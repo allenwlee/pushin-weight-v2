@@ -88,7 +88,7 @@ def test_catalog_partial_remains_resumable_without_fake_numeric_contract():
     run.refresh_from_db()
     assert run.completed_at is None and run.contract_id is None
     scope = CollectionScopeRun.objects.create(
-        run=run, scope_key="publisher", ownership={}, cursor="next"
+        run=run, scope_key="publisher", cursor="next"
     )
     observation = CollectionObservation.objects.create(
         run=run,
@@ -97,7 +97,6 @@ def test_catalog_partial_remains_resumable_without_fake_numeric_contract():
         source_identifier="publisher/Model",
         source_subject_kind="repository",
         observation_key="c" * 64,
-        groups={"listing": "ok"},
         processing_outcome="pending",
     )
     assert observation.values.count() == 0
@@ -127,12 +126,12 @@ def test_numeric_evidence_cannot_enter_catalog_projection():
     from tests.test_benchmark_download_db_models import measurement
 
     _, _, observation = measurement()
-    before = (observation.source_metadata, observation.observed_at, observation.status)
+    before = (observation.legacy_archive_id, observation.observed_at, observation.status)
     with pytest.raises(ValueError, match="matching catalog evidence"):
         persist_product(observation, {}, [], {}, "detail")
     observation.refresh_from_db()
     assert (
-        observation.source_metadata,
+        observation.legacy_archive_id,
         observation.observed_at,
         observation.status,
     ) == before

@@ -6,6 +6,69 @@ import pytest
 from core.hf_metadata_client import HFMetadataClient
 
 
+def test_targeted_model_search_without_known_publisher_keeps_all_leads():
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        assert request.url.path == "/api/models"
+        assert request.url.params["search"] == "Nanbeige4.3-33B"
+        assert request.url.params["limit"] == "5"
+        assert "author" not in request.url.params
+        return httpx.Response(200, json=[{"id": "lab/Nanbeige4.3-33B"}, {"id": "other/Nanbeige4.3-33B"}])
+
+    hf = client(respond)
+    result = hf.search_models("Nanbeige4.3-33B", limit=5)
+    assert result.outcome == "ok"
+    assert [row["id"] for row in result.payload] == ["lab/Nanbeige4.3-33B", "other/Nanbeige4.3-33B"]
+    assert len(requests) == hf.requests == 1
+
+
+def test_targeted_model_search_rejects_invalid_input_before_request():
+    hf = client(lambda _: pytest.fail("invalid input must not make a request"))
+    assert hf.search_models(" ").outcome == "malformed"
+    assert hf.search_models("x" * 257).outcome == "malformed"
+    assert hf.search_models("model", limit=0).outcome == "malformed"
+    assert hf.requests == 0
+
+
+def test_targeted_model_search_reports_incomplete_page_without_following_it():
+    hf = client(
+        lambda _: httpx.Response(
+            200,
+            json=[{"id": "lab/model"}],
+            headers={"link": '<https://huggingface.co/api/models?cursor=abc>; rel="next"'},
+        )
+    )
+    result = hf.search_models("model", limit=1)
+    assert result.outcome == "ok" and result.next_cursor == "abc"
+    assert hf.requests == 1
+
+
+def test_targeted_search_resume_preserves_term_and_opaque_cursor():
+    def respond(request):
+        assert request.url.params["search"] == "Nanbeige4.3-33B"
+        assert request.url.params["cursor"] == "opaque+/="
+        assert request.url.params["limit"] == "5"
+        return httpx.Response(200, json=[{"id": "lab/second"}])
+
+    result = client(respond).search_models("Nanbeige4.3-33B", limit=5, cursor="opaque+/=")
+    assert result.outcome == "ok" and result.next_cursor is None
+
+
+def test_targeted_model_search_rejects_untrusted_continuation_and_bad_rows():
+    hf = client(
+        lambda _: httpx.Response(
+            200,
+            json=[{"id": "lab/model"}],
+            headers={"link": '<https://other.example/api/models?cursor=abc>; rel="next"'},
+        )
+    )
+    assert hf.search_models("model").outcome == "invalid_continuation"
+    hf = client(lambda _: httpx.Response(200, json=[{"id": "invalid"}]))
+    assert hf.search_models("model").outcome == "malformed"
+
+
 def test_history_rejects_an_unparseable_next_link():
     hf = client(lambda _: httpx.Response(200, json=[], headers={"link": 'rel="next"'}))
     result = hf.history_page("lab/model", "a" * 40, "commits")
@@ -370,6 +433,41 @@ def test_missing_namespace_is_not_verified_empty():
 def test_wrong_namespace_identity_is_rejected():
     hf = client(lambda r: httpx.Response(200, json={"name": "other"}))
     assert hf.namespace_info("lab").outcome == "identity_mismatch"
+
+
+def test_organization_socials_remains_source_claim_with_identity_validation():
+    hf = client(lambda request: httpx.Response(
+        200, json={"org": "Other", "socialHandles": {"twitter": "someone"}}
+    ))
+    assert hf.organization_socials("lab").outcome == "identity_mismatch"
+    assert hf.requests == 1
+    hf = client(lambda request: httpx.Response(
+        200, json={"org": "Lab", "socialHandles": {"twitter": "someone"}}
+    ))
+    assert hf.organization_socials("lab").outcome == "ok"
+    assert hf.organization_socials("bad/path").outcome == "malformed"
+    assert hf.requests == 1
+
+
+def test_socials_fall_back_to_user_only_after_organization_not_found():
+    calls = []
+    def respond(request):
+        calls.append(request.url.path)
+        if "/organizations/" in request.url.path:
+            return httpx.Response(404)
+        return httpx.Response(200, json={"user": "Lab", "socialHandles": {"twitter": "owner"}})
+    hf = client(respond)
+    result = hf.organization_socials("lab")
+    assert result.outcome == "ok" and result.payload["user"] == "Lab"
+    assert calls == ["/api/organizations/lab/socials", "/api/users/lab/socials"]
+    assert len(result.attempts) == hf.requests == 2
+    hf = client(lambda _request: httpx.Response(403))
+    assert hf.organization_socials("lab").outcome == "forbidden"
+    assert hf.requests == 1
+    hf = client(lambda request: httpx.Response(404) if "/organizations/" in request.url.path
+                else httpx.Response(200, json={"user": "other", "socialHandles": {}}))
+    assert hf.organization_socials("lab").outcome == "identity_mismatch"
+    assert hf.requests == 2
 
 
 def test_client_credentials_are_not_sent():

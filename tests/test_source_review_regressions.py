@@ -7,6 +7,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 
+from core.collection_capture import run_report_document
 from core.collection_jobs import register_job, set_job_state
 from core.models import CollectionObservation, MetricValue
 from scripts.benchmark_download_collector.sources import Budget
@@ -48,16 +49,19 @@ def test_rolling_same_day_new_run_refetches_but_continuation_reuses_generation()
         budget, calls = transport(tokens=value)
         with patch("core.model_history_collection.timezone.now", return_value=now):
             first = execute_model_history(job.pk, budget=budget, key="fixture")
-        assert first.status == "partial", first.report
+        assert first.status == "partial", run_report_document(first)
         assert len(calls) == 2
         resume_budget, resume_calls = transport(tokens=value)
         with patch("core.model_history_collection.timezone.now", return_value=now):
             resumed = execute_model_history(job.pk, budget=resume_budget, key="fixture")
-        assert resumed.status == "success", resumed.report
+        assert resumed.status == "success", run_report_document(resumed)
         assert resumed.pk == first.pk and not resume_calls
+        window = resumed.scopes.get(scope_kind="publication_runtime")
+        assert window.requested_start_at == datetime(2026, 10, 13, tzinfo=UTC)
+        assert window.requested_end_at == datetime(2026, 10, 15, tzinfo=UTC)
         generations.append(
             (
-                resumed.scopes.get(scope_kind="publication_runtime").envelopes[0],
+                {"acquisition_generation": str(window.run_id)},
                 first.pk,
             )
         )
@@ -114,14 +118,14 @@ def test_inventory_terminal_missing_counters_ack_and_next_acquisition(
     partial = execute_model_inventory(
         job.pk, budget=Budget(httpx.Client(transport=httpx.MockTransport(respond)))
     )
-    assert partial.status == "partial", partial.report
+    assert partial.status == "partial", run_report_document(partial)
     broken = False
     for attempt in range(2):
         calls.clear()
         run = execute_model_inventory(
             job.pk, budget=Budget(httpx.Client(transport=httpx.MockTransport(respond)))
         )
-        assert run.status == "success", run.report
+        assert run.status == "success", run_report_document(run)
         if attempt == 0:
             assert run.pk == partial.pk
             assert not any(httpx.URL(url).path == "/api/models" for url in calls)
@@ -137,7 +141,7 @@ def test_inventory_terminal_missing_counters_ack_and_next_acquisition(
             queued_ids = [
                 pk
                 for numeric in CollectionRun.objects.filter(job__purpose="metric")
-                for pk in numeric.report.get("projection", {}).get(
+                for pk in run_report_document(numeric).get("projection", {}).get(
                     "source_observation_ids", []
                 )
             ]
@@ -164,9 +168,9 @@ def test_inventory_terminal_missing_counters_ack_and_next_acquisition(
         coverage = [
             c
             for r in CollectionRun.objects.filter(job__purpose="metric")
-            for c in r.report.get("coverage", [])
+            for c in run_report_document(r).get("coverage", [])
         ]
-        assert any(c["outcome"] == "invalid" for c in coverage)
+        assert any(c["outcome"] == "terminal_invalid" for c in coverage)
 
 
 @pytest.mark.parametrize(
@@ -176,11 +180,12 @@ def test_inventory_terminal_missing_counters_ack_and_next_acquisition(
 def test_zero_counter_metric_attempt_is_terminal_without_values(counters, outcome):
     contract, raw, _, _ = configured()
     run = project(contract, "hf", [evidence("hf", {"id": raw["id"], **counters})])
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     assert run.selected_count == 1 and run.success_count == 0
-    assert run.report["projection"]["terminal_resources"] == 1
+    assert run_report_document(run)["projection"]["terminal_resources"] == 1
     assert not MetricValue.objects.exists()
-    assert any(row["outcome"] == outcome for row in run.report["coverage"])
+    expected_outcome = "terminal_invalid" if outcome == "invalid" else "terminal_missing"
+    assert any(row["outcome"] == expected_outcome for row in run_report_document(run)["coverage"])
 
 
 def replay_job(contract, snapshots, *, key="replay-bounded", byte_limit=25000):
@@ -253,9 +258,9 @@ def test_replay_streams_aggregate_byte_limit_and_restarts_at_last_admitted(monke
     for _ in range(5):
         loaded.clear()
         latest = projection.replay_saved_evidence(job.pk)
-    assert latest.status == "success", latest.report
+    assert latest.status == "success", run_report_document(latest)
     assert batches == [[s.pk for s in snapshots[i : i + 2]] for i in range(0, 12, 2)]
-    assert latest.report["projection"]["selected_resources"] == 12
+    assert run_report_document(latest)["projection"]["selected_resources"] == 12
     assert MetricValue.objects.count() == 24
 
 
@@ -286,7 +291,7 @@ def test_replay_selection_and_projection_share_entry_deadline(monkeypatch):
     monkeypatch.setattr(projection, "_evidence_bytes", actual_size)
     monkeypatch.setattr(projection, "project_evidence", actual_project)
     resumed = projection.replay_saved_evidence(job.pk)
-    assert resumed.status == "success", resumed.report
+    assert resumed.status == "success", run_report_document(resumed)
     assert MetricValue.objects.count() == 2
 
 
@@ -309,10 +314,10 @@ def test_native_only_publication_continuation_acknowledges_completed_selection()
     )
     job = register(source, scope, items=3)
     first = execute_model_history(job.pk, budget=transport()[0], key="fixture")
-    assert first.status == "partial", first.report
+    assert first.status == "partial", run_report_document(first)
     budget, calls = transport()
     resumed = execute_model_history(job.pk, budget=budget, key="fixture")
-    assert resumed.status == "success", resumed.report
+    assert resumed.status == "success", run_report_document(resumed)
     assert not calls and MetricValue.objects.count() == 4
     assert not resumed.scopes.filter(
         scope_kind="numeric_projection", outcome="pending"

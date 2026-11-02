@@ -9,7 +9,11 @@ import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
-from core.collection_capture import observation_object_documents
+from core.collection_capture import (
+    archive_legacy,
+    observation_object_documents,
+    run_report_document,
+)
 from core.collection_identity import review_catalog_mapping
 from core.collection_jobs import register_job, set_job_state
 from core.measurement_taxonomy import digest, subject_id
@@ -35,7 +39,7 @@ def test_selected_publication_rows_keep_typed_origin_links_and_coordinates(sourc
     source, _product, scope = publication_scope(source_id)
     budget, _requests = transport(source_id)
     run = execute_model_history(register(source, scope).pk, budget=budget, key="fixture")
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     selected = list(CollectionObservation.objects.filter(observation_kind="publication_row"))
     assert selected
     expected = {}
@@ -53,7 +57,7 @@ def test_selected_publication_rows_keep_typed_origin_links_and_coordinates(sourc
         if source_id == "openrouter":
             assert observation.published_date is None
         expected[observation.pk] = original.pk
-    CollectionObservation.objects.filter(pk__in=expected).update(listing={}, source_metadata={}, dimensions={})
+    assert not hasattr(selected[0], "listing")
     for observation in CollectionObservation.objects.filter(pk__in=expected):
         assert observation.inputs.get(input_role="publication_row_origin").input_observation_id == expected[observation.pk]
 
@@ -233,7 +237,7 @@ def test_actual_history_dispatch_writes_numeric_and_reuses_saved_publication(
     job = register(provider, scope)
     budget, _requests = transport(source, config=config)
     run = execute_due_job(job, {"slot": None}, budget)
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     selection_scopes = list(run.scopes.filter(scope_kind="publication_selection"))
     assert selection_scopes
     for selected_scope in selection_scopes:
@@ -255,16 +259,11 @@ def test_actual_history_dispatch_writes_numeric_and_reuses_saved_publication(
             "dimensions": dimensions,
             "source_metadata": metadata,
         })
-        publication.listing = {}
-        publication.dimensions = {}
-        publication.source_metadata = {}
-        publication.save(update_fields=[
-            "legacy_archive", "listing", "dimensions", "source_metadata",
-        ])
+        publication.save(update_fields=["legacy_archive"])
     replay = register(provider, scope, key="history-other-job")
     fresh_budget, fresh_requests = transport(source, config=config)
     again = execute_model_history(replay.pk, budget=fresh_budget, key="fixture")
-    assert again.status == "success", again.report
+    assert again.status == "success", run_report_document(again)
     assert not fresh_requests and set(MetricValue.objects.values_list("pk", flat=True)) == before
     assert history_report(again)["numeric_projection"]["after_acquisition"]["pending"] is False
     if source == "openrouter":
@@ -297,13 +296,16 @@ def test_publication_scope_copy_preserves_exact_refs_and_refuses_identity_drift(
 
     provider, _product, scope = publication_scope()
     run = execute_model_history(register(provider, scope).pk, budget=transport()[0], key="fixture")
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     selected = run.scopes.get(scope_kind="publication_selection")
     expected = (selected.resource_observation_id, selected.projection_contract_id)
+    from core.collection_capture import archive_legacy
+
+    archive = archive_legacy({"ownership": {"publication_observation_id": expected[0],
+                                             "contract_hash": selected.projection_contract.contract_hash},
+                              "cursor_history": [], "envelopes": []})
     CollectionScopeRun.objects.filter(pk=selected.pk).update(
-        resource_observation=None, projection_contract=None,
-        ownership={"publication_observation_id": expected[0],
-                   "contract_hash": selected.projection_contract.contract_hash},
+        resource_observation=None, projection_contract=None, legacy_archive=archive,
     )
     with pytest.raises(ValueError, match="missing typed references"):
         project_publication_scope_references_batch(verify_only=True)
@@ -397,7 +399,7 @@ def test_pending_numeric_survives_crash_without_any_transport_files():
     )
     budget, requests = transport()
     recovered = execute_model_history(job.pk, budget=budget, key="fixture")
-    assert recovered.status == "success", recovered.report
+    assert recovered.status == "success", run_report_document(recovered)
     assert not requests and MetricValue.objects.exists()
 
 
@@ -437,18 +439,12 @@ def test_opt_in_model_kind_pins_native_evidence_without_changing_taxonomy_type(d
         source_identifier=product.repo_id,
         source_subject_kind="repository",
         observation_key="c" * 64,
-        listing={
-            "id": product.repo_id,
-            "private": False,
-            "createdAt": "2026-09-01T00:00:00Z",
-        },
-        dimensions={"kind": "creation_inventory"},
+        legacy_archive=archive_legacy({"listing": {"id": product.repo_id, "private": False, "createdAt": "2026-09-01T00:00:00Z"}, "dimensions": {"kind": "creation_inventory"}, "source_metadata": {}}),
     )
     call_command("normalize_collection_run_jobs", verbosity=0)
     from core.collection_resources import project_observation_facts
 
     project_observation_facts(evidence)
-    CollectionObservation.objects.filter(pk=evidence.pk).update(dimensions={})
     evidence.refresh_from_db()
     arguments = {"brand_ids": brands, "cutoff": "2026-09-12T00:00:00Z"}
     original = build_cohort(**arguments)
@@ -471,8 +467,10 @@ def test_opt_in_model_kind_pins_native_evidence_without_changing_taxonomy_type(d
     job = register(provider, scope)
     assert validate_model_pins(job)
     if drift == "evidence":
-        evidence.listing["private"] = True
-        evidence.save()
+        listing, dimensions, metadata = observation_object_documents(evidence)
+        listing["private"] = True
+        evidence.legacy_archive = archive_legacy({"listing": listing, "dimensions": dimensions, "source_metadata": metadata})
+        evidence.save(update_fields=["legacy_archive"])
     else:
         ownership = product.publisher_ownership
         ownership.ownership_confirmed = False
@@ -508,12 +506,16 @@ def test_rolling_publication_selection_uses_current_window_with_frozen_cohort():
     assert job.definition["scope"]["cutoff"] == original["cutoff"]
     runtime = run.scopes.get(scope_kind="publication_runtime")
     assert runtime.requested_end_at == datetime(2026, 10, 15, tzinfo=UTC)
-    CollectionScopeRun.objects.filter(pk=runtime.pk).update(
-        requested_start_at=None, requested_end_at=None,
-        ownership={"policy": scope["publication_window_policy"], "cohort_hash": scope["cohort_hash"]},
-        envelopes=[{"cutoff": "2026-10-15T00:00:00+00:00",
-                    "publication_start_at": "2026-10-13T00:00:00+00:00", "acquisition_generation": str(run.pk)}],
-    )
+    from core.collection_capture import archive_legacy
+
+    ownership = {"policy": scope["publication_window_policy"], "cohort_hash": scope["cohort_hash"]}
+    saved_envelopes = [{"cutoff": "2026-10-15T00:00:00+00:00",
+                        "publication_start_at": "2026-10-13T00:00:00+00:00", "acquisition_generation": str(run.pk)}]
+    def set_archive():
+        runtime.legacy_archive = archive_legacy({"ownership": ownership, "cursor_history": [], "envelopes": saved_envelopes})
+        runtime.save(update_fields=["legacy_archive"])
+    set_archive()
+    CollectionScopeRun.objects.filter(pk=runtime.pk).update(requested_start_at=None, requested_end_at=None)
     with pytest.raises(ValueError, match="missing typed bounds"):
         project_publication_runtime_bounds_batch(verify_only=True)
     assert project_publication_runtime_bounds_batch(batch_size=1).updated == 1
@@ -525,9 +527,8 @@ def test_rolling_publication_selection_uses_current_window_with_frozen_cohort():
 
     # A historical resume reads the saved typed window even after the legacy
     # envelope is absent and the wall clock has advanced.
-    saved_envelopes = copy.deepcopy(runtime.envelopes)
-    runtime.envelopes = []
-    runtime.save(update_fields=["envelopes"])
+    runtime.legacy_archive = None
+    runtime.save(update_fields=["legacy_archive"])
     with patch(
         "core.model_history_collection.timezone.now",
         return_value=now + timedelta(days=20),
@@ -537,13 +538,12 @@ def test_rolling_publication_selection_uses_current_window_with_frozen_cohort():
     assert resumed.scope["publication_start_at"] == "2026-10-13T00:00:00+00:00"
 
     saved_envelopes[0]["cutoff"] = "2026-10-16T00:00:00+00:00"
-    runtime.envelopes = saved_envelopes
-    runtime.save(update_fields=["envelopes"])
+    set_archive()
     with pytest.raises(ValueError, match="conflicting typed bounds"):
         project_publication_runtime_bounds_batch()
-    runtime.envelopes[0]["cutoff"] = "2026-10-15T00:00:00+00:00"
-    runtime.ownership["cohort_hash"] = "e" * 64
-    runtime.save(update_fields=["ownership", "envelopes"])
+    saved_envelopes[0]["cutoff"] = "2026-10-15T00:00:00+00:00"
+    ownership["cohort_hash"] = "e" * 64
+    set_archive()
     with pytest.raises(ValueError, match="runtime identity"):
         project_publication_runtime_bounds_batch()
 
@@ -571,7 +571,7 @@ def test_native_publication_scope_needs_no_invented_products_or_accounts():
     run = execute_model_history(
         register(source, scope).pk, budget=transport()[0], key="fixture"
     )
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     assert MetricValue.objects.exists()
     assert not MetricValue.objects.exclude(observation__mapping=None).exists()
     assert counts == (Account.objects.count(), Product.objects.count())
@@ -581,11 +581,11 @@ def test_small_projection_budget_is_partial_then_resumes_pending_rows():
     source, _product, scope = publication_scope()
     job = register(source, scope, items=3)
     first = execute_model_history(job.pk, budget=transport()[0], key="fixture")
-    assert first.status == "partial", first.report
+    assert first.status == "partial", run_report_document(first)
     assert history_report(first)["numeric_projection"]["after_acquisition"]["pending"]
     budget, requests = transport()
     second = execute_model_history(job.pk, budget=budget, key="fixture")
-    assert second.status == "success", second.report
+    assert second.status == "success", run_report_document(second)
     assert not requests
     assert MetricValue.objects.count() == 4
 
@@ -621,7 +621,7 @@ def test_campaign_facade_accounts_publication_requests_on_shared_child(monkeypat
     )
     budget, requests = transport()
     run = execute_phase(job.pk, budget=budget)
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     assert MetricValue.objects.exists()
     assert run.request_count == 0
     usage = campaign_usage(job)
@@ -630,7 +630,6 @@ def test_campaign_facade_accounts_publication_requests_on_shared_child(monkeypat
 
 def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benchmark():
     from core.benchmark_metric_identity import configure_collection
-    from core.collection_storage_migration import project_observation_groups_batch
     from core.model_kind_qualification import qualify_model_kind, validate_model_kind
     from tests.test_source_metric_projection import project
 
@@ -649,31 +648,21 @@ def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benc
         source_identifier=product.repo_id,
         source_subject_kind="repository",
         observation_key="e" * 64,
-        listing={"id": product.repo_id, "private": False, "downloads": 7, "likes": 2},
-        dimensions={"kind": "creation_inventory"},
-        groups={"listing": "ok"},
+        legacy_archive=archive_legacy({"listing": {"id": product.repo_id, "private": False, "downloads": 7, "likes": 2}, "dimensions": {"kind": "creation_inventory"}, "source_metadata": {}, "groups": {"listing": "ok"}}),
     )
     call_command("normalize_collection_run_jobs", verbosity=0)
     from core.collection_resources import project_observation_facts
 
     project_observation_facts(observation)
-    project_observation_groups_batch(after_id=observation.pk - 1, batch_size=1)
+    from core.collection_groups import record_observation_group
+
+    record_observation_group(observation, "listing", "ok")
     qualification = qualify_model_kind(product)
     assert qualification
-    CollectionObservation.objects.filter(pk=observation.pk).update(groups={})
     assert validate_model_kind(product, qualification) == qualification
-    from core.collection_capture import archive_legacy
 
-    archive = archive_legacy({
-        "listing": observation.listing,
-        "dimensions": observation.dimensions,
-        "source_metadata": observation.source_metadata,
-        "envelopes": observation.envelopes,
-        "groups": {"listing": "ok"},
-    })
-    CollectionObservation.objects.filter(pk=observation.pk).update(
-        legacy_archive=archive, listing={}, dimensions={}, source_metadata={},
-    )
+    observation.refresh_from_db()
+    assert observation.legacy_archive_id is not None
     assert validate_model_kind(product, qualification) == qualification
     subject = MeasurementSubject.objects.get(
         pk=subject_id("product", product.product_key)
@@ -797,8 +786,7 @@ def test_history_statistics_reuses_existing_product_and_publisher_subjects():
         source_identifier=product.repo_id,
         source_subject_kind="repository",
         observation_key="2" * 64,
-        listing={"id": product.repo_id, "private": False},
-        dimensions={"kind": "creation_inventory"},
+        legacy_archive=archive_legacy({"listing": {"id": product.repo_id, "private": False}, "dimensions": {"kind": "creation_inventory"}, "source_metadata": {}}),
     )
     call_command("normalize_collection_run_jobs", verbosity=0)
     from core.collection_resources import project_observation_facts
@@ -979,7 +967,7 @@ def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolat
                     )
                 )
             )
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     assert MetricValue.objects.count() == 8
     assert (
         CollectionObservation.objects.filter(values__isnull=False).distinct().count()
@@ -1014,7 +1002,6 @@ def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolat
 def test_existing_completed_or_day_reuses_original_contract_and_only_acquires_gap():
     from core.benchmark_metric_identity import configure_collection
     from core.benchmark_metric_store import persist_source
-    from core.collection_capture import archive_legacy
     from core.models import MetricCollectionContract
 
     source, product, scope = publication_scope()
@@ -1054,20 +1041,12 @@ def test_existing_completed_or_day_reuses_original_contract_and_only_acquires_ga
     )
     value = MetricValue.objects.get(observation__run=original)
     saved = value.observation
-    saved.legacy_archive = archive_legacy({
-        "listing": saved.listing,
-        "dimensions": saved.dimensions,
-        "source_metadata": saved.source_metadata,
-    })
-    saved.listing, saved.dimensions, saved.source_metadata = {}, {}, {}
-    saved.save(update_fields=[
-        "legacy_archive", "listing", "dimensions", "source_metadata",
-    ])
+    assert not hasattr(saved, "listing")
     budget, requests = transport()
     run = execute_model_history(
         register(source, scope).pk, budget=budget, key="fixture"
     )
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     assert requests[0].url.params["start_date"] == "2026-09-11"
     assert requests[0].url.params["end_date"] == "2026-09-11"
     reused = [
@@ -1090,7 +1069,7 @@ def test_statistics_arena_windows_are_pinned_and_have_no_synthetic_carry_in():
     # The requested campaign starts on the actual fixture publication date.
     scope["global_start_at"] = "2026-09-11T00:00:00Z"
     run = execute_model_history(register(source, scope).pk, budget=budget)
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     assert "2026-09-11" in requests[0].url.params["where"]
     assert "2026-08-" not in requests[0].url.params["where"]
 
@@ -1150,7 +1129,7 @@ def test_latest_arena_artifact_dispatch_preserves_publication_window(
     scope.update(arena_publication_mode="latest-artifact-v1", publication_window_days=1)
     budget, requests = latest_arena_transport(published=published)
     run = execute_due_job(register(source, scope), {"slot": None}, budget)
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     assert len(requests) == 1  # One bounded artifact for the whole multi-day window.
     assert MetricValue.objects.exists() is has_values
     cell = history_report(run)["coverage"][0]
@@ -1181,7 +1160,7 @@ def test_latest_arena_artifact_cache_separates_history_and_retains_revisions():
     first = execute_model_history(
         register(source, scope, key="artifact").pk, budget=budget
     )
-    assert first.status == "success", first.report
+    assert first.status == "success", run_report_document(first)
     assert len(requests) == 1
     count = MetricValue.objects.count()
     assert count == historical_count * 2
@@ -1189,7 +1168,7 @@ def test_latest_arena_artifact_cache_separates_history_and_retains_revisions():
     again = execute_model_history(
         register(source, scope, key="artifact-repeat").pk, budget=budget
     )
-    assert again.status == "success", again.report
+    assert again.status == "success", run_report_document(again)
     assert not requests and MetricValue.objects.count() == count
     later = copy.deepcopy(scope)
     later["cutoff"] = "2026-09-13T00:00:00Z"
@@ -1197,7 +1176,7 @@ def test_latest_arena_artifact_cache_separates_history_and_retains_revisions():
     revised = execute_model_history(
         register(source, later, key="artifact-revised").pk, budget=budget
     )
-    assert revised.status == "success", revised.report
+    assert revised.status == "success", run_report_document(revised)
     assert len(requests) == 1
     assert MetricValue.objects.count() == count + historical_count
 
@@ -1218,7 +1197,7 @@ def test_arena_publication_mode_rejects_unsupported_instructions_without_http(
     run = execute_model_history(
         register(provider, scope).pk, budget=budget, key="fixture"
     )
-    assert run.status == "partial", run.report
+    assert run.status == "partial", run_report_document(run)
     assert not requests and not MetricValue.objects.exists()
 
 
@@ -1229,7 +1208,7 @@ def test_latest_arena_mode_requires_source_statistics_contract():
     scope.pop("numeric_projection_policy")
     budget, requests = latest_arena_transport()
     run = execute_model_history(register(provider, scope).pk, budget=budget)
-    assert run.status == "partial", run.report
+    assert run.status == "partial", run_report_document(run)
     assert not requests and not MetricValue.objects.exists()
 
 
@@ -1248,7 +1227,7 @@ def test_rolling_latest_arena_reacquires_each_generation_without_duplicate_value
             run = execute_model_history(
                 register(provider, scope, key=key).pk, budget=budget
             )
-        assert run.status == "success", run.report
+        assert run.status == "success", run_report_document(run)
         assert len(requests) == 1
         if count is None:
             count = MetricValue.objects.count()

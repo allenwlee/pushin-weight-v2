@@ -112,10 +112,7 @@ def test_openrouter_model_catalog_correlates_api_only_creation_through_reviewed_
     observation.legacy_archive = archive_legacy(dict(zip(
         ("listing", "dimensions", "source_metadata"), observation_object_documents(observation),
     )))
-    observation.listing, observation.dimensions, observation.source_metadata = {}, {}, {}
-    observation.save(update_fields=[
-        "legacy_archive", "listing", "dimensions", "source_metadata",
-    ])
+    observation.save(update_fields=["legacy_archive"])
     jobs = freeze(brands, cutoff)
     selected = next(
         j

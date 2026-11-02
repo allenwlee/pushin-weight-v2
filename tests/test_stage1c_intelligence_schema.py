@@ -131,7 +131,7 @@ def test_profile_and_affiliation_evidence_keep_observation_separate_from_dates()
         first_source_kind="post",
         first_source_post=post,
         present_fields=["description"],
-        profile_data={"description": "Researcher"},
+        description="Researcher",
     )
     brand = Brand.objects.create(nickname="anthropic", display_name="Anthropic")
     person = person_with_name("Anna Wang")
@@ -156,6 +156,7 @@ def test_profile_and_affiliation_evidence_keep_observation_separate_from_dates()
     assert affiliation.start_date is None
     assert affiliation.start_date_precision == "unknown"
     assert evidence.observed_at == now
+    assert evidence.source_profile_snapshot.description == "Researcher"
     _assert_integrity_error(
         lambda: PersonBrandAffiliationEvidence.objects.create(
             affiliation=affiliation,

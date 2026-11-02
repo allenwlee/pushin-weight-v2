@@ -73,15 +73,14 @@ def test_full_walk_enrichment_refresh_identity_and_ambiguous_brand():
     saved = CollectionRun.objects.get(pk=result["run_id"])
     legacy_id = uuid4()
     saved.ingestion_key = digest(["catalog", "hf", str(legacy_id)])
-    saved.source_metadata = {}
-    saved.save(update_fields=["ingestion_key", "source_metadata"])
+    saved.save(update_fields=["ingestion_key"])
     assert resolve_catalog_run(legacy_id).pk == saved.pk
     assert resolve_catalog_run(saved.pk).pk == saved.pk
     assert saved.job_id is not None
     assert saved.job.source_id == saved.source_id == "hf"
     assert saved.job.definition["scope"] == saved.scope == manifest
     assert saved.request_count == 6
-    assert saved.invocations == []
+    assert saved.attempts.count() == 1
     assert saved.attempts.get().response_byte_limit is not None
     requests = CollectionRequest.objects.filter(attempt__run=saved)
     assert requests.count() == saved.attempts.get().actual_requests == 6
@@ -186,10 +185,10 @@ def test_slow_http_response_records_partial_time_cap_with_finalization_lease(
     assert run.job.definition["budgets"]["seconds"] == 60
     assert attempt.effective_seconds == 60
     assert attempt.response_byte_limit == hf.max_bytes
-    assert run.invocations == []
+    assert run.attempts.count() == 1
 
 
-@pytest.mark.usefixtures("isolated_migration_database")
+@pytest.mark.usefixtures("collection_history_schema")
 def test_archived_partial_catalog_reuses_pages_without_rewriting_unknown_budgets():
     import copy
 
@@ -204,7 +203,7 @@ def test_archived_partial_catalog_reuses_pages_without_rewriting_unknown_budgets
     previous = previous_catalog_module(historical)
     first = previous.execute_catalog(scope=scope(), hf=api(budget=2))
     run = historical.get_model("core", "CollectionRun").objects.get(pk=first["run_id"])
-    scopes = list(run.scopes.order_by("pk").values_list("pk", flat=True))
+    scopes = list(run.scopes.filter(scope_kind="namespace").order_by("pk").values_list("pk", flat=True))
     observations = list(run.observations.order_by("pk").values_list("pk", flat=True))
     target = [("core", "0090_remove_run_instruction_columns")]
     executor = MigrationExecutor(connection)
@@ -218,8 +217,9 @@ def test_archived_partial_catalog_reuses_pages_without_rewriting_unknown_budgets
     assert definition["schedule"] is None
 
     # Resume with the current reader only after upgrading its complete schema.
-    executor = MigrationExecutor(connection)
-    executor.migrate(executor.loader.graph.leaf_nodes())
+    from tests.collection_fixtures import upgrade_legacy_collection_for_current_reader
+
+    upgrade_legacy_collection_for_current_reader()
     run = CollectionRun.objects.get(pk=run.pk)
 
     def no_saved_pages(request):
@@ -230,7 +230,7 @@ def test_archived_partial_catalog_reuses_pages_without_rewriting_unknown_budgets
     assert resumed["complete"] and resumed["requests"] == 4
     assert run.job_id == archive_id
     assert run.job.definition == definition
-    assert list(run.scopes.order_by("pk").values_list("pk", flat=True)) == scopes
+    assert list(run.scopes.filter(scope_kind="namespace").order_by("pk").values_list("pk", flat=True)) == scopes
     assert list(run.observations.order_by("pk").values_list("pk", flat=True)) == observations
     latest_attempt = run.attempts.order_by("-ordinal").first()
     assert latest_attempt.reserved_requests == 7
@@ -351,7 +351,7 @@ def test_typed_group_resume_preserves_report_and_does_not_repeat_successful_expa
     result = execute_catalog(scope=scope(), hf=api(fail_detail))
     run = CollectionRun.objects.get(pk=result["run_id"])
     expected = catalog_report(run)["group_outcomes"]
-    run.observations.update(groups={})
+    assert not run.observations.filter(legacy_archive__isnull=False).exists()
     assert catalog_report(run)["group_outcomes"] == expected
     resumed = execute_catalog(run_id=run.pk, hf=api())
     assert resumed["complete"]
@@ -373,8 +373,6 @@ def test_invalid_saved_cursor_restarts_namespace_and_deduplicates():
     first = execute_catalog(scope=scope(), hf=api(first_page, budget=2))
     run = CollectionRun.objects.get(pk=first["run_id"])
     assert run.scopes.get(scope_kind="namespace").recorded_cursors == ["expired"]
-    run.scopes.update(cursor_history=[])
-
     def expired(request):
         if request.url.params.get("cursor") == "expired":
             return httpx.Response(400, json={"error": "invalid cursor"})
@@ -457,7 +455,7 @@ def test_stale_direct_catalog_cannot_checkpoint_or_overwrite_final_report(replac
 
     def lose_ownership(request):
         run = CollectionRun.objects.get()
-        changes = {"report": {"successor": "preserve"}}
+        changes = {"selected_count": 73}
         if replacement == "expired":
             changes["lease_expires_at"] = timezone.now() - timedelta(seconds=1)
         else:
@@ -469,8 +467,8 @@ def test_stale_direct_catalog_cannot_checkpoint_or_overwrite_final_report(replac
     with pytest.raises(StaleClaim):
         execute_catalog(scope=manifest, hf=client)
     run = CollectionRun.objects.get()
-    assert run.report == {"successor": "preserve"}
-    assert run.scopes.get().envelopes == []
+    assert run.selected_count == 73
+    assert not run.scopes.get().observations.exists()
     assert not run.observations.exists()
     assert not Product.objects.exists()
     assert client.on_attempt is None

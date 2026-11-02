@@ -317,6 +317,77 @@ class HFMetadataClient:
                 result.outcome = "identity_mismatch"
         return result
 
+    def organization_socials(self, namespace: str) -> MetadataResponse:
+        """Capture organization or individual self-reported links within this budget."""
+        if not NAMESPACE.fullmatch(namespace):
+            return MetadataResponse("malformed")
+        result = self._get(f"/organizations/{namespace}/socials")
+        identity_field = "org"
+        if result.outcome == "not_found":
+            user = self._get(f"/users/{namespace}/socials")
+            user.attempts = result.attempts + user.attempts
+            result = user
+            identity_field = "user"
+        if result.outcome == "ok":
+            payload = result.payload
+            if (not isinstance(payload, dict)
+                    or str(payload.get(identity_field) or "").casefold() != namespace.casefold()
+                    or ("user" if identity_field == "org" else "org") in payload
+                    or not isinstance(payload.get("socialHandles"), dict)):
+                result.outcome = "identity_mismatch"
+        return result
+
+    def search_models(self, term: str, *, limit: int = 10, cursor: str | None = None) -> MetadataResponse:
+        """Fetch one bounded page of public model leads, without asserting ownership."""
+        if (
+            not isinstance(term, str)
+            or not term.strip()
+            or term != term.strip()
+            or len(term) > 256
+            or type(limit) is not int
+            or not 1 <= limit <= 100
+            or cursor is not None and (
+                not isinstance(cursor, str) or not cursor or len(cursor) > 4096
+                or any(ord(char) < 32 for char in cursor)
+            )
+        ):
+            return MetadataResponse("malformed")
+        params = {"search": term, "limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
+        result = self._get("/models", params)
+        if result.outcome != "ok":
+            return result
+        if not isinstance(result.payload, list) or len(result.payload) > limit:
+            result.outcome = "malformed"
+            return result
+        for item in result.payload:
+            if outcome := self._identity_outcome(item):
+                result.outcome = outcome
+                return result
+        link = result.attempts[-1].get("link", "")
+        response = httpx.Response(200, headers={"link": link})
+        next_link = response.links.get("next")
+        if next_link:
+            url = urlparse(next_link.get("url", ""))
+            values = parse_qs(url.query).get("cursor", [])
+            if (
+                url.scheme != "https"
+                or url.netloc != "huggingface.co"
+                or url.path != "/api/models"
+                or url.fragment
+                or len(values) != 1
+                or not values[0]
+                or len(values[0]) > 4096
+                or any(ord(char) < 32 for char in values[0])
+            ):
+                result.outcome = "invalid_continuation"
+            else:
+                result.next_cursor = values[0]
+        elif "next" in link:
+            result.outcome = "invalid_continuation"
+        return result
+
     def list_page(
         self,
         namespace: str,

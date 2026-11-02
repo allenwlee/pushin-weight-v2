@@ -383,6 +383,7 @@ Graphviz schema and legacy SQLite file are read-only historical artifacts.
 - [Post translation](docs/reference/translator-output.md)
 - [Rare-type intelligence](docs/reference/rare-types.md)
 - [Trend narrative contract](docs/reference/headline-trend-narratives.md)
+- [Product-release detection and discussion studies](docs/reference/2026-10-29-223000-product-release-detection.md) — inclusive stored-source intake, verified milestones and reusable numerical evidence; staged, not scheduled.
 - [Render deployment runbook](docs/deploy/render.md)
 - Production database access is documented in the project memory and Render runbook.
 

@@ -21,6 +21,111 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(
+    name="monitor.tasks.acquire_product_release",
+    bind=False,
+    autoretry_for=(),
+    max_retries=0,
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=90,
+    time_limit=120,
+)
+def acquire_product_release(*, job_id: str) -> dict[str, object]:
+    """Run one bounded, durable acquisition job on the existing worker."""
+    import httpx
+    from django.conf import settings
+
+    if not settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
+        return {"status": "disabled", "provider_calls": 0}
+    from core.product_release_acquisition import drain_due_hf_acquisitions
+
+    with httpx.Client(follow_redirects=False, trust_env=False) as client:
+        result = drain_due_hf_acquisitions(
+            client=client, limit=1, execute=True, job_ids=[job_id]
+        )
+    return {"status": "processed", **result}
+
+
+@shared_task(
+    name="monitor.tasks.recover_due_product_releases",
+    bind=False,
+    autoretry_for=(),
+    max_retries=0,
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=110,
+    time_limit=120,
+)
+def recover_due_product_releases() -> dict[str, object]:
+    """Process up to three due saved jobs; each owns its request budget."""
+    import httpx
+    from django.conf import settings
+
+    if not settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
+        return {"status": "disabled", "provider_calls": 0}
+    from core.product_release_acquisition import (
+        dispatch_due_recovery,
+        drain_due_hf_acquisitions,
+        recover_release_registrations,
+    )
+    from core.product_release_detection_queue import drain_posts
+    from core.product_release_source_queue import drain_mapping_reconciliations, drain_observations
+    from core.source_metric_projection import recover_release_projection_followups
+
+    try:
+        detection = drain_posts(limit=50, max_seconds=20)
+    except Exception:
+        logger.exception("Release detection recovery failed; later wake-up can retry")
+        detection = {"status": "error"}
+
+    try:
+        mapping_reconciliation = drain_mapping_reconciliations(limit=10, page_size=25, max_seconds=15)
+    except Exception:
+        logger.exception("Release mapping reconciliation failed; later wake-up can retry")
+        mapping_reconciliation = {"status": "error"}
+
+    try:
+        source_detection = drain_observations(limit=25, max_seconds=15)
+    except Exception:
+        logger.exception("Source release detection recovery failed; later wake-up can retry")
+        source_detection = {"status": "error"}
+
+    try:
+        registrations = recover_release_registrations(limit=25)
+    except Exception:
+        logger.exception("Release registration recovery failed; later wake-up can retry")
+        registrations = {"status": "error"}
+
+    try:
+        projections = recover_release_projection_followups(limit=25)
+    except Exception:
+        logger.exception("Release measurement follow-up failed; later wake-up can retry")
+        projections = {"status": "error"}
+
+    with httpx.Client(follow_redirects=False, trust_env=False) as client:
+        result = drain_due_hf_acquisitions(client=client, limit=3, execute=True)
+    detection_progress = detection.get("due_remaining") and (detection.get("processed") or detection.get("failed"))
+    projection_progress = projections.get("due_remaining") and (
+        projections.get("queued") or projections.get("waiting") or projections.get("excluded")
+        or projections.get("failed")
+    )
+    source_progress = source_detection.get("due_remaining") and (
+        source_detection.get("processed") or source_detection.get("failed")
+    )
+    mapping_progress = mapping_reconciliation.get("due_remaining") and (
+        mapping_reconciliation.get("processed") or mapping_reconciliation.get("failed")
+    )
+    if detection_progress or source_progress or projection_progress or mapping_progress:
+        dispatch_due_recovery()
+    return {"status": "processed", "detection": detection, "source_detection": source_detection,
+            "mapping_reconciliation": mapping_reconciliation,
+            "registration_recovery": registrations,
+            "measurement_followups": projections, **result}
+
+
+@shared_task(
     name="monitor.tasks.refresh_trend_narratives",
     bind=False,
     autoretry_for=(),

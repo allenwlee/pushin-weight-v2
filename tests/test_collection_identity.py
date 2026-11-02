@@ -98,12 +98,18 @@ def test_rename_is_alias_and_preserves_mapping_hash():
     }
 
 
-def test_dedicated_native_identity_cannot_be_claimed_by_another_product():
+@pytest.mark.parametrize("first_role,second_role", [
+    ("dedicated_model", "dedicated_model"),
+    ("dedicated_model", "dedicated_product"),
+    ("dedicated_product", "dedicated_model"),
+    ("dedicated_product", "family_repository"),
+])
+def test_dedicated_native_identity_cannot_be_claimed_by_another_product(first_role, second_role):
     brand, _, subject, repo = identities()
     review_github_mapping(
         subject=subject,
         repo=repo,
-        role="dedicated_model",
+        role=first_role,
         evidence_url="https://github.com/publisher/family",
         reviewed_by="test",
     )
@@ -113,7 +119,8 @@ def test_dedicated_native_identity_cannot_be_claimed_by_another_product():
         review_github_mapping(
             subject=another,
             repo=repo,
-            role="dedicated_model",
+            role=second_role,
+            version_selector="v2" if second_role == "family_repository" else None,
             evidence_url="https://github.com/publisher/family",
             reviewed_by="test",
         )

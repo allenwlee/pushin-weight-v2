@@ -17,7 +17,7 @@ from core.models import (
 )
 from core.source_metric_projection import drain_pending_projections, enqueue_projection
 from scripts.benchmark_download_collector.sources import Budget
-from tests.test_source_metric_projection import configured
+from tests.test_source_metric_projection import configured, retained_document
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
@@ -53,8 +53,9 @@ def capture(operation="hf_catalog", *, queued=True):
         source_identifier=str(raw["id"]),
         source_subject_kind="repository",
         observation_key="b" * 64,
-        listing=raw,
-        dimensions={"kind": "repository"} if source == "github" else {},
+        legacy_archive=retained_document(
+            raw, dimensions={"kind": "repository"} if source == "github" else {},
+        ),
     )
     if queued:
         from core.collection_state import fenced_run
@@ -115,7 +116,7 @@ def test_reclaimed_acquisition_cannot_acknowledge_committed_projection(
     queue = CollectionRun.objects.get(pk=abandoned.run_id).scopes.get(
         scope_kind="numeric_projection"
     )
-    assert queue.envelopes == []
+    assert queue.phase == "projection_queue"
     assert list(queue.child_scopes.filter(scope_kind="numeric_projection_item").values_list(
         "resource_observation_id", "outcome",
     )) == [(snapshot.pk, "pending")]
@@ -129,7 +130,7 @@ def test_reclaimed_acquisition_cannot_acknowledge_committed_projection(
     queue.refresh_from_db()
     assert recovered["acknowledged"] == recovered["reused_resources"] == 1
     assert recovered["written_values"] == 0 and recovered["pending"] is False
-    assert queue.envelopes == [] and queue.outcome == "complete"
+    assert queue.phase == "projection_queue" and queue.outcome == "complete"
     assert list(queue.child_scopes.filter(scope_kind="numeric_projection_item").values_list(
         "resource_observation_id", "outcome",
     )) == [(snapshot.pk, "complete")]
@@ -249,7 +250,7 @@ def test_standalone_recovery_cannot_acknowledge_after_acquisition_starts(monkeyp
     queue = CollectionRun.objects.get(job__purpose="catalog").scopes.get(
         scope_kind="numeric_projection"
     )
-    assert queue.envelopes == []
+    assert queue.phase == "projection_queue"
     assert list(queue.child_scopes.filter(scope_kind="numeric_projection_item").values_list(
         "resource_observation_id", "outcome",
     )) == [(snapshot.pk, "pending")]

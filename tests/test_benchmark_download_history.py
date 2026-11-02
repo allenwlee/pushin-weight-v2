@@ -119,7 +119,7 @@ def test_arena_history_keeps_publication_when_selected_cohort_is_empty():
     assert run.source_dataset.code == "lmarena-ai/leaderboard-dataset"
     from core.collection_capture import read_document
 
-    assert run.raw_payload is None
+    assert not hasattr(run, "raw_payload")
     assert read_document(run.payload_archive)["coverage"] == "publication_window"
     assert read_document(run.source_metadata_archive)["publication_dates"] == ["2026-09-10", "2026-09-11"]
     assert set(run.observations.values_list("observation_kind", flat=True)) == {
@@ -150,18 +150,13 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields(arch
         period_label_date=None,
         temporal_status="unknown",
     )
-    for observation in run.observations.all():
-        metadata = observation.source_metadata
-        metadata.pop("reported_time", None)
-        metadata["unrelated"] = "preserve"
-        changes = {"source_metadata": metadata}
-        if archived:
-            from core.collection_capture import archive_legacy
+    if archived:
+        from core.collection_capture import archive_legacy
 
-            changes["legacy_archive"] = archive_legacy({
-                "listing": {}, "dimensions": {}, "source_metadata": metadata,
-            })
-        type(observation).objects.filter(pk=observation.pk).update(**changes)
+        archive = archive_legacy({
+            "listing": {}, "dimensions": {}, "source_metadata": {"unrelated": "preserve"},
+        })
+        run.observations.update(legacy_archive=archive)
     before = list(
         MetricValue.objects.order_by("id").values(
             "id", "integer_value", "window_end_at", "temporal_status"
@@ -202,7 +197,7 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields(arch
     ).first()
     assert cumulative.window_start_at == datetime(2026, 9, 10, 13, tzinfo=UTC)
     assert cumulative.window_range.lower < cumulative.window_range.upper
-    saved = list(run.observations.order_by("id").values("source_metadata"))
+    saved = list(run.observations.order_by("id").values("legacy_archive_id", "source_identifier"))
     output = StringIO()
     call_command(
         "repair_metric_timing",
@@ -215,7 +210,7 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields(arch
     summary = json.loads(output.getvalue().splitlines()[-1].split(" ", 1)[1])
     assert summary["changed_values"] == summary["metadata_updates"] == 0
     assert CollectionCorrection.objects.count() == 4
-    assert list(run.observations.order_by("id").values("source_metadata")) == saved
+    assert list(run.observations.order_by("id").values("legacy_archive_id", "source_identifier")) == saved
     call_command(
         "repair_metric_timing",
         apply=True,
@@ -231,9 +226,10 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields(arch
         )
         == before
     )
-    assert all(
-        o.source_metadata["unrelated"] == "preserve" for o in run.observations.all()
-    )
+    if archived:
+        from core.collection_capture import read_document
+
+        assert all(read_document(o.legacy_archive)["source_metadata"]["unrelated"] == "preserve" for o in run.observations.all())
     assert CollectionCorrection.objects.count() == 8
     rollback_ids = set(CollectionCorrection.objects.values_list("pk", flat=True))
     call_command(
@@ -265,7 +261,6 @@ def test_timing_correction_refuses_conflicts_and_rolls_back_failed_batches(
 
     from core.benchmark_metric_history import import_history
     from core.benchmark_metric_timing_repair import LOCK_KEY
-    from core.models import CollectionObservation
 
     run = import_history(manifest(configured()), apply=True)
     MetricValue.objects.all().update(
@@ -274,12 +269,6 @@ def test_timing_correction_refuses_conflicts_and_rolls_back_failed_batches(
         period_label_date=None,
         temporal_status="unknown",
     )
-    for observation in run.observations.all():
-        metadata = observation.source_metadata
-        metadata.pop("reported_time", None)
-        CollectionObservation.objects.filter(pk=observation.pk).update(
-            source_metadata=metadata
-        )
     kwargs = {
         "database_name": connection.settings_dict["NAME"],
         "cutoff_value_id": MetricValue.objects.order_by("-id").first().pk,
@@ -324,7 +313,10 @@ def test_timing_correction_refuses_conflicts_and_rolls_back_failed_batches(
         call_command("repair_metric_timing", **kwargs)
         value = MetricValue.objects.order_by("pk").first()
         if failure.startswith("later_typed_"):
-            run.observations.update(source_metadata={})
+            from core.collection_capture import archive_legacy
+
+            archive = archive_legacy({"listing": {}, "dimensions": {}, "source_metadata": {}})
+            run.observations.update(legacy_archive=archive)
         if failure == "later_typed_basis":
             MetricValue.objects.filter(pk=value.pk).update(window_end_basis="later_review")
         else:

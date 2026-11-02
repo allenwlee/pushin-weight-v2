@@ -1166,16 +1166,27 @@ def project_publication_scope_references_batch(
         with connection.cursor() as cursor:
             cursor.execute("SET LOCAL lock_timeout = '5s'")
             cursor.execute("SET LOCAL statement_timeout = '30s'")
+        legacy_fields = any(f.name == "ownership" for f in CollectionScopeRun._meta.fields)
         query = CollectionScopeRun.objects.filter(
             scope_kind="publication_selection", pk__gt=after_id,
-        ).only("id", "scope_key", "ownership", "resource_observation", "projection_contract")
+        ).select_related("projection_contract", "legacy_archive")
         if not verify_only:
-            query = query.select_for_update()
+            query = query.select_for_update(of=("self",))
         scopes = list(query.order_by("pk")[:batch_size])
         if not scopes:
             return ProvenanceBatch(after_id, 0, 0)
+        from core.collection_capture import scope_object_documents
+
+        owners = {}
         for scope in scopes:
-            owner = scope.ownership
+            if legacy_fields:
+                owner = scope.ownership
+            elif scope.legacy_archive_id:
+                owner = scope_object_documents(scope)[0]
+            else:
+                owner = {"contract_hash": scope.projection_contract.contract_hash,
+                         "publication_observation_id": scope.resource_observation_id} if scope.projection_contract_id else {}
+            owners[scope.pk] = owner
             if (
                 not isinstance(owner, dict)
                 or set(owner) != {"contract_hash", "publication_observation_id"}
@@ -1184,15 +1195,15 @@ def project_publication_scope_references_batch(
             ):
                 raise ValueError("invalid historical publication selection identity")
         contracts = MetricCollectionContract.objects.only("id", "contract_hash").in_bulk(
-            {s.ownership["contract_hash"] for s in scopes}, field_name="contract_hash",
+            {owners[s.pk]["contract_hash"] for s in scopes}, field_name="contract_hash",
         )
         publication_ids = set(CollectionObservation.objects.filter(
-            pk__in=[s.ownership["publication_observation_id"] for s in scopes],
+            pk__in=[owners[s.pk]["publication_observation_id"] for s in scopes],
         ).values_list("pk", flat=True))
         changed = []
         for scope in scopes:
-            contract_hash = scope.ownership["contract_hash"]
-            publication_id = scope.ownership["publication_observation_id"]
+            contract_hash = owners[scope.pk]["contract_hash"]
+            publication_id = owners[scope.pk]["publication_observation_id"]
             contract = contracts.get(contract_hash)
             if (
                 contract is None or publication_id not in publication_ids
@@ -1232,14 +1243,12 @@ def project_publication_runtime_bounds_batch(
         with connection.cursor() as cursor:
             cursor.execute("SET LOCAL lock_timeout = '5s'")
             cursor.execute("SET LOCAL statement_timeout = '30s'")
+        legacy_fields = any(f.name == "ownership" for f in CollectionScopeRun._meta.fields)
         query = CollectionScopeRun.objects.filter(
             scope_kind="publication_runtime", pk__gt=after_id,
-        ).only(
-            "id", "run_id", "scope_key", "ownership", "envelopes",
-            "requested_start_at", "requested_end_at",
-        )
+        ).select_related("legacy_archive")
         if not verify_only:
-            query = query.select_for_update()
+            query = query.select_for_update(of=("self",))
         scopes = list(query.order_by("pk")[:batch_size])
         if not scopes:
             return ScopeBoundsBatch(after_id, 0, 0)
@@ -1251,21 +1260,33 @@ def project_publication_runtime_bounds_batch(
         for scope in scopes:
             job = jobs[run_jobs[scope.run_id]]
             instruction = job.scope
+            if legacy_fields:
+                ownership, envelopes = scope.ownership, scope.envelopes
+            elif scope.legacy_archive_id:
+                from core.collection_capture import scope_object_documents
+
+                ownership, _, envelopes = scope_object_documents(scope)
+            else:
+                ownership = {"policy": instruction.get("publication_window_policy"),
+                             "cohort_hash": instruction.get("cohort_hash")}
+                envelopes = [{"cutoff": scope.requested_end_at.isoformat(),
+                              "publication_start_at": scope.requested_start_at.isoformat(),
+                              "acquisition_generation": str(scope.run_id)}] if scope.requested_start_at and scope.requested_end_at else []
             if (
                 job.source_id not in {"arena", "openrouter"}
                 or job.operation != "model_history"
                 or scope.scope_key != "window"
                 or instruction.get("publication_window_policy") != "rolling-completed-days-v1"
                 or not instruction.get("cohort_hash")
-                or scope.ownership != {
+                or ownership != {
                     "policy": instruction["publication_window_policy"],
                     "cohort_hash": instruction["cohort_hash"],
                 }
-                or not isinstance(scope.envelopes, list)
-                or len(scope.envelopes) != 1
+                or not isinstance(envelopes, list)
+                or len(envelopes) != 1
             ):
                 raise ValueError("invalid historical publication runtime identity")
-            saved = scope.envelopes[0]
+            saved = envelopes[0]
             if (
                 not isinstance(saved, dict)
                 or set(saved) != {"cutoff", "publication_start_at", "acquisition_generation"}
@@ -1637,7 +1658,7 @@ def project_arena_publication_batch(
                 if run.source_metadata_archive_id is not None else run.source_metadata
             )
             if not isinstance(metadata, dict):
-                raise ValueError("Arena source metadata is invalid")
+                raise TypeError("Arena source metadata is invalid")
             if "publication_dates" not in metadata:
                 continue
             native = metadata["publication_dates"]
@@ -1701,11 +1722,19 @@ def _project_endpoint_row_dates(checks, *, verify_only):
             if observation_id in dates and dates[observation_id] != day:
                 raise ValueError("endpoint row has conflicting date references")
             dates[observation_id] = day
-    for row in CollectionObservation.objects.filter(pk__in=dates).only(
-        "pk", "dimensions", "source_record_date",
-    ):
+    has_dimensions = any(f.name == "dimensions" for f in CollectionObservation._meta.fields)
+    fields = ["pk", "source_record_date", "dimensions" if has_dimensions else "legacy_archive"]
+    for row in CollectionObservation.objects.filter(pk__in=dates).only(*fields):
         day = dates[row.pk]
-        legacy_day = row.dimensions.get("date")
+        if has_dimensions:
+            dimensions = row.dimensions
+        elif row.legacy_archive_id:
+            from core.collection_capture import read_document
+
+            dimensions = read_document(row.legacy_archive).get("dimensions", {})
+        else:
+            dimensions = {}
+        legacy_day = dimensions.get("date")
         if legacy_day is not None and native_date(legacy_day) != day:
             raise ValueError("endpoint row date conflicts with captured evidence")
         if row.source_record_date is None and not verify_only:
@@ -1738,10 +1767,12 @@ def project_opencode_endpoint_batch(
             job__source_id="opencode",
             job__purpose="metric",
             status__in=["success", "partial"],
-        ).filter(
-            Q(source_metadata__has_key="endpoint_checks")
-            | Q(source_metadata_archive__isnull=False)
-        ).select_related("job__contract")
+        )
+        if any(f.name == "source_metadata" for f in CollectionRun._meta.fields):
+            runs = runs.filter(Q(source_metadata__has_key="endpoint_checks") | Q(source_metadata_archive__isnull=False))
+        else:
+            runs = runs.filter(source_metadata_archive__isnull=False)
+        runs = runs.select_related("job__contract")
         if after_id is not None:
             runs = runs.filter(pk__gt=after_id)
         if not verify_only:
@@ -1756,7 +1787,7 @@ def project_opencode_endpoint_batch(
                 if run.source_metadata_archive_id is not None else run.source_metadata
             )
             if not isinstance(metadata, dict):
-                raise ValueError("OpenCode source metadata is invalid")
+                raise TypeError("OpenCode source metadata is invalid")
             if "endpoint_checks" not in metadata:
                 continue
             checks = metadata["endpoint_checks"]

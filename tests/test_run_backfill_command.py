@@ -41,7 +41,7 @@ def test_arbitrary_ranges_need_no_source_edits_or_paid_requests(planned, since, 
     definition = frozen["windows"][0]["collection_definition"]
     assert definition["scope"]["adapter"] == "x-backfill/v2"
     assert set(definition["scope"]["required_call_ids"]) == {
-        "A", "B1", "B2", "B3", "C1", "C2", "C3",
+        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4",
     }
     assert definition["scope"]["since_epoch"] < definition["scope"]["until_epoch"]
     assert definition["scope"]["author_scope"]["historical_membership_reconstructed"] is False

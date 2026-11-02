@@ -310,6 +310,9 @@ def claim_job(
                     "hf_catalog", "match_crosswalk",
                 }
                 or job.purpose == "metric" and job.operation == "collect_metrics"
+                or job.source_id in {"hf", "github"} and job.purpose == "content"
+                and job.operation == "release_acquisition" and job.mode == "manual"
+                and manual_authorized
                 or job.source_id == "x" and job.purpose == "content"
                 and job.operation == "x_backfill" and job.mode == "historical"
                 and manual_authorized
@@ -462,6 +465,8 @@ def claim_job(
             marker_kind, marker_phase = "metric_execution", "typed-metric-v1"
         elif job.operation == "match_crosswalk":
             marker_kind, marker_phase = "match_execution", "typed-product-match-v1"
+        elif job.source_id in {"hf", "github"} and job.operation == "release_acquisition":
+            marker_kind, marker_phase = "release_acquisition", "typed-release-acquisition-v1"
         elif job.source_id == "x" and job.operation == "x_backfill":
             marker_kind, marker_phase = "x_backfill_execution", "typed-backfill-v1"
         elif job.source_id == "x" and job.operation == "x_cycle":
@@ -808,7 +813,8 @@ def _validate_typed_projection_scope(job, kind, key, ownership, contract, observ
     )
     require(
         (
-            job.purpose == "catalog"
+            (job.purpose == "catalog" or job.purpose == "content"
+             and job.source_id in {"hf", "github"} and job.operation == "release_acquisition")
             and key == str(contract.pk)
             and ownership == {
                 "contract_id": str(contract.pk),
@@ -1377,6 +1383,10 @@ def finish_run(
                 job.purpose == "catalog" and job.operation == "match_crosswalk"
                 and request_count == 0
             )
+            release_acquisition = (
+                job.source_id in {"hf", "github"} and job.purpose == "content"
+                and job.operation == "release_acquisition" and request_count is not None
+            )
             require(
                 (job.purpose == "catalog" and (
                     job.source_id == "hf" and job.operation in {"model_inventory", "hf_catalog"}
@@ -1384,7 +1394,7 @@ def finish_run(
                 ))
                 or metric_collection or model_history or github_catalog or x_backfill
                 or x_cycle
-                or product_match,
+                or product_match or release_acquisition,
                 "typed completion needs a supported collection operation",
             )
         now = now or timezone.now()

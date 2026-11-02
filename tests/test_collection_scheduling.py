@@ -72,9 +72,10 @@ def test_utc_slot_and_failure_cooldown_are_separate_from_success(settings):
     take_metric_authority(job.pk)
     job.refresh_from_db()
     assert not due_job(job, now=NOW.replace(hour=9))["due"]
-    claim = claim_job(job.pk, now=NOW)
+    claim = claim_job(job.pk, now=NOW, typed=True)
     run = finish_run(
-        claim, status="failed", retry_at=NOW + timedelta(minutes=15), now=NOW
+        claim, status="failed", retry_at=NOW + timedelta(minutes=15), now=NOW,
+        typed=True, physical_accounting_complete=True, request_count=0,
     )
     job.refresh_from_db()
     assert job.last_success_id is None and job.last_attempt_id == run.pk
@@ -124,20 +125,17 @@ def test_metric_due_command_writes_values_to_claimed_run_once(settings, monkeypa
 
 
 def test_historical_run_bytes_survive_without_an_attempt(settings):
-    job = scheduled(settings)
-    run = CollectionRun.objects.create(
-        job=job,
-        ingestion_key="a" * 64,
-        status="failed",
-        completed_at=NOW,
-        lease_expires_at=NOW,
-        source_metadata={"physical_bytes_received": 42},
-    )
-    assert not run.attempts.exists()
+    scheduled(settings)
+    # Exercise the historical migration against a temporary copy of its old
+    # table shape, without restoring the retired column on the real table.
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE TEMP TABLE collection_runs (source_metadata jsonb, physical_bytes_received bigint) ON COMMIT DROP")
+        cursor.execute("INSERT INTO collection_runs VALUES ('{\"physical_bytes_received\": 42}', NULL)")
     migration = importlib.import_module("core.migrations.0175_rg6_run_physical_bytes")
     migration.copy_historical_bytes(None, SimpleNamespace(connection=connection))
-    run.refresh_from_db()
-    assert run.physical_bytes_received == 42
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT physical_bytes_received FROM collection_runs")
+        assert cursor.fetchone() == (42,)
 
 
 def test_dispatch_invocation_budget_stops_before_second_job(settings):
@@ -210,8 +208,8 @@ def test_external_x_cron_is_never_due_even_when_ready():
     with pytest.raises(ValueError, match="caller authorization"):
         claim_job(job.pk, now=NOW)
     # Existing scheduled/on-demand authority is explicit and independent of metric flags.
-    claim = claim_job(job.pk, manual_authorized=True, now=NOW)
-    finish_run(claim, status="success", now=NOW)
+    claim = claim_job(job.pk, manual_authorized=True, now=NOW, typed=True)
+    finish_run(claim, status="success", now=NOW, typed=True, physical_accounting_complete=True, request_count=0)
 
 
 def test_late_metric_response_cannot_write_after_job_is_paused(settings, monkeypatch):

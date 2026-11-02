@@ -91,10 +91,10 @@ def test_post_membership_can_be_saved_without_historical_enrichment_ownership(ba
         save_post_membership(scheduled_run, None, [post.pk])
     assert CollectionObservation.objects.filter(run=scheduled_run, post=post).count() == 1
     first_scope = CollectionScopeRun.objects.create(
-        run=scheduled_run, scope_kind="x_query", scope_key="A", ownership={},
+        run=scheduled_run, scope_kind="x_query", scope_key="A",
     )
     second_scope = CollectionScopeRun.objects.create(
-        run=scheduled_run, scope_kind="x_query", scope_key="B1", ownership={},
+        run=scheduled_run, scope_kind="x_query", scope_key="B1",
     )
     with transaction.atomic():
         save_post_membership(scheduled_run, first_scope, [post.pk])

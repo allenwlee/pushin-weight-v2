@@ -257,7 +257,11 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 15 * 60}
 # Render cron is the only production scheduler. Keep beat empty so a future
 # worker cannot silently create a second 15-minute harvest scheduler.
 CELERY_BEAT_SCHEDULE = {}
+# Event-driven release work is opt-in. It creates no schedule or beat entry.
+PRODUCT_RELEASE_BACKGROUND_ENABLED = env.bool("PRODUCT_RELEASE_BACKGROUND_ENABLED", default=False)
 CELERY_TASK_ROUTES = {
+    "monitor.tasks.acquire_product_release": {"queue": "trend-narratives"},
+    "monitor.tasks.recover_due_product_releases": {"queue": "trend-narratives"},
     "monitor.tasks.refresh_editorial": {"queue": "trend-narratives"},
     "monitor.tasks.poll_editorial_picture": {"queue": "trend-narratives"},
     "monitor.tasks.edit_content_picture": {"queue": "trend-narratives"},

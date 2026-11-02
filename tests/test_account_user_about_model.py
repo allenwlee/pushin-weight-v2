@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.db.models.deletion import ProtectedError
 
 from core.models import Account, AccountBasedInMapping, Geolocation, XAccountDetail

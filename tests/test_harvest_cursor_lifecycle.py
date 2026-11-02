@@ -235,13 +235,23 @@ def test_server_error_also_holds_the_cursor(harvest):
     assert CallState.objects.get().last_completed_at == first
 
 
-def test_recovery_resumes_normal_advance(harvest):
+def test_recovery_resumes_normal_advance(harvest, monkeypatch):
+    from types import SimpleNamespace
+
+    from core import x_cycle_lineage
     from core.models import CallState
+
+    # Scheduled harvests occur in separate 15-minute slots.  Keep the
+    # lineage clock distinct even when all three fixture runs finish in one second.
+    slot = [datetime.now(timezone.utc).replace(second=0, microsecond=0)]
+    monkeypatch.setattr(x_cycle_lineage, "timezone", SimpleNamespace(now=lambda: slot[0]))
 
     call = [_call()]
     harvest(call, [[_tweet("1")]])
     held = CallState.objects.get().last_completed_at
+    slot[0] += timedelta(minutes=15)
     harvest(call, [XClientRateLimitError("429")])
+    slot[0] += timedelta(minutes=15)
     harvest(call, [[_tweet("3")]])
     assert CallState.objects.get().last_completed_at >= held, (
         "cursor regressed after a recovered failure"

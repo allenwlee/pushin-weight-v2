@@ -75,10 +75,24 @@ def test_catalog_mapping_reverse_refuses_without_erasing_identity_evidence():
     # The old 0082 rollback guard predates forward-only 0089; exercise that
     # historical boundary without first crossing the new cutover migration.
     executor.migrate([("core", "0088_archive_run_instructions")])
-    from tests.test_collection_identity import admit, identities
+    from django.utils import timezone
 
-    _, _, subject, repo = identities()
-    mapping = admit(subject, repo)
+    historical = executor.loader.project_state([("core", "0088_archive_run_instructions")]).apps
+    source = historical.get_model("core", "DataSource").objects.create(
+        pk="github", name="GitHub", source_type="model_adoption"
+    )
+    brand = historical.get_model("core", "Brand").objects.create(
+        nickname="guard-fixture", created_at=timezone.now()
+    )
+    subject = historical.get_model("core", "MeasurementSubject").objects.create(
+        subject_kind="brand", brand=brand
+    )
+    mapping = historical.get_model("core", "SourceSubjectMapping").objects.create(
+        purpose="catalog", source=source, subject=subject,
+        source_subject_kind="repository", identifier_scope="repository_id",
+        external_identifier="123", normalized_identifier="123", mapping_hash="a" * 64,
+        evidence_url="https://github.com/publisher/family", reviewed_by="fixture",
+    )
     with pytest.raises(RuntimeError, match="preserve.*0082"):
         MigrationExecutor(connection).migrate([("core", "0081_collection_jobs")])
     mapping.refresh_from_db()

@@ -207,10 +207,10 @@ def test_projection_recovers_after_crash_before_ack_without_refetch(
         scope_kind="numeric_projection_item",
     )
     assert pending_item.outcome == "pending"
-    type(pending_item).objects.filter(run__job=job, scope_kind="numeric_projection").update(
-        envelopes=[{"observation_id": 0}] if stale_envelopes else [], ownership={},
-    )
-    from core.collection_capture import scope_object_documents
+    from core.collection_capture import archive_legacy, scope_object_documents
+
+    archive = archive_legacy({"ownership": {}, "cursor_history": [], "envelopes": [{"observation_id": 0}] if stale_envelopes else []})
+    type(pending_item).objects.filter(run__job=job, scope_kind="numeric_projection").update(legacy_archive=archive)
 
     def queue_documents_forbidden(scope):
         if scope.scope_kind == "numeric_projection":
@@ -332,12 +332,7 @@ def test_detail_partial_resumes_and_unsupported_expansion_is_terminal_gap():
     for listing in first.observations.filter(scope_run__scope_kind="namespace"):
         documents = observation_object_documents(listing)
         listing.legacy_archive = archive_legacy(dict(zip(("listing", "dimensions", "source_metadata"), documents)))
-        listing.listing = {}
-        listing.dimensions = {}
-        listing.source_metadata = {}
-        listing.save(update_fields=[
-            "legacy_archive", "listing", "dimensions", "source_metadata",
-        ])
+        listing.save(update_fields=["legacy_archive"])
     assert sorted(_hf_missing_fields(first, job), key=str) == sorted(
         missing_before_archive, key=str
     )

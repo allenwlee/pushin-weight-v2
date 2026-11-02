@@ -156,3 +156,37 @@ def with_database_models(function):
             )
 
     return wrapped
+
+
+def upgrade_legacy_collection_for_current_reader():
+    """Upgrade fixture evidence using the same archive and retirement guards."""
+    import hashlib
+
+    from django.core.management import call_command
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
+    from core.migrations._rg6_retirement_v1 import FIELDS
+    from tests.test_rg6_retirement import authorization
+
+    call_command("prepare_refresh_references", verbosity=0)
+    target = [("core", "0200_merge_rg6_enrichment_budget_contract")]
+    MigrationExecutor(connection).migrate(target)
+    historical = MigrationExecutor(connection).loader.project_state(target).apps
+    archive_model = historical.get_model("core", "CollectionEvidenceArchive")
+    with connection.cursor() as cursor:
+        for table, fields in FIELDS.items():
+            pairs = ",".join(f"'{field}',{field}" for field in fields)
+            cursor.execute(f"SELECT id,convert_to(jsonb_build_object({pairs})::text,'UTF8') FROM {table}")
+            for key, raw in cursor.fetchall():
+                body = bytes(raw)
+                archive, _ = archive_model.objects.get_or_create(
+                    content_sha256=hashlib.sha256(body).hexdigest(),
+                    encoding="legacy-jsonb-text-v1",
+                    defaults={"media_type": "application/json", "byte_count": len(body),
+                              "body": body, "capture_kind": "legacy_collection"},
+                )
+                cursor.execute(f"UPDATE {table} SET legacy_archive_id=%s WHERE id=%s", [archive.pk, key])
+    with authorization():
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes("core"))

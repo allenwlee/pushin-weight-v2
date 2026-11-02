@@ -20,7 +20,7 @@ MIGRATION = "core.migrations.0088_archive_run_instructions"
 
 
 @pytest.fixture
-def historical_schema(isolated_migration_database, monkeypatch, request):
+def historical_schema(collection_history_schema, monkeypatch, request):
     """Old rows belong to historical models on the actual old schema."""
     executor = MigrationExecutor(connection)
     target = [("core", "0088_archive_run_instructions")]
@@ -116,7 +116,6 @@ def previous_catalog_module(historical=None):
     "status,budget", [("pending", 1), ("partial", 2), ("success", 50)]
 )
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
 @pytest.mark.usefixtures("historical_schema")
 def test_build_leaves_catalog_resumable_by_loaded_previous_caller(status, budget):
     from tests.test_hf_catalog_runner import api, scope
@@ -202,13 +201,6 @@ def test_frozen_legacy_bootstrap_launcher_runs_only_with_its_historical_orm(
     # The historical launcher uses its deployed scheduler. Current services
     # require the expanded schema and are tested after migration below.
     importlib.import_module("monitor.management.commands.collect_benchmark_due")
-    monkeypatch.setattr(models, "MetricCollectionRun", CollectionRun)
-    monkeypatch.setattr(
-        models,
-        "MetricCollectionContract",
-        apps.get_model("core", "MetricCollectionContract"),
-    )
-
     def no_provider_request(*args, **kwargs):
         raise AssertionError("Retained bootstrap and disabled schedule need no request")
 
@@ -218,7 +210,15 @@ def test_frozen_legacy_bootstrap_launcher_runs_only_with_its_historical_orm(
         / "fixtures/collection_schema/legacy_benchmark_launcher.txt"
     ).read_text()
     script = script.replace("75c4a856-385b-429a-9b03-c7e023ea6f73", str(contract.pk))
-    exec(compile(script, "historical_legacy_benchmark_launcher.py", "exec"), {})  # noqa: S102 - frozen historical deployed payload
+    # Restore these bindings before historical_schema restores its own model
+    # aliases; the shared monkeypatch fixture is torn down in the opposite order.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(models, "MetricCollectionRun", CollectionRun)
+        patch.setattr(
+            models, "MetricCollectionContract",
+            apps.get_model("core", "MetricCollectionContract"),
+        )
+        exec(compile(script, "historical_legacy_benchmark_launcher.py", "exec"), {})  # noqa: S102 - frozen historical deployed payload
     assert CollectionRun.objects.count() == 1
     assert CollectionRun.objects.get(pk=run.pk).observations.count() == 1
 
@@ -244,8 +244,9 @@ def test_current_reader_includes_finished_old_writer_evidence_after_catchup():
         payload(123),
     )
     assert run.job_id is None and run.status == "success"
-    executor = MigrationExecutor(connection)
-    executor.migrate(executor.loader.graph.leaf_nodes("core"))
+    from tests.collection_fixtures import upgrade_legacy_collection_for_current_reader
+
+    upgrade_legacy_collection_for_current_reader()
     report = resource_statistics(
         contract_id=contract.pk, source="hf", identifier="lab/Model"
     )
@@ -274,7 +275,6 @@ def test_scope_copy_mismatch_is_rejected_before_it_can_weaken_a_claim():
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
 @pytest.mark.usefixtures("historical_schema")
 def test_0087_to_0088_preserves_every_existing_field_and_is_retryable():
     executor = MigrationExecutor(connection)
