@@ -1,6 +1,6 @@
 ---
 name: avoiding-recurring-mistakes
-description: Use when working in the pushin-weight-v2 (x-monitor) Django/Render repo on fuchitalee. Activates whenever you are about to make a code change, run a migration, modify harvest/cycle code, touch the prod DB, design URLs/endpoints, commit to main, or write/regenerate reference docs. Triggers on phrases like "harvest", "cycle", "backfiller", "prod db", "render", "i18n", "psql", "classifier", "posts_raw", "worktree", "merge", "deploy", "migration", "concurrent index", "advisory lock", "deadlock", "seed", "halt", "pause", "stop the cron", "fetched vs inserted", "credits too high", "discrepancy". Built from a longitudinal analysis of real project corrections, with amendments through 2026-08-19.
+description: Use when working in the pushin-weight-v2 (x-monitor) Django/Render repo on fuchitalee. Activates whenever you are about to make a code change, run a migration, modify harvest/cycle code, touch the prod DB, design URLs/endpoints, commit to main, or write/regenerate reference docs. Triggers on phrases like "harvest", "cycle", "backfiller", "prod db", "render", "i18n", "psql", "classifier", "posts_raw", "worktree", "merge", "deploy", "migration", "concurrent index", "advisory lock", "deadlock", "seed", "halt", "pause", "stop the cron", "fetched vs inserted", "credits too high", "discrepancy". Built from a longitudinal analysis of real project corrections, with amendments through 2026-10-14.
 ---
 
 # Avoiding Recurring Mistakes — pushin-weight-v2 (x-monitor)
@@ -8,6 +8,10 @@ description: Use when working in the pushin-weight-v2 (x-monitor) Django/Render 
 A correction log distilled from real friction. Each section is named after the mistake pattern, shows a representative correction prompt, and gives a concrete "do this" rule. Apply these rules whenever the trigger condition is met, **before** you start editing code.
 
 If a rule conflicts with `AGENTS.md` / `CLAUDE.md` / `CONCEPTS.md`, follow those repo docs first — this skill is the *recurring-friction* layer on top. Future sessions: Integrate durable corrections into the applicable M-rule and Quick reference, retaining only concise current guidance.
+
+**Before database design:** apply M19. Inspect existing entities, relationships
+and storage before deciding where a new field belongs; do not copy legacy
+duplication as a new-source convention.
 
 ## When this skill triggers
 
@@ -401,6 +405,70 @@ The translator batch-limits probe (`scripts/probes/translator_batch_limits/probe
 
 ---
 
+## M19 — Inspect storage before choosing tables and field types
+
+**Pattern.** A new feature or source gets another table while existing entities
+already represent its identity, evidence or collection lifecycle. Older redundant
+tables become templates for further duplication. The OriginalContent, collection
+and account cleanup discussions exposed this recurring problem.
+
+**Rule.** Inspect existing entities, relationships and storage before deciding
+where a new field belongs:
+
+1. Read `core/models.py` and relevant migrations. Use `CONCEPTS.md` and
+   `docs/reference/db-schema.md` as maps, then verify against actual code.
+2. Trace the relevant writers and readers. Compare record meaning, ownership,
+   counting unit, source/observation time, lifecycle and constraints, rather than
+   matching only names or columns.
+3. Prefer reuse or a justified extension. A new provider does not by itself need
+   a new account, observation, metric or run table. Distinct typed profile
+   extensions or other genuinely different records can justify new tables.
+4. In the existing plan or change description, identify the chosen storage and
+   explain any remaining gap, new-table purpose and table additions/retirements.
+   Do not create another planning artifact or permission gate for this check.
+
+Apply this review to fields as well as tables. For each proposed JSON column,
+record in the existing plan what one value means, which record owns its facts,
+whether it contains several independently referenced items, and how it is read,
+validated and versioned. Compare it with existing columns and related rows.
+Future flexibility, an agent's JSON response or a desire for fewer tables is not
+sufficient justification. Source membership, extracted assertions and historical
+assessment inputs have different meanings even when supplied in one response.
+
+The owner-selected field test is: **Is this truly variable-schema data, or just
+an unmodeled entity?** A PR adding a json/jsonb column needs explicit owner/team
+approval, representative shape variations, typed alternatives and a documented
+versioned strict schema. Enforce it at the database or every application write
+boundary (including jobs/bulk paths), with invalid-value tests; an unused ORM
+validator is not enforcement. Define unknown-key, required/type/range and evolution
+rules. Verify pg_jsonschema availability before depending on jsonb_matches_schema;
+that function is extension-provided, not built into PostgreSQL. This narrow
+approval requirement is explicit owner policy, not an inferred extra gate.
+
+Use representative application queries and invariants to judge the design:
+for example, find every assessment using a Post, enforce subject/source links,
+filter contracts by issuer/period, and reproduce the evidence known at a cutoff.
+Identify what the database enforces versus what a writer must validate. A gallery
+rendering or internally consistent sample proves neither query support nor
+referential integrity. Do not claim performance or deployed behavior from it.
+
+JSON remains a legitimate choice when actual shape variation or externally
+dictated document semantics justify a bounded, strictly validated document treated
+as a unit. An immutable diagnostic/research packet still has to pass the owner's
+variable-schema-versus-unmodeled-entity test. Ordinary columns and
+related rows can also preserve history. Do not convert "JSON is not strictly
+necessary" into "zero JSON is optimal," or replace it with speculative generic
+tables merely to reach a count. Mark unresolved subject/outcome/rule shapes as
+open decisions, then reconcile affected links, readers, writers and table counts
+in the same proposal when they are settled. This is design review, not a new
+approval requirement or authority to migrate data.
+
+Existing repetition is not design authority. This rule does not mandate putting
+every provider field into one wide table or unstructured JSON, and does not
+authorize retiring tables or migrating business data without task scope.
+
+---
+
 ## Quick reference table
 
 | # | Mistake | One-line rule |
@@ -423,6 +491,7 @@ The translator batch-limits probe (`scripts/probes/translator_batch_limits/probe
 | M16 | Inventing API surface | `context7` / WebSearch before guessing external APIs |
 | M17 | Inferring pause authority from an anomaly | Diagnose read-only; pause/resume only with current explicit owner authorization |
 | M18 | Function-only regression net | Pin the production call chain end-to-end (fake client + captured kwargs); function-level tests stay green while production breaks |
+| M19 | Schema chosen by analogy or table/JSON counts | Inspect storage; justify ownership, field types, relationships, queries and constraints |
 
 ---
 
