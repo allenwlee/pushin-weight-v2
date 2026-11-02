@@ -81,7 +81,7 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
             source_id="hf", purpose="catalog", status="pending", ingestion_key="8" * 64
         )
     scope = CollectionScopeRun.objects.create(
-        run=catalog, scope_key="publisher", ownership={}
+        run=catalog, scope_key="publisher", **({"ownership": {}} if legacy_source else {})
     )
     CollectionObservation.objects.create(
         run=catalog,
@@ -286,8 +286,15 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
         }
 
     monkeypatch.setattr(processor, "_django_environment", django_environment)
-    if legacy_source == "0088-active-metric":
-        with pytest.raises(RefreshError, match="candidate_migration_failed"):
+    if legacy_source:
+        # Old snapshots cannot be restored until their populated RG6 documents
+        # have been retired with the explicit preservation procedure.
+        failure = (
+            "candidate_migration_failed"
+            if legacy_source is True
+            else "candidate_rg6_legacy_collection_columns_present"
+        )
+        with pytest.raises(RefreshError, match=failure):
             processor.process(candidate)
         with connect(
             **{
@@ -296,9 +303,14 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
             }
         ) as db:
             assert db.execute(
-                "SELECT status, completed_at, job_id FROM collection_runs WHERE id = %s",
-                [numeric.pk],
-            ).fetchone() == ("running", None, None)
+                "SELECT integer_value FROM metric_values WHERE integer_value = %s",
+                [4_000_000_000],
+            ).fetchone() == (4_000_000_000,)
+            if legacy_source == "0088-active-metric":
+                assert db.execute(
+                    "SELECT status, completed_at, job_id FROM collection_runs WHERE id = %s",
+                    [numeric.pk],
+                ).fetchone() == ("running", None, None)
             assert (
                 "validated"
                 not in db.execute(
