@@ -116,7 +116,6 @@ def previous_catalog_module(historical=None):
     "status,budget", [("pending", 1), ("partial", 2), ("success", 50)]
 )
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
 @pytest.mark.usefixtures("historical_schema")
 def test_build_leaves_catalog_resumable_by_loaded_previous_caller(status, budget):
     from tests.test_hf_catalog_runner import api, scope
@@ -276,7 +275,6 @@ def test_scope_copy_mismatch_is_rejected_before_it_can_weaken_a_claim():
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
 @pytest.mark.usefixtures("historical_schema")
 def test_0087_to_0088_preserves_every_existing_field_and_is_retryable():
     executor = MigrationExecutor(connection)
