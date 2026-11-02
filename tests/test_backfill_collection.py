@@ -36,7 +36,7 @@ def on_demand_test_environment(monkeypatch):
     monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "test-only-on-demand")
 
 
-def ready_job(*, requests=1, maximum=20, cursor=None, complete=False, probe=False):
+def ready_job(*, requests=1, maximum=20, cursor=None, complete=False, probe=False, extra_units=()):
     cfg = bounded_backfill_config(load_config(Path("config.yaml")), enrichment_limit=1)
     source, _ = DataSource.objects.get_or_create(id="x", defaults={"name": "X", "source_type": "social"})
     definition = {
@@ -56,6 +56,7 @@ def ready_job(*, requests=1, maximum=20, cursor=None, complete=False, probe=Fals
                            "outcome": "complete" if complete else "pending", "enumeration_complete": complete}],
             },
         }
+    definition["scope"]["units"].extend(extra_units)
     if probe:
         import hashlib
         import json

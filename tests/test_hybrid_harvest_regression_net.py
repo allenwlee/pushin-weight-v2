@@ -87,14 +87,14 @@ def test_policy_c3_is_glm_pack_with_bare_ox_alpha():
     assert "Zai_org" not in next(spec for spec in specs if spec.call_id == "B2").handles
 
 
-def test_policy_after_state_has_exact_seven_logical_calls():
+def test_policy_after_state_includes_the_added_c4_logical_call():
     policy = load_policy(POLICY_PATH)
     calls = plan_calls(
         "2067062923525275922",
         specs_from_policy(policy),
         primary_keywords=primary_keywords_from_policy(policy),
     )
-    assert {call.call_id for call in calls} == EXPECTED_CALL_IDS_AFTER_U3
+    assert {call.call_id for call in calls} == EXPECTED_CALL_IDS_AFTER_U3 | {"C4"}
 
 
 
