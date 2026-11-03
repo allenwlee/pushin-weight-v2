@@ -102,6 +102,12 @@ def _resolve_metric(
         mapping = None
     if mapping is None or mapping.contract is None:
         return ResolvedMetric(selection, None, "mapping_unavailable")
+    if (
+        not mapping.reviewed_by.strip()
+        or not mapping.evidence_url.strip()
+        or not mapping.contract.reviewed_by.strip()
+    ):
+        return ResolvedMetric(selection, None, "mapping_unreviewed")
     try:
         requested_product = UUID(str(selection.product_key))
     except (TypeError, ValueError):
@@ -609,7 +615,7 @@ def build_chart(
             {
                 "role": role,
                 "key": key,
-                "label": f"{release.product.display_name} {key[0]} {key[1]}",
+                "label": f"{release.product.display_name} {key[0]} {key[1]} ({getattr(metric.mapping, 'external_identifier', 'mapped subject')})",
                 "values": {
                     (date.fromisoformat(point["date"]) - release.date).days: point.get(
                         value_key
@@ -621,14 +627,12 @@ def build_chart(
     lines = []
     for line in raw_lines:
         reference_role = "comparison" if resolved.comparison else "target"
-        reference = next(
-            (
-                item["values"]
-                for item in raw_lines
-                if item["role"] == reference_role and item["key"] == line["key"]
-            ),
-            {},
-        )
+        candidates = [
+            item["values"]
+            for item in raw_lines
+            if item["role"] == reference_role and item["key"] == line["key"]
+        ]
+        reference = candidates[0] if len(candidates) == 1 else {}
         lines.append(
             {
                 "label": line["label"],
@@ -651,6 +655,7 @@ def build_chart(
             ).isoformat()
     previews = []
     if resolved.comparison and request.comparable_collection_accounting:
+        from core.benchmark_forecast_inputs import forecast_inputs
         from core.chart_prediction_preview import temporary_preview
 
         def complete_posts(role, start, end):
@@ -684,6 +689,19 @@ def build_chart(
             if line["role"] == "comparison"
             and line["key"] in {("hf", "downloads"), ("openrouter", "total_tokens")}
         ):
+            if (
+                sum(
+                    item["role"] == "comparison" and item["key"] == prior["key"]
+                    for item in raw_lines
+                )
+                != 1
+                or sum(
+                    item["role"] == "target" and item["key"] == prior["key"]
+                    for item in raw_lines
+                )
+                != 1
+            ):
+                continue
             target = next(
                 (
                     line
@@ -709,7 +727,16 @@ def build_chart(
                         {"lines": [{"source": metric.mapping.source_id}]},
                         "forecast_fitting",
                     )
-            except UseNotPermitted:
+                    forecast_inputs(
+                        metric.mapping.contract,
+                        request.cutoff,
+                        mapping_ids=[metric.mapping.pk],
+                        mode="operational"
+                        if request.history_mode == "strict"
+                        else "retrospective_research",
+                        use="forecast_fitting",
+                    )
+            except (UseNotPermitted, ValueError):
                 permitted = False
             source, key = prior["key"]
             preview = temporary_preview(

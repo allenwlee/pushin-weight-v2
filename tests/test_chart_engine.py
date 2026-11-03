@@ -215,6 +215,15 @@ def test_reviewed_metric_mapping_is_resolved_for_the_selected_product():
         == "mapping_product_mismatch"
     )
 
+    reviewer = mapping.reviewed_by
+    mapping.reviewed_by = ""
+    mapping.save(update_fields=["reviewed_by"])
+    assert (
+        validate_request(request).metrics[0].unavailable_reason == "mapping_unreviewed"
+    )
+    mapping.reviewed_by = reviewer
+    mapping.save(update_fields=["reviewed_by"])
+
     source = mapping.source
     source.metadata["use_policy"]["internal_analysis"] = {"status": "prohibited"}
     source.save(update_fields=["metadata"])
@@ -246,6 +255,28 @@ def test_omitting_metric_selection_discovers_reviewed_product_metrics():
         "downloads_all_time",
     }
     assert all(item.mapping.contract_id == contract.pk for item in metrics)
+
+
+def test_comparing_two_releases_of_same_product_keeps_both_roles():
+    from core.benchmark_metric_identity import configure_collection
+    from core.chart_engine import ChartRequest, ReleaseAnchor, validate_request
+    from tests.test_benchmark_download_db_identity import setup_spec
+
+    product, spec = setup_spec()
+    configure_collection(spec)
+    start = datetime(2026, 8, 1, tzinfo=UTC)
+    prior = start - timedelta(days=30)
+    request = ChartRequest(
+        target=ReleaseAnchor(product.product_key, start.date(), "caller"),
+        start=start,
+        end=start + timedelta(days=7),
+        cutoff=start + timedelta(days=8),
+        comparison=ReleaseAnchor(product.product_key, prior.date(), "caller"),
+        comparison_start=prior,
+        comparison_end=prior + timedelta(days=7),
+    )
+    roles = [metric.selection.release for metric in validate_request(request).metrics]
+    assert roles.count("target") == roles.count("comparison") == 2
 
 
 def test_brand_discussion_uses_exact_half_open_window_without_saving_snapshots():
@@ -626,7 +657,7 @@ def test_github_product_repository_metric_is_not_confused_with_account_metrics()
     assert result["points"][0]["unit"] == "stars"
 
 
-def test_internal_chart_returns_same_values_and_svg_without_writes():
+def test_internal_chart_returns_same_values_and_svg_without_writes(tmp_path):
     from core.chart_engine import ChartRequest, ReleaseAnchor, build_chart
     from core.models import Post, PostBrand
 
@@ -651,6 +682,7 @@ def test_internal_chart_returns_same_values_and_svg_without_writes():
     assert result["discussion"]["target"]["post_count"] == 8
     assert result["lines"][0]["points"][0]["value"] == 0
     assert "Chart model brand discussion" in result["svg"]
+    (tmp_path / "chart.svg").write_text(result["svg"])
     assert Post.objects.count() == before
 
 
@@ -660,6 +692,7 @@ def test_internal_forecast_requires_permission_and_produces_separate_dotted_line
     from types import SimpleNamespace
     from uuid import uuid4
 
+    import core.benchmark_forecast_inputs as forecast_reader
     import core.chart_engine as engine
 
     target_id, prior_id = uuid4(), uuid4()
@@ -680,7 +713,7 @@ def test_internal_forecast_requires_permission_and_produces_separate_dotted_line
         history_mode="hindsight",
         comparable_collection_accounting=True,
     )
-    mapping = SimpleNamespace(source_id="openrouter", contract=object())
+    mapping = SimpleNamespace(pk=uuid4(), source_id="openrouter", contract=object())
     metrics = tuple(
         engine.ResolvedMetric(
             engine.MetricSelection(pid, uuid4(), uuid4(), "total_tokens", role), mapping
@@ -690,6 +723,7 @@ def test_internal_forecast_requires_permission_and_produces_separate_dotted_line
     resolved = engine.ResolvedRequest(request, target, prior, metrics)
     monkeypatch.setattr(engine, "validate_request", lambda _: resolved)
     monkeypatch.setattr(engine, "enforce_use", lambda *args: None)
+    monkeypatch.setattr(forecast_reader, "forecast_inputs", lambda *args, **kwargs: {})
     monkeypatch.setattr(
         engine,
         "brand_discussion",
@@ -727,10 +761,15 @@ def test_internal_forecast_requires_permission_and_produces_separate_dotted_line
     assert any(line.get("forecast") for line in result["lines"])
     assert "stroke-dasharray" in result["svg"]
 
-    def deny(*args):
+    def deny(*args, **kwargs):
         raise engine.UseNotPermitted("forecast not approved")
 
     monkeypatch.setattr(engine, "enforce_use", deny)
     denied = engine.build_chart(request, end_day=9)
     assert denied["preview"][0]["status"] == "unavailable"
     assert not any(line.get("forecast") for line in denied["lines"])
+
+    monkeypatch.setattr(engine, "enforce_use", lambda *args: None)
+    monkeypatch.setattr(forecast_reader, "forecast_inputs", deny)
+    denied_dataset = engine.build_chart(request, end_day=9)
+    assert denied_dataset["preview"][0]["status"] == "unavailable"
