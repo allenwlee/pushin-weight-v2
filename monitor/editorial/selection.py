@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from .contracts import Decisions, candidate_entries, candidate_rejection
+from .contracts import Decisions, filter_candidates
 from .grounding import GROUNDING_INSTRUCTIONS, validate_claim_audit, validate_support
 
 EDITOR_INSTRUCTIONS = (
@@ -110,19 +110,12 @@ def validate_decisions(raw, packet):
 
 def validate_candidates(raw, packet):
     """Salvage independent valid nominations without changing strict validators."""
-    entries, conflicts = candidate_entries(raw)
-    accepted, rejected = [], []
-    for index, entry in enumerate(entries):
-        if (isinstance(entry, dict) and isinstance(entry.get("key"), str)
-                and entry["key"].strip() in conflicts):
-            rejected.append(candidate_rejection(entry, index, "validation", "duplicate_development"))
-            continue
-        try:
-            valid = validate_decisions({"events": [entry]}, packet)
-        except (ValueError, TypeError):
-            rejected.append(candidate_rejection(entry, index, "validation", "invalid_candidate_evidence"))
-        else:
-            accepted.extend(valid.events)
+    def validate(entry):
+        return validate_decisions({"events": [entry]}, packet).events[0]
+
+    accepted, rejected = filter_candidates(
+        raw, validate, stage="validation", invalid_reason="invalid_candidate_evidence"
+    )
     return Decisions(events=accepted), rejected
 
 
