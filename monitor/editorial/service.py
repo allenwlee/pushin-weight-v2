@@ -27,7 +27,7 @@ from .persistence import BudgetHeld, claim_assessment, finish_assessment, requir
 from .pictures import select_picture
 from .providers import json_call
 from .reviewing import require_approval, review_record, review_request
-from .selection import aged_priority, should_replace, validate_decisions
+from .selection import aged_priority, should_replace, validate_candidates
 from .voices import load_voice
 from .writing import editor_request, validate_copy, writer_request
 
@@ -132,7 +132,8 @@ def publish_edition(row, event, packet, track, voice, copy, model, cfg, *, revie
             )["n"]
             or 0
         ) + 1
-        require_approval(current, copy, packet, voice, model, cfg, review)
+        if track != "chatter":
+            require_approval(current, copy, packet, voice, model, cfg, review)
         edition = EditorialEdition.objects.create(
             story=story,
             assessment=row,
@@ -221,10 +222,14 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
         cfg = policy_reader()
         if not cfg.enabled:
             raise BudgetHeld("disabled before editor")
-        response = call(
-            row, "editor:v1", cfg.routes["editor"], editor_request(packet, cfg), cfg
-        )
-        decisions = validate_decisions(response["data"], packet)
+        request = editor_request(packet, cfg)
+        request["allow_partial_events"] = True
+        response = call(row, "editor:v1", cfg.routes["editor"], request, cfg)
+        decisions, rejected = validate_candidates(response["data"], packet)
+        rejected = response.get("candidate_rejections", []) + rejected
+        outcome["candidate_rejections"] = rejected
+        if not decisions.events and rejected:
+            raise ValueError("all editorial candidates rejected")
         with transaction.atomic():
             current = require_fence(row)
             current.decisions = decisions.model_dump(mode="json")
@@ -239,6 +244,11 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
         )
         picture_work = []
         for track, limit in (("chatter", 1), ("pulse", cfg.pulse_limit)):
+            # Keep Pulse's existing strict batch policy while salvaging Chatter.
+            if track == "pulse" and rejected:
+                if any(event.pulse for event in decisions.events):
+                    outcome["holds"].append({"track": track, "stage": "editor", "reason": "partial_editor_response"})
+                continue
             selected = 0
             for event in ordered:
                 if selected >= limit:
@@ -280,6 +290,7 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                         f"writer:{track}:{locale}:{digest([event.key, voice.digest])}"
                     )
                     failure_stage = "writer"
+                    edition = None
                     try:
                         route = fresh.writer_route(track, locale)
                         if route is None:
@@ -291,10 +302,25 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                         writer_model = response["model"]
                         fresh = policy_reader()
                         if not fresh.enabled:
-                            raise BudgetHeld("disabled before senior review")
+                            raise BudgetHeld("disabled before publication")
+                        if track == "chatter":
+                            edition = publish_edition(
+                                row, event, contextual_packet, track, voice, copy,
+                                writer_model, fresh,
+                            )
+                            if edition is None:
+                                continue
+                            accepted = True
+                            outcome["published"] += 1
+                            picture_work.append((track, event, edition, copy.visual_brief))
                         failure_stage = "senior_review"
+                        if track == "chatter":
+                            fresh = policy_reader()
+                            if not fresh.enabled:
+                                raise BudgetHeld("disabled before senior review")
                         review_input, identity = review_request(
-                            copy, contextual_packet, voice, writer_model, request, fresh
+                            copy, contextual_packet, voice, writer_model, request, fresh,
+                            advisory=track == "chatter",
                         )
                         review_stage = f"senior-review:{track}:{locale}:{digest(identity)}"
                         reviewed = call(row, review_stage, fresh.reviewer, review_input, fresh)
@@ -308,6 +334,15 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                             current = require_fence(row)
                             current.outcome = outcome
                             current.save(update_fields=["outcome"])
+                            if edition is not None:
+                                # Append findings without rewriting the frozen copy/citations.
+                                saved = EditorialEdition.objects.select_for_update().get(pk=edition.pk)
+                                if saved.evidence.get("senior_review") not in (None, review):
+                                    raise ValueError("conflicting advisory review")
+                                saved.evidence = {**saved.evidence, "senior_review": review}
+                                saved.save(update_fields=["evidence"])
+                        if track == "chatter":
+                            continue
                         if review["result"]["verdict"] != "publish":
                             outcome["holds"].append({
                                 "track": track, "locale": locale, "key": event.key,
@@ -330,7 +365,12 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                             review=review,
                         )
                     except (ValueError, TypeError) as exc:
-                        outcome["holds"].append(
+                        failures = (
+                            outcome.setdefault("advisory_failures", [])
+                            if track == "chatter" and edition is not None
+                            else outcome["holds"]
+                        )
+                        failures.append(
                             {
                                 "track": track,
                                 "locale": locale,

@@ -243,6 +243,26 @@ def bind_editor_availability(schema, packet):
     return schema
 
 
+def normalize_editor_candidates(result, request):
+    """Apply the existing strict source normalizer independently to each nomination."""
+    from .contracts import candidate_entries, candidate_rejection
+
+    entries, conflicts = candidate_entries(result)
+    accepted, rejected = [], []
+    for index, entry in enumerate(entries):
+        if (isinstance(entry, dict) and isinstance(entry.get("key"), str)
+                and entry["key"].strip() in conflicts):
+            rejected.append(candidate_rejection(entry, index, "normalization", "duplicate_development"))
+            continue
+        try:
+            normalized = normalize_reply({"events": [entry]}, request, editor=True)
+        except (ValueError, TypeError):
+            rejected.append(candidate_rejection(entry, index, "normalization", "invalid_source_binding"))
+        else:
+            accepted.extend(normalized["events"])
+    return {"events": accepted}, rejected
+
+
 def normalize_reply(result, request, *, editor):
     """Validate wire ownership before restoring IDs; never repair guessed brands."""
     result = deepcopy(result)

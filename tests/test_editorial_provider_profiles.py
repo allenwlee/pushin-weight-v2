@@ -158,6 +158,43 @@ def test_missing_schema_and_profile_overrides_fail_before_send(factual_setup):
             client.build_request(max_tokens=65536, messages=[], **options)
 
 
+@pytest.mark.parametrize("status,provider_code,expected", [
+    (429, "insufficient_quota", "provider_quota_exhausted"),
+    (429, "rate_limit_exceeded", "provider_rate_limited"),
+    (401, "invalid_api_key", "provider_authentication_failed"),
+    (429, "unrecognized_private_code", "provider_http_429"),
+])
+def test_http_error_classification_retains_only_safe_receipt_fields(
+    monkeypatch, factual_setup, status, provider_code, expected
+):
+    cfg, packet = factual_setup
+    route = cfg.routes["chatter"]
+    monkeypatch.setenv(route.key_env, "test-only")
+
+    def call_once(row, stage, kind, ceiling, config, send, **kwargs):
+        return send()
+
+    monkeypatch.setattr(providers, "call_once", call_once)
+    request = writer_request(selection(), packet, load_voice("chatter-en-v3"), cfg)
+    raw = json.dumps({
+        "id": "request-fixture", "error": {"code": provider_code, "message": "private-provider-message"},
+        "usage": {"prompt_tokens": 7, "completion_tokens": 0},
+    }).encode()
+    with pytest.raises(ProviderReplyError) as caught:
+        providers.json_call(None, "writer:chatter:en", route, request, cfg,
+                            transport=lambda *args, **kwargs: (status, raw))
+    assert caught.value.code == expected
+    diagnostics = caught.value.diagnostics
+    assert diagnostics["http_status"] == status
+    assert diagnostics["provider_request_id"] == "request-fixture"
+    assert diagnostics["usage"]["prompt_tokens"] == 7
+    assert "private-provider-message" not in json.dumps(diagnostics)
+    if provider_code == "unrecognized_private_code":
+        assert "provider_error_code" not in diagnostics
+    else:
+        assert diagnostics["provider_error_code"] == provider_code
+
+
 def reply(model):
     return {
         "model": model,

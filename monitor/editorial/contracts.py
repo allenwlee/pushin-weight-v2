@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import re
+from collections import Counter
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
@@ -61,6 +63,34 @@ class Event(ClosedModel):
 
 class Decisions(ClosedModel):
     events: list[Event] = Field(default_factory=list, max_length=20)
+
+
+def candidate_entries(raw):
+    """Keep the envelope strict while finding conflicts before filtering events."""
+    if (
+        not isinstance(raw, dict)
+        or set(raw) != {"events"}
+        or not isinstance(raw["events"], list)
+        or len(raw["events"]) > 20
+    ):
+        raise ValueError("malformed editor envelope")
+    entries = raw["events"]
+    counts = Counter(
+        entry["key"].strip() for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get("key"), str)
+    )
+    return entries, {key for key, count in counts.items() if count > 1}
+
+
+def candidate_rejection(entry, index, stage, reason):
+    """A small code-owned diagnostic; never persist exception text or raw payloads."""
+    key = entry.get("key") if isinstance(entry, dict) else None
+    if not isinstance(key, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,159}", key):
+        key = None
+    return {
+        "candidate_index": index, "candidate_key": key,
+        "candidate_hash": digest(entry), "stage": stage, "reason": reason,
+    }
 
 
 class SupportedCopy(ClosedModel):

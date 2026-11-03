@@ -249,6 +249,10 @@ def test_real_transport_review_gate_and_durable_accounting(
             assert EditorialCall.objects.filter(
                 state="sent", stage__startswith="senior-review:"
             ).exists()
+            # Chatter publication must already exist before advisory review starts.
+            assert EditorialEdition.objects.filter(
+                track="chatter", locale=payload["review_identity"]["locale"]
+            ).exists()
             if verdict == "http_failure":
                 return 503, b"unavailable"
             data = senior_approval()
@@ -312,9 +316,7 @@ def test_real_transport_review_gate_and_durable_accounting(
         "dry_run": False,
     }
     result = service.run_editorial(envelope, cfg=cfg)
-    assert result["published"] == (expected_editions if verdict == "publish" else 0), (
-        result
-    )
+    assert result["published"] == expected_editions, result
     expected_sends = 2 if verdict == "budget" else 1 + 2 * expected_editions
     assert len(sends) == expected_sends
     assert EditorialCall.objects.count() == len(sends)
@@ -331,9 +333,9 @@ def test_real_transport_review_gate_and_durable_accounting(
             edition = EditorialEdition.objects.get(locale=locale)
             assert edition.evidence["senior_review"] == record
             assert (
-                OriginalContentText.objects.get(locale=locale).narrative.provenance[
-                    "evidence"
-                ]["senior_review"]
+                OriginalContentText.objects.get(locale=locale).narrative.run.outcome[
+                    "senior_reviews"
+                ][record["review_stage"]]
                 == record
             )
             # Exact identity, not an old approval for changed copy or changed evidence.
@@ -370,7 +372,8 @@ def test_real_transport_review_gate_and_durable_accounting(
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.requires_postgres
-def test_publication_without_senior_review_is_rejected():
+@pytest.mark.parametrize("track", ["chatter", "pulse"])
+def test_only_chatter_can_publish_without_senior_review(track):
     now = timezone.now()
     row = claim_assessment(now, "senior-review-missing")
     event = selection(occurred_at=now - timedelta(minutes=1))
@@ -386,15 +389,21 @@ def test_publication_without_senior_review_is_rejected():
         locale="en",
         post_ids=["1"],
     )
-    with pytest.raises(ValueError, match="senior review"):
-        publish_edition(
+    def publish():
+        return publish_edition(
             row,
             event,
             packet,
-            "chatter",
-            load_voice("chatter-en-v1"),
+            track,
+            load_voice("chatter-en-v1" if track == "chatter" else "pulse-en-v1"),
             copy,
             "explicit-test",
             active_config(pictures={}),
         )
-    assert not EditorialEdition.objects.exists()
+    if track == "pulse":
+        with pytest.raises(ValueError, match="senior review"):
+            publish()
+        assert not EditorialEdition.objects.exists()
+    else:
+        assert publish() is not None
+        assert EditorialEdition.objects.get().track == "chatter"
