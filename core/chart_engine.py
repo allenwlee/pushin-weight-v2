@@ -659,10 +659,34 @@ def build_chart(
         release = releases[role]
         key = (metric.mapping.source_id, selection.metric_key)
         value_key = "net_change" if key == ("hf", "downloads") else "value"
+        definitions = metric.mapping.contract.source_configuration.get(key[0], {}).get(
+            "definitions", []
+        )
+        definition = next(
+            (item for item in definitions if item.get("metric_key") == key[1]), {}
+        )
+        compatibility = tuple(
+            definition.get(field)
+            for field in (
+                "version",
+                "unit",
+                "value_kind",
+                "quantity_form",
+                "value_role",
+                "measurement_kind",
+                "window_mode",
+                "window_amount",
+                "window_unit",
+                "window_duration_basis",
+                "window_alignment",
+                "source_timezone",
+            )
+        )
         raw_lines.append(
             {
                 "role": role,
                 "key": key,
+                "compatibility": compatibility,
                 "label": f"{release_label(role)} {key[0]} {key[1]} ({getattr(metric.mapping, 'external_identifier', 'mapped subject')})",
                 "values": {
                     (date.fromisoformat(point["date"]) - release.date).days: point.get(
@@ -678,7 +702,9 @@ def build_chart(
         candidates = [
             item["values"]
             for item in raw_lines
-            if item["role"] == reference_role and item["key"] == line["key"]
+            if item["role"] == reference_role
+            and item["key"] == line["key"]
+            and item.get("compatibility") == line.get("compatibility")
         ]
         reference = candidates[0] if len(candidates) == 1 else {}
         lines.append(
@@ -759,6 +785,8 @@ def build_chart(
                 None,
             )
             if target is None:
+                continue
+            if prior.get("compatibility") != target.get("compatibility"):
                 continue
             permitted = True
             matching = [

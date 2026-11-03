@@ -738,7 +738,15 @@ def test_internal_forecast_requires_permission_and_produces_separate_dotted_line
         history_mode="hindsight",
         comparable_collection_accounting=True,
     )
-    mapping = SimpleNamespace(pk=uuid4(), source_id="openrouter", contract=object())
+    mapping = SimpleNamespace(
+        pk=uuid4(),
+        source_id="openrouter",
+        contract=SimpleNamespace(
+            source_configuration={
+                "openrouter": {"definitions": [{"metric_key": "total_tokens"}]}
+            }
+        ),
+    )
     metrics = tuple(
         engine.ResolvedMetric(
             engine.MetricSelection(pid, uuid4(), uuid4(), "total_tokens", role), mapping
@@ -798,6 +806,29 @@ def test_internal_forecast_requires_permission_and_produces_separate_dotted_line
     monkeypatch.setattr(forecast_reader, "forecast_inputs", deny)
     denied_dataset = engine.build_chart(request, end_day=9)
     assert denied_dataset["preview"][0]["status"] == "unavailable"
+
+    from dataclasses import replace
+
+    monkeypatch.setattr(forecast_reader, "forecast_inputs", lambda *args, **kwargs: {})
+    incompatible_mapping = SimpleNamespace(
+        pk=uuid4(),
+        source_id="openrouter",
+        contract=SimpleNamespace(
+            source_configuration={
+                "openrouter": {
+                    "definitions": [{"metric_key": "total_tokens", "unit": "different"}]
+                }
+            }
+        ),
+    )
+    incompatible = replace(
+        resolved,
+        metrics=(metrics[0], replace(metrics[1], mapping=incompatible_mapping)),
+    )
+    monkeypatch.setattr(engine, "validate_request", lambda _: incompatible)
+    assert not any(
+        line.get("forecast") for line in engine.build_chart(request, end_day=9)["lines"]
+    )
 
 
 def test_stored_release_pair_drives_numbers_and_forecast_without_writes(tmp_path):
