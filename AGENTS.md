@@ -49,7 +49,7 @@ Before general-launch work, read the shared
 [General Launch Index](docs/brainstorms/2026-09-30-104924-general-launch-index.md)
 and its linked charter. Sessions in linked worktrees must use the authoritative
 copies under `/Users/fuchitalee/development/pushin-weight-v2/docs/brainstorms/`
-on fuchitalee. Follow the index's session rules: claim a bounded G1–G4 task,
+on fuchitalee. Follow the index's session rules: claim a bounded G1–G5 task,
 record active ownership, and append timestamped ON/OFF log entries with a
 one-line work summary when starting/resuming and pausing/switching/finishing.
 Keep detailed progress in the linked task plan. Preserve other sessions' claims
@@ -65,6 +65,18 @@ locale-visible copy, or visual regression, read and follow
 repository, including Claude Code and Codex.
 
 ## Harvester changes
+
+**Live-operation continuity is a release invariant.** Do not pause, suspend,
+reschedule away, or otherwise intentionally interrupt production harvesting or
+other live collection/worker operations to obtain a stable schema-copy cohort,
+run a parity check, or simplify deployment. Design online copies and final
+delta checks around active writers. If the work cannot be completed while
+those operations run, stop that work and redesign its release path; a planned
+gap is not an acceptable routine tradeoff. Only a current explicit owner order
+for an exceptional stop can override this rule. Any such stop or actual outage
+must have its skipped time windows recorded and reconciled under
+`docs/operations/pause-and-resume-harvest-cron.md`. Restoring a schedule and
+seeing one healthy run does not recover missed data.
 
 Before changing harvest/cycle behavior (CycleRunner, `run_cycle`, backfill,
 harvest policy, A/B/C TwitterAPI calls, cursors, metrics refresh, translator
@@ -85,6 +97,28 @@ including Claude Code and Codex.
   `TWITTERAPI_IO_API_KEY`, default a purpose, or fall back between keys.
 - Secret values live only in Render-managed environment configuration (or an
   operator's untracked local secret store); never commit, print, or log them.
+
+## MiniMax project credential
+
+PushinWeight MiniMax requests, including agent experiments, must use
+`PUSHINWEIGHT_MINIMAX_API_KEY`. The local secret store on fuchitalee is
+`/Users/fuchitalee/.env.secrets`; the assignment may use `export`.
+Read this exact variable from the request process's environment, or parse only
+its literal assignment from that file without executing the file. Never print
+the value, dump the secret file, or include credentials in saved requests.
+
+If the project variable is absent or empty, stop before making the request.
+Never fall back to `MINIMAX_API_TOKEN`, `MINIMAX_API_KEY`, or an Anthropic token:
+the existing shared MiniMax credential belongs to other applications. Do not
+replace it or change other apps' configuration. For H3, the project key must
+have funded pay-as-you-go access.
+
+This is agent discovery guidance, not an automatic application loader. Django
+currently loads the repository `.env`, not `~/.env.secrets`; a caller must
+explicitly resolve the project variable. If MiniMax is later deployed, configure
+the same variable on the intended Render service under that task's authority.
+Historical experiment scripts/receipts retain their original credential names
+as evidence and must not be rerun unchanged.
 
 ## Plans and delivery
 
@@ -201,6 +235,27 @@ python manage.py check --deploy
 
 ## Render deploy
 
+### Protect the live web service
+
+The production web service serves visitors and has limited memory. Commands
+launched through `render ssh pushinweight-web` run inside the same service and
+share its memory.
+
+- Do not run imports, backfills, tests, batch scripts, large file transfers,
+  media processing, or other substantial one-off work inside the live web
+  service.
+- Use Render logs and bounded, read-only database queries for diagnosis.
+  Read-only scripts can still consume significant memory; do not assume they
+  are safe merely because they make no writes.
+- Run authorized one-off work outside the live web service, using an isolated,
+  appropriately sized environment and the project's approved database and
+  storage access.
+- Before production work, identify the execution host, target database,
+  expected resource use, and effect on active services.
+- Do not pause or degrade the web service or harvesting to make a batch easier.
+  If no suitable execution environment is available, stop that operation and
+  arrange one; do not substitute the live web service.
+
 Deployment candidates are described by `render.yaml`; applying a Blueprint is
 an explicit release action. The current topology is:
 
@@ -214,7 +269,9 @@ worker) and `pushinweight-headlines-broker`; it does not add beat.
 
 Full runbook: `docs/deploy/render.md`.
 
-Manual deploy commands (one-off under Render shell):
+Deployment commands, when required by the release procedure, must run in an
+appropriate isolated execution environment, not a shell inside the live web
+service. Confirm the target database and release context before running them:
 ```bash
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
