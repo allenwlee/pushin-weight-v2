@@ -421,6 +421,9 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
         return {
             "status": "unavailable",
             "reason": metric.unavailable_reason,
+            "product_key": str(metric.selection.product_key),
+            "mapping_id": str(metric.selection.mapping_id),
+            "metric": metric.selection.metric_key,
             "points": [],
         }
     request = resolved.request
@@ -452,7 +455,14 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
             use="internal_analysis",
         )
     except (UseNotPermitted, ValueError) as exc:
-        return {"status": "unavailable", "reason": str(exc), "points": []}
+        return {
+            "status": "unavailable",
+            "reason": str(exc),
+            "source": mapping.source_id,
+            "metric": metric.selection.metric_key,
+            "mapping_id": str(mapping.pk),
+            "points": [],
+        }
     opencode_rows = None
     if mapping.source_id == "opencode":
         from core.benchmark_opencode import selected_rows
