@@ -10,9 +10,8 @@ ollija:
   workflow: work
   delivery_target: production
   delivery_selected_by_user: true
-  delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 ## Plain-English Summary
 
@@ -20,7 +19,7 @@ Fix affiliation saves by limiting trigger reads to validation columns. No tables
 
 ## Delivery Exceptions
 
-Production deployment authorized in the current conversation; normal staged route retained. Cast ingestion and live-service import work are outside this fix.
+Owner explicitly selected direct production deployment in the current continuation; staging is omitted. Cast ingestion and live-service import work are outside this fix.
 
 ## Investigation and verification
 
@@ -65,14 +64,10 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
     - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/affiliation-trigger-permissions-20261104` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
     - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/affiliation-trigger-permissions-20261104` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
@@ -99,4 +94,4 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Documentation skipped under ce-compound durable-learning bar: final SQL, regression tests and this plan retain the complete reasoning.
 - Migration lint passes; test lint has only pre-existing SIM117 at unchanged existing code (baseline108/current109). Diff whitespace check passes.
 - Shared test SQL and temporary migration ledger restored after final run; Chatter0220 retained. Temporary graph overlay files removed and excluded from delivery.
-- Await current owner route selection because origin/staging is separate Chatter3d83bf81 while production/base is9088ed74. No force-push or inclusion of peer changes.
+- Owner selected direct production deployment after79tests/review. Preserve Chatter staging3d83bf81. This metadata-only route update does not invalidate the code/test evidence at3e848b15.
