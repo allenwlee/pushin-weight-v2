@@ -624,3 +624,113 @@ def test_github_product_repository_metric_is_not_confused_with_account_metrics()
 
     assert result["points"][0]["value"] == "3"
     assert result["points"][0]["unit"] == "stars"
+
+
+def test_internal_chart_returns_same_values_and_svg_without_writes():
+    from core.chart_engine import ChartRequest, ReleaseAnchor, build_chart
+    from core.models import Post, PostBrand
+
+    brand = Brand.objects.create(nickname="chart-end-to-end")
+    product = Product.objects.create(brand=brand, display_name="Chart model")
+    start = datetime(2026, 8, 1, tzinfo=UTC)
+    for day in range(8):
+        post = Post.objects.create(
+            tweet_id=f"chart-output-{day}",
+            created_at=start + timedelta(days=day, hours=1),
+        )
+        PostBrand.objects.create(post=post, brand=brand)
+    request = ChartRequest(
+        target=ReleaseAnchor(product.product_key, start.date(), "test"),
+        start=start,
+        end=start + timedelta(days=8),
+        cutoff=start + timedelta(days=9),
+        history_mode="hindsight",
+    )
+    before = Post.objects.count()
+    result = build_chart(request, start_day=0, end_day=7)
+    assert result["discussion"]["target"]["post_count"] == 8
+    assert result["lines"][0]["points"][0]["value"] == 0
+    assert "Chart model brand discussion" in result["svg"]
+    assert Post.objects.count() == before
+
+
+def test_internal_forecast_requires_permission_and_produces_separate_dotted_line(
+    monkeypatch,
+):
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    import core.chart_engine as engine
+
+    target_id, prior_id = uuid4(), uuid4()
+    target_product = SimpleNamespace(product_key=target_id, display_name="New")
+    prior_product = SimpleNamespace(product_key=prior_id, display_name="Old")
+    target_date, prior_date = date(2026, 9, 10), date(2026, 8, 1)
+    target = engine.ResolvedRelease(target_product, target_date, "test", False)
+    prior = engine.ResolvedRelease(prior_product, prior_date, "test", False)
+    start = datetime(2026, 9, 10, tzinfo=UTC)
+    request = engine.ChartRequest(
+        target=engine.ReleaseAnchor(target_id, target_date, "test"),
+        start=start,
+        end=start + timedelta(days=10),
+        cutoff=start + timedelta(days=3),
+        comparison=engine.ReleaseAnchor(prior_id, prior_date, "test"),
+        comparison_start=datetime(2026, 8, 1, tzinfo=UTC),
+        comparison_end=datetime(2026, 8, 11, tzinfo=UTC),
+        history_mode="hindsight",
+        comparable_collection_accounting=True,
+    )
+    mapping = SimpleNamespace(source_id="openrouter", contract=object())
+    metrics = tuple(
+        engine.ResolvedMetric(
+            engine.MetricSelection(pid, uuid4(), uuid4(), "total_tokens", role), mapping
+        )
+        for pid, role in ((target_id, "target"), (prior_id, "comparison"))
+    )
+    resolved = engine.ResolvedRequest(request, target, prior, metrics)
+    monkeypatch.setattr(engine, "validate_request", lambda _: resolved)
+    monkeypatch.setattr(engine, "enforce_use", lambda *args: None)
+    monkeypatch.setattr(
+        engine,
+        "brand_discussion",
+        lambda _, comparison=False: {
+            "status": "stored_only",
+            "daily": {
+                (prior_date if comparison else target_date).isoformat(): 10,
+                **{
+                    (
+                        (prior_date if comparison else target_date) + timedelta(days=i)
+                    ).isoformat(): 10
+                    for i in range(1, 10)
+                },
+            },
+            "warning": "Coverage may be incomplete",
+        },
+    )
+    monkeypatch.setattr(
+        engine,
+        "metric_series",
+        lambda _, i: {
+            "points": [
+                {
+                    "date": (
+                        (target_date if i == 0 else prior_date) + timedelta(days=d)
+                    ).isoformat(),
+                    "value": "20",
+                }
+                for d in range(10)
+            ]
+        },
+    )
+    result = engine.build_chart(request, end_day=9)
+    assert result["preview"][0]["ratio"] == 1
+    assert any(line.get("forecast") for line in result["lines"])
+    assert "stroke-dasharray" in result["svg"]
+
+    def deny(*args):
+        raise engine.UseNotPermitted("forecast not approved")
+
+    monkeypatch.setattr(engine, "enforce_use", deny)
+    denied = engine.build_chart(request, end_day=9)
+    assert denied["preview"][0]["status"] == "unavailable"
+    assert not any(line.get("forecast") for line in denied["lines"])

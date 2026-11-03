@@ -1,6 +1,6 @@
 """Internal, read-only requests for product-release charts."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
@@ -39,6 +39,7 @@ class MetricSelection:
     contract_id: UUID | str
     mapping_id: UUID | str
     metric_key: str
+    release: str | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ class ChartRequest:
     classifications: tuple[tuple[str, str], ...] = ()
     metrics: tuple[MetricSelection, ...] = ()
     history_mode: str = "strict"
+    comparable_collection_accounting: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,6 +86,8 @@ def _resolve_metric(
 ) -> ResolvedMetric:
     if not isinstance(selection, MetricSelection):
         raise TypeError("invalid metric selection")
+    if selection.release not in {None, "target", "comparison"}:
+        raise ValueError("unknown release selection")
     try:
         mapping = (
             SourceSubjectMapping.objects.select_related("subject", "contract")
@@ -100,7 +104,7 @@ def _resolve_metric(
         return ResolvedMetric(selection, None, "mapping_unavailable")
     try:
         requested_product = UUID(str(selection.product_key))
-    except ValueError:
+    except (TypeError, ValueError):
         return ResolvedMetric(selection, None, "product_unavailable")
     if (
         requested_product not in product_keys
@@ -269,7 +273,24 @@ def validate_request(request: ChartRequest) -> ResolvedRequest:
     if comparison:
         product_keys.add(comparison.product.product_key)
     selections = request.metrics or _discover_metrics(product_keys)
+    if (
+        not request.metrics
+        and comparison
+        and comparison.product.product_key == target.product.product_key
+    ):
+        selections = tuple(
+            replace(selection, release=role)
+            for selection in selections
+            for role in ("target", "comparison")
+        )
     metrics = tuple(_resolve_metric(metric, product_keys) for metric in selections)
+    for metric in metrics:
+        expected = comparison if metric.selection.release == "comparison" else target
+        if metric.selection.release is not None and (
+            expected is None
+            or str(metric.selection.product_key) != str(expected.product.product_key)
+        ):
+            raise ValueError("metric selection does not match its release")
     return ResolvedRequest(request, target, comparison, metrics)
 
 
@@ -376,9 +397,20 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
         }
     request = resolved.request
     mapping = metric.mapping
-    release_is_comparison = resolved.comparison is not None and str(
-        metric.selection.product_key
-    ) == str(resolved.comparison.product.product_key)
+    release_is_comparison = metric.selection.release == "comparison" or (
+        metric.selection.release is None
+        and resolved.comparison is not None
+        and resolved.comparison.product.product_key
+        != resolved.target.product.product_key
+        and str(metric.selection.product_key)
+        == str(resolved.comparison.product.product_key)
+    )
+    if release_is_comparison and resolved.comparison is None:
+        return {
+            "status": "unavailable",
+            "reason": "comparison_unavailable",
+            "points": [],
+        }
     start = request.comparison_start if release_is_comparison else request.start
     end = request.comparison_end if release_is_comparison else request.end
     try:
@@ -512,3 +544,271 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
         if request.history_mode == "hindsight"
         else None,
     }
+
+
+def build_chart(
+    request: ChartRequest,
+    *,
+    start_day=-14,
+    end_day=29,
+    smoothing=False,
+    normalized=True,
+    selected_lines=None,
+    include_preview=True,
+):
+    """Return one in-memory numerical result and SVG for an internal caller."""
+    from core.chart_engine_svg import render_svg
+    from core.chart_engine_view import prepare_line
+
+    if (
+        not isinstance(start_day, int)
+        or not isinstance(end_day, int)
+        or start_day >= end_day
+        or end_day - start_day > 366
+    ):
+        raise ValueError("invalid display range")
+    resolved = validate_request(request)
+    discussions = {"target": brand_discussion(resolved)}
+    if resolved.comparison:
+        discussions["comparison"] = brand_discussion(resolved, comparison=True)
+    releases = {"target": resolved.target, "comparison": resolved.comparison}
+    raw_lines = []
+    for role, discussion in discussions.items():
+        release = releases[role]
+        raw_lines.append(
+            {
+                "role": role,
+                "key": ("discussion", "posts"),
+                "label": f"{release.product.display_name} brand discussion",
+                "values": {
+                    (date.fromisoformat(day) - release.date).days: count
+                    for day, count in discussion.get("daily", {}).items()
+                },
+            }
+        )
+    measurements = []
+    for index, metric in enumerate(resolved.metrics):
+        data = metric_series(resolved, index)
+        measurements.append(data)
+        if metric.mapping is None:
+            continue
+        selection = metric.selection
+        role = selection.release or (
+            "comparison"
+            if resolved.comparison
+            and resolved.comparison.product.product_key
+            != resolved.target.product.product_key
+            and str(selection.product_key)
+            == str(resolved.comparison.product.product_key)
+            else "target"
+        )
+        release = releases[role]
+        key = (metric.mapping.source_id, selection.metric_key)
+        value_key = "net_change" if key == ("hf", "downloads") else "value"
+        raw_lines.append(
+            {
+                "role": role,
+                "key": key,
+                "label": f"{release.product.display_name} {key[0]} {key[1]}",
+                "values": {
+                    (date.fromisoformat(point["date"]) - release.date).days: point.get(
+                        value_key
+                    )
+                    for point in data["points"]
+                },
+            }
+        )
+    lines = []
+    for line in raw_lines:
+        reference_role = "comparison" if resolved.comparison else "target"
+        reference = next(
+            (
+                item["values"]
+                for item in raw_lines
+                if item["role"] == reference_role and item["key"] == line["key"]
+            ),
+            {},
+        )
+        lines.append(
+            {
+                "label": line["label"],
+                "role": line["role"],
+                "source": line["key"][0],
+                "metric": line["key"][1],
+                "points": prepare_line(
+                    line["values"],
+                    reference,
+                    start=start_day,
+                    end=end_day,
+                    smoothing=smoothing,
+                    normalized=normalized,
+                ),
+            }
+        )
+        for point in lines[-1]["points"]:
+            point["date"] = (
+                releases[line["role"]].date + timedelta(days=point["day"])
+            ).isoformat()
+    previews = []
+    if resolved.comparison and request.comparable_collection_accounting:
+        from core.chart_prediction_preview import temporary_preview
+
+        def complete_posts(role, start, end):
+            raw = next(
+                line["values"]
+                for line in raw_lines
+                if line["role"] == role and line["key"] == ("discussion", "posts")
+            )
+            anchor = releases[role].date
+            return {
+                day: count
+                for day, count in raw.items()
+                if start
+                <= datetime.combine(
+                    anchor + timedelta(days=day), datetime.min.time(), tzinfo=UTC
+                )
+                and datetime.combine(
+                    anchor + timedelta(days=day + 1), datetime.min.time(), tzinfo=UTC
+                )
+                <= min(end, request.cutoff)
+            }
+
+        target_posts = complete_posts("target", request.start, request.end)
+        prior_posts = complete_posts(
+            "comparison", request.comparison_start, request.comparison_end
+        )
+        completed_day = (request.cutoff.date() - resolved.target.date).days - 1
+        for prior in (
+            line
+            for line in raw_lines
+            if line["role"] == "comparison"
+            and line["key"] in {("hf", "downloads"), ("openrouter", "total_tokens")}
+        ):
+            target = next(
+                (
+                    line
+                    for line in raw_lines
+                    if line["role"] == "target" and line["key"] == prior["key"]
+                ),
+                None,
+            )
+            if target is None:
+                continue
+            permitted = True
+            matching = [
+                metric
+                for metric in resolved.metrics
+                if metric.mapping is not None
+                and (metric.mapping.source_id, metric.selection.metric_key)
+                == prior["key"]
+            ]
+            try:
+                for metric in matching:
+                    enforce_use(
+                        metric.mapping.contract,
+                        {"lines": [{"source": metric.mapping.source_id}]},
+                        "forecast_fitting",
+                    )
+            except UseNotPermitted:
+                permitted = False
+            source, key = prior["key"]
+            preview = temporary_preview(
+                target_posts=target_posts,
+                historical_posts=prior_posts,
+                historical_metrics=prior["values"],
+                completed_day=completed_day,
+                cutoff=request.cutoff,
+                target_launch=resolved.target.date,
+                source=source,
+                metric="net_download_change" if source == "hf" else key,
+                comparable=True,
+                accounting_known=all(
+                    item["status"] == "stored_only" for item in discussions.values()
+                ),
+                forecast_permitted=permitted,
+                history_mode=request.history_mode,
+                horizon=min(28, end_day - 1),
+            )
+            previews.append(preview)
+            if preview["status"] == "available":
+                values = {
+                    day: point["smoothed" if smoothing else "value"]
+                    for day, point in preview["points"].items()
+                }
+                lines.append(
+                    {
+                        "label": f"Temporary prediction {source} {key}",
+                        "role": "target",
+                        "source": source,
+                        "metric": key,
+                        "forecast": True,
+                        "points": prepare_line(
+                            values,
+                            prior["values"],
+                            start=start_day,
+                            end=end_day,
+                            smoothing=False,
+                            normalized=normalized,
+                        ),
+                    }
+                )
+                for point in lines[-1]["points"]:
+                    point["date"] = (
+                        resolved.target.date + timedelta(days=point["day"])
+                    ).isoformat()
+    if selected_lines is not None:
+        lines = [
+            line
+            for line in lines
+            if (line["role"], line["source"], line["metric"]) in selected_lines
+        ]
+    if not include_preview:
+        lines = [line for line in lines if not line.get("forecast")]
+    if not normalized and len({(line["source"], line["metric"]) for line in lines}) > 1:
+        raise ValueError("raw charts require a single metric; select compatible lines")
+    warnings = [
+        discussion["warning"]
+        for discussion in discussions.values()
+        if discussion.get("warning")
+    ]
+    warnings = list(dict.fromkeys(warnings))
+    warnings.extend(
+        preview["warning"] for preview in previews if preview.get("warning")
+    )
+    result = {
+        "version": "chart-engine-v1",
+        "lines": lines,
+        "discussion": discussions,
+        "measurements": measurements,
+        "warnings": warnings,
+        "preview": previews
+        or [
+            {
+                "status": "unavailable",
+                "reason": "comparable collection accounting and forecast permissions not established",
+            }
+        ],
+        "anchors": {
+            role: {
+                "product_key": str(release.product.product_key),
+                "date": release.date.isoformat(),
+                "reviewed": release.reviewed,
+                "source": release.anchor_source,
+            }
+            for role, release in releases.items()
+            if release
+        },
+    }
+    result["svg"] = render_svg(
+        {
+            "title": "Product release comparison"
+            if resolved.comparison
+            else "Product release",
+            "lines": lines,
+            "warnings": warnings,
+            "unit": "Change from reference (%)"
+            if normalized
+            else "Raw value (see series units)",
+        }
+    )
+    return result
