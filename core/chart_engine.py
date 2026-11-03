@@ -161,7 +161,7 @@ def _discover_metrics(product_keys: set[UUID]) -> tuple[MetricSelection, ...]:
                         definition["metric_key"],
                     )
                 )
-    if len(selections) > 2000:
+    if len(selections) > 100:
         raise ValueError("too many metrics; select a smaller set")
     return tuple(selections)
 
@@ -219,6 +219,8 @@ def _resolve_anchor(
 
 def validate_request(request: ChartRequest) -> ResolvedRequest:
     """Validate exact half-open bounds and resolve named Products without writes."""
+    if not isinstance(request.comparable_collection_accounting, bool):
+        raise TypeError("collection accounting declaration must be boolean")
     timestamps = [request.start, request.end, request.cutoff]
     if any(
         not isinstance(value, datetime) or value.utcoffset() is None
@@ -290,6 +292,8 @@ def validate_request(request: ChartRequest) -> ResolvedRequest:
             for selection in selections
             for role in ("target", "comparison")
         )
+    if len(selections) > 100:
+        raise ValueError("too many metrics; select a smaller set")
     metrics = tuple(_resolve_metric(metric, product_keys) for metric in selections)
     for metric in metrics:
         expected = comparison if metric.selection.release == "comparison" else target
@@ -310,6 +314,7 @@ def brand_discussion(resolved: ResolvedRequest, *, comparison: bool = False) -> 
     from collections import Counter
 
     from core.discussion_windows import _calculate, _inputs
+    from core.models import Post
 
     request = resolved.request
     release = resolved.comparison if comparison else resolved.target
@@ -337,6 +342,22 @@ def brand_discussion(resolved: ResolvedRequest, *, comparison: bool = False) -> 
             "status": "outside_cutoff",
             "post_count": None,
             "warning": "The requested window begins at or after the evidence cutoff.",
+        }
+    if (
+        Post.objects.filter(
+            brands__brand_id=release.product.brand_id,
+            created_at__gte=start,
+            created_at__lt=end,
+        )
+        .values("pk")[:100001]
+        .count()
+        > 100000
+    ):
+        return {
+            "scope": "brand_discussion",
+            "status": "window_too_large",
+            "post_count": None,
+            "warning": "Narrow the window to at most 100,000 stored posts.",
         }
     posts, states, projections = _inputs(release.product.brand_id, start, end)
     requested = set(request.classifications)
@@ -504,6 +525,20 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
                 row["value_id"],
             ),
         )
+        same_revision = [
+            row
+            for row in values
+            if row["run_id"] == value["run_id"]
+            and row["provider_as_of"] == value["provider_as_of"]
+            and row["import_completed_at"] == value["import_completed_at"]
+        ]
+        if len({(row["value"], row["unit"]) for row in same_revision}) > 1:
+            selected[day] = {
+                "date": day,
+                "value": None,
+                "coverage": "ambiguous_observations",
+            }
+            continue
         partial_source = value["source_metadata"].get("period_status") == "partial"
         selected[day] = {
             "date": day,
@@ -562,6 +597,7 @@ def build_chart(
     normalized=True,
     selected_lines=None,
     include_preview=True,
+    selected_day=None,
 ):
     """Return one in-memory numerical result and SVG for an internal caller."""
     from core.chart_engine_svg import render_svg
@@ -766,7 +802,7 @@ def build_chart(
                 ),
                 forecast_permitted=permitted,
                 history_mode=request.history_mode,
-                horizon=min(28, end_day - 1),
+                horizon=28,
             )
             previews.append(preview)
             if preview["status"] == "available":
@@ -849,6 +885,7 @@ def build_chart(
             if normalized
             else "Raw value (see series units)",
             "day_range": (start_day, end_day - 1),
+            "selected_day": selected_day,
         }
     )
     return result

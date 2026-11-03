@@ -21,6 +21,7 @@ def test_svg_contains_matching_values_and_escapes_labels():
     )
     assert "&lt;DeepSeek&gt; &amp; comparison" in svg
     assert "150" in svg and "140" in svg
+    assert "D+1: 150.00" in svg
     assert "stroke-dasharray" in svg
     assert "Coverage may be incomplete" in svg
     assert "<DeepSeek>" not in svg

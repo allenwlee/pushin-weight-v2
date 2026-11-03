@@ -35,7 +35,21 @@ def render_svg(chart):
         for warning in chart.get("warnings", [])
         for part in wrap(str(warning), width=48)
     ]
-    legend_lines = [wrap(str(line["label"]), width=42) or [""] for line in lines]
+    legend_lines = []
+    for line in lines:
+        available = [p for p in line["points"] if p.get("value") is not None]
+        selected = chart.get("selected_day")
+        point = (
+            next((p for p in available if p["day"] == selected), None)
+            if selected is not None
+            else (available[-1] if available else None)
+        )
+        readout = (
+            f" — D{point['day']:+}: {float(point['value']):.2f}"
+            if point
+            else " — unavailable"
+        )
+        legend_lines.append(wrap(str(line["label"]) + readout, width=42) or [""])
     legend_height = sum(len(parts) * 30 for parts in legend_lines)
     height = max(540, 470 + legend_height + 28 * len(warning_lines))
     out = [

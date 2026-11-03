@@ -94,7 +94,12 @@ def test_accepted_release_claim_resolves_its_existing_review():
     from django.utils import timezone
 
     from core.chart_engine import ChartRequest, ReleaseAnchor, validate_request
-    from core.event_dossiers import ClaimDecision, ProductReleaseInput, complete_review
+    from core.event_dossiers import (
+        ClaimDecision,
+        ProductReleaseInput,
+        add_claim,
+        complete_review,
+    )
     from tests.test_event_dossiers import claim, dossier
 
     product = Product.objects.create(display_name="Model C")
@@ -103,6 +108,16 @@ def test_accepted_release_claim_resolves_its_existing_review():
     evidence = claim(
         event,
         key="chart-accepted",
+        effective_precision="day",
+        effective_date=anchor_date,
+    )
+    unrelated = add_claim(
+        evidence.event_dossier_source_id,
+        claim_kind="release_context",
+        scope_key="context",
+        assertion_text="Context",
+        source_excerpt="Context",
+        extraction_version="test-v1",
         effective_precision="day",
         effective_date=anchor_date,
     )
@@ -116,7 +131,10 @@ def test_accepted_release_claim_resolves_its_existing_review():
             method_version="test-v1",
             actor="test",
             reason="review",
-            claims=[ClaimDecision(evidence.pk, "accepted", "source evidence")],
+            claims=[
+                ClaimDecision(evidence.pk, "accepted", "source evidence"),
+                ClaimDecision(unrelated.pk, "accepted", "context"),
+            ],
             product_release=ProductReleaseInput(
                 observed_name="Model C", product_key=product.product_key
             ),
@@ -144,6 +162,13 @@ def test_accepted_release_claim_resolves_its_existing_review():
     )
     with pytest.raises(ValueError, match="cutoff"):
         validate_request(historical_request)
+
+    from dataclasses import replace
+
+    with pytest.raises(ValueError, match="claim"):
+        validate_request(
+            replace(request, target=replace(request.target, claim_id=unrelated.pk))
+        )
 
 
 @pytest.mark.parametrize(
@@ -819,6 +844,8 @@ def test_stored_release_pair_drives_numbers_and_forecast_without_writes(tmp_path
     assert result["preview"][0]["ratio"] == 1
     assert result["preview"][0]["points"][3]["value"] == 10
     assert any(line.get("forecast") for line in result["lines"])
+    cropped = build_chart(request, start_day=0, end_day=5)
+    assert cropped["preview"] == result["preview"]
     assert "None brand discussion" not in result["svg"]
     assert "lab/Model (comparison, 2026-09-10)" in result["svg"]
     (tmp_path / "comparison.svg").write_text(result["svg"])
@@ -827,3 +854,101 @@ def test_stored_release_pair_drives_numbers_and_forecast_without_writes(tmp_path
         query["sql"].lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE"))
         for query in queries
     )
+
+
+def test_large_discussion_window_is_rejected_before_loading_posts(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    import core.chart_engine as engine
+    from core.models import Post
+
+    query = MagicMock()
+    query.values.return_value.__getitem__.return_value.count.return_value = 100001
+    monkeypatch.setattr(Post.objects, "filter", lambda **kwargs: query)
+    start = datetime(2026, 8, 1, tzinfo=UTC)
+    request = engine.ChartRequest(
+        target=engine.ReleaseAnchor("unused", start.date(), "fixture"),
+        start=start,
+        end=start + timedelta(days=1),
+        cutoff=start + timedelta(days=2),
+        history_mode="hindsight",
+    )
+    release = engine.ResolvedRelease(
+        SimpleNamespace(brand_id="large"), start.date(), "fixture", False
+    )
+    result = engine.brand_discussion(engine.ResolvedRequest(request, release, None, ()))
+    assert result["status"] == "window_too_large"
+    assert result["post_count"] is None
+
+
+def test_conflicting_values_from_same_revision_are_not_silently_selected(monkeypatch):
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    import core.benchmark_forecast_inputs as reader
+    from core.chart_engine import (
+        ChartRequest,
+        MetricSelection,
+        ReleaseAnchor,
+        ResolvedMetric,
+        ResolvedRelease,
+        ResolvedRequest,
+        metric_series,
+    )
+
+    product = SimpleNamespace(product_key=uuid4())
+    start = datetime(2026, 9, 10, tzinfo=UTC)
+    mapping = SimpleNamespace(pk=uuid4(), source_id="openrouter", contract=object())
+    selection = MetricSelection(
+        product.product_key, uuid4(), mapping.pk, "total_tokens"
+    )
+    release = ResolvedRelease(product, start.date(), "test", False)
+    request = ChartRequest(
+        target=ReleaseAnchor(product.product_key, start.date(), "test"),
+        start=start,
+        end=start + timedelta(days=1),
+        cutoff=start + timedelta(days=2),
+        history_mode="hindsight",
+    )
+    sample = {
+        "metric": "total_tokens",
+        "source_metadata": {},
+        "period_label_date": "2026-09-10",
+        "as_of_date": None,
+        "as_of_at": None,
+        "dimensions": {},
+        "provider_as_of": "2026-09-11T00:00:00Z",
+        "import_completed_at": "2026-09-12T00:00:00Z",
+        "run_id": "run",
+        "value_id": "one",
+        "value": "10",
+        "unit": "tokens",
+    }
+    conflicting = {**sample, "value_id": "two", "value": "12"}
+    monkeypatch.setattr(
+        reader,
+        "forecast_inputs",
+        lambda *args, **kwargs: {"values": [sample, conflicting]},
+    )
+    result = metric_series(
+        ResolvedRequest(request, release, None, (ResolvedMetric(selection, mapping),)),
+        0,
+    )
+    assert result["points"][0]["coverage"] == "ambiguous_observations"
+    assert result["points"][0]["value"] is None
+
+
+def test_collection_accounting_declaration_must_be_boolean():
+    from core.chart_engine import ChartRequest, ReleaseAnchor, validate_request
+
+    start = datetime(2026, 8, 1, tzinfo=UTC)
+    request = ChartRequest(
+        target=ReleaseAnchor("unused", start.date(), "test"),
+        start=start,
+        end=start + timedelta(days=1),
+        cutoff=start + timedelta(days=1),
+        comparable_collection_accounting="yes",
+    )
+    with pytest.raises(TypeError, match="boolean"):
+        validate_request(request)
