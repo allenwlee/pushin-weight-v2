@@ -93,6 +93,22 @@ def candidate_rejection(entry, index, stage, reason):
     }
 
 
+def filter_candidates(raw, validate, *, stage, invalid_reason):
+    """Share envelope/conflict handling across wire and evidence validation."""
+    entries, conflicts = candidate_entries(raw)
+    accepted, rejected = [], []
+    for index, entry in enumerate(entries):
+        key = entry.get("key") if isinstance(entry, dict) else None
+        if isinstance(key, str) and key.strip() in conflicts:
+            rejected.append(candidate_rejection(entry, index, stage, "duplicate_development"))
+            continue
+        try:
+            accepted.append(validate(entry))
+        except (ValueError, TypeError):
+            rejected.append(candidate_rejection(entry, index, stage, invalid_reason))
+    return accepted, rejected
+
+
 class SupportedCopy(ClosedModel):
     headline: str = Field(min_length=1, max_length=160)
     byline: str = Field(min_length=1, max_length=500)

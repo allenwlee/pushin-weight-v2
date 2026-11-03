@@ -245,21 +245,14 @@ def bind_editor_availability(schema, packet):
 
 def normalize_editor_candidates(result, request):
     """Apply the existing strict source normalizer independently to each nomination."""
-    from .contracts import candidate_entries, candidate_rejection
+    from .contracts import filter_candidates
 
-    entries, conflicts = candidate_entries(result)
-    accepted, rejected = [], []
-    for index, entry in enumerate(entries):
-        if (isinstance(entry, dict) and isinstance(entry.get("key"), str)
-                and entry["key"].strip() in conflicts):
-            rejected.append(candidate_rejection(entry, index, "normalization", "duplicate_development"))
-            continue
-        try:
-            normalized = normalize_reply({"events": [entry]}, request, editor=True)
-        except (ValueError, TypeError):
-            rejected.append(candidate_rejection(entry, index, "normalization", "invalid_source_binding"))
-        else:
-            accepted.extend(normalized["events"])
+    def normalize(entry):
+        return normalize_reply({"events": [entry]}, request, editor=True)["events"][0]
+
+    accepted, rejected = filter_candidates(
+        result, normalize, stage="normalization", invalid_reason="invalid_source_binding"
+    )
     return {"events": accepted}, rejected
 
 
