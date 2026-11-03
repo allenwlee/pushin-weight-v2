@@ -253,6 +253,10 @@ def test_real_transport_review_gate_and_durable_accounting(
             assert EditorialEdition.objects.filter(
                 track="chatter", locale=payload["review_identity"]["locale"]
             ).exists()
+            assert EditorialEdition.objects.filter(track="chatter").count() == expected_editions
+            from monitor.editorial.readers import feed_payload
+
+            assert feed_payload(cfg, track="chatter", locale=locale)["hero"]
             if verdict == "http_failure":
                 return 503, b"unavailable"
             data = senior_approval()

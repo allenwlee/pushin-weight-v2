@@ -307,7 +307,7 @@ def test_optional_media_cannot_take_slots_before_all_native_writers(monkeypatch)
     monkeypatch.setattr(service, "select_picture", picture)
     _, _, _, captured, outcome = captured_worker(monkeypatch)
     assert outcome["published"] == 3, outcome
-    assert [row["locale"] for row in captured] == [None, "en", None, "ja", None, "zh-cn", None]
+    assert [row["locale"] for row in captured] == [None, "en", "ja", "zh-cn", None, None, None]
     assert order == [{"en", "ja", "zh-cn"}] * 3
     assert len(outcome["holds"]) == 3
     assert all(hold["stage"] == "picture" for hold in outcome["holds"])

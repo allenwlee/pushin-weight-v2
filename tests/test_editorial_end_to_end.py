@@ -81,6 +81,13 @@ def test_chatter_keeps_valid_sibling_through_real_provider_chain(monkeypatch, st
     edition = EditorialEdition.objects.get()
     assert edition.track == "chatter" and edition.story.development_key == "valid-release"
     assert outcome["candidate_rejections"]
+    expected_reason = {
+        "source_binding": "unknown_source_support",
+        "numeric_audit": "numeric_copy_without_number_ownership",
+        "shape": "malformed_model_entries",
+        "duplicate": "duplicate_development",
+    }[defect]
+    assert {r["reason"] for r in outcome["candidate_rejections"]} == {expected_reason}
     assert len(calls) == 3  # editor, valid writer, advisory review; no retry/bad writer
 
 
@@ -360,7 +367,7 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
     assert [
         request.get("max_tokens", request.get("max_completion_tokens"))
         for request in requests
-    ] == [65536, 4096, 16384, 16384, 16384, 16384, 16384, 65536, 16384]
+    ] == [65536, 4096, 16384, 16384, 65536, 16384, 16384, 16384, 16384]
     from monitor.editorial.writing import HEADLINE_ATTRIBUTION_RULE
     from monitor.headline_grounding import SOURCE_READING_RULES
 
