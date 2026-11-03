@@ -51,6 +51,8 @@ def test_serving_login_reads_canonical_columns_but_cannot_reach_source_or_owner(
         assert cursor.fetchone() == (role, role)
         cursor.execute("SELECT tweet_id,author_geolocation_id FROM posts WHERE tweet_id='serving-geography'")
         assert cursor.fetchone() == ("serving-geography", None)
+        # collection_runs.raw_payload was retired; its old permission assertion
+        # is irrelevant. Keep checking the current protected evidence below.
         for query in (
             "SELECT reported_profile_location FROM accounts",
             "SELECT reported_based_in FROM x_account_details",
@@ -61,7 +63,6 @@ def test_serving_login_reads_canonical_columns_but_cannot_reach_source_or_owner(
             "SELECT raw_payload FROM job_listings",
             "SELECT body FROM collection_evidence_archives",
             "SELECT extracted_claim_data FROM people_brand_affiliation_evidence",
-            "SELECT raw_payload FROM collection_runs",
             "CREATE TABLE public.forbidden_serving_table (id bigint)",
         ):
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
@@ -244,3 +245,85 @@ def test_populated_webpages_and_feeds_work_without_source_privileges(serving_log
                 assert response.status_code == 200
                 assert response.json()["items"], section
                 assert "Springfield" not in response.content.decode()
+
+
+def test_serving_affiliation_save_commits_without_source_column_access(serving_login):
+    from core.staff_assets.intake import ingest_record
+    from tests.test_person_affiliations import role
+    from tests.test_staff_library import record
+
+    intake, _ = ingest_record(record())
+    serving, _role, _owner, _report = serving_login
+    with patch.object(connections["default"], "connection", serving), transaction.atomic():
+        claim = role(intake.person)
+        claim.title_raw = "Reviewed role"
+        claim.save(update_fields=["title_raw"])
+        with connections["default"].cursor() as cursor:
+            cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        serving.execute("SELECT reported_location FROM people_brand_affiliations")
+
+
+@pytest.mark.parametrize(
+    "invalid", ["person", "organization", "review", "cycle", "dependency"]
+)
+def test_restricted_affiliation_replacement_keeps_database_guards(
+    serving_login, invalid
+):
+    from core.staff_assets.intake import ingest_record
+    from tests.test_person_affiliations import role
+    from tests.test_staff_library import record
+
+    intake, _ = ingest_record(record())
+    other, _ = ingest_record(record(source_key="other:permission-person"))
+    from core.models import Brand
+
+    other_brand = Brand.objects.create(nickname="permission-other-org")
+    old = role(intake.person)
+    new = role(other.person if invalid == "person" else intake.person)
+    serving, _role, _owner, _report = serving_login
+    review = "superseded_at=now(), superseded_by_reviewer='reviewer', supersession_reason='source'"
+    expected = {"cycle": "Replacement cycle", "dependency": "dependencies must move"}.get(
+        invalid, "Replacement needs same person, organization and review"
+    )
+    if invalid == "organization":
+        serving.execute(
+            "UPDATE people_brand_affiliations SET brand_id=%s WHERE id=%s",
+            (other_brand.pk, new.pk),
+        )
+    with pytest.raises(psycopg.errors.CheckViolation, match=expected), serving.transaction():
+        serving.execute(
+            f"UPDATE people_brand_affiliations SET superseded_by_id=%s, {review if invalid != 'review' else 'superseded_at=NULL'} WHERE id=%s",
+            (new.pk, old.pk),
+        )
+        if invalid == "cycle":
+            serving.execute(
+                f"UPDATE people_brand_affiliations SET superseded_by_id=%s, {review} WHERE id=%s",
+                (old.pk, new.pk),
+            )
+        if invalid == "dependency":
+            serving.execute("SET CONSTRAINTS ALL IMMEDIATE")
+            serving.execute(
+                "UPDATE people_brand_affiliations SET person_id=%s WHERE id=%s",
+                (other.person_id, new.pk),
+            )
+        serving.execute("SET CONSTRAINTS ALL IMMEDIATE")
+
+
+def test_affiliation_source_writer_requires_authorized_connection(serving_login):
+    from core.geolocation_evidence import source_evidence, write_source_evidence
+    from core.staff_assets.intake import ingest_record
+    from tests.test_staff_library import record
+
+    intake, _ = ingest_record(record())
+    evidence = intake.person.brand_affiliations.get().evidence.first()
+    with transaction.atomic():
+        write_source_evidence(evidence, extracted_claim_data={"role": "Researcher"})
+    assert source_evidence(evidence).extracted_claim_data == {"role": "Researcher"}
+    serving, _role, _owner, _report = serving_login
+    with (
+        patch.object(connections["default"], "connection", serving),
+        pytest.raises(ProgrammingError),
+        transaction.atomic(),
+    ):
+        write_source_evidence(evidence, extracted_claim_data={"role": "Changed"})
