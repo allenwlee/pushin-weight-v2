@@ -93,6 +93,25 @@ def candidate_rejection(entry, index, stage, reason):
     }
 
 
+_CANDIDATE_FAILURES = {
+    message: re.sub(r"[^a-z0-9]+", "_", message.lower()).strip("_")
+    for message in (
+        "malformed model entries", "post IDs must come from source support",
+        "event brands must come from source support", "missing source check",
+        "invalid source support", "duplicate source support fields",
+        "unknown source support", "claim actor is code-owned",
+        "source support ownership mismatch", "missing supported copy",
+        "unknown source or no current evidence", "duplicate development",
+        "unknown person", "unknown story", "existing-story change without existing stories",
+        "unknown brand", "event brand/source support mismatch", "future development",
+        "unknown chart facts", "unsupported chart claim", "unknown source image",
+        "essential image unavailable", "source claim outside cited posts",
+        "source claim cites unowned brand", "source claim cites unowned passage",
+        "unverified source independence", "numeric copy without number ownership",
+    )
+}
+
+
 def filter_candidates(raw, validate, *, stage, invalid_reason):
     """Share envelope/conflict handling across wire and evidence validation."""
     entries, conflicts = candidate_entries(raw)
@@ -104,8 +123,10 @@ def filter_candidates(raw, validate, *, stage, invalid_reason):
             continue
         try:
             accepted.append(validate(entry))
-        except (ValueError, TypeError):
-            rejected.append(candidate_rejection(entry, index, stage, invalid_reason))
+        except (ValueError, TypeError) as exc:
+            # Exact code-owned messages only: Pydantic/input/provider text stays private.
+            reason = _CANDIDATE_FAILURES.get(str(exc), invalid_reason)
+            rejected.append(candidate_rejection(entry, index, stage, reason))
     return accepted, rejected
 
 
