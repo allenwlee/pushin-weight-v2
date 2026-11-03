@@ -681,7 +681,7 @@ def test_internal_chart_returns_same_values_and_svg_without_writes(tmp_path):
     result = build_chart(request, start_day=0, end_day=7)
     assert result["discussion"]["target"]["post_count"] == 8
     assert result["lines"][0]["points"][0]["value"] == 0
-    assert "Chart model brand discussion" in result["svg"]
+    assert "Chart model (target, 2026-08-01) brand discussion" in result["svg"]
     (tmp_path / "chart.svg").write_text(result["svg"])
     assert Post.objects.count() == before
 
@@ -773,3 +773,57 @@ def test_internal_forecast_requires_permission_and_produces_separate_dotted_line
     monkeypatch.setattr(forecast_reader, "forecast_inputs", deny)
     denied_dataset = engine.build_chart(request, end_day=9)
     assert denied_dataset["preview"][0]["status"] == "unavailable"
+
+
+def test_stored_release_pair_drives_numbers_and_forecast_without_writes(tmp_path):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from core.chart_engine import (
+        ChartRequest,
+        MetricSelection,
+        ReleaseAnchor,
+        build_chart,
+    )
+    from core.models import Post
+    from tests.test_benchmark_release_response import response_contract, seed
+
+    contract = response_contract()
+    seed(contract, missing_hf_days=())
+    mapping = contract.mappings.get(source_id="hf")
+    product = mapping.subject.product
+    target = datetime(2026, 9, 15, tzinfo=UTC)
+    prior = datetime(2026, 9, 10, tzinfo=UTC)
+    request = ChartRequest(
+        target=ReleaseAnchor(product.product_key, target.date(), "fixture"),
+        start=target,
+        end=target + timedelta(days=3),
+        cutoff=target + timedelta(days=3),
+        comparison=ReleaseAnchor(product.product_key, prior.date(), "fixture"),
+        comparison_start=prior,
+        comparison_end=prior + timedelta(days=9),
+        metrics=tuple(
+            MetricSelection(
+                product.product_key, contract.pk, mapping.pk, "downloads", role
+            )
+            for role in ("target", "comparison")
+        ),
+        history_mode="hindsight",
+        comparable_collection_accounting=True,
+    )
+    before = Post.objects.count()
+    with CaptureQueriesContext(connection) as queries:
+        result = build_chart(request, start_day=0, end_day=8)
+    assert result["discussion"]["target"]["post_count"] == 30
+    assert result["preview"][0]["status"] == "available"
+    assert result["preview"][0]["ratio"] == 1
+    assert result["preview"][0]["points"][3]["value"] == 10
+    assert any(line.get("forecast") for line in result["lines"])
+    assert "None brand discussion" not in result["svg"]
+    assert "lab/Model (comparison, 2026-09-10)" in result["svg"]
+    (tmp_path / "comparison.svg").write_text(result["svg"])
+    assert Post.objects.count() == before
+    assert not any(
+        query["sql"].lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE"))
+        for query in queries
+    )

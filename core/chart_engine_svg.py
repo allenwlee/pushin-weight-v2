@@ -25,7 +25,7 @@ def render_svg(chart):
     low, high = (min(0, min(values)), max(0, max(values))) if values else (0, 1)
     if low == high:
         high = low + 1
-    first, last = (min(days), max(days)) if days else (0, 1)
+    first, last = chart.get("day_range", (min(days), max(days)) if days else (0, 1))
     if first == last:
         last = first + 1
     x = lambda day: 90 + (day - first) * 700 / (last - first)
@@ -35,10 +35,12 @@ def render_svg(chart):
         for warning in chart.get("warnings", [])
         for part in wrap(str(warning), width=48)
     ]
-    height = max(540, 470 + 30 * len(lines) + 28 * len(warning_lines))
+    legend_lines = [wrap(str(line["label"]), width=42) or [""] for line in lines]
+    legend_height = sum(len(parts) * 30 for parts in legend_lines)
+    height = max(540, 470 + legend_height + 28 * len(warning_lines))
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 {height}" role="img" aria-label="{title}">',
-        "<style>@media (max-width: 600px) { text { font-size: 25px; } }</style>",
+        "<style>@media (max-width: 600px) { text { font-size: 30px; } }</style>",
         f'<rect width="900" height="{height}" rx="16" fill="#fff"/>',
         f'<text x="40" y="38" font-size="23" fill="#17243a">{title}</text>',
         f'<text x="90" y="65" font-size="12" fill="#53647a">{escape(str(chart.get("unit", "Value")))}</text>',
@@ -65,12 +67,15 @@ def render_svg(chart):
         out.append(
             f'<text x="{x(day):.1f}" y="378" text-anchor="middle" font-size="12">{day:.0f}</text>'
         )
+    legend_y = 445
     for i, line in enumerate(lines):
         color = COLORS[i % len(COLORS)]
         label = escape(str(line["label"]))
-        out.append(
-            f'<text x="90" y="{445 + i * 30}" font-size="16" fill="{color}">{label}</text>'
-        )
+        for part in legend_lines[i]:
+            out.append(
+                f'<text x="90" y="{legend_y}" font-size="16" fill="{color}">{escape(part)}</text>'
+            )
+            legend_y += 30
         segment = []
         for p in line["points"] + [{"value": None}]:
             if p.get("value") is None or not isfinite(float(p["value"])):
@@ -99,7 +104,7 @@ def render_svg(chart):
         )
     for i, warning in enumerate(warning_lines):
         out.append(
-            f'<text x="40" y="{480 + len(lines) * 30 + i * 28}" font-size="14" fill="#7b4b00">{escape(str(warning))}</text>'
+            f'<text x="40" y="{480 + legend_height + i * 28}" font-size="14" fill="#7b4b00">{escape(str(warning))}</text>'
         )
     out.append("</svg>")
     return "".join(out)

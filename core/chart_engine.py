@@ -190,6 +190,7 @@ def _resolve_anchor(
     claim = (
         EventDossierClaim.objects.filter(
             pk=anchor.claim_id,
+            claim_kind_reference__code__in=("announcement", "release_report"),
             event_dossier_source__event_dossier_id=release.review.event_dossier_id,
             review_decisions__review=release.review,
             review_decisions__disposition="accepted",
@@ -578,6 +579,17 @@ def build_chart(
     if resolved.comparison:
         discussions["comparison"] = brand_discussion(resolved, comparison=True)
     releases = {"target": resolved.target, "comparison": resolved.comparison}
+
+    def release_label(role):
+        release = releases[role]
+        product = release.product
+        name = (
+            product.display_name
+            or getattr(product, "repo_id", None)
+            or str(product.product_key)
+        )
+        return f"{name} ({role}, {release.date.isoformat()})"
+
     raw_lines = []
     for role, discussion in discussions.items():
         release = releases[role]
@@ -585,7 +597,7 @@ def build_chart(
             {
                 "role": role,
                 "key": ("discussion", "posts"),
-                "label": f"{release.product.display_name} brand discussion",
+                "label": f"{release_label(role)} brand discussion",
                 "values": {
                     (date.fromisoformat(day) - release.date).days: count
                     for day, count in discussion.get("daily", {}).items()
@@ -615,7 +627,7 @@ def build_chart(
             {
                 "role": role,
                 "key": key,
-                "label": f"{release.product.display_name} {key[0]} {key[1]} ({getattr(metric.mapping, 'external_identifier', 'mapped subject')})",
+                "label": f"{release_label(role)} {key[0]} {key[1]} ({getattr(metric.mapping, 'external_identifier', 'mapped subject')})",
                 "values": {
                     (date.fromisoformat(point["date"]) - release.date).days: point.get(
                         value_key
@@ -836,6 +848,7 @@ def build_chart(
             "unit": "Change from reference (%)"
             if normalized
             else "Raw value (see series units)",
+            "day_range": (start_day, end_day - 1),
         }
     )
     return result
