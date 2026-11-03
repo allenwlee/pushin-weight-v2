@@ -12,7 +12,7 @@ from x_monitor.deepinfra import DeepInfraChatCompletionsClient, DeepInfraPermane
 from x_monitor.provider_http import https_request
 
 from .contracts import ProviderReplyError, digest
-from .grounding import normalize_reply, restore_sources
+from .grounding import normalize_editor_candidates, normalize_reply, restore_sources
 from .persistence import call_once
 
 
@@ -143,7 +143,26 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
             raise ProviderReplyError("provider_transport_invalid", diagnostics) from exc
         diagnostics["http_status"] = status
         if not 200 <= status < 300:
-            raise ProviderReplyError(f"provider_http_{status}", diagnostics)
+            # Read only fixed codes; messages can contain secrets or arbitrary text.
+            code = f"provider_http_{status}"
+            try:
+                error_reply = json.loads(raw)
+                if isinstance(error_reply, dict):
+                    diagnostics.update(response_diagnostics(error_reply))
+                error = error_reply.get("error") if isinstance(error_reply, dict) else None
+                error = error if isinstance(error, dict) else {}
+                provider_code = error.get("code") or error.get("type")
+                classifications = {
+                    "insufficient_quota": "provider_quota_exhausted",
+                    "rate_limit_exceeded": "provider_rate_limited",
+                    "invalid_api_key": "provider_authentication_failed",
+                }
+                if isinstance(provider_code, str) and provider_code in classifications:
+                    diagnostics["provider_error_code"] = provider_code
+                    code = classifications[provider_code]
+            except (ValueError, TypeError):
+                pass
+            raise ProviderReplyError(code, diagnostics)
         try:
             decoded = json.loads(raw)
         except (ValueError, TypeError) as exc:
@@ -185,11 +204,15 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
                 raise ProviderReplyError("invalid_model_json", diagnostics) from exc
         if not isinstance(result, dict):
             raise ProviderReplyError("non_object_model_response", diagnostics)
+        candidate_rejections = []
         if "source_bindings" in request:
             try:
-                result = normalize_reply(
-                    result, request, editor=stage.startswith("editor")
-                )
+                if request.get("allow_partial_events") and stage.startswith("editor"):
+                    result, candidate_rejections = normalize_editor_candidates(result, request)
+                else:
+                    result = normalize_reply(
+                        result, request, editor=stage.startswith("editor")
+                    )
             except (ValueError, TypeError) as exc:
                 diagnostics["validation_code"] = str(exc).replace(" ", "_")
                 raise ProviderReplyError("invalid_source_support", diagnostics) from exc
@@ -210,12 +233,15 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
             ):
                 raise ProviderReplyError("missing_source_check", diagnostics)
             result = restore_sources(result, request["source_ids"])
-        return {
+        reply = {
             "data": result,
             "usage": kept,
             "model": decoded["model"],
             "diagnostics": diagnostics,
         }
+        if request.get("allow_partial_events") and stage.startswith("editor"):
+            reply["candidate_rejections"] = candidate_rejections
+        return reply
 
     def send():
         started = monotonic()
