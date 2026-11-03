@@ -3645,6 +3645,10 @@ class ProductVerificationProposal(models.Model):
 
 
 class CollectionScopeRun(models.Model):
+    search_query = models.ForeignKey("SearchQuery", null=True, db_index=False, on_delete=models.PROTECT,
+                                     related_name="collection_scopes")
+    content_call = models.ForeignKey("OriginalContentCall", null=True, db_index=False, on_delete=models.PROTECT,
+                                     related_name="collection_scopes")
     run = models.ForeignKey(
         "CollectionRun", on_delete=models.CASCADE, related_name="scopes"
     )
@@ -3697,6 +3701,8 @@ class CollectionScopeRun(models.Model):
     class Meta:
         db_table = "collection_scope_runs"
         indexes = [
+            models.Index(fields=["content_call"], name="idx_chatter_scope_call"),
+            models.Index(fields=["search_query"], name="idx_chatter_scope_query"),
             models.Index(
                 fields=["retry_at", "id"], name="idx_rel_metric_followup_due",
                 condition=models.Q(scope_kind="release_metric_followup", outcome="pending"),
@@ -3828,9 +3834,17 @@ class SearchQuery(models.Model):
     keywords = models.JSONField(blank=True, null=True, db_column="keywords_json")
     plan_calls_run_id = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    development = models.ForeignKey("EditorialStory", null=True, on_delete=models.PROTECT,
+                                     related_name="search_queries")
+    previous_version = models.ForeignKey("self", null=True, on_delete=models.PROTECT,
+                                         related_name="next_versions")
 
     class Meta:
         db_table = "search_queries"
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(condition=~models.Q(previous_version=models.F("id")),
+                                   name="ck_query_version_not_self"),
+        ]
         indexes = [
             models.Index(
                 fields=["brand"], name="idx_search_queries_brand_id"
@@ -4543,6 +4557,9 @@ class OriginalContentRun(models.Model):
         SUPERSEDED = "superseded", "Superseded"
 
     source_cycle_id = models.CharField(max_length=128)
+    cycle_started_at = models.DateTimeField(null=True, blank=True)
+    discovery_state = models.CharField(max_length=16, null=True, blank=True,
+        choices=[(value, value) for value in ("pending", "complete", "failed")])
     window_days = models.PositiveSmallIntegerField(null=True, blank=True)
     facts_as_of = models.DateTimeField()
     packet_schema_version = models.PositiveSmallIntegerField()
@@ -4572,6 +4589,12 @@ class OriginalContentRun(models.Model):
     class Meta:
         db_table = "original_content_runs"
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(discovery_state__isnull=True)
+                | models.Q(discovery_state__in=["pending", "complete", "failed"],
+                           cycle_started_at__isnull=False),
+                name="ck_oc_run_discovery_state",
+            ),
             models.UniqueConstraint(
                 fields=["source_cycle_id", "window_days"],
                 name="uq_tnr_source_window",
@@ -5064,6 +5087,24 @@ class OriginalContent(models.Model):
     output_key = models.CharField(max_length=200, null=True, blank=True)
     subject_key = models.CharField(max_length=200, blank=True, default="")
     story_id = models.UUIDField(null=True, blank=True, db_index=True)
+    development = models.ForeignKey("EditorialStory", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="content_considerations")
+    source_locale = models.ForeignKey(Locale, null=True, blank=True,
+        on_delete=models.PROTECT, related_name="content_considerations")
+    editorial_group = models.CharField(max_length=16, null=True, blank=True,
+        choices=[("giant", "Giant"), ("rest", "Rest")])
+    consideration_state = models.CharField(max_length=16, null=True, blank=True,
+        choices=[(value, value) for value in (
+            "pending", "selected", "passed_over", "kept", "ineligible", "no_story")])
+    consideration_reason = models.TextField(blank=True, default="")
+    appearance_kind = models.CharField(max_length=24, null=True, blank=True,
+        choices=[(value, value) for value in (
+            "semantic_shortlist", "memory_only", "keyword_only", "release")])
+    discovery_call = models.ForeignKey(OriginalContentCall, null=True, blank=True,
+        on_delete=models.PROTECT, related_name="discovered_considerations")
+    decision_call = models.ForeignKey(OriginalContentCall, null=True, blank=True,
+        on_delete=models.PROTECT, related_name="decided_considerations")
+    shortlist_position = models.PositiveSmallIntegerField(null=True, blank=True)
     revision = models.PositiveIntegerField(default=1)
     occurred_at = models.DateTimeField(null=True, blank=True)
     published_at = models.DateTimeField(null=True, blank=True)
@@ -5109,6 +5150,51 @@ class OriginalContent(models.Model):
     class Meta:
         db_table = "original_content"
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(consideration_state__isnull=True)
+                | models.Q(consideration_state__in=[
+                    "pending", "selected", "passed_over", "kept", "ineligible", "no_story"]),
+                name="ck_oc_consideration_state"),
+            models.CheckConstraint(
+                condition=models.Q(development__isnull=True)
+                | models.Q(story_id__isnull=False, story_id=models.F("development")),
+                name="ck_oc_development_identity"),
+            models.CheckConstraint(
+                condition=models.Q(consideration_state__isnull=True)
+                | models.Q(consideration_state="no_story", development__isnull=True,
+                           story_id__isnull=True, status="no_content")
+                | (models.Q(consideration_state__isnull=False, development__isnull=False)
+                   & ~models.Q(consideration_state="no_story")),
+                name="ck_oc_consideration_subject"),
+            models.CheckConstraint(
+                condition=models.Q(consideration_state__isnull=True)
+                | models.Q(consideration_state__in=["pending", "ineligible"])
+                | models.Q(source_locale__isnull=False, source_locale__in=["en", "ja", "zh-CN"],
+                           editorial_group__isnull=False, editorial_group__in=["giant", "rest"]),
+                name="ck_oc_consideration_pool"),
+            models.CheckConstraint(
+                condition=models.Q(editorial_group__isnull=True)
+                | models.Q(editorial_group__in=["giant", "rest"]),
+                name="ck_oc_editorial_group"),
+            models.CheckConstraint(
+                condition=models.Q(appearance_kind__isnull=True)
+                | models.Q(appearance_kind__in=["semantic_shortlist", "memory_only", "keyword_only", "release"]),
+                name="ck_oc_appearance_kind"),
+            models.CheckConstraint(
+                condition=models.Q(shortlist_position__isnull=True)
+                | models.Q(shortlist_position__gte=1), name="ck_oc_shortlist_position"),
+            models.CheckConstraint(
+                condition=models.Q(consideration_state__isnull=True)
+                | models.Q(consideration_state="selected")
+                | (models.Q(published_at__isnull=True, verified_at__isnull=True)
+                   & ~models.Q(status="approved")),
+                name="ck_oc_consideration_unpublished"),
+            models.UniqueConstraint(fields=["run", "development"],
+                condition=models.Q(consideration_state__isnull=False, development__isnull=False),
+                name="uq_oc_run_development"),
+            models.UniqueConstraint(fields=["run", "source_locale", "editorial_group"],
+                condition=models.Q(consideration_state__in=["selected", "kept", "no_story"]),
+                name="uq_oc_run_pool_lead"),
             models.UniqueConstraint(
                 fields=["run", "workflow_key", "output_key"],
                 name="uq_oc_run_output",
@@ -5170,6 +5256,12 @@ class OriginalContent(models.Model):
         ]
         indexes = [
             models.Index(fields=["brand_key_snapshot", "-attempted_at"], name="idx_btn_brand_attempt"),
+            models.Index(fields=["development", "-attempted_at"],
+                         condition=models.Q(consideration_state__isnull=False),
+                         name="idx_oc_development_history"),
+            models.Index(fields=["source_locale", "editorial_group", "-attempted_at"],
+                         condition=models.Q(consideration_state__isnull=False),
+                         name="idx_oc_pool_history"),
             models.Index(fields=["run", "status"], name="idx_btn_run_status"),
             models.Index(fields=["subject_key", "workflow_key", "-published_at", "id"], name="idx_oc_subject_history"),
             models.Index(fields=["workflow_key", "-published_at"], name="idx_oc_workflow_feed"),
@@ -5226,10 +5318,16 @@ BrandTrendNarrativeText = OriginalContentText
 
 
 class OriginalContentSource(models.Model):
-    """A writing-time citation on one immutable localized text."""
+    """A frozen citation or a source considered for authored output."""
 
-    text = models.ForeignKey(OriginalContentText, on_delete=models.CASCADE, related_name="sources")
-    post = models.ForeignKey(Post, on_delete=models.PROTECT, related_name="original_content_citations")
+    text = models.ForeignKey(OriginalContentText, null=True, on_delete=models.CASCADE, related_name="sources")
+    content = models.ForeignKey(OriginalContent, null=True, on_delete=models.CASCADE,
+                               related_name="consideration_sources")
+    usage = models.CharField(max_length=16, default="citation", db_default="citation",
+        choices=[(value, value) for value in ("citation", "consideration", "background")])
+    post = models.ForeignKey(Post, null=True, on_delete=models.PROTECT, related_name="original_content_citations")
+    dossier_source = models.ForeignKey("EventDossierSource", null=True,
+        on_delete=models.PROTECT, related_name="original_content_memberships")
     position = models.PositiveSmallIntegerField()
     url_snapshot = models.CharField(max_length=4096)
     author_label_snapshot = models.TextField(blank=True, default="")
@@ -5241,6 +5339,25 @@ class OriginalContentSource(models.Model):
         db_table = "original_content_sources"
         ordering = ["position"]
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(text__isnull=False, content__isnull=True, usage="citation")
+                | models.Q(text__isnull=True, content__isnull=False,
+                           usage__in=["consideration", "background"]),
+                name="ck_oc_source_owner_usage"),
+            models.CheckConstraint(
+                condition=models.Q(post__isnull=False, dossier_source__isnull=True)
+                | models.Q(post__isnull=True, dossier_source__isnull=False),
+                name="ck_oc_source_identity"),
+            models.UniqueConstraint(fields=["content", "post"],
+                condition=models.Q(content__isnull=False, post__isnull=False),
+                name="uq_oc_considered_post"),
+            models.UniqueConstraint(fields=["content", "dossier_source"],
+                condition=models.Q(content__isnull=False, dossier_source__isnull=False),
+                name="uq_oc_considered_dossier_source"),
+            models.UniqueConstraint(fields=["text", "dossier_source"],
+                condition=models.Q(dossier_source__isnull=False), name="uq_oc_cited_dossier_source"),
+            models.UniqueConstraint(fields=["content", "position"],
+                condition=models.Q(content__isnull=False), name="uq_oc_considered_position"),
             models.UniqueConstraint(fields=["text", "post"], name="uq_oc_source_post"),
             models.UniqueConstraint(fields=["text", "position"], name="uq_oc_source_position"),
             models.CheckConstraint(condition=~models.Q(url_snapshot=""), name="ck_oc_source_url"),
@@ -8970,6 +9087,8 @@ class CollectionJob(models.Model):
 
 
 class CollectionRun(models.Model):
+    content_run = models.ForeignKey("OriginalContentRun", null=True, db_index=False,
+        on_delete=models.PROTECT, related_name="collection_runs")
     staging_retry_version = models.PositiveSmallIntegerField(null=True)
     staging_retry_phase = models.PositiveSmallIntegerField(null=True)
     staging_retry_cooldowns = models.PositiveSmallIntegerField(null=True)
@@ -9038,6 +9157,7 @@ class CollectionRun(models.Model):
     class Meta:
         db_table = "collection_runs"
         indexes = [
+            models.Index(fields=["content_run"], name="idx_chatter_collection_run"),
             models.Index(
                 fields=["job", "status", "completed_at"],
                 name="idx_metric_run_outcome",
@@ -9547,6 +9667,8 @@ class CollectionRequest(models.Model):
     attempt = models.ForeignKey(CollectionAttempt, on_delete=models.PROTECT, related_name="requests")
     scope_run = models.ForeignKey(CollectionScopeRun, on_delete=models.PROTECT, related_name="requests")
     ordinal = models.PositiveIntegerField()
+    reserved_usd = models.DecimalField(max_digits=12, decimal_places=6, null=True)
+    estimated_usd = models.DecimalField(max_digits=12, decimal_places=6, null=True)
     receipt_kind = models.CharField(max_length=24, default="physical")
     http_method = models.CharField(max_length=8, choices=HTTP_METHOD_CHOICES, null=True)
     endpoint_url = models.TextField(null=True)
@@ -9579,6 +9701,10 @@ class CollectionRequest(models.Model):
     class Meta:
         db_table = "collection_requests"
         constraints: ClassVar[list] = [
+            models.CheckConstraint(condition=models.Q(reserved_usd__isnull=True)
+                | models.Q(reserved_usd__gte=0), name="ck_collection_request_reserve"),
+            models.CheckConstraint(condition=models.Q(estimated_usd__isnull=True)
+                | models.Q(estimated_usd__gte=0), name="ck_collection_request_estimate"),
             models.CheckConstraint(
                 condition=models.Q(response_sha256__isnull=True) | models.Q(Exact(
                     models.Func(models.F("response_sha256"), function="octet_length", output_field=models.IntegerField()),
@@ -9877,6 +10003,8 @@ class EditorialStory(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     development_key = models.CharField(max_length=160, unique=True)
     anchor_ids = models.JSONField(default=list)
+    event_dossier = models.OneToOneField("EventDossier", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="editorial_development")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

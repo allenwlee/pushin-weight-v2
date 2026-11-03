@@ -33,7 +33,7 @@ Chatter can publish supported text while artwork is pending or unavailable; clai
 The existing Render headlines worker and broker remain the execution route.
 The selected endpoint is staging: deliver the publication repair first, then the new workflow. The owner allows $20 total for new live validation and wants routine operating cost measured without a daily spending cutoff. Target the first valid text within five minutes of its discovery cycle starting, publishing sooner whenever ready.
 The owner now invokes LFG to finish the implementation plan and execute both repair-first staging checkpoints. Production is outside the selected staging endpoint.
-No application implementation, paid experiment, production data change or deployment occurred in this planning pass.
+Implementation and staging verification are authorized under that LFG continuation. Keep execution progress and test/deployment receipts outside this plan; historical planning-only statements describe their dated amendments.
 
 ## November 3 active continuation
 
@@ -252,7 +252,7 @@ The October22 schema map is historical orientation, not proof that all its propo
 | Existing record | Reuse or extension | Required invariant |
 | --- | --- | --- |
 | OriginalContentRun | One frozen interval/scope/workflow evaluation, using existing cutoff, claim/fence and execution outcome | Retry cannot create another logical evaluation; distinct Chatter workflow identity must not collide with legacy editorial runs |
-| OriginalContent | Reuse as one considered development per run, extending with typed consideration decision, source-language/group, decision-call relationship and nullable measured counts/window/completeness | No dummy text or fake publication date for passed-over candidates; no overloading existing publication status |
+| OriginalContent | Reuse as one considered development per run, extending with typed consideration decision, source-language/group and decision-call relationships. Derive observed source counts from typed source memberships and collection receipts; keep unmeasured totals unknown, with the measurement window/completeness in the corresponding validated input projection | No dummy text or fake publication date for passed-over candidates; no overloading existing publication status |
 | OriginalContentSource | Extend existing source table with nullable direct content owner and typed usage; retain text owner for citations | Exactly one owner; citations require text; considered/background sources require content; conditional uniqueness per owner/post/usage; immutable citation history |
 | OriginalContentText | Existing locale text and producing-call link | Unique parent/locale, independent locale completion and stable public IDs |
 | OriginalContentSelection | Existing selected text pointer with six-pool/edition scope key | Monotonic story decision order; completion time alone cannot win |
@@ -365,7 +365,7 @@ U21 refines U13, U22 refines Chatter-owned parts of U14, U23 refines U15, U24 re
 
 **Goal / requirements:** implement the typed U13 extension in the current schema; C-R5–8/C-R11.
 **Dependencies:** U18; can be developed independently of U19–20 after ownership reconciliation.
-**Files:** `core/models.py`, next graph-correct `core/migrations/`, `monitor/original_content.py`, `original_content_readers.py`, `monitor/editorial/persistence.py`; proposed `tests/test_original_content_consideration.py` plus existing accounting/model/workflow tests.
+**Files:** `core/models.py`, next graph-correct `core/migrations/`, `monitor/original_content.py`, `original_content_readers.py`, `monitor/editorial/chatter_history.py` and the existing editorial readers; `tests/test_original_content_consideration.py`, `test_chatter_history.py`, `test_chatter_pool_readers.py` and `test_chatter_consideration_migration.py` plus existing accounting/model/workflow tests.
 **Approach:** complete the field/constraint map specified above, add compatible nullable fields/conditional constraints and direct-content source ownership, then update every relevant writer/reader. Preserve existing text citations, published parents and imported dates. Query board membership and decisions via typed fields; retain a frozen source snapshot for writing provenance.
 
 Current `publish_content` rejects any parent whose status is not `prepared`, then marks the parent `approved`; calling it unchanged for a later locale will fail. Add a workflow-scoped append-locale path under the same run/content locks and fence: verify the producing call and frozen content identity, permit a missing locale on an approved Chatter parent, treat an identical existing locale as idempotent and reject an incompatible rewrite. Preserve the parent's first publication time and use each text's actual creation time for its edition. Keep brand-window's bilingual and immutable behavior. Extend the currently hardcoded `featured:{workflow}:{locale}` pointer validation/readers to an explicitly validated Chatter pool-plus-edition key, with a compatibility read path for legacy Chatter; do not relax pointer validation globally.
@@ -376,6 +376,81 @@ Current `publish_content` rejects any parent whose status is not `prepared`, the
 4. Source-language pool differs from publication locale without merging them; incomplete membership leaves total unknown.
 5. Concurrent writes and stale fences cannot publish another run's result.
 **Verification:** migration and representative reads/writes satisfy constraints on the shared test database under its lock, with historical citation/pointer parity. Do not run extra-database fixtures unchanged.
+
+#### U21 implementation map against the staging repair base
+
+This map uses `9088ed74` plus the repair revision, whose model/migration graph ends at `0219_release_mapping_reconcile_index`. Read paths are `original_content.py`, `original_content_readers.py`, editorial grounding/publication, collection capture/instructions and dossier-source readers; migration history includes `0075`–`0078`, `0098`–`0114` and `0201`. This supersedes the earlier source-base orientation above. Reuse the shared entities rather than adding a Chatter candidate, search-log, cost, or publication table. **Planned additions: zero tables, zero retirements, zero JSON columns, 22 typed columns across eight existing tables; two existing source foreign keys become nullable.** Recount the generated migration and explain any delta before applying it.
+
+| Existing table | Added typed fields | Meaning and constraints |
+| --- | --- | --- |
+| `original_content_runs` | `cycle_started_at` datetime; `discovery_state` controlled string | The initiating cycle clock includes queue time; deadline is derived as start +300 seconds. Discovery pending/complete/failed is separate from writing completion. New Chatter claims use a distinct workflow/scope and the existing interval uniqueness, fence and lease. |
+| `original_content` | `development` FK to EditorialStory; `source_locale` FK to Locale; `editorial_group`; `consideration_state`; `consideration_reason`; `appearance_kind`; `discovery_call` and `decision_call` FKs to OriginalContentCall; nullable `shortlist_position` | One candidate/development per run. Pending or unclassified candidates may lack a pool; selected/passed-over/kept candidates require a supported source locale and giant/rest group. An empty pool uses the existing no-content outcome with no development, sources, text or publication time. The old `story_id` remains the public-identity snapshot; new rows must match it to `development_id`. Do not impose an EditorialStory FK on every historical workflow's generic UUID. |
+| `original_content_sources` | nullable `content` FK; `usage`; nullable `dossier_source` FK to EventDossierSource | Make `text` and `post` nullable. Exactly one owner: text/citation or content/consideration-or-background. Exactly one source: Post or EventDossierSource. Preserve old text/post and text/position uniqueness; add conditional content/source, text/dossier-source and content/position uniqueness. A source has one usage per content owner; promote background to consideration rather than duplicating membership. Sources from websites never become fake X Posts. |
+| `search_queries` | nullable `development` FK; nullable self-FK `previous_version` | Immutable wording/version identities. A story's revised keyword query links the prior version; recurring executions link the exact query used. Reverting to old wording creates a new version rather than mutating its previous chain. Reject self-links and cross-development version links. |
+| `collection_runs` | nullable `content_run` FK to OriginalContentRun | Typed execution ownership distinguishes Chatter from source sweeps/backfills without parsing job-key names. |
+| `collection_scope_runs` | nullable `search_query` FK; nullable `content_call` FK | Each observed semantic tool invocation can reference its query and producing call. The outer physical request uses its owning scope; internal Grok tool invocations are scopes, never invented physical HTTP requests. Hidden query/results stay explicitly unknown. |
+| `collection_requests` | nullable `reserved_usd`; nullable `estimated_usd`, both nonnegative decimals | Source API reservations/estimates only. Model billing remains on OriginalContentCall and is counted once. Unknown/ambiguous requests retain their reservation; estimates are not represented as provider-confirmed charges. Pricing identity comes from the sealed configuration snapshot. |
+| `editorial_stories` | nullable unique `event_dossier` FK | Reuse a dossier's stable development identity for release admission. Ordinary human-interest developments remain valid without a dossier. Same-brand/different-version stories stay distinct. |
+
+`consideration_state` is pending/selected/passed_over/kept/ineligible/no_story; publication `status` retains its existing meaning. `appearance_kind` is semantic_shortlist/memory_only/keyword_only/release. Source Locale uses canonical catalog tags `en`, `ja`, `zh-CN`; map publication/wire `zh-cn` explicitly rather than creating a case-duplicate Locale. Only a fresh semantic shortlist from an actual completed search call contributes to the rank-independent period appearance; carrying memory or confirming a targeted query does not. A failed/noncomparable discovery period, or one whose discovery call had not completed by the requested cutoff, is unknown, not an absence. History readers exclude decisions recorded after their requested cutoff; use the completed `discovery` stage receipt as evidence that a semantic period was observed. Provider-hidden per-tool membership remains unknown even when the returned shortlist itself is observed.
+
+Store essential source projections once in the run's existing frozen snapshot, keyed by real source identity; consideration and citation rows provide the queryable membership and source hash. Do not repeat full source text in every candidate membership. New source projections are a versioned, strict discriminated packet (X Post or dossier source), with bounded passages, dates and attribution; reject unknown keys, missing fields, invalid types/ranges and hash/reference mismatches at every Chatter write boundary, including bulk insertion. Preserve historical packets. Provider envelopes, encrypted reasoning and unused profiles never enter this packet or an archive. New call audit uses prompt/version/settings, exact rendered request hash and frozen input references; preserve enough immutable inputs to reconstruct the actual request without duplicating its entire source packet for every locale.
+
+Existing legacy editorial mirroring is compatibility work, not the new chain's transport contract. New Chatter writes OriginalContentRun/Call directly. Factor a generic reservation primitive out of the existing trend-narrative call reservation; retain its old stage validation/defaults in the existing wrapper, and reuse the already generic claim/sent/completion/ambiguity transitions. Share editorial request building, HTTP classification and response normalization through an injected reservation adapter. Do not create legacy assessments/calls merely to obtain shared records or copy an entire second paid-call engine. Keep short budget/fence locks outside HTTP.
+
+Generalize `publish_content` only for scoped Chatter locale append: under the existing run/content locks and fence, verify producer ownership, frozen development/revision/pool identity and complete citation hashes against the consideration-owned frozen source memberships. A bare source ID, background-only source or newly supplied replacement projection cannot authorize publication. A missing locale may append to an approved Chatter parent; an identical replay is idempotent and incompatible rewriting is rejected. Keep first publication time; readers use each text's actual creation time. Featured selection keys include source locale, editorial group and publication locale; validate each component and check decision cutoff before advancing. Preserve old scopes/read paths and other workflows' bilingual/critic requirements.
+
+Migration order: nullable additive fields and source nullability; conditional checks/uniqueness and bounded history indexes; application writers/readers; read-back parity. No whole-history backfill, JSON-column addition, table copy, full database restore, production mutation or collection pause. Acquire the permanent test-database wrapper lock and coordinate its migration state before applying the next graph-correct migration; preflight staging constraints/orphans and preserve historical content/citations. Negative database tests cover both/no owners, both/no sources, duplicate memberships, invalid new-contract pool/state and stale producer/fence; integration tests cover passed-over rows without fake text, source reconstruction, independent locales, replay and old-reader parity.
+
+#### U21–U24 execution boundaries
+
+The diagrams indicate ownership and ordering; they do not prescribe implementation syntax. The discovery/selection lifecycle above remains the state sketch.
+
+```mermaid
+flowchart LR
+  Run[Authored run] --> Consideration[Considered development]
+  Consideration --> Development[Existing story identity]
+  Development --> Dossier[Optional release dossier]
+  Consideration --> Membership[Existing source membership]
+  Membership --> Post[Real X Post]
+  Membership --> DossierSource[Existing dossier source]
+  Run --> Collection[Existing collection run]
+  Collection --> Scope[Query or tool scope]
+  Scope --> Receipt[Physical request receipt]
+```
+
+```mermaid
+sequenceDiagram
+  participant C as Existing cycle trigger
+  participant D as Chatter discovery
+  participant S as Separate selector
+  participant W as Locale writer
+  participant P as Existing publisher
+  C->>D: Original start, cutoff and source-cycle identity
+  D->>D: Fresh semantic shortlist plus saved history
+  D->>S: Resolved sources, releases, board, incumbent and appearance history
+  S->>W: Supported selected development per pool
+  W->>P: Each validated locale independently
+  P-->>P: Publish ready text before advisory review
+```
+
+```mermaid
+flowchart TD
+  Fresh{Fresh comparable inputs?} -->|No| Unknown[Record unknown or failure; preserve last good]
+  Fresh -->|Yes| Equivalent{Evidence, attention, persistence and eligibility unchanged?}
+  Equivalent -->|Yes| Keep[Audited code keep; no selector request]
+  Equivalent -->|No| Select[Separate selector; all candidates and six pools]
+  Select --> Empty[Empty pool stays empty]
+  Select --> Lead[Selected story with brief reasons for other candidates]
+```
+
+| Runtime mode | Collection credential | Spending / publication |
+| --- | --- | --- |
+| Disabled | None | No fresh provider dispatch; saved content remains readable under existing access policy. |
+| Explicit staging validation | On-demand TwitterAPI purpose, exact configured model keys | Shared remaining $20 allowance, conservative reservations including ambiguity; scoped staging publication only. |
+| Routine Chatter | Awaiting the owner's answer to the November3 scheduled-key question | No daily application spending cutoff; bounded requests/retries/concurrency and complete cost accounting. No production activation under this task. |
+
+The scheduled-key decision blocks U22's automatic source-call dispatch, not U21's independent storage/publication work. Do not silently use the on-demand key for recurring work or broaden the scheduled-key rule by calling any worker task a child of `run_cycle`. Preserve the same request accounting after the selected route is recorded. The first positive live publication remains a verification requirement; a held replay with all candidates rejected does not prove it.
 
 ### U22. Connect semantic intake, release admission and six-pool selection
 

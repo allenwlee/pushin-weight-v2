@@ -122,15 +122,21 @@ def edition_payload(edition, cfg, *, pictures=None):
     }
 
 
-def feed_payload(cfg, *, track="chatter", locale="en", cursor="", limit=20):
+def feed_payload(
+    cfg, *, track="chatter", locale="en", cursor="", limit=20,
+    source_locale=None, editorial_group=None,
+):
     if track not in TRACKS or locale not in LOCALES:
         raise ValueError("unsupported track or locale")
     if shared_storage():
         from monitor.original_content_readers import shared_feed_payload
 
         return shared_feed_payload(
-            cfg, track=track, locale=locale, cursor=cursor, limit=limit
+            cfg, track=track, locale=locale, cursor=cursor, limit=limit,
+            source_locale=source_locale, editorial_group=editorial_group,
         )
+    if source_locale is not None or editorial_group is not None:
+        raise ValueError("Chatter pools require shared storage")
     requested_locale = locale
     if (
         locale != "en"
