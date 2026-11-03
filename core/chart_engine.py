@@ -497,6 +497,11 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
             or value["period_label_date"]
             or value["as_of_date"]
             or (value["as_of_at"] or "")[:10]
+            or (
+                (value["first_local_observed_at"] or "")[:10]
+                if mapping.source_id == "hf"
+                else None
+            )
         )
         if not day:
             continue

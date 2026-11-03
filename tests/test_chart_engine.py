@@ -983,3 +983,65 @@ def test_collection_accounting_declaration_must_be_boolean():
     )
     with pytest.raises(TypeError, match="boolean"):
         validate_request(request)
+
+
+def test_hf_live_snapshot_uses_its_first_observation_date_when_no_archive_date(
+    monkeypatch,
+):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from uuid import uuid4
+
+    import core.benchmark_forecast_inputs as reader
+    from core.chart_engine import (
+        ChartRequest,
+        MetricSelection,
+        ReleaseAnchor,
+        ResolvedMetric,
+        ResolvedRelease,
+        ResolvedRequest,
+        metric_series,
+    )
+    from core.models import CollectionRun
+
+    product = SimpleNamespace(product_key=uuid4())
+    start = datetime(2026, 9, 10, tzinfo=UTC)
+    mapping = SimpleNamespace(pk=uuid4(), source_id="hf", contract=object())
+    selection = MetricSelection(product.product_key, uuid4(), mapping.pk, "downloads")
+    release = ResolvedRelease(product, start.date(), "test", False)
+    request = ChartRequest(
+        target=ReleaseAnchor(product.product_key, start.date(), "test"),
+        start=start,
+        end=start + timedelta(days=1),
+        cutoff=start + timedelta(days=2),
+        history_mode="hindsight",
+    )
+    sample = {
+        "metric": "downloads",
+        "source_metadata": {},
+        "period_label_date": None,
+        "as_of_date": None,
+        "as_of_at": None,
+        "first_local_observed_at": "2026-09-10T12:00:00+00:00",
+        "dimensions": {},
+        "provider_as_of": None,
+        "import_completed_at": "2026-09-10T12:01:00+00:00",
+        "run_id": "run",
+        "value_id": "one",
+        "observation_id": "observation",
+        "value": "10",
+        "unit": "downloads",
+        "window_mode": "rolling",
+        "measurement_kind": "flow",
+    }
+    monkeypatch.setattr(
+        reader, "forecast_inputs", lambda *args, **kwargs: {"values": [sample]}
+    )
+    query = MagicMock()
+    query.values_list.return_value = []
+    monkeypatch.setattr(CollectionRun.objects, "filter", lambda **kwargs: query)
+    result = metric_series(
+        ResolvedRequest(request, release, None, (ResolvedMetric(selection, mapping),)),
+        0,
+    )
+    assert result["points"][0]["value"] == "10"
