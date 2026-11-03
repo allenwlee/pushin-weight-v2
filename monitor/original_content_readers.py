@@ -3,11 +3,11 @@
 from types import SimpleNamespace
 
 from django.core import signing
-from django.db.models import F, Q, Window
+from django.db.models import Case, DateTimeField, F, Q, When, Window
 from django.db.models.functions import RowNumber
 
 from core.models import OriginalContentSelection, OriginalContentText
-from monitor.original_content import WORKFLOWS
+from monitor.original_content import WORKFLOWS, chatter_pool, featured_scope
 
 
 def text_query(track):
@@ -17,7 +17,17 @@ def text_query(track):
             narrative__status="approved",
             public_id__isnull=False,
         )
+        .annotate(edition_published_at=Case(
+            When(narrative__consideration_state__isnull=False, then=F("created_at")),
+            default=F("narrative__published_at"), output_field=DateTimeField(),
+        ))
         .select_related("narrative__run", "producing_call")
+        .defer(
+            "narrative__run__snapshot", "narrative__run__config_snapshot",
+            "narrative__run__decisions", "narrative__run__outcome",
+            "producing_call__request_packet", "producing_call__response_payload",
+            "producing_call__provenance",
+        )
         .prefetch_related("sources")
     )
 
@@ -37,7 +47,7 @@ def saved_edition(text):
         headline=text.headline,
         byline=text.secondary,
         article=text.body,
-        published_at=parent.published_at,
+        published_at=text.created_at if parent.consideration_state is not None else parent.published_at,
         importance=parent.importance,
         occurred_at=parent.occurred_at,
         fingerprint=parent.fingerprint,
@@ -60,40 +70,60 @@ def shared_story(story_id, track, locale="en", pinned=None):
     return saved_edition(text) if text is not None else None
 
 
-def shared_feed_payload(cfg, *, track, locale, cursor, limit):
+def shared_feed_payload(
+    cfg, *, track, locale, cursor, limit, source_locale=None, editorial_group=None,
+):
     from monitor.editorial.readers import edition_payload, pictures_for_editions
 
     requested_locale = locale
-    query = text_query(track)
-    if locale != "en" and not query.filter(locale=locale).exists():
+    pool_query = text_query(track)
+    if source_locale is not None or editorial_group is not None:
+        if track != "chatter":
+            raise ValueError("only Chatter supports source pools")
+        source_locale, editorial_group = chatter_pool(source_locale, editorial_group)
+        pool_query = pool_query.filter(
+            narrative__source_locale_id=source_locale,
+            narrative__editorial_group=editorial_group,
+        )
+    else:
+        # The old global feed remains stable until its caller selects pool mode.
+        pool_query = pool_query.filter(narrative__consideration_state__isnull=True)
+    if locale != "en" and not pool_query.filter(locale=locale).exists():
         locale = "en"
-    query = query.filter(locale=locale).order_by(
-        "-narrative__published_at", "-public_id"
+    query = pool_query.filter(locale=locale).order_by(
+        "-edition_published_at", "-public_id"
     )
     if cursor:
         value = signing.loads(cursor, salt="editorial-archive")
-        if value["track"] != track or value["locale"] != locale:
+        if (
+            value["track"] != track or value["locale"] != locale
+            or value.get("source_locale") != source_locale
+            or value.get("editorial_group") != editorial_group
+        ):
             raise ValueError("cursor filter mismatch")
         query = query.filter(
-            Q(narrative__published_at__lt=value["at"])
-            | Q(narrative__published_at=value["at"], public_id__lt=value["id"])
+            Q(edition_published_at__lt=value["at"])
+            | Q(edition_published_at=value["at"], public_id__lt=value["id"])
         )
     editions = [saved_edition(text) for text in query[: limit + 1]]
     more = len(editions) > limit
     editions = editions[:limit]
     pointer = (
         OriginalContentSelection.objects.filter(
-            scope_key=f"featured:{WORKFLOWS[track]}:{locale}"
+            scope_key=featured_scope(
+                WORKFLOWS[track], locale,
+                source_locale=source_locale, editorial_group=editorial_group,
+            )
         ).first()
         if track == "chatter"
         else None
     )
-    selected = text_query(track).filter(pk=pointer.text_id).first() if pointer else None
+    selected = pool_query.filter(pk=pointer.text_id, locale=locale).first() if pointer else None
     current = saved_edition(selected) if selected else None
     history = (
         [
             saved_edition(text)
-            for text in text_query(track)
+            for text in pool_query
             .filter(locale=locale)
             .exclude(narrative__story_id=current.story_id if current else None)
             .annotate(
@@ -101,13 +131,13 @@ def shared_feed_payload(cfg, *, track, locale, cursor, limit):
                     expression=RowNumber(),
                     partition_by=[F("narrative__story_id")],
                     order_by=[
-                        F("narrative__published_at").desc(),
+                        F("edition_published_at").desc(),
                         F("public_id").desc(),
                     ],
                 )
             )
             .filter(story_rank=1)
-            .order_by("-narrative__published_at", "-public_id")[:5]
+            .order_by("-edition_published_at", "-public_id")[:5]
         ]
         if track == "chatter"
         else []
@@ -117,6 +147,8 @@ def shared_feed_payload(cfg, *, track, locale, cursor, limit):
             {
                 "track": track,
                 "locale": locale,
+                "source_locale": source_locale,
+                "editorial_group": editorial_group,
                 "at": editions[-1].published_at.isoformat(),
                 "id": str(editions[-1].pk),
             },
