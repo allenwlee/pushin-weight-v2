@@ -29,6 +29,7 @@ def test_ratio_uses_totals_and_preserves_signed_metric():
     assert result["points"][4]["value"] == Decimal(-7)
     assert result["points"][5]["smoothed"] == Decimal("5.6")
     assert "coverage" in result["warning"].lower()
+    assert "inflate" in result["warning"].lower()
 
 
 def test_zero_target_is_valid_but_missing_or_zero_historical_is_not():

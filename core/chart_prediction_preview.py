@@ -76,5 +76,5 @@ def temporary_preview(
         "points": points,
         "history_mode": history_mode,
         "cutoff": cutoff,
-        "warning": "Experimental estimate: assumes this collected-post ratio continues; collection coverage may differ.",
+        "warning": "Experimental estimate: assumes this collected-post ratio continues; collection coverage may differ. Missing historical posts can inflate the ratio and estimate.",
     }

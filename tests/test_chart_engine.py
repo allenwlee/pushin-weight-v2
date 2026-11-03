@@ -791,6 +791,12 @@ def test_internal_forecast_requires_permission_and_produces_separate_dotted_line
     )
     result = engine.build_chart(request, end_day=9)
     assert result["preview"][0]["ratio"] == 1
+    assert result["preview"][0]["calibration_dates"]["comparison"] == [
+        "2026-08-01",
+        "2026-08-02",
+        "2026-08-03",
+    ]
+    assert "inflate" in result["svg"]
     assert any(line.get("forecast") for line in result["lines"])
     assert "stroke-dasharray" in result["svg"]
 

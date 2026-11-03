@@ -847,6 +847,15 @@ def build_chart(
                 history_mode=request.history_mode,
                 horizon=28,
             )
+            if preview["status"] == "available":
+                preview["calibration_dates"] = {
+                    role: [
+                        (release.date + timedelta(days=day)).isoformat()
+                        for day in range(completed_day - 2, completed_day + 1)
+                    ]
+                    for role, release in releases.items()
+                    if release
+                }
             previews.append(preview)
             if preview["status"] == "available":
                 values = {
@@ -893,6 +902,13 @@ def build_chart(
     warnings.extend(
         preview["warning"] for preview in previews if preview.get("warning")
     )
+    for preview in previews:
+        if preview["status"] == "available":
+            dates = preview["calibration_dates"]
+            warnings.append(
+                f"Collected-post ratio {preview['ratio']:.2f}x: {dates['target'][0]}–{dates['target'][-1]} versus {dates['comparison'][0]}–{dates['comparison'][-1]}."
+            )
+    warnings = list(dict.fromkeys(warnings))
     result = {
         "version": "chart-engine-v1",
         "lines": lines,
