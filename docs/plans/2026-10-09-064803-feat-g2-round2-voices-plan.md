@@ -16,7 +16,7 @@ ollija:
   staging_transport: branch
 type: feat
 origin: docs/brainstorms/2026-10-15-095449-g2-summarize-engine-brainstorm.md
-updated: 2026-11-03
+updated: 2026-11-04
 ---
 # G2-C Chatter publication repair and new workflow - Plan
 
@@ -448,9 +448,9 @@ flowchart TD
 | --- | --- | --- |
 | Disabled | None | No fresh provider dispatch; saved content remains readable under existing access policy. |
 | Explicit staging validation | On-demand TwitterAPI purpose, exact configured model keys | Shared remaining $20 allowance, conservative reservations including ambiguity; scoped staging publication only. |
-| Routine Chatter | Awaiting the owner's answer to the November3 scheduled-key question | No daily application spending cutoff; bounded requests/retries/concurrency and complete cost accounting. No production activation under this task. |
+| Routine Chatter | Owner-approved November4 exception: scheduled TwitterAPI key on the existing headline worker for Chatter keyword searches and source lookups | No daily application spending cutoff; bounded requests/retries/concurrency and complete cost accounting. No production activation under this task. |
 
-The scheduled-key decision blocks U22's automatic source-call dispatch, not U21's independent storage/publication work. Do not silently use the on-demand key for recurring work or broaden the scheduled-key rule by calling any worker task a child of `run_cycle`. Preserve the same request accounting after the selected route is recorded. The first positive live publication remains a verification requirement; a held replay with all candidates rejected does not prove it.
+The owner explicitly approves the scoped scheduled-key exception on November4 in response to the worker keyword/source-lookup question. Routine Chatter may use that key after Grok discovery on the existing headline worker. Explicit staging validation still uses the on-demand purpose, with every source/model call under the remaining aggregate trial allowance. Preserve operation registration, source-purpose declarations and request accounting; this exception does not change unrelated collection paths or production activation authority. The first positive live publication remains a verification requirement; a held replay with all candidates rejected does not prove it.
 
 ### U22. Connect semantic intake, release admission and six-pool selection
 
@@ -8247,6 +8247,8 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 <!-- END OLLIJA DELIVERY GUIDE -->
 
 ## Delivery Exceptions
+
+November4: the owner approves Chatter keyword searches and source lookups on the existing headline worker using `TWITTERAPI_IO_SCHEDULED_API_KEY`, as a scoped exception to the AGENTS `run_cycle` credential restriction. Use on-demand purpose for explicit validation, with the unchanged aggregate $20 limit.
 
 November 3 owner answers and subsequent LFG invocation select implementation through staging, repair first then the new workflow, with $20 aggregate live validation. Production permissions in historical entries below do not apply to this continuation. Routine Chatter has no daily application spending cutoff; this does not change provider billing settings. Graphics keeps its own session and cast-reference foundation.
 
