@@ -283,9 +283,11 @@ def claim_job(
         _require_legacy_fields(CollectionRun, "report")
     if bounded_campaign:
         if candidate.campaign_id:
-            from core.models import CollectionCampaign
+            from core.data_source_backfill import budget_campaigns
 
-            CollectionCampaign.objects.select_for_update().get(pk=candidate.campaign_id)
+            locked_campaigns = list(
+                budget_campaigns(candidate).select_for_update().order_by('pk')[:1001])
+            require(len(locked_campaigns) <= 1000, 'campaign revision inspection cap')
         else:
             list(
                 CollectionJob.objects.select_for_update()
@@ -362,10 +364,10 @@ def claim_job(
                 stop_reason="expired_lease",
             )
     if bounded_campaign:
-        from core.data_source_backfill import campaign_usage, validate_campaign
+        from core.data_source_backfill import campaign_budget_usage, validate_campaign
 
         campaign = validate_campaign(job.instructions, contract_id=job.contract_id)
-        usage = campaign_usage(job)
+        usage = campaign_budget_usage(job)
         require(
             usage["invocations"] < campaign["max_invocations"]
             and usage["reserved_requests"] + job.budgets["requests"]

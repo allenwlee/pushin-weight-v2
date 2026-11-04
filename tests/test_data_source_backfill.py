@@ -486,3 +486,79 @@ def test_ambiguous_reservation_blocks_other_source_phase():
     with pytest.raises(ValueError, match='request limit'):
         claim_job(second.pk, typed=True)
     assert not second.runs.exists()
+
+
+def revision_budget_jobs(requests):
+    from copy import deepcopy
+
+    from core.collection_jobs import register_job
+    from core.models import DataSource
+
+    spec = specification()
+    spec['definition']['campaign'].update(key='0813:revision-a', max_invocations=40, max_requests=1000)
+    spec['definition']['budgets']['requests'] = requests
+    second = deepcopy(spec)
+    second['definition']['campaign']['key'] = '0813:revision-b'
+    jobs = []
+    # Isolate the locked claim guard from the separate narrow cohort validator.
+    # These two immutable owners stand for the two already-observed revisions.
+    for index, value in enumerate((spec, second)):
+        jobs.append(register_job(job_key=f'0813:revision-{index}:guard',
+            source=DataSource.objects.get(pk=value['source']), purpose=value['purpose'],
+            operation=value['operation'], mode='historical', definition=value['definition']))
+    return jobs
+
+
+@pytest.mark.parametrize('limit', ['requests', 'attempts'])
+def test_0813_contract_revisions_share_exhausted_budget(limit):
+    from core.data_source_backfill import campaign_usage
+
+    jobs = revision_budget_jobs(100 if limit == 'requests' else 1)
+    for _ in range(10 if limit == 'requests' else 40):
+        set_job_state(jobs[0].pk, 'ready')
+        claim = claim_job(jobs[0].pk, typed=True)
+        finish_run(claim, status='partial', typed=True, request_count=0,
+                   error_code='fixture_interrupted', physical_accounting_complete=False)
+    assert campaign_usage(jobs[1]) == {'invocations': 0, 'reserved_requests': 0, 'recorded_requests': 0}
+    set_job_state(jobs[1].pk, 'ready')
+    before = CollectionAttempt.objects.count()
+    with pytest.raises(ValueError, match='campaign invocation/request limit exhausted'):
+        claim_job(jobs[1].pk, typed=True)
+    assert CollectionAttempt.objects.count() == before
+
+
+def test_0813_revisions_serialize_the_last_request_reservation():
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from django.db import close_old_connections
+
+    from core.data_source_backfill import campaign_budget_usage
+
+    jobs = revision_budget_jobs(100)
+    for _ in range(9):
+        set_job_state(jobs[0].pk, 'ready')
+        claim = claim_job(jobs[0].pk, typed=True)
+        finish_run(claim, status='partial', typed=True, request_count=0,
+                   error_code='fixture_interrupted', physical_accounting_complete=False)
+    for job in jobs:
+        set_job_state(job.pk, 'ready')
+    ready = Barrier(2)
+
+    def reserve(job_id):
+        close_old_connections()
+        try:
+            ready.wait(timeout=10)
+            try:
+                claim_job(job_id, typed=True)
+                return 'claimed'
+            except ValueError as exc:
+                assert str(exc) == 'campaign invocation/request limit exhausted'
+                return 'limited'
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(reserve, [job.pk for job in jobs]))
+    assert sorted(outcomes) == ['claimed', 'limited']
+    assert campaign_budget_usage(jobs[0])['reserved_requests'] == 1000

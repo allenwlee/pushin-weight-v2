@@ -289,6 +289,31 @@ def report_campaign(*, campaign_key=None, job_id=None, limit=25, after_job_key=N
     }
 
 
+def budget_campaigns(job):
+    """Keep the fixed 0813 allowance across immutable contract corrections."""
+    campaigns = CollectionCampaign.objects.filter(pk=job.campaign_id)
+    if job.campaign_id and job.campaign.campaign_key.startswith('0813:'):
+        campaigns = CollectionCampaign.objects.filter(
+            policy_version='backfiller-data-source-v1', campaign_key__startswith='0813:')
+    return campaigns
+
+
+def campaign_budget_usage(job):
+    """Per-revision reports stay intact; admission sums the recovery task."""
+    if not job.campaign_id or not job.campaign.campaign_key.startswith('0813:'):
+        return campaign_usage(job)
+    require(job.budgets['seconds'] <= 80 and job.budgets['bytes'] <= 25 * 1024**2
+            and job.budgets['requests'] <= 100, '0813 attempt ceiling exceeded')
+    peers = list(CollectionJob.objects.filter(campaign__in=budget_campaigns(job))
+        .select_related('campaign').order_by('campaign_id', 'pk').distinct('campaign_id')[:1001])
+    require(len(peers) <= 1000, '0813 campaign revision inspection cap')
+    usage = {'invocations': 0, 'reserved_requests': 0, 'recorded_requests': 0}
+    for peer in peers:
+        for name, value in campaign_usage(peer).items():
+            usage[name] += value
+    return usage
+
+
 def campaign_usage(job):
     """Reservations bound crash exposure; request_count remains actual usage."""
     if job.campaign_id:
@@ -563,7 +588,7 @@ def _execute_phase(job_id, *, budget=None, executor=None, replay=False, projecto
         or is_opencode_history(job),
         "direct metric acquisition hook is unavailable",
     )
-    usage = campaign_usage(job)
+    usage = campaign_budget_usage(job)
     require(
         usage["invocations"] < campaign["max_invocations"]
         and usage["reserved_requests"] + job.budgets["requests"]

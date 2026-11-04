@@ -15,7 +15,8 @@ from tests.test_data_source_backfill_cohort import reference
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
-def test_retained_hf_capture_selects_one_product_and_replays_without_duplicate_values(monkeypatch):
+@pytest.fixture
+def retained_contract(monkeypatch):
     setup_spec()
     Brand.objects.create(nickname='deepseek', display_name='DeepSeek')
     company = company_with_label('deepseek_co', 'DeepSeek')
@@ -24,6 +25,11 @@ def test_retained_hf_capture_selects_one_product_and_replays_without_duplicate_v
     monkeypatch.setattr('core.data_source_backfill_target.validate_backfill_target', lambda **_: {})
     result = configure_cohort(reference(), reviewed_by='fixture: retained evidence')
     contract = MetricCollectionContract.objects.get(pk=result['contract_id'])
+    return contract
+
+
+def test_retained_hf_capture_selects_one_product_and_replays_without_duplicate_values(monkeypatch, retained_contract):
+    contract = retained_contract
     payload = {'status': 'ok', 'rows': [{
         'repo_id': IDENTIFIERS['hf'], 'status': 'ok',
         'raw': {'downloads': 0, 'downloadsAllTime': 10, 'likes': 2},
@@ -74,3 +80,36 @@ def test_retained_hf_capture_selects_one_product_and_replays_without_duplicate_v
         assert report['run_id'] == str(run.pk)
         assert report['provider_calls'] == 0
         assert MetricValue.objects.count() == 3
+
+
+@pytest.mark.parametrize('source', ['arena', 'openrouter'])
+def test_retained_native_models_persist_under_exact_product_and_contract(monkeypatch, retained_contract, source):
+    import httpx
+
+    from core.data_source_backfill_cohort import PRODUCT
+    from core.data_source_backfill_reuse import replay_retained_run
+
+    monkeypatch.setattr(httpx.Client, 'send', lambda *_a, **_k: pytest.fail('retained import made HTTP'))
+    contract = retained_contract
+    payloads = {
+        'arena': {'status': 'ok', 'config': 'text', 'rows': [{
+            'model_name': IDENTIFIERS['arena'], 'leaderboard_publish_date': '2026-08-19',
+            'category': 'overall', 'rating': 1500, 'rank': 1, 'rating_lower': 1490,
+            'rating_upper': 1510, 'variance': 5, 'vote_count': 100}]},
+        'openrouter': {'status': 'ok', 'meta': {'version': 'v1'}, 'rows': [{
+            'model_permaslug': IDENTIFIERS['openrouter'], 'date': '2026-08-19', 'total_tokens': '0'}]},
+    }
+    payload = payloads[source]
+    origin = {'resource': ORIGIN_RESOURCE, 'run_id': str(uuid4()), 'archive_id': str(uuid4()),
+              'payload_sha256': digest(payload)}
+    run = reuse_capture(contract, source=source, payload=payload, origin=origin)
+    assert run.status == 'success' and run.success_count == 1
+    values = list(MetricValue.objects.filter(observation__run=run).select_related('observation__mapping__subject'))
+    assert len(values) == (6 if source == 'arena' else 1)
+    assert all(value.observation.mapping.contract_id == contract.pk
+               and str(value.observation.mapping.subject.product_id) == PRODUCT for value in values)
+    if source == 'openrouter':
+        assert values[0].integer_value == 0
+    before = MetricValue.objects.count()
+    assert replay_retained_run(run.pk).pk == run.pk
+    assert MetricValue.objects.count() == before

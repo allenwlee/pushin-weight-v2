@@ -58,7 +58,8 @@ def test_discovery_resumes_saved_immutable_head_and_pages(monkeypatch):
     assert all(CollectionRun.objects.values_list('physical_bytes_received', flat=True))
 
 
-def test_archive_only_captures_ranges_and_replays_zero_without_http(monkeypatch):
+@pytest.fixture
+def archive_case():
     import io
     from datetime import UTC, datetime
 
@@ -66,9 +67,7 @@ def test_archive_only_captures_ranges_and_replays_zero_without_http(monkeypatch)
     import pyarrow.parquet as pq
 
     from core.benchmark_metric_identity import configure_collection
-    from core.data_source_backfill_hf import replay_archives
-    from core.model_history_collection import execute_model_history
-    from core.models import CollectionRequest, DataSource, MetricValue
+    from core.models import DataSource
     from tests.test_benchmark_download_db_identity import setup_spec
     from tests.test_model_history_collection import history_job
 
@@ -90,6 +89,15 @@ def test_archive_only_captures_ranges_and_replays_zero_without_http(monkeypatch)
     output = io.BytesIO()
     pq.write_table(pa.Table.from_pylist([{'id': product.repo_id, 'downloads': 0, 'likes': 0}]), output)
     binary = output.getvalue()
+    return job, binary
+
+
+def test_archive_only_captures_ranges_and_replays_zero_without_http(monkeypatch, archive_case):
+    from core.data_source_backfill_hf import replay_archives
+    from core.model_history_collection import execute_model_history
+    from core.models import CollectionRequest, MetricValue
+
+    job, binary = archive_case
     def send(request):
         import re
         start, end = map(int, re.fullmatch(r'bytes=(\d+)-(\d+)', request.headers['range']).groups())
@@ -147,3 +155,57 @@ def test_existing_file_archive_command_keeps_its_output_and_shared_selection(mon
     snapshot = json.loads((root / 'snapshot-2026-09-10.json').read_text())
     assert snapshot['data']['revision'] == 'a' * 40
     assert snapshot['data']['rows'] == [{'id': 'lab/Model', 'downloads': 0, 'downloadsAllTime': 10}]
+
+
+@pytest.mark.parametrize('failure', ['send', 'stream'])
+def test_archive_transport_failure_finalizes_and_can_resume(archive_case, failure):
+    import re
+
+    from core.model_history_collection import execute_model_history
+    from core.models import CollectionRequest, MetricValue
+
+    job, binary = archive_case
+    closed = []
+
+    class Interrupted(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b'PA'
+            raise httpx.ReadTimeout('fixture stream interrupted')
+
+        def close(self):
+            closed.append(True)
+
+    def failing(request):
+        if failure == 'send':
+            raise httpx.ConnectTimeout('fixture connect timeout', request=request)
+        return httpx.Response(206, stream=Interrupted(), request=request,
+                              headers={'content-range': f'bytes 0-3/{len(binary)}'})
+
+    with httpx.Client(transport=httpx.MockTransport(failing)) as client:
+        budget = Budget(client, max_requests=30, max_bytes=1000000, cumulative=True)
+        partial = execute_model_history(job.pk, budget=budget)
+    assert partial.status == 'partial' and partial.error_code == 'request_error'
+    assert partial.request_count == 1
+    job.refresh_from_db()
+    assert job.active_run_id is None and job.state == 'ready'
+    receipt = CollectionRequest.objects.get(attempt__run=partial)
+    if failure == 'send':
+        assert receipt.transport_outcome == 'transport_error'
+        assert receipt.response_bytes is None and not receipt.accounting_complete
+    else:
+        assert closed and receipt.response_bytes == 2
+        assert receipt.error_code == 'range_body_incomplete'
+        assert budget.total_bytes_read == 2
+    assert not MetricValue.objects.exists()
+
+    def healthy(request):
+        start, end = map(int, re.fullmatch(r'bytes=(\d+)-(\d+)', request.headers['range']).groups())
+        return httpx.Response(206, content=binary[start:end + 1], request=request,
+                              headers={'content-range': f'bytes {start}-{end}/{len(binary)}'})
+
+    # No clock advance or lease override: an explicitly requested resume works.
+    with httpx.Client(transport=httpx.MockTransport(healthy)) as client:
+        resumed = execute_model_history(job.pk,
+            budget=Budget(client, max_requests=30, max_bytes=1000000, cumulative=True))
+    assert resumed.status == 'success' and MetricValue.objects.count() == 2
+    assert CollectionRequest.objects.get(pk=receipt.pk).transport_outcome == receipt.transport_outcome

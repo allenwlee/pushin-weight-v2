@@ -17,6 +17,7 @@ from core.collection_state import checkpoint_scope, claim_job, fenced_run, finis
 from core.hf_metadata_client import HFMetadataClient
 from core.measurement_taxonomy import digest, require
 from core.models import CollectionJob, CollectionObservation, CollectionRequest
+from scripts.benchmark_download_collector.sources import SourceError
 
 DATASET = 'cfahlgren1/hub-stats'
 ROLE = 'backfill_archive_discovery'
@@ -40,9 +41,9 @@ class ArchiveCaptureClient:
             request_config=request.headers['range'], request_category='hf_archive_range')
         try:
             response = self.client.send(request, **kwargs)
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
             self.capture.failed(receipt)
-            raise
+            raise SourceError('request_error') from exc
         return _RangeReply(response, self.capture, receipt, self.max_bytes)
 
 
@@ -56,11 +57,16 @@ class _RangeReply:
         return getattr(self.response, name)
 
     def iter_bytes(self):
-        for block in self.response.iter_bytes(chunk_size=64 * 1024):
-            self.received += len(block)
-            if len(self.body) + len(block) <= self.max_bytes:
-                self.body.extend(block)
-            yield block
+        try:
+            # Preserve delivered partial chunks if the next read times out;
+            # re-chunking would hide a buffered tail from request accounting.
+            for block in self.response.iter_bytes():
+                self.received += len(block)
+                if len(self.body) + len(block) <= self.max_bytes:
+                    self.body.extend(block)
+                yield block
+        except httpx.HTTPError as exc:
+            raise SourceError('request_error') from exc
         self.complete = True
 
     def close(self):
