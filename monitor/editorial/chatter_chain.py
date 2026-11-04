@@ -126,26 +126,31 @@ def _history(cutoff):
         OriginalContentRun.objects.filter(
             workflow_key=WORKFLOW,
             scope_key=SCOPE,
-            discovery_state="complete",
             facts_as_of__lt=cutoff,
         )
-        .only("pk", "facts_as_of")
+        .only("pk", "facts_as_of", "discovery_state")
         .order_by("-facts_as_of")[:8]
     )
+    discovery_states = {run.pk: run.discovery_state for run in recent}
     searches = []
     for call in OriginalContentCall.objects.filter(
         run__in=recent, stage="discovery", state="completed"
     ).only("response_payload", "run_id"):
         reply = call.response_payload or {}
+        data = reply.get("data", {})
+        stories = data.get("stories")
+        stories = stories if isinstance(stories, list) else []
         searches.append(
             {
                 "run_id": call.run_id,
+                "discovery_state": discovery_states[call.run_id],
                 "tool_activity": reply.get("search_activity", []),
                 "stories": [
                     {"subject": item.get("subject"), "story_ref": item.get("story_ref")}
-                    for item in reply.get("data", {}).get("stories", [])
+                    for item in stories[:30]
+                    if isinstance(item, dict)
                 ],
-                "keyword_query": reply.get("data", {}).get("keyword_query"),
+                "keyword_query": data.get("keyword_query"),
                 "tool_results": "unavailable unless explicitly captured",
             }
         )
