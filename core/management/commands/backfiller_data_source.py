@@ -2,12 +2,18 @@
 import json
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+from django.db import connection, transaction
 
 from core import data_source_backfill as service
 from core.data_source_backfill_target import validate_backfill_target
 from core.collection_jobs import set_job_state
 from core.models import CollectionJob, DataSource, MetricCollectionContract
+
+
+def readonly_call(function, **kwargs):
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute('SET TRANSACTION READ ONLY')
+        return function(**kwargs)
 
 
 class Command(BaseCommand):
@@ -21,6 +27,8 @@ class Command(BaseCommand):
         selection.add_argument('--campaign')
         parser.add_argument('--specifications', help='Reviewed JSON source-job instructions; never a checkpoint file.')
         parser.add_argument('--apply', action='store_true')
+        parser.add_argument('--limit', type=int, default=25, help='Report page size, at most100.')
+        parser.add_argument('--after', dest='after_job_key', help='Next-page cursor returned as next_after.')
 
     def handle(self, *args, **options):
         operation, apply = options['operation'], options['apply']
@@ -32,17 +40,20 @@ class Command(BaseCommand):
                     'applied': False, 'requires_schema_upgrade': True}))
                 return
             selection = {'campaign_key': options['campaign'], 'job_id': options['job']}
+            def report():
+                return readonly_call(service.report_campaign, **selection,
+                    limit=options['limit'], after_job_key=options['after_job_key'])
             if operation == 'register':
                 if not options['specifications']:
                     raise ValueError('registration specifications required')
                 specifications = json.loads(options['specifications'])
-                prepared = service.prepare_campaign(specifications)
+                prepared = readonly_call(service.prepare_campaign, specifications=specifications)
                 if apply:
                     jobs = service.register_campaign(specifications)
                     selection = {'campaign_key': jobs[0].campaign_settings['key']}
-                    report = service.report_campaign(**selection)
+                    result = report()
                 else:
-                    report = {'job_keys': [spec['job_key'] for spec in prepared], 'writes': 0}
+                    result = {'job_keys': [spec['job_key'] for spec in prepared], 'writes': 0}
             else:
                 if options['specifications']:
                     raise ValueError('specifications are only accepted for registration')
@@ -51,17 +62,18 @@ class Command(BaseCommand):
                 if operation == 'pause' and not any(selection.values()):
                     raise ValueError('pause requires a job or campaign')
                 # Always resolve and validate before mutation, including preview.
-                report = service.report_campaign(**selection)
+                result = report()
                 if apply and operation in {'execute', 'resume', 'replay'}:
                     service.execute_phase(options['job'], replay=operation == 'replay')
                 elif apply and operation == 'pause':
                     with transaction.atomic():
                         for job in service.campaign_jobs(**selection):
                             set_job_state(job.pk, 'paused')
-                report = service.report_campaign(**selection)
-            report.update(operation=operation, applied=apply and operation not in {'inspect', 'report'})
-            report['target'] = target
-            self.stdout.write(json.dumps(report, ensure_ascii=False))
+                if apply and operation not in {'inspect', 'report'}:
+                    result = report()
+            result.update(operation=operation, applied=apply and operation not in {'inspect', 'report'})
+            result['target'] = target
+            self.stdout.write(json.dumps(result, ensure_ascii=False))
         except (ValueError, TypeError, KeyError, CollectionJob.DoesNotExist,
                 DataSource.DoesNotExist, MetricCollectionContract.DoesNotExist) as exc:
             raise CommandError(str(exc)) from exc

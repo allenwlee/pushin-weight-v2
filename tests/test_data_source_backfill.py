@@ -25,7 +25,7 @@ from core.models import (
 )
 from tests.test_collection_jobs import job as base_job
 
-pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
 
 @pytest.fixture(autouse=True)
@@ -197,6 +197,79 @@ def test_default_inspect_and_registration_preview_are_nonmutating(monkeypatch):
     assert preview['applied'] is False
     assert list(CollectionJob.objects.values()) == before
     assert not CollectionRun.objects.exists()
+
+
+def test_campaign_report_is_paged_and_usage_is_shared(monkeypatch):
+    from copy import deepcopy
+    from core import data_source_backfill as service
+
+    first = specification()
+    second = deepcopy(first)
+    second['job_key'] += ':second'
+    service.register_campaign([first, second])
+    calls = []
+    monkeypatch.setattr(service, 'campaign_usage', lambda job: (
+        calls.append(job.pk) or {'invocations': 0, 'reserved_requests': 0, 'recorded_requests': 0}))
+    page = service.report_campaign(campaign_key='campaign', limit=1)
+    assert page['job_count'] == 1 and page['total_job_count'] == 2
+    assert page['next_after'] == first['job_key']
+    next_page = service.report_campaign(campaign_key='campaign', limit=1,
+                                        after_job_key=page['next_after'])
+    assert next_page['cells'][0]['job_key'] == second['job_key']
+    assert next_page['next_after'] is None
+    calls.clear()
+    assert service.report_campaign(campaign_key='campaign', limit=2)['job_count'] == 2
+    assert len(calls) == 1
+
+
+def test_command_reports_use_readonly_transactions(monkeypatch):
+    from django.db import connection
+    from core import data_source_backfill as service
+
+    registered()
+    original = service.report_campaign
+    seen = []
+
+    def inspect(**kwargs):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_setting('transaction_read_only')")
+            seen.append(cursor.fetchone()[0])
+        return original(**kwargs)
+
+    monkeypatch.setattr(service, 'report_campaign', inspect)
+    assert command()['applied'] is False
+    assert seen == ['on']
+
+
+def test_legacy_usage_streams_archives_instead_of_caching_all_bodies(monkeypatch):
+    from django.db.models import QuerySet
+    from core.data_source_backfill import campaign_usage
+
+    job = legacy_campaign_job()
+    CollectionRun.objects.create(job=job, ingestion_key='b' * 64, status='success',
+        completed_at=timezone.now(), request_count=2,
+        legacy_archive=campaign_archive(invocations=1, reserved_requests=3, recorded_requests=2))
+    original = QuerySet.__iter__
+
+    def forbid_archive_cache(query):
+        if query.model is CollectionRun and query.query.select_related:
+            pytest.fail('campaign usage cached archive-bearing run rows')
+        return original(query)
+
+    monkeypatch.setattr(QuerySet, '__iter__', forbid_archive_cache)
+    assert campaign_usage(job) == {'invocations': 1, 'reserved_requests': 3, 'recorded_requests': 2}
+
+
+def test_legacy_usage_refuses_oversize_archive_before_reading_body(monkeypatch):
+    from core.data_source_backfill import campaign_usage
+    job = legacy_campaign_job()
+    archive = archive_legacy({'report': {'padding': 'x' * (16 * 1024 * 1024)}})
+    CollectionRun.objects.create(job=job, ingestion_key='d' * 64,
+        status='success', completed_at=timezone.now(), legacy_archive=archive)
+    monkeypatch.setattr('core.collection_capture.read_document',
+                        lambda *_: pytest.fail('oversize archive body was read'))
+    with pytest.raises(ValueError, match='archive exceeds report byte limit'):
+        campaign_usage(job)
 
 
 def test_registration_is_paused_idempotent_and_rejects_changed_partition():

@@ -198,18 +198,31 @@ def campaign_jobs(*, campaign_key=None, job_id=None):
     return jobs.select_related("source", "contract", "campaign").order_by("created_at", "job_key")
 
 
-def report_campaign(*, campaign_key=None, job_id=None):
-    cells = []
-    for job in campaign_jobs(campaign_key=campaign_key, job_id=job_id):
+def report_campaign(*, campaign_key=None, job_id=None, limit=25, after_job_key=None):
+    require(type(limit) is int and 1 <= limit <= 100, "report limit must be from1 to100")
+    require(after_job_key is None or isinstance(after_job_key, str) and len(after_job_key) <= 128,
+            "invalid report cursor")
+    jobs = campaign_jobs(campaign_key=campaign_key, job_id=job_id).order_by('job_key')
+    total = jobs.count()
+    if after_job_key:
+        jobs = jobs.filter(job_key__gt=after_job_key)
+    page = list(jobs[:limit + 1])
+    cells, usages = [], {}
+    for job in page[:limit]:
         validate_job(job)
         campaign = validate_campaign(job.instructions, contract_id=job.contract_id)
+        key = job.campaign_id or campaign['key']
+        if key not in usages:
+            usages[key] = campaign_usage(job)
         cells.append(
-            {**job_status(job.pk), "campaign": campaign, "usage": campaign_usage(job)}
+            {**job_status(job.pk), "campaign": campaign, "usage": usages[key]}
         )
     require(not job_id or len(cells) == 1, "campaign job not found")
     return {
         "schema_version": 1,
         "job_count": len(cells),
+        "total_job_count": total,
+        "next_after": page[limit - 1].job_key if len(page) > limit else None,
         "cells": cells,
         "complete_public_history_claimed": False,
     }
@@ -249,10 +262,17 @@ def campaign_usage(job):
     from core.collection_capture import run_report_document
 
     usage = {"invocations": 0, "reserved_requests": 0, "recorded_requests": 0}
-    for run in CollectionRun.objects.select_related("job", "legacy_archive").filter(
+    for run in CollectionRun.objects.select_related("job", "legacy_archive").defer(
+        "legacy_archive__body",
+    ).filter(
         job__definition__campaign__kind="backfiller-data-source-v1",
         job__definition__campaign__key=job.campaign_settings["key"],
-    ):
+    ).iterator(chunk_size=1):
+        require(
+            run.legacy_archive_id is None
+            or run.legacy_archive.byte_count <= 16 * 1024 * 1024,
+            "legacy campaign archive exceeds report byte limit; use isolated adoption",
+        )
         reservation = run_report_document(run).get("campaign_usage", {})
         usage["invocations"] += reservation.get("invocations", 0)
         usage["reserved_requests"] += reservation.get("reserved_requests", 0)
