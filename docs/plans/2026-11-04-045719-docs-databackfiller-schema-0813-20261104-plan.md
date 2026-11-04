@@ -398,6 +398,14 @@ The chosen isolated job may incur normal provider/network/Render usage. This pla
 
 ## Delivery Exceptions
 
+### Execution checkpoint — November 4
+
+The actual backfill DB reached `0223_merge_backfill_retry_policy`. The guarded retirement removed all13 legacy collection JSON columns after archive/page/runtime/report parity; all49,274 original Posts match across all81 original columns, and all41 X job states/pointers match the pre-upgrade inventory. Five pre-existing pending transport outcomes remain unknown and untouched. Current public X readers work after contraction. No production scheduler was interrupted.
+
+The HF discovery pilot completed with11 physical requests and154,972 received bytes. It identified28 daily model-file snapshots in the examined immutable history; August26 has none. Seventeen retained captures were imported without provider calls. The current OpenCode response was retained but rejected: `updatedAt=2026-10-02T22:29:06Z` conflicts with a2026-10-03 daily row. Its requested cells remain failed source validation, not confirmed unavailable.
+
+Actual verification exposed an identity-scope defect in the new cohort builder: non-HF adapters emit the empty identifier scope, whereas the builder selected `model`. HF alone requires `model`. The source strings and product UUID were correct, but retained Arena/OpenRouter observations were unassigned. Correct the builder, test real adapter-to-mapping admission for all three non-HF sources, create a new immutable contract, and re-admit the saved captures through the shared writer. Preserve the original contract/evidence; do not rewrite those observations or repeat provider requests. Record both contract/campaign revisions and combine their actual spending against the single authorized0813 ceiling. Only the Arena job needs a new acquisition definition; do not reactivate the old one or start another HF discovery/OpenCode fetch.
+
 Owner-selected LFG execution on November 4 supersedes the earlier planning-only restriction. Complete implementation and a reviewed pull request, plus the verified bounded 0813 campaign in the existing backfill DB. `delivery_target: on-request` remains correct for application deployment: staging, production deployment and production promotion are not selected. Use existing isolated one-off execution; preserve live collection and the existing X campaign state.
 
 The implementation freezes at most 40 campaign attempts, each at most 25 MiB and 80 seconds, using existing typed reservation fields. This conservatively reserves 1,000 MiB and 3,200 seconds, below KTD6's aggregate ceilings. The existing shared campaign limit separately caps requests and uncertain reservations at 1,000. Provider concurrency is 1; the HF range reader has an explicit serial mode. Successful, fully accounted attempts release unused request reservations through the existing campaign accounting.

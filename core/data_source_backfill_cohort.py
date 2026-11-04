@@ -121,7 +121,8 @@ def _configure_cohort(reference, preview, reviewed_by):
     for source, identifier in IDENTIFIERS.items():
         mappings.append({'source': source, 'external_identifier': identifier,
             'source_subject_kind': 'repository' if source == 'hf' else 'model',
-            'identifier_scope': 'model', 'subject_id': sid, 'evidence_url': urls[source],
+            'identifier_scope': 'model' if source == 'hf' else '',
+            'subject_id': sid, 'evidence_url': urls[source],
             **({'publisher_account_key': PUBLISHER} if source == 'hf' else {}),
             **({'identifier_metadata': {'archive_row_key': reference['product']['hf_archive_row_id']}}
                if source == 'hf' else {}),

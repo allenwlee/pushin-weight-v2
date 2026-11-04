@@ -64,6 +64,28 @@ def test_reviewed_cohort_is_idempotent_exact_and_preserves_x(monkeypatch):
     mappings = list(contract.mappings.select_related('subject'))
     assert {m.source_id: m.external_identifier for m in mappings} == IDENTIFIERS
     assert all(str(m.subject.product_id) == PRODUCT for m in mappings)
+    # Exercise adapter-to-mapping admission: a model's kind is not its scope.
+    # Other source adapters emit the empty scope; HF requires model explicitly.
+    assert {m.source_id: m.identifier_scope_code for m in mappings} == {
+        'hf': 'model', 'arena': '', 'openrouter': '', 'opencode': ''}
+    from core.benchmark_metric_store import prepare_rows
+    for source, payload in {
+        'openrouter': {'meta': {'version': 'v1'}, 'rows': [{'model_permaslug': IDENTIFIERS['openrouter'],
+            'date': '2026-08-19', 'total_tokens': '0'}]},
+        'arena': {'config': 'text', 'rows': [{'model_name': IDENTIFIERS['arena'],
+            'leaderboard_publish_date': '2026-08-19', 'category': 'overall',
+            'rating': 1500, 'rank': 1, 'rating_lower': 1490, 'rating_upper': 1510,
+            'variance': 5, 'vote_count': 100}]},
+        'opencode': {'rows': [{'model_id': IDENTIFIERS['opencode'],
+            'date': '2026-08-19', 'tokens': 0, 'uniqueUsers': 2, 'sessions': 3,
+            '_source_metadata': {'updated_at': '2026-08-20T12:00:00Z',
+                                 'period_status': 'completed'}}]},
+    }.items():
+        prepared = prepare_rows(contract, source, {'status': 'ok', **payload})
+        assert len(prepared) == 1
+        observation, values = prepared[0]
+        assert observation['status'] == 'ok' and values
+        assert str(observation['mapping'].subject.product_id) == PRODUCT
     assert next(m for m in mappings if m.source_id == 'opencode').identifier_metadata == {'endpoint_path': ENDPOINT}
     assert str(Account.objects.get(data_source_id='hf', normalized_identifier='deepseek-ai').pk) == PUBLISHER
     assert DataSource.objects.filter(pk='x').values().get() == before
