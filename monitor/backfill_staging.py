@@ -24,6 +24,7 @@ from core.collection_staging import (
     adopt_retry_state,
     adopt_staging_receipt,
     ensure_staging_bytes,
+    has_retry_review,
     write_staging_receipt,
 )
 from core.collection_state import fenced_run, x_scope_ownership
@@ -113,6 +114,17 @@ class StagingPrefetcher(Prefetcher):
         failures, not_before, group = 0, None, None
         for request in requests:
             require(x_scope_ownership(request.scope_run) == x_scope_ownership(scope), "staging scope ancestry changed")
+            if request.transport_outcome == 'unknown' and has_retry_review(request, self.claim.job_id):
+                original_scope = copy(request.scope_run)
+                original_scope.cursor = request.cursor_before
+                require(request.error_code == 'operator_reconciled_interruption'
+                        and request.http_method == 'GET' and not request.accounting_complete
+                        and request.request_config == _request_identity(original_scope)
+                        and request.endpoint_url == _endpoint(original_scope),
+                        'interrupted retry ancestry changed')
+                if request.cursor_before == scope.cursor:
+                    group = group or request.request_group or str(request.pk)
+                continue
             if (request.http_method == "GET" and request.transport_outcome in {"received", "transport_error", "timeout"}
                     and transient(request.error_code, request.http_status)):
                 original_scope = copy(request.scope_run)

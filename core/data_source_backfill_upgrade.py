@@ -9,9 +9,11 @@ import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import cache
+from uuid import UUID
 
 from django.db import connection, transaction
 from django.db.migrations.loader import MigrationLoader
+from django.db.models import Exists, OuterRef
 
 from core.measurement_taxonomy import require
 from core.migrations._rg6_retirement_v1 import FIELDS
@@ -35,8 +37,8 @@ def _historical_fields():
 
 
 @dataclass(frozen=True)
-class PageBatch:
-    last_id: int
+class ProjectionBatch:
+    last_id: int | UUID | None
     scanned: int
     updated: int
 
@@ -46,9 +48,19 @@ def project_x_pages_batch(*, after_id=0, batch_size=100, verify_only=False):
 
     require(type(after_id) is int and after_id >= 0, 'page cursor must be a nonnegative integer')
     rows = list(CollectionScopeRun.objects.filter(scope_kind='x_query', pk__gt=after_id)
-                .order_by('pk').values_list('pk', 'run_id', 'run__job_id')[:batch_size])
+                .annotate(has_pages=Exists(CollectionScopeRun.objects.filter(
+                    parent_scope_id=OuterRef('pk'), scope_kind=PAGE_KIND)))
+                .order_by('pk').values_list('pk', 'run_id', 'run__job_id', 'envelopes', 'has_pages')[:batch_size])
+    if verify_only:
+        _verify_page_batch(rows)
+        return ProjectionBatch(rows[-1][0] if rows else after_id, len(rows), 0)
     updated = 0
-    for scope_id, run_id, job_id in rows:
+    for scope_id, run_id, job_id, envelopes, has_pages in rows:
+        # Empty source and empty destination need no writes or row locks. This
+        # is a copy optimization only; final parity rereads every source under
+        # its owner's lock, including these skipped scopes and late writes.
+        if not envelopes and not has_pages:
+            continue
         # Preserve the live writer's job -> run -> scope lock order. One source
         # scope is atomic; a timeout retains every previously verified scope.
         with transaction.atomic(), connection.cursor() as cursor:
@@ -58,12 +70,54 @@ def project_x_pages_batch(*, after_id=0, batch_size=100, verify_only=False):
             scope = CollectionScopeRun.objects.select_for_update().get(pk=scope_id)
             require(scope.run_id == run_id, 'historical page owner changed')
             before = scope.child_scopes.filter(scope_kind=PAGE_KIND).count()
-            require(not verify_only or before == len(scope.envelopes),
-                    'historical page receipts are not fully projected')
             project_page_receipts(scope, scope.envelopes, cursor=scope.cursor,
                                   legacy_archive=scope.legacy_archive)
             updated += int(before != len(scope.envelopes))
-    return PageBatch(rows[-1][0] if rows else after_id, len(rows), updated)
+    return ProjectionBatch(rows[-1][0] if rows else after_id, len(rows), updated)
+
+
+def _verify_page_batch(rows):
+    from collections import defaultdict
+    from core.collection_pages import PAGE_KIND, _receipt_semantics, page_receipts
+
+    # Bound the prefetched appearance graph independently of the cursor batch.
+    for start in range(0, len(rows), 25):
+        group = rows[start:start + 25]
+        with transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout='2s'; SET LOCAL statement_timeout='30s'")
+            list(CollectionJob.objects.filter(pk__in={row[2] for row in group})
+                 .order_by('pk').select_for_update().only('pk'))
+            list(CollectionRun.objects.filter(pk__in={row[1] for row in group})
+                 .order_by('pk').select_for_update().only('pk'))
+            scopes = list(CollectionScopeRun.objects.filter(pk__in=[row[0] for row in group])
+                          .order_by('pk').select_for_update().only('pk', 'run_id', 'envelopes'))
+            require(len(scopes) == len(group), 'historical page owner disappeared')
+            require({scope.pk: scope.run_id for scope in scopes}
+                    == {row[0]: row[1] for row in group}, 'historical page owner changed')
+            children = defaultdict(list)
+            for child in CollectionScopeRun.objects.filter(
+                parent_scope_id__in=[scope.pk for scope in scopes], scope_kind=PAGE_KIND,
+            ).order_by('parent_scope_id', 'checkpoint_ordinal').prefetch_related(
+                'observations__inputs__input_observation', 'request_uses__request__scope_run',
+                'rare_hit_memberships',
+            ):
+                children[child.parent_scope_id].append(child)
+            for scope in scopes:
+                require([_receipt_semantics(e) for e in page_receipts(scope, children=children[scope.pk])]
+                        == [_receipt_semantics(e) for e in scope.envelopes],
+                        'historical page receipts differ from their saved checkpoint')
+
+
+def project_retry_reviews_batch(*, after_id=None, batch_size=100, verify_only=False):
+    from core.collection_staging import adopt_retry_reviews
+
+    query = CollectionRun.objects.filter(job__source_id='x', job__operation='x_backfill').only(
+        'pk', 'job_id', 'legacy_archive_id').order_by('pk')
+    if after_id is not None:
+        query = query.filter(pk__gt=after_id)
+    rows = list(query[:batch_size])
+    copied = sum(adopt_retry_reviews(run, verify_only=verify_only) for run in rows)
+    return ProjectionBatch(rows[-1].pk if rows else after_id, len(rows), copied)
 
 
 @contextmanager
@@ -115,6 +169,7 @@ def project_batch(stage, *, after_id=None, batch_size=100, verify_only=False):
         'rare_hits': (copy.project_scope_rare_hits_batch, 0, False),
         'request_uses': (copy.project_scope_request_uses_batch, 0, False),
         'pages': (project_x_pages_batch, 0, True),
+        'retry_reviews': (project_retry_reviews_batch, None, True),
     }
     require(stage in stages, 'unsupported legacy projection stage')
     function, initial, verifies = stages[stage]

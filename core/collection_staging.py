@@ -12,11 +12,94 @@ from django.utils import timezone
 
 from core.collection_capture import read_document
 from core.measurement_taxonomy import digest, require
-from core.models import CollectionObservation, CollectionRequest
+from core.models import (
+    CollectionEvidenceArchive, CollectionObservation, CollectionObservationInput, CollectionRequest,
+)
 from monitor.backfill_retry import RetryControl
 
 CATEGORY = "x_backfill_staging"
 APPEARANCE_KIND = "x_request_appearance"
+RETRY_REVIEW_KIND = 'x_staging_retry_approval'
+
+
+@transaction.atomic
+def adopt_retry_reviews(run, *, verify_only=False):
+    """Preserve already-recorded operator consents; never grant a new retry.
+
+    An observation records the review fact and its actual review clock. Its
+    typed input points to the original unknown request, rather than pretending
+    that a response was received. The reason remains immutable source evidence.
+    """
+    from core.benchmark_metric_store import aware_instant
+    from core.collection_capture import archive_legacy, read_document
+    from core.models import CollectionJob, CollectionRun
+
+    CollectionJob.objects.select_for_update().only('pk').get(pk=run.job_id)
+    run = CollectionRun.objects.select_for_update().only('pk', 'job_id', 'legacy_archive_id').get(pk=run.pk)
+    approvals = _legacy_report(run).get('staging_unknown_retries', {})
+    require(isinstance(approvals, dict) and len(approvals) <= 1000,
+            'invalid historical retry review set')
+    copied = 0
+    for identifier, approval in approvals.items():
+        require(isinstance(approval, dict) and set(approval) == {'reason', 'at'}
+                and isinstance(approval['reason'], str) and 0 < len(approval['reason']) <= 4096,
+                'invalid historical retry review')
+        at = aware_instant(approval['at'])
+        request = CollectionRequest.objects.select_for_update().get(pk=identifier)
+        require(request.attempt.run_id == run.pk and request.request_category == CATEGORY
+                and request.http_method == 'GET' and request.transport_outcome == 'unknown'
+                and request.error_code == 'operator_reconciled_interruption'
+                and request.received_at is None and request.http_status is None
+                and request.archive_id is None and not request.accounting_complete,
+                'historical retry review does not match an unknown request')
+        key = digest([RETRY_REVIEW_KIND, identifier, approval])
+        observation = CollectionObservation.objects.filter(run=run, observation_key=key).first()
+        if observation is None:
+            require(not verify_only, 'historical retry review is not projected')
+            observation = CollectionObservation.objects.create(run=run,
+                source_identifier=identifier, source_subject_kind='aggregate',
+                observation_kind=RETRY_REVIEW_KIND, observation_key=key,
+                observed_at=at, processing_outcome='approved',
+                legacy_archive=archive_legacy(approval))
+            CollectionObservationInput.objects.create(observation=observation,
+                input_request=request, input_role='reconciled_request',
+                row_locator='report.staging_unknown_retries.' + identifier,
+                input_sha256=digest(approval))
+            copied += 1
+        require(observation.observation_kind == RETRY_REVIEW_KIND
+                and observation.processing_outcome == 'approved'
+                and observation.observed_at == at
+                and read_document(observation.legacy_archive) == approval
+                and observation.inputs.filter(input_request=request,
+                    input_role='reconciled_request', input_sha256=digest(approval)).exists(),
+                'historical retry review projection changed')
+    return copied
+
+
+def has_retry_review(request, job_id):
+    from core.benchmark_metric_store import aware_instant
+
+    links = list(CollectionObservationInput.objects.filter(input_request=request,
+        input_role='reconciled_request', observation__run__job_id=job_id,
+        observation__observation_kind=RETRY_REVIEW_KIND,
+        observation__processing_outcome='approved', observation__status='ok')
+        .select_related('observation__legacy_archive').defer('observation__legacy_archive__body')[:2])
+    require(len(links) <= 1, 'historical retry review is ambiguous')
+    if not links:
+        return False
+    link = links[0]
+    observation = link.observation
+    require(observation.source_identifier == str(request.pk)
+            and observation.source_subject_kind == 'aggregate'
+            and observation.legacy_archive_id is not None
+            and observation.legacy_archive.byte_count <= 32 * 1024,
+            'historical retry review evidence is invalid')
+    evidence = read_document(observation.legacy_archive)
+    require(isinstance(evidence, dict) and set(evidence) == {'reason', 'at'}
+            and isinstance(evidence['reason'], str) and bool(evidence['reason'])
+            and observation.observed_at == aware_instant(evidence['at'])
+            and link.input_sha256 == digest(evidence), 'historical retry review evidence changed')
+    return True
 
 
 def _legacy_report(run):
@@ -24,7 +107,10 @@ def _legacy_report(run):
     if any(field.name == "report" for field in type(run)._meta.fields) and run.report:
         return run.report
     if run.legacy_archive_id:
-        document = read_document(run.legacy_archive)
+        archive = CollectionEvidenceArchive.objects.only('pk', 'byte_count').get(pk=run.legacy_archive_id)
+        require(archive.byte_count <= 16 * 1024**2,
+                'staging report archive exceeds adoption byte limit')
+        document = read_document(archive)
         require(isinstance(document, dict) and isinstance(document.get("report"), dict),
                 "staging legacy report archive is invalid")
         return document["report"]

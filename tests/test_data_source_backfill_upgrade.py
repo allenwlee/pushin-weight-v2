@@ -20,7 +20,8 @@ BASE = ('core', '0183_rg6_typed_statistics_identity')
 
 @pytest.mark.parametrize('migration_rehearsal_schema', [BASE], indirect=True)
 def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration_rehearsal_schema):
-    from core.collection_capture import run_report_document
+    from core.collection_capture import archive_legacy, read_document, run_report_document
+    from core.models import CollectionObservation
     from core.collection_pages import page_receipts
     from core.collection_storage_migration import (
         archive_legacy_batch,
@@ -70,10 +71,27 @@ def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration
     assert int(scope.requested_start_at.timestamp()) == job.scope['since_epoch']
     assert int(scope.requested_end_at.timestamp()) == job.scope['until_epoch']
     assert tuple(CollectionRun._meta.fields) == original_fields
+    review_evidence = {'reason': 'Previously recorded consent', 'at': at.isoformat()}
+    with legacy_projection_models():
+        review = CollectionObservation.objects.create(run_id=run.pk,
+            source_subject_kind='aggregate', source_identifier='historical-request',
+            observation_kind='x_staging_retry_approval', observation_key='e' * 64,
+            observed_at=at, processing_outcome='approved',
+            legacy_archive=archive_legacy(review_evidence))
     for table in FIELDS:
         while archive_legacy_batch(table, batch_size=100).more_unarchived:
             pass
+    # Empty obsolete observation JSON must not replace typed review evidence.
+    review.refresh_from_db()
+    assert read_document(review.legacy_archive) == review_evidence
     assert project_batch('pages').updated == 1
+    assert project_batch('pages', verify_only=True).updated == 0
+    # Independent parity must inspect receipt contents, not just child counts.
+    child = CollectionScopeRun.objects.get(parent_scope_id=scope.pk, scope_kind='x_page_checkpoint')
+    CollectionScopeRun.objects.filter(pk=child.pk).update(raw_count=1)
+    with pytest.raises(ValueError, match='differ from their saved checkpoint'):
+        project_batch('pages', verify_only=True)
+    CollectionScopeRun.objects.filter(pk=child.pk).update(raw_count=0)
     assert project_batch('pages', verify_only=True).updated == 0
     assert all(stale_legacy_archive_count(table) == 0 for table in FIELDS)
     MigrationExecutor(connection).migrate([('core', '0200_merge_rg6_enrichment_budget_contract')])

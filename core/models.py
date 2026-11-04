@@ -9647,7 +9647,7 @@ class CollectionScopeCursorReceipt(models.Model):
 
 
 class CollectionObservationInput(models.Model):
-    """One captured reply or preceding resource result used by an observation."""
+    """One request receipt or preceding resource result used by an observation."""
 
     observation = models.ForeignKey(CollectionObservation, on_delete=models.PROTECT, related_name="inputs")
     input_request = models.ForeignKey(CollectionRequest, null=True, on_delete=models.PROTECT)
