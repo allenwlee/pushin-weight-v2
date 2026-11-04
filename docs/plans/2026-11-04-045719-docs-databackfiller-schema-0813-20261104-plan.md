@@ -9,8 +9,10 @@ ollija:
   change_id: docs-databackfiller-schema-0813-20261104-2026-11-04-045719
   branch: docs/databackfiller-schema-0813-20261104
   workflow: plan
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: production
+  delivery_selected_by_user: true
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 # DataBackfiller current schema and 0813 backfill DB collection - Plan
 
@@ -22,7 +24,7 @@ The existing backfill DB is still on schema 0183 and contains X-post backfill wo
 
 The first campaign targets missing HF download/like history, HF trending score, OpenCode tokens/users/sessions and additional available Arena snapshots. Reuse existing collectors and measurement storage. Verification covers safe resume, correct dates, repeat imports, database targeting, existing X compatibility, and a before/after coverage report. Unknown historical values stay missing. This plan does not promise that every provider has retained the requested history.
 
-The owner selected LFG execution on November 4. This authorizes implementation, the default reviewed pull-request endpoint, and the bounded 0813 campaign in the existing backfill DB. Production application deployment and production data transfer remain outside this execution authority.
+The owner selected LFG execution on November 4 and subsequently requested production deployment. Complete reviewed application delivery directly to production, as the owner selected, and verify the deployed revision. The bounded0813 collection remains in the existing backfill DB; production measurement transfer and new collection activation remain excluded.
 
 ---
 ## Goal Capsule
@@ -31,7 +33,7 @@ The owner selected LFG execution on November 4. This authorizes implementation, 
 - Means: Upgrade the existing backfill environment through the repository migration graph, reuse shared ingestion and add bounded datasource campaign orchestration (KTD1–KTD6).
 - Authority: Current owner decisions and AGENTS.md govern this plan. Historical datasource/X deployment permissions do not authorize this campaign.
 - Endpoint: A verified 0813 campaign in `xbackfiller`, with a reproducible transfer-ready evidence inventory. The parent execution workflow owns completion; no automatic production promotion.
-- Stop conditions: Wrong database identity, unsafe schema contraction with an incompatible X writer, changed product identity, unaccounted physical requests, exhausted campaign limits, or an attempted production write.
+- Stop conditions: Wrong database identity, unsafe schema contraction with an incompatible X writer, changed product identity, unaccounted physical requests, exhausted campaign limits, or an attempted campaign measurement write to production. Application release migrations are separately authorized by the later production deployment request.
 
 ---
 ## Product Contract
@@ -412,7 +414,7 @@ The first Arena definition completed with0 requests because a model with empty `
 
 Actual verification exposed an identity-scope defect in the new cohort builder: non-HF adapters emit the empty identifier scope, whereas the builder selected `model`. HF alone requires `model`. The source strings and product UUID were correct, but retained Arena/OpenRouter observations were unassigned. Correct the builder, test real adapter-to-mapping admission for all three non-HF sources, create a new immutable contract, and re-admit the saved captures through the shared writer. Preserve the original contract/evidence; do not rewrite those observations or repeat provider requests. Record both contract/campaign revisions and combine their actual spending against the single authorized0813 ceiling. Only the Arena job needs a new acquisition definition; do not reactivate the old one or start another HF discovery/OpenCode fetch.
 
-Owner-selected LFG execution on November 4 supersedes the earlier planning-only restriction. Complete implementation and a reviewed pull request, plus the verified bounded 0813 campaign in the existing backfill DB. `delivery_target: on-request` remains correct for application deployment: staging, production deployment and production promotion are not selected. Use existing isolated one-off execution; preserve live collection and the existing X campaign state.
+Owner-selected LFG execution on November4 supersedes the earlier planning-only restriction. The later explicit request, “deploy to production,” extends the endpoint through direct application deployment and exact-revision production verification, including necessary application migrations. Preserve live collection, peer staging ownership and the existing X campaign state. Production measurement transfer, new campaign/provider activation and new permanent Render resources remain excluded. A production code deployment does not promote the collected216 backfill measurements.
 
 The implementation freezes at most 40 campaign attempts, each at most 25 MiB and 80 seconds, using existing typed reservation fields. This conservatively reserves 1,000 MiB and 3,200 seconds, below KTD6's aggregate ceilings. The existing shared campaign limit separately caps requests and uncertain reservations at 1,000. Provider concurrency is 1; the HF range reader has an explicit serial mode. Successful, fully accounted attempts release unused request reservations through the existing campaign accounting.
 
@@ -443,10 +445,20 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `production`
+- Owner selection recorded: `true`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/docs/databackfiller-schema-0813-20261104` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/docs/databackfiller-schema-0813-20261104` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
