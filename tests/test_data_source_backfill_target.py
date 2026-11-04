@@ -73,11 +73,12 @@ def test_readonly_inspection_can_report_old_schema_but_execution_cannot():
             environ={'BACKFILL_DATABASE_URL': URL}, require_write=True)
 
 
-def test_cli_rejects_missing_target_before_service_or_provider_access(monkeypatch):
+@pytest.mark.parametrize('command_name', ['backfiller_data_source', 'upgrade_data_source_backfill'])
+def test_cli_rejects_missing_target_before_service_or_provider_access(monkeypatch, command_name):
     monkeypatch.delenv('BACKFILL_DATABASE_URL', raising=False)
     from core.management.commands import backfiller_data_source as command
     monkeypatch.setattr(command.service, 'report_campaign',
                         lambda **_: pytest.fail('service reached before target validation'))
     with pytest.raises(CommandError, match='backfill credential missing') as error:
-        call_command('backfiller_data_source', operation='inspect', stdout=StringIO())
+        call_command(command_name, stdout=StringIO())
     assert 'private-password' not in str(error.value)
