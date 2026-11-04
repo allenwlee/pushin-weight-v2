@@ -179,6 +179,12 @@ def test_rank_does_not_change_fresh_appearance_and_unknown_period_is_not_absence
     ).update(completed_at=start + timedelta(minutes=16))
     late = history.appearance_history(story, start + timedelta(minutes=15), periods=2)
     assert late["unknown_periods"] == 1 and late["fresh_periods"] == 1
+    observed_later = history.appearance_history(
+        story, start + timedelta(minutes=15), periods=2,
+        observed_at=start + timedelta(minutes=31),
+    )
+    assert observed_later["consecutive_lower_bound"] == 2
+    assert observed_later["periods"][0]["interval"] == (start + timedelta(minutes=15)).isoformat()
 
 
 def test_carried_memory_does_not_renew_the_two_hour_competition_board():

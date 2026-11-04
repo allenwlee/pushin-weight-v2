@@ -32,7 +32,7 @@ def _expanded_history(identities, run):
     expanded = {}
     for identity in identities:
         rows = development_history(
-            EditorialStory.objects.get(pk=identity), timezone.now(), limit=9
+            EditorialStory.objects.get(pk=identity), run.facts_as_of, limit=9
         )
         expanded[identity] = [
             {
@@ -75,6 +75,7 @@ def _selection_packet(run, cfg):
     if prior:
         previous = resolved_sources(prior.snapshot)
     candidates, measurements, languages = [], [], []
+    observed_at = timezone.now()
     for row in rows:
         identities = [
             s.post_id or f"dossier-source:{s.dossier_source_id}"
@@ -93,7 +94,9 @@ def _selection_packet(run, cfg):
                 if row.development.event_dossier_id
                 else [],
                 "evidence": evidence,
-                "persistence": appearance_history(row.development, timezone.now()),
+                "persistence": appearance_history(
+                    row.development, run.facts_as_of, observed_at=observed_at
+                ),
             }
         )
         measurements.append(

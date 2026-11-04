@@ -106,10 +106,13 @@ def wire(data, model="grok-4.7", *, search=False):
     ).encode()
 
 
-@pytest.mark.parametrize("recover", [False, True])
+@pytest.mark.parametrize(
+    "recover,keyword_offset", [(False, -1), (True, 1), (True, -30)]
+)
 def test_discovery_to_pool_publication_uses_real_storage_and_no_duplicate_send(
     monkeypatch,
     recover,
+    keyword_offset,
 ):
     from monitor.editorial import chatter_chain
 
@@ -207,7 +210,7 @@ def test_discovery_to_pool_publication_uses_real_storage_and_no_duplicate_send(
                                 "subject": "A separate lawsuit in the same roundup",
                             },
                         ],
-                        "keyword_query": '"small lab"',
+                        "keyword_query": '"small lab" OR "small lawsuit"',
                         "search_notes": [],
                         "history_requests": [],
                     },
@@ -270,6 +273,10 @@ def test_discovery_to_pool_publication_uses_real_storage_and_no_duplicate_send(
         ).encode()
 
     def get(url, params, timeout=None, **kwargs):
+        if "advanced_search" in url:
+            assert params["query"].startswith(
+                '("small lab" OR "small lawsuit") since_time:'
+            )
         identity = "124" if "advanced_search" in url else "123"
         data = {
             "tweets": [
@@ -277,7 +284,11 @@ def test_discovery_to_pool_publication_uses_real_storage_and_no_duplicate_send(
                     "id": identity,
                     "text": "A company announced a model.",
                     "lang": "en",
-                    "createdAt": (now - timedelta(minutes=1)).isoformat(),
+                    "createdAt": (
+                        now + timedelta(minutes=keyword_offset)
+                        if identity == "124"
+                        else now - timedelta(minutes=1)
+                    ).isoformat(),
                     "likeCount": 10,
                     "author": {"id": "42", "userName": "lab"},
                 }
@@ -370,6 +381,27 @@ def test_discovery_to_pool_publication_uses_real_storage_and_no_duplicate_send(
     )
     assert shared_source.count() == 2
     assert len(set(shared_source.values_list("development_id", flat=True))) == 2
+    assert OriginalContent.objects.filter(
+        run_id=result["run_id"], appearance_kind="keyword_only"
+    ).count() == (0 if recover else 1)
+    if recover:
+        from monitor.editorial.chatter_inputs import _selection_packet
+
+        with patch(
+            "django.utils.timezone.now", return_value=now + timedelta(minutes=31)
+        ):
+            packet = _selection_packet(
+                OriginalContentRun.objects.get(pk=result["run_id"]), cfg
+            )
+        assert all(
+            row["persistence"]["periods"][0]["interval"]
+            == held_run.interval.isoformat()
+            for row in packet["candidates"]
+        )
+        assert all(
+            row["persistence"]["consecutive_lower_bound"] == 1
+            for row in packet["candidates"]
+        )
     assert queued == [("select", result["run_id"])]
     selected = select_chatter(
         result["run_id"],
