@@ -8,7 +8,12 @@ from django.utils import timezone
 from core.collection_capture import archive_legacy, begin_request, finish_request
 from core.collection_staging import adopt_retry_reviews, has_retry_review
 from core.collection_state import checkpoint_scope, claim_job
-from core.models import CollectionObservation, CollectionRequest, CollectionRun, CollectionScopeRun
+from core.models import (
+    CollectionObservation,
+    CollectionRequest,
+    CollectionRun,
+    CollectionScopeRun,
+)
 from monitor.backfill_prefetch import _endpoint, _request_identity
 from monitor.backfill_staging import StagingPrefetcher
 from tests.test_backfill_staging import staged_job

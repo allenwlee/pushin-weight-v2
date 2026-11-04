@@ -95,6 +95,7 @@ def test_moved_job_still_rejects_ordinary_execution(monkeypatch):
 
 def test_campaign_command_binds_only_the_explicit_verified_receipt(monkeypatch, tmp_path):
     from django.core.management import call_command
+
     from monitor.backfill_database import job_database_matches
     from monitor.management.commands.run_backfill import Command
 

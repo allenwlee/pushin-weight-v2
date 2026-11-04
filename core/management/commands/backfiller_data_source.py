@@ -5,9 +5,14 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 
 from core import data_source_backfill as service
-from core.data_source_backfill_target import validate_backfill_target
 from core.collection_jobs import set_job_state
-from core.models import CollectionJob, CollectionRun, DataSource, MetricCollectionContract
+from core.data_source_backfill_target import validate_backfill_target
+from core.models import (
+    CollectionJob,
+    CollectionRun,
+    DataSource,
+    MetricCollectionContract,
+)
 
 
 def readonly_call(function, **kwargs):
@@ -49,7 +54,10 @@ class Command(BaseCommand):
                 return readonly_call(service.report_campaign, **selection,
                     limit=options['limit'], after_job_key=options['after_job_key'])
             if operation == 'replay-retained':
-                from core.data_source_backfill_reuse import prepare_retained_replay, replay_retained_run
+                from core.data_source_backfill_reuse import (
+                    prepare_retained_replay,
+                    replay_retained_run,
+                )
 
                 if not options['run'] or options['reference'] or options['contract'] or options['specifications'] or any(selection.values()):
                     raise ValueError('replay-retained requires only one explicit run')
@@ -69,7 +77,10 @@ class Command(BaseCommand):
             elif options['contract']:
                 raise ValueError('contract is only accepted for plan-0813')
             elif operation == 'prepare-0813':
-                from core.data_source_backfill_cohort import configure_cohort, preview_cohort
+                from core.data_source_backfill_cohort import (
+                    configure_cohort,
+                    preview_cohort,
+                )
 
                 if not options['reference'] or options['specifications'] or any(selection.values()):
                     raise ValueError('prepare-0813 requires only its explicit reference JSON')

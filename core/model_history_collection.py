@@ -494,6 +494,7 @@ def _execute_models(claim, job, budget, *, key, before):
         acquire_hf_archives(claim, job, budget)
         if job.scope.get('backfill_archive_only') is True:
             from django.db.models import Sum
+
             from core.models import CollectionRequest
 
             requests = CollectionRequest.objects.filter(attempt__run_id=claim.run_id)

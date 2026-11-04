@@ -13,7 +13,10 @@ from django.utils import timezone
 from core.collection_capture import read_document
 from core.measurement_taxonomy import digest, require
 from core.models import (
-    CollectionEvidenceArchive, CollectionObservation, CollectionObservationInput, CollectionRequest,
+    CollectionEvidenceArchive,
+    CollectionObservation,
+    CollectionObservationInput,
+    CollectionRequest,
 )
 from monitor.backfill_retry import RetryControl
 

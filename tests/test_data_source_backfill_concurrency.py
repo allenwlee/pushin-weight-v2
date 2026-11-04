@@ -12,7 +12,13 @@ from core.collection_jobs import register_job, set_job_state
 from core.collection_pages import append_page_receipt, page_receipts
 from core.collection_state import checkpoint_scope, claim_job, fenced_run, finish_run
 from core.data_source_backfill import execute_phase, register_campaign
-from core.models import CollectionRequest, CollectionRun, CollectionScopeRun, DataSource, MetricValue
+from core.models import (
+    CollectionRequest,
+    CollectionRun,
+    CollectionScopeRun,
+    DataSource,
+    MetricValue,
+)
 from tests.test_backfill_collection import ready_job
 from tests.test_benchmark_opencode import configured, endpoint
 from tests.test_data_source_backfill_opencode import specification

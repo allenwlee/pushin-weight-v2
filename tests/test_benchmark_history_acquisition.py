@@ -98,10 +98,15 @@ def test_archive_rejects_full_file_when_range_ignored():
 def test_native_archive_row_identity_skips_unrelated_row_groups():
     import io
     import re
+
     import httpx
     import pyarrow as pa
     import pyarrow.parquet as pq
-    from scripts.benchmark_download_collector.hf_archive import ArchiveBudget, select_snapshot
+
+    from scripts.benchmark_download_collector.hf_archive import (
+        ArchiveBudget,
+        select_snapshot,
+    )
 
     output = io.BytesIO()
     pq.write_table(pa.Table.from_pylist([

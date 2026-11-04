@@ -148,7 +148,10 @@ def prepare_campaign(specifications):
         )
         if not typed and (definition['scope'].get('role') == 'backfill_archive_discovery'
                           or definition['scope'].get('backfill_archive_only') is True):
-            from core.data_source_backfill_hf import validate_archive_only, validate_discovery
+            from core.data_source_backfill_hf import (
+                validate_archive_only,
+                validate_discovery,
+            )
 
             candidate = CollectionJob(source=source, contract=contract, purpose=spec['purpose'],
                 operation=spec['operation'], mode='historical', definition=definition)
@@ -531,7 +534,11 @@ def _execute_phase(job_id, *, budget=None, executor=None, replay=False, projecto
 
         return replay_archives(job)
     if job.scope.get('role') == 'backfill_archive_discovery':
-        from core.data_source_backfill_hf import discovered_revisions, execute_discovery, validate_discovery
+        from core.data_source_backfill_hf import (
+            discovered_revisions,
+            execute_discovery,
+            validate_discovery,
+        )
 
         validate_discovery(job)
         if job.state == 'completed':
