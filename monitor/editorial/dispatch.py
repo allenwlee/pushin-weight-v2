@@ -49,9 +49,9 @@ def dispatch_chatter_cycle(source_cycle_id, started, *, kind, dry_run, task=None
 def dispatch_chatter_stage(stage, *args):
     from monitor.tasks import chatter_stage
 
-    if stage not in {"select", "write", "review"}:
+    if stage not in {"select", "write", "review", "resume-discovery"}:
         raise ValueError("unsupported Chatter stage")
-    priority = 0 if stage == "select" else 9 if stage == "review" else 3 if args[-1] == "en" else 6
+    priority = 0 if stage in {"select", "resume-discovery"} else 9 if stage == "review" else 3 if args[-1] == "en" else 6
     transaction.on_commit(lambda: _send(chatter_stage, [stage, *args], priority=priority))
 
 

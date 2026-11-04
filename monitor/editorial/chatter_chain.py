@@ -1,10 +1,10 @@
 """Persisted Chatter stages shared by the queue, CLI and deterministic transports."""
 
+import hashlib
 import json
 import re
 from copy import deepcopy
 from datetime import datetime, timedelta
-from types import SimpleNamespace
 
 from django.db import transaction
 from django.db.models import Max
@@ -29,6 +29,7 @@ from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
 from .chatter_accounting import call_once
 from .chatter_discovery import (
+    development_identity,
     keep_fingerprint,
     prompts,
     semantic_request,
@@ -57,7 +58,7 @@ from .chatter_inputs import (
 from .chatter_sources import SourceSession
 from .config import EditorialConfig, load_editorial_config
 from .contracts import ProviderReplyError, interval_start
-from .providers import json_call
+from .providers import json_call, request_payload
 from .voices import load_bound_voices
 from .writing import validate_copy
 
@@ -297,6 +298,47 @@ def run_chatter(envelope, *, cfg=None, transport=None, x_client=None, enqueue=en
         }:
             return {"status": "already_discovered", "run_id": run.pk}
         return {"status": "already_dispatched", "run_id": run.pk}
+    return _discover(
+        run,
+        cfg,
+        configured=configured,
+        transport=transport,
+        x_client=x_client,
+        enqueue=enqueue,
+        purpose=envelope["credential_purpose"],
+    )
+
+
+def resume_chatter_discovery(
+    run_id, *, cfg=None, transport=None, x_client=None, enqueue=enqueue
+):
+    """Explicitly continue a held reply; never send the discovery request again."""
+    run = OriginalContentRun.objects.get(pk=run_id, workflow_key=WORKFLOW)
+    configured = cfg is not None
+    cfg = _saved_config(run, cfg)
+    if cfg is None:
+        return {"status": "disabled"}
+    if (
+        run.discovery_state != "failed"
+        or run.outcome.get("phase") != "held"
+        or run.outcome.get("discovery_recovery")
+    ):
+        return {"status": "already_dispatched", "run_id": run.pk}
+    return _discover(
+        run,
+        cfg,
+        configured=configured,
+        transport=transport,
+        x_client=x_client,
+        enqueue=enqueue,
+        resume=True,
+    )
+
+
+def _discover(
+    run, cfg, *, configured, transport, x_client, enqueue, resume=False, purpose=None
+):
+    cutoff = run.facts_as_of
     sources = None
     try:
         previous, incumbents, history = _history(cutoff)
@@ -311,7 +353,33 @@ def run_chatter(envelope, *, cfg=None, transport=None, x_client=None, enqueue=en
             }
             for identity, row in releases.items()
         ]
-        purpose = TwitterApiCredentialPurpose(envelope["credential_purpose"])
+        if resume:
+            call = OriginalContentCall.objects.get(
+                run=run, stage="discovery", state="completed"
+            )
+            # Rebuild the original input, including history and releases. A changed
+            # board cannot silently reinterpret a paid reply against new context.
+            expected = request_payload(
+                cfg.chatter.discovery, semantic_request(cutoff, history, cfg)
+            )
+            if (
+                expected != call.request_packet
+                or hashlib.sha256(
+                    json.dumps(expected, ensure_ascii=False).encode()
+                ).hexdigest()
+                != call.request_hash
+            ):
+                raise ValueError("saved discovery input changed")
+            reply = call.response_payload
+            result = validate_semantic(reply, set(previous) | set(releases))
+            purpose = TwitterApiCredentialPurpose(
+                run.collection_runs.get()
+                .attempts.order_by("ordinal")
+                .first()
+                .credential_purpose
+            )
+        else:
+            purpose = TwitterApiCredentialPurpose(purpose)
         if cfg.chatter.trial and purpose != TwitterApiCredentialPurpose.ON_DEMAND:
             raise ValueError("explicit validation requires the on-demand purpose")
         sources = SourceSession(
@@ -321,18 +389,21 @@ def run_chatter(envelope, *, cfg=None, transport=None, x_client=None, enqueue=en
             client=x_client,
             transport=transport,
             policy_reader=(lambda: cfg) if configured else load_editorial_config,
+            resume=resume,
         )
-        reply = json_call(
-            run,
-            "discovery",
-            cfg.chatter.discovery,
-            semantic_request(cutoff, history, cfg),
-            cfg,
-            transport=sources.transport,
-            reservation=call_once,
-        )
-        result = validate_semantic(reply, set(previous) | set(releases))
+        if not resume:
+            reply = json_call(
+                run,
+                "discovery",
+                cfg.chatter.discovery,
+                semantic_request(cutoff, history, cfg),
+                cfg,
+                transport=sources.transport,
+                reservation=call_once,
+            )
         sources.tools(reply)
+        if not resume:
+            result = validate_semantic(reply, set(previous) | set(releases))
         ids = list(
             dict.fromkeys(
                 identity for item in result["stories"] for identity in item["post_ids"]
@@ -425,13 +496,7 @@ def run_chatter(envelope, *, cfg=None, transport=None, x_client=None, enqueue=en
                 else None
             )
             if story is None:
-                from .service import find_story
-
-                key = "chatter:" + digest(sorted(item["post_ids"]))
-                story = find_story(
-                    SimpleNamespace(story_id=None, key=key, post_ids=item["post_ids"])
-                )
-            if story is None:
+                key = "chatter:" + digest(development_identity(item))
                 story, _ = EditorialStory.objects.get_or_create(
                     development_key=key,
                     defaults={"anchor_ids": item["post_ids"]},

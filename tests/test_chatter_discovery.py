@@ -138,9 +138,30 @@ def test_one_bad_semantic_story_does_not_remove_a_valid_sibling():
     result = validate_semantic({"data": raw, "usage": {"x_search_calls": 1}}, set())
     assert len(result["stories"]) == 1 and result["stories"][0]["post_ids"] == ["123"]
     assert len(result["rejections"]) == 1
+    raw["stories"] = [
+        row,
+        {**row, "story_ref": "S2", "subject": "A separate lawsuit in the same roundup"},
+    ]
+    result = validate_semantic({"data": raw, "usage": {"x_search_calls": 1}}, set())
+    assert len(result["stories"]) == 2
+    assert result["stories"][0]["post_ids"] == result["stories"][1]["post_ids"]
     raw["stories"] = [row, {**row, "story_ref": "second-identity"}]
     with pytest.raises(ValueError, match="ambiguous_semantic_identity"):
         validate_semantic({"data": raw, "usage": {"x_search_calls": 1}}, set())
+    from uuid import uuid4
+
+    prior = str(uuid4())
+    raw["stories"] = [
+        {**row, "prior_development_id": prior},
+        {
+            **row,
+            "story_ref": "S2",
+            "subject": "A separate development",
+            "prior_development_id": prior,
+        },
+    ]
+    with pytest.raises(ValueError, match="ambiguous_semantic_identity"):
+        validate_semantic({"data": raw, "usage": {"x_search_calls": 1}}, {prior})
 
 
 def test_attention_uses_comparable_measurement_times_and_keeps_missing_values_unknown():

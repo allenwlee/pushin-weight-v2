@@ -91,6 +91,14 @@ def post_id(url):
     return match[1]
 
 
+def development_identity(story):
+    """A post is evidence; a roundup can support several distinct developments."""
+    return (
+        " ".join(story["subject"].casefold().split()),
+        tuple(sorted(story["post_ids"])),
+    )
+
+
 def validate_semantic(reply, history_ids):
     usage = reply.get("usage", {})
     activity = reply.get("search_activity", [])
@@ -146,13 +154,13 @@ def validate_semantic(reply, history_ids):
             )
     if raw["stories"] and not valid:
         raise ValueError("all semantic candidates rejected")
-    source_sets = [tuple(sorted(story["post_ids"])) for story in valid]
+    identities = [development_identity(story) for story in valid]
     prior_refs = [
         story["prior_development_id"]
         for story in valid
         if story["prior_development_id"]
     ]
-    if len(set(source_sets)) != len(source_sets) or len(set(prior_refs)) != len(
+    if len(set(identities)) != len(identities) or len(set(prior_refs)) != len(
         prior_refs
     ):
         raise ProviderReplyError("ambiguous_semantic_identity", {})
