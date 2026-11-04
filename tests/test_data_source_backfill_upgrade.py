@@ -140,10 +140,19 @@ def test_projection_context_restores_model_fields_on_failure(monkeypatch):
         def fetchall(self):
             return [(table, name, 'jsonb') for table, names in FIELDS.items() for name in names]
     monkeypatch.setattr(connection, 'cursor', PhysicalColumns)
+    from core.models import CollectionObservation
+    CollectionObservation._meta.__dict__.pop('db_returning_fields', None)
     with pytest.raises(RuntimeError, match='injected interruption'), legacy_projection_models():
+        assert {'listing', 'envelopes', 'groups'} <= {
+            field.name for field in CollectionObservation._meta.db_returning_fields}
         assert hasattr(CollectionRun, 'report')
         raise RuntimeError('injected interruption')
     assert not hasattr(CollectionRun, 'report')
+    from core.models import CollectionObservation
+    assert not set(FIELDS['collection_observations']).intersection(
+        field.name for field in CollectionObservation._meta.local_fields)
+    assert not set(FIELDS['collection_observations']).intersection(
+        field.name for field in CollectionObservation._meta.db_returning_fields)
     assert not set(FIELDS['collection_scope_runs']).intersection(f.name for f in CollectionScopeRun._meta.fields)
     with legacy_projection_models():
         assert hasattr(CollectionRun, 'report')

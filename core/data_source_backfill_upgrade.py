@@ -209,12 +209,16 @@ def legacy_projection_models():
                 field = _historical_fields()[model][name].clone()
                 model.add_to_class(name, field)
                 added.append((model, name, field))
+            # Django does not include this cached insert-return list in
+            # Options._expire_cache(), even when a field has db_default.
+            model._meta.__dict__.pop('db_returning_fields', None)
         yield
     finally:
         for model, name, field in reversed(added):
             model._meta.local_fields.remove(field)
             delattr(model, name)
             model._meta._expire_cache()
+            model._meta.__dict__.pop('db_returning_fields', None)
         _projection_lock.release()
 
 
