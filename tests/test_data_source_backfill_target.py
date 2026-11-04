@@ -8,7 +8,7 @@ from django.core.management.base import CommandError
 from core.data_source_backfill_target import validate_backfill_target
 
 HOST = 'dpg-dbfemu2vcj2c73fsafe0-a.oregon-postgres.render.com'
-URL = f'postgresql://xbackfiller:private-password@{HOST}/xbackfiller'
+URL = f'postgresql://xbackfiller:placeholder@{HOST}/xbackfiller'
 
 
 class Database:
@@ -81,7 +81,7 @@ def test_cli_rejects_missing_target_before_service_or_provider_access(monkeypatc
                         lambda **_: pytest.fail('service reached before target validation'))
     with pytest.raises(CommandError, match='backfill credential missing') as error:
         call_command(command_name, stdout=StringIO())
-    assert 'private-password' not in str(error.value)
+    assert 'placeholder' not in str(error.value)
 
 
 @pytest.mark.parametrize('operation', ['register', 'execute'])
