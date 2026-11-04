@@ -82,3 +82,28 @@ def test_cli_rejects_missing_target_before_service_or_provider_access(monkeypatc
     with pytest.raises(CommandError, match='backfill credential missing') as error:
         call_command(command_name, stdout=StringIO())
     assert 'private-password' not in str(error.value)
+
+
+@pytest.mark.parametrize('operation', ['register', 'execute'])
+def test_service_rejects_missing_target_before_database_or_http(monkeypatch, operation):
+    from core import data_source_backfill as service
+
+    monkeypatch.delenv('BACKFILL_DATABASE_URL', raising=False)
+    with pytest.raises(ValueError, match='backfill credential missing'):
+        if operation == 'register':
+            service.register_campaign([])
+        else:
+            service.execute_phase('not-a-job')
+
+
+def test_internal_review_override_is_scoped_and_restored_on_failure(monkeypatch):
+    from core import data_source_backfill_target as target
+
+    checks = []
+    monkeypatch.setattr(target, 'validate_backfill_target', lambda **kw: checks.append(kw))
+    assert target.in_isolated_backfill_review() is False
+    with pytest.raises(RuntimeError), target.isolated_backfill_review():
+        assert target.in_isolated_backfill_review() is True
+        raise RuntimeError('injected failure')
+    assert target.in_isolated_backfill_review() is False
+    assert checks == [{'require_write': True}]

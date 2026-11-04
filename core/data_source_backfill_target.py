@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
+from contextvars import ContextVar
 from urllib.parse import unquote, urlsplit
 
 from django.db import connection
@@ -9,6 +11,22 @@ from django.db import connection
 RESOURCE = 'dpg-dbfemu2vcj2c73fsafe0-a'
 DATABASE = 'xbackfiller'
 SCHEMA_FLOOR = '0221_affiliation_trigger_column_permissions'
+_isolated_review = ContextVar('isolated_backfill_review', default=False)
+
+
+def in_isolated_backfill_review():
+    return _isolated_review.get()
+
+
+@contextmanager
+def isolated_backfill_review():
+    """Owner-selected internal analysis, scoped to this verified backfill action."""
+    validate_backfill_target(require_write=True)
+    token = _isolated_review.set(True)
+    try:
+        yield
+    finally:
+        _isolated_review.reset(token)
 
 
 def _backfill_host(host):
