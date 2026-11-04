@@ -8,8 +8,11 @@ ollija:
   change_id: feat-g2-cast-asset-ingest-20261103-2026-11-04-071721
   branch: feat/g2-cast-asset-ingest-20261103
   workflow: plan
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: production
+  delivery_selected_by_user: true
+  delivery_route: staged
+  delivery_route_selected_by_user: false
+  staging_transport: branch
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -37,10 +40,24 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `production`
+- Owner selection recorded: `true`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-cast-asset-ingest-20261103` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-cast-asset-ingest-20261103` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -66,7 +83,7 @@ Bring the saved importer and reader together so Graphics Editor can use real peo
 
 Reuse the existing import worktree, which holds the only uncommitted versions of these components, and bring it up to date carefully before implementation. Preserve the older G2 editorial worktree and all saved source files. Use the existing people and media tables; no new tables or columns. Verify the reader using the actual imported bytes, not just database rows. Keep live services and harvesting running.
 
-This plan covers the reader, importer and authorized four-person transfer. The separate Graphics Editor plan remains the authority for video generation, exports and the shared Chatter interface. Deployment of application code requires an explicitly selected delivery endpoint; authorization to transfer the specified media is already given.
+This plan covers the reader, importer and authorized four-person transfer. The separate Graphics Editor plan remains the authority for video generation, exports and the shared Chatter interface. On November 4 the owner explicitly requested production deployment; the normal staged route applies.
 
 ## Context and scope
 
@@ -82,4 +99,4 @@ Authoritative Graphics plan: `/Users/fuchitalee/development/collect-chinese-work
 
 ## Delivery and exit
 
-The authorized transfer is complete only when all in-scope missing references are attached or each remaining obstacle is reported with evidence. Code delivery remains on-request; do not infer a deployment route from the data-transfer authorization. Record outcomes in the existing Graphics plan. Worktree closure is not authorized by this plan and must never remove uncommitted files or saved reference packs.
+The owner-confirmed transfer is complete: 12 new Altman/Musk references and 10 existing Huang/Amodei references were read back by hash and by the local reader. Production deployment was explicitly requested after that transfer. Record outcomes in the existing Graphics plan. Worktree closure is not authorized by this plan and must never remove uncommitted files or saved reference packs.
