@@ -96,14 +96,24 @@ class DocumentSource(SourceSnapshot):
         return self
 
 
+class SourceReference(ClosedSnapshot):
+    run_id: int = Field(gt=0)
+    sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
 class FrozenPacket(ClosedSnapshot):
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     sources: dict[str, Annotated[XSource | DocumentSource, Field(discriminator="kind")]] = Field(max_length=200)
+    source_refs: dict[str, SourceReference] = Field(default_factory=dict, max_length=200)
 
     @model_validator(mode="after")
     def validate_keys(self):
         if any(key != source.id for key, source in self.sources.items()):
             raise ValueError("source snapshot key mismatch")
+        if self.schema_version == 1 and self.source_refs:
+            raise ValueError("source references require packet version two")
+        if self.sources.keys() & self.source_refs.keys() or len(self.sources) + len(self.source_refs) > 200:
+            raise ValueError("source reference overlap or capacity exceeded")
         return self
 
 
@@ -113,10 +123,51 @@ def validated_packet(value):
         encoded = json.dumps(value, ensure_ascii=False, allow_nan=False)
         if len(encoded.encode()) > 240000:
             raise ValueError("source packet byte limit")
-        return FrozenPacket.model_validate_json(encoded).model_dump(mode="json")
+        result = FrozenPacket.model_validate_json(encoded).model_dump(mode="json")
+        if result["schema_version"] == 1:
+            result.pop("source_refs")
+        return result
     except (ValueError, TypeError):
         # Validation errors may quote untrusted source/provider input.
         raise ValueError("invalid frozen source packet") from None
+
+
+def resolved_sources(snapshot):
+    """Resolve bounded hash-pinned references to an earlier physical snapshot, never chains."""
+    packet = validated_packet(snapshot)
+    sources = dict(packet["sources"])
+    refs = packet.get("source_refs", {})
+    targets = dict(OriginalContentRun.objects.filter(pk__in={r["run_id"] for r in refs.values()}).values_list("pk", "snapshot"))
+    targets = {key: validated_packet(value)["sources"] for key, value in targets.items()}
+    for identity, ref in refs.items():
+        source = targets.get(ref["run_id"], {}).get(identity)
+        if source is None or digest(source) != ref["sha256"]:
+            raise ValueError("frozen source reference mismatch")
+        sources[identity] = source
+    return sources
+
+
+@transaction.atomic
+def reference_sources(run, previous, *, fence):
+    """Reuse immutable evidence without copying the same source text every fifteen minutes."""
+    current = locked_run(run.pk, fence)
+    packet = validated_packet(current.snapshot or {"schema_version": 1, "sources": {}})
+    previous_run = OriginalContentRun.objects.get(pk=previous.run_id)
+    if previous_run.pk == current.pk or previous_run.facts_as_of > current.facts_as_of:
+        raise ValueError("history reference is not from an earlier evaluation")
+    prior = validated_packet(previous_run.snapshot)
+    sources = read_sources(previous)
+    existing = resolved_sources(packet)
+    refs = dict(packet.get("source_refs", {}))
+    for source in sources:
+        identity = source["id"]
+        if identity in existing:
+            continue  # Prefer the current run's freshly measured source.
+        ref = prior.get("source_refs", {}).get(identity)
+        refs[identity] = ref or {"run_id": previous.run_id, "sha256": digest(source)}
+    current.snapshot = validated_packet({**packet, "schema_version": 2, "source_refs": refs})
+    current.save(update_fields=["snapshot"])
+    return [source["id"] for source in sources]
 
 
 def project_post(post, *, receipt_at=None):
@@ -161,10 +212,12 @@ def freeze_sources(run, sources, *, fence):
             raise ValueError("conflicting source identity")
         incoming[key] = source
     incoming = validated_packet({"schema_version": 1, "sources": incoming})["sources"]
+    resolved = resolved_sources(prior)
     for key, source in incoming.items():
-        if key in prior["sources"] and prior["sources"][key] != source:
+        if key in resolved and resolved[key] != source:
             raise ValueError("frozen source is immutable")
-    packet = validated_packet({"schema_version": 1, "sources": {**prior["sources"], **incoming}})
+    refs = {key: ref for key, ref in prior.get("source_refs", {}).items() if key not in incoming}
+    packet = validated_packet({**prior, "sources": {**prior["sources"], **incoming}, **({"source_refs": refs} if prior["schema_version"] == 2 else {})})
     current.snapshot = packet
     current.save(update_fields=["snapshot"])
     return packet
@@ -185,11 +238,14 @@ def attach_sources(content, source_ids, *, fence, usage="consideration"):
         or any(type(key) is not str or not key or len(key) > 128 for key in source_ids)
     ):
         raise ValueError("invalid source list")
-    packet = validated_packet(run.snapshot)
+    frozen = validated_packet(run.snapshot)
+    packet = {"sources": resolved_sources(frozen)}
     ids = list(dict.fromkeys(source_ids))
     if not set(ids) <= packet["sources"].keys():
         raise ValueError("source is outside frozen packet")
     values = citation_values([packet["sources"][key] for key in ids])
+    for value, key in zip(values, ids, strict=True):
+        value["snapshot_run_id"] = frozen.get("source_refs", {}).get(key, {}).get("run_id")
     existing = list(row.consideration_sources.order_by("position"))
     by_source = {(source.post_id, source.dossier_source_id): source for source in existing}
     for value in values:
@@ -210,7 +266,8 @@ def attach_sources(content, source_ids, *, fence, usage="consideration"):
 
 def read_sources(content, *, usage=None):
     snapshot = OriginalContentRun.objects.values_list("snapshot", flat=True).get(pk=content.run_id)
-    packet = validated_packet(snapshot)
+    packet = {"sources": resolved_sources(snapshot)}
+    source_refs = validated_packet(snapshot).get("source_refs", {})
     rows = content.consideration_sources.order_by("position")
     if usage is not None:
         if usage not in {"consideration", "background"}:
@@ -222,6 +279,9 @@ def read_sources(content, *, usage=None):
         source = packet["sources"].get(key)
         if source is None or digest(source) != row.source_hash:
             raise ValueError("consideration source snapshot mismatch")
+        origin = source_refs.get(key, {}).get("run_id")
+        if row.snapshot_run_id != origin:
+            raise ValueError("consideration source owner mismatch")
         result.append(source)
     return result
 

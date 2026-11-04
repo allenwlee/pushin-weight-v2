@@ -136,6 +136,24 @@ def graphics_snapshot_response(request, snapshot, size, digest, content_type, re
     # including when a streaming iterator has not started yet.
     response._resource_closers.append(close_snapshot)
     return private_cache(response)
+def pool_options(request, cfg, track, locale):
+    if track != "chatter" or not cfg.chatter.enabled:
+        return {}
+    source = request.GET.get("source_lang", locale).casefold()
+    edition = request.GET.get("edition_lang", locale).casefold()
+    group = request.GET.get("group", "rest")
+    if source not in LOCALES or edition not in LOCALES or group not in {"giant", "rest"}:
+        raise ValueError("unsupported Chatter pool")
+    return {"source_locale": source, "editorial_group": group, "locale": edition}
+
+
+def pool_controls(request, options):
+    if not options:
+        return None
+    return {"source_lang": options["source_locale"], "group": options["editorial_group"],
+            "edition_lang": options["locale"],
+            "hidden": [(key, value) for key, values in request.GET.lists()
+                       if key not in {"source_lang", "group", "edition_lang", "cursor"} for value in values]}
 
 
 @require_GET
@@ -168,14 +186,15 @@ def archive(request):
     cfg = access(request)
     try:
         track, locale = filters(request)
+        options = pool_options(request, cfg, track, locale)
         feed = feed_payload(
-            cfg, track=track, locale=locale, cursor=request.GET.get("cursor", "")
+            cfg, track=track, cursor=request.GET.get("cursor", ""), **({"locale": locale} | options)
         )
     except (ValueError, TypeError, KeyError, signing.BadSignature):
         return HttpResponseBadRequest("Invalid archive selection")
     with translation.override("zh-hans" if locale == "zh-cn" else locale):
         return private_cache(
-            render(request, "monitor/editorial/archive.html", {"feed": feed})
+            render(request, "monitor/editorial/archive.html", {"feed": feed, "pool_controls": pool_controls(request, options)})
         )
 
 
@@ -184,12 +203,13 @@ def stories_api(request):
     cfg = access(request)
     try:
         track, locale = filters(request)
+        options = pool_options(request, cfg, track, locale)
         return private_cache(
             JsonResponse(
                 feed_payload(
                     cfg,
                     track=track,
-                    locale=locale,
+                    **({"locale": locale} | options),
                     cursor=request.GET.get("cursor", ""),
                 )
             )

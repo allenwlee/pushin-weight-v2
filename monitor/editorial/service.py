@@ -272,6 +272,8 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
             return review_stage, review
 
         for track, limit in (("chatter", 1), ("pulse", cfg.pulse_limit)):
+            if track == "chatter" and cfg.chatter.enabled:
+                continue  # The independent Chatter chain owns this publication path.
             # Keep Pulse's existing strict batch policy while salvaging Chatter.
             if track == "pulse" and rejected:
                 if any(event.pulse for event in decisions.events):

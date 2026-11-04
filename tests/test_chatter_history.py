@@ -12,6 +12,30 @@ from tests.test_original_content_consideration import consideration
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
+def test_history_reuses_physical_source_text_and_pins_its_hash_without_reference_chains():
+    from monitor.editorial import chatter_history as history
+
+    first, second, third = consideration(), consideration(), consideration()
+    post = Post.objects.create(tweet_id="882099", text="Retained original evidence.", created_at=first.run.facts_as_of)
+    history.freeze_sources(first.run, [history.project_post(post)], fence=first.run.fence)
+    history.attach_sources(first, [post.pk], fence=first.run.fence)
+    for previous, current in ((first, second), (second, third)):
+        history.reference_sources(current.run, previous, fence=current.run.fence)
+        history.attach_sources(current, [post.pk], fence=current.run.fence)
+        current.run.refresh_from_db()
+        assert current.run.snapshot["sources"] == {}
+        assert current.run.snapshot["source_refs"][post.pk]["run_id"] == first.run_id
+        assert current.consideration_sources.get().snapshot_run_id == first.run_id
+        assert history.read_sources(current)[0]["original_text"] == post.text
+    from django.db.models.deletion import ProtectedError
+    with pytest.raises(ProtectedError):
+        first.run.delete()
+    third.run.snapshot["source_refs"][post.pk]["sha256"] = "0"*64
+    third.run.save(update_fields=["snapshot"])
+    with pytest.raises(ValueError, match="reference mismatch"):
+        history.read_sources(third)
+
+
 def test_consideration_reads_frozen_source_after_the_post_changes():
     from monitor.editorial import chatter_history as history
 

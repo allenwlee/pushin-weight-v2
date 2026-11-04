@@ -1,0 +1,100 @@
+{
+  "schema_version": "bridgewright.assurance.declaration/v1",
+  "profile": "stateful-ui-assurance/v1",
+  "source_revision": "worktree-sha256:9eb904ddd1883efb9ecc6e620e3db08fa416bf73b70070b5d521cab73a4ef02f",
+  "fixture": {
+    "path": "tests/fixtures/chatter_pools_contract.json",
+    "sha256": "22a276b6db868f17c73669283584f7885da91e066ba075ecf64de2a57ba90ef1"
+  },
+  "generator": {
+    "name": "pushinweight-chatter-pools-browser",
+    "version": "1.0",
+    "seed": 504
+  },
+  "controls": [
+    {
+      "id": "source_lang",
+      "kind": "single_select",
+      "values": [
+        "en",
+        "ja",
+        "zh-cn"
+      ],
+      "initial_value": "en",
+      "reversible": true
+    },
+    {
+      "id": "group",
+      "kind": "single_select",
+      "values": [
+        "rest",
+        "giant"
+      ],
+      "initial_value": "rest",
+      "reversible": true
+    },
+    {
+      "id": "edition_lang",
+      "kind": "single_select",
+      "values": [
+        "en",
+        "ja",
+        "zh-cn"
+      ],
+      "initial_value": "en",
+      "reversible": true
+    }
+  ],
+  "coverage_groups": [
+    {
+      "id": "chatter-pools",
+      "controls": [
+        "source_lang",
+        "group",
+        "edition_lang"
+      ],
+      "strength": 3
+    }
+  ],
+  "ordered_groups": [
+    {
+      "id": "source-and-edition",
+      "actions": [
+        "source_lang:ja",
+        "edition_lang:en",
+        "source_lang:en",
+        "group:giant",
+        "group:rest"
+      ],
+      "strength": 2
+    }
+  ],
+  "constraints": [],
+  "invariants": [
+    {
+      "id": "saved-pool-only",
+      "projections": [
+        "controls",
+        "feed",
+        "accessibility",
+        "persistence"
+      ]
+    }
+  ],
+  "races": [],
+  "seeded_regressions": [],
+  "environments": [
+    {
+      "id": "desktop-chromium",
+      "browser_runtime": "playwright-chromium",
+      "required": true
+    }
+  ],
+  "gates": [
+    {
+      "id": "chatter-local",
+      "scope": "affected",
+      "required": true
+    }
+  ]
+}

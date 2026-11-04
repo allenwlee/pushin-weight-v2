@@ -25,6 +25,26 @@ def request_payload(route, request):
         content = [{"type": "text", "text": content}] + [
             {"type": "image_url", "image_url": {"url": url}} for url in images
         ]
+    if route.endpoint == "https://api.x.ai/v1/responses":
+        if images:
+            raise ValueError("Grok Chatter discovery/selection uses text evidence only")
+        body = {
+            "model": route.model, "max_output_tokens": route.max_output_tokens,
+            "input": [{"role": "system", "content": request["system"]},
+                      {"role": "user", "content": content}],
+            "text": {"format": {"type": "json_object"}}, "store": False,
+            "service_tier": "default", "prompt_cache_key": "pushinweight-chatter-v1",
+        }
+        if route.reasoning:
+            body["reasoning"] = {"effort": route.reasoning}
+        tools = request.get("server_tools")
+        if tools:
+            if set(tools) != {"tools", "max_turns"} or not 1 <= tools["max_turns"] <= 2:
+                raise ValueError("unsupported Chatter search bounds")
+            if len(tools["tools"]) != 1 or tools["tools"][0].get("type") != "x_search":
+                raise ValueError("Chatter only enables X search")
+            body.update(tools, parallel_tool_calls=False)
+        return body
     body = {
         "model": route.model,
         "max_tokens": route.max_output_tokens,
@@ -77,6 +97,9 @@ def response_diagnostics(decoded):
         for key in ("prompt_tokens", "completion_tokens", "total_tokens")
         if type(usage.get(key)) is int and usage[key] >= 0
     }
+    for source, target in (("input_tokens", "prompt_tokens"), ("output_tokens", "completion_tokens")):
+        if type(usage.get(source)) is int and usage[source] >= 0:
+            kept[target] = usage[source]
     details = usage.get("completion_tokens_details")
     details = details if isinstance(details, dict) else {}
     reasoning = details.get("reasoning_tokens", usage.get("reasoning_tokens"))
@@ -88,6 +111,15 @@ def response_diagnostics(decoded):
             kept["estimated_cost"] = str(cost)
     except (InvalidOperation, ValueError):
         pass
+    for field, divisor in (("cost_in_usd_ticks", 10_000_000_000), ("cost_in_nano_usd", 1_000_000_000)):
+        if type(usage.get(field)) is int and usage[field] >= 0:
+            kept["estimated_cost"] = str(Decimal(usage[field]) / Decimal(divisor))
+            break
+    details = usage.get("server_side_tool_usage_details")
+    if isinstance(details, dict):
+        for key in ("x_posts_fetched", "x_users_fetched", "x_search_calls"):
+            if type(details.get(key)) is int and details[key] >= 0:
+                kept[key] = details[key]
     result = {"usage": kept}
     if decoded.get("service_tier") in ("priority", "standard", "default", "flex"):
         result["service_tier"] = decoded["service_tier"]
@@ -99,7 +131,31 @@ def response_diagnostics(decoded):
     return result
 
 
-def json_call(assessment, stage, route, request, cfg, *, transport=None):
+def search_activity(decoded):
+    """Only exposed call identity/arguments; overall citations are not per-tool results."""
+    activity = []
+    for item in decoded.get("output", []):
+        if not isinstance(item, dict) or item.get("type") != "custom_tool_call":
+            continue
+        if item.get("name") not in {"x_semantic_search", "x_keyword_search", "x_user_search", "x_thread_fetch"}:
+            continue
+        arguments = item.get("arguments")
+        try:
+            arguments = json.loads(arguments) if isinstance(arguments, str) else arguments
+        except ValueError:
+            arguments = None
+        kept = {}
+        if isinstance(arguments, dict):
+            for key in ("query", "mode", "from_date", "to_date", "limit", "max_results", "tweet_id"):
+                value = arguments.get(key)
+                if type(value) in {str, int} and len(str(value)) <= 4096:
+                    kept[key] = value
+        activity.append({"sequence": len(activity) + 1, "name": item["name"],
+                         "arguments": kept, "results_visible": False})
+    return activity
+
+
+def json_call(assessment, stage, route, request, cfg, *, transport=None, reservation=None):
     transport = transport or https_request
     body = request_payload(route, request)
     encoded = json.dumps(body, ensure_ascii=False).encode()
@@ -124,6 +180,9 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
         Decimal(input_bound) * Decimal(str(route.input_usd_per_million))
         + Decimal(route.max_output_tokens) * Decimal(str(route.output_usd_per_million))
     ) / Decimal(1_000_000)
+    if route.endpoint == "https://api.x.ai/v1/responses":
+        # Responses max_output_tokens excludes reasoning/tool tokens; it is not a cost cap.
+        ceiling = Decimal(str(request["reservation_usd"]))
     key = os.environ.get(route.key_env, "")
     if not key:
         raise ValueError("configured provider credential missing")
@@ -174,6 +233,18 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
         diagnostics["model_matches_config"] = decoded.get("model") == route.model
         if decoded.get("model") != route.model:
             raise ProviderReplyError("served_model_mismatch", diagnostics)
+        activity = []
+        if route.endpoint == "https://api.x.ai/v1/responses":
+            if decoded.get("status") != "completed":
+                raise ProviderReplyError("incomplete_model_response", diagnostics)
+            activity = search_activity(decoded)
+            text = "".join(
+                block.get("text", "")
+                for item in decoded.get("output", []) if item.get("type") == "message"
+                for block in item.get("content", []) if block.get("type") == "output_text"
+            )
+            decoded = {"choices": [{"finish_reason": "stop", "message": {"content": text}}],
+                       "model": decoded["model"]}
         choices = decoded.get("choices", [])
         if (
             not isinstance(choices, list)
@@ -239,6 +310,8 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
             "model": decoded["model"],
             "diagnostics": diagnostics,
         }
+        if route.endpoint == "https://api.x.ai/v1/responses":
+            reply["search_activity"] = activity
         if request.get("allow_partial_events") and stage.startswith("editor"):
             reply["candidate_rejections"] = candidate_rejections
         return reply
@@ -259,7 +332,7 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
 
     from urllib.parse import urlsplit
 
-    return call_once(
+    return (reservation or call_once)(
         assessment,
         stage,
         "text",
@@ -269,6 +342,7 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
         request_metadata={
             "request_hash": hashlib.sha256(encoded).hexdigest(),
             "request_packet": body,
+            "input_reference": request.get("input_reference"),
             "provider": urlsplit(route.endpoint).hostname,
             "model": route.model,
             "workflow_version": digest(

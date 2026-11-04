@@ -1,0 +1,103 @@
+# Staging validation only. Enable explicitly with CHATTER_ENABLED=true.
+# Chatter uses the aggregate trial ledger; legacy/Pulse daily controls are separate.
+enabled: true
+public_enabled: true
+daily_usd: 5
+assessment_usd: 2
+daily_calls: 384
+assessment_calls: 13
+media_daily_calls: 4
+media_cost_ceiling_usd: 0.6
+media_duration: 6
+pulse_limit: 1
+pictures:
+  atomic: select_only
+  current_headline: select_only
+  chatter: 'off'
+  pulse: derive
+permitted_reuse:
+- permitted
+- unknown
+voices:
+  chatter:en: chatter-en-v3
+  chatter:ja: chatter-ja-tospo-v2
+  chatter:zh-cn: chatter-zh-cn-wemedia-v2
+  pulse:en: pulse-en-v1
+routes:
+  editor:
+    model: deepseek-ai/DeepSeek-V4-Flash-0731
+    endpoint: https://api.deepinfra.com/v1/openai/chat/completions
+    key_env: DEEPINFRA_API_KEY
+    reasoning: none
+    request_profile: editorial_editor_v1
+    timeout_seconds: 300
+    vision: false
+    input_usd_per_million: 0.1
+    output_usd_per_million: 2.0
+    max_output_tokens: 65536
+  pulse:
+    model: deepseek-ai/DeepSeek-V4-Flash-0731
+    endpoint: https://api.deepinfra.com/v1/openai/chat/completions
+    key_env: DEEPINFRA_API_KEY
+    reasoning: none
+    request_profile: editorial_writer_v1
+    timeout_seconds: 300
+    vision: false
+    input_usd_per_million: 0.1
+    output_usd_per_million: 2.0
+    max_output_tokens: 65536
+  chatter:
+    model: gpt-6-sol
+    endpoint: https://api.openai.com/v1/chat/completions
+    key_env: OPENAI_API_KEY
+    reasoning: medium
+    vision: true
+    input_usd_per_million: 2.5
+    output_usd_per_million: 10.0
+    max_output_tokens: 4096
+locale_routes:
+  chatter:ja:
+    model: gpt-6.1-sol
+    endpoint: https://api.openai.com/v1/chat/completions
+    key_env: OPENAI_API_KEY
+    reasoning: high
+    vision: true
+    input_usd_per_million: 2.5
+    output_usd_per_million: 10.0
+    max_output_tokens: 16384
+    timeout_seconds: 300
+  chatter:zh-cn:
+    model: gpt-6.1-sol
+    endpoint: https://api.openai.com/v1/chat/completions
+    key_env: OPENAI_API_KEY
+    reasoning: high
+    vision: true
+    input_usd_per_million: 2.5
+    output_usd_per_million: 10.0
+    max_output_tokens: 16384
+    timeout_seconds: 300
+reviewer:
+  model: gpt-6.1-sol
+  endpoint: https://api.openai.com/v1/chat/completions
+  key_env: OPENAI_API_KEY
+  reasoning: high
+  vision: true
+  input_usd_per_million: 2.5
+  output_usd_per_million: 10.0
+  max_output_tokens: 16384
+  timeout_seconds: 300
+chatter:
+  enabled: false
+  discovery: &id001
+    model: grok-4.7
+    endpoint: https://api.x.ai/v1/responses
+    key_env: XAI_API_KEY_PW
+    input_usd_per_million: 2
+    output_usd_per_million: 6
+    max_output_tokens: 16384
+    timeout_seconds: 300
+  selector: *id001
+  trial:
+    scope: chatter-lfg-20261103
+    limit_usd: 20
+    carry_usd: 0.002486
