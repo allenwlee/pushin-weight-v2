@@ -427,6 +427,27 @@ where a new field belongs:
    explain any remaining gap, new-table purpose and table additions/retirements.
    Do not create another planning artifact or permission gate for this check.
 
+**Ask two questions before planning database work.** Structure changes are the
+slow part: migrations, deploys and online copies around live harvesting.
+
+1. **Does this need a structure change at all?** Check whether the result can
+   be written as rows through existing writers (for example
+   `core.collection_identity.review_catalog_mapping`), which already enforce
+   ownership, exclusivity, locks and evidence rules. If it can, no migration,
+   model change or deploy is needed.
+2. **Can the exact change list be worked out before touching production?**
+   Compute it from bounded read-only `render psql` exports and downloaded source
+   data, never inside `pushinweight-web`. Freeze it as a reviewable list with
+   per-row evidence, save it with the receipt, and make the production step only
+   apply it. Run that step as a one-off job (see AGENTS.md "Protect the live web
+   service"). First run it inside one transaction that rolls back, then run the
+   same list so it commits only if every row passes. Both runs need the task's
+   write authorization.
+
+On 2026-11-04 this route added 266 crosswalk links in about 25 minutes after
+the owner's go-ahead, with no code change. When a structure change is
+genuinely needed, the migration and live-operation rules still apply.
+
 Review every proposed `CharField`/`TextField` and equivalent SQL varchar/text column. Record its meaning, owner, cardinality, readers/writers and constraints. Reuse existing shared entities or lookup tables when the meaning is shared; identical spelling alone does not prove shared identity. Keep genuine prose, source-native identities, hashes and necessary frozen evidence as justified text. Ask the owner before settling unresolved string storage, and reuse an existing explicit decision instead of asking again. General names such as language and timezone must use a shared definition/reference contract; independent meanings need distinct descriptive names.
 
 Apply this review to fields as well as tables. For each proposed JSON column,
@@ -493,7 +514,7 @@ authorize retiring tables or migrating business data without task scope.
 | M16 | Inventing API surface | `context7` / WebSearch before guessing external APIs |
 | M17 | Inferring pause authority from an anomaly | Diagnose read-only; pause/resume only with current explicit owner authorization |
 | M18 | Function-only regression net | Pin the production call chain end-to-end (fake client + captured kwargs); function-level tests stay green while production breaks |
-| M19 | Schema chosen by analogy or table/JSON counts | Inspect storage; justify reuse, shared references, field types, relationships, queries and constraints |
+| M19 | Schema chosen by analogy or table/JSON counts | Inspect storage; justify reuse, shared references, field types, relationships, queries and constraints. First ask: rows through existing writers instead of a structure change? Exact change list fixed before production? |
 
 ---
 
