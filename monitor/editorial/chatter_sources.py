@@ -16,7 +16,9 @@ from core.collection_jobs import register_job, set_job_state
 from core.collection_state import checkpoint_scope, claim_job, fenced_run, finish_run
 from core.models import (
     CollectionAttempt,
+    CollectionJob,
     CollectionObservation,
+    CollectionRequest,
     CollectionRun,
     CollectionScopeRequestUse,
     DataSource,
@@ -41,7 +43,15 @@ from .persistence import BudgetHeld
 
 class SourceSession:
     def __init__(
-        self, run, cfg, *, purpose, client=None, transport=None, policy_reader=None
+        self,
+        run,
+        cfg,
+        *,
+        purpose,
+        client=None,
+        transport=None,
+        policy_reader=None,
+        resume=False,
     ):
         if not isinstance(purpose, TwitterApiCredentialPurpose):
             raise TypeError(
@@ -99,6 +109,12 @@ class SourceSession:
                 "max_items": 200,
             },
         )
+        self.last_receipt_at = None
+        self.last_request = None
+        self.metric_presence = {}
+        if resume:
+            self.claim = self._resume(job, purpose)
+            return
         if CollectionRun.objects.filter(content_run=run).exists():
             raise BudgetHeld("Chatter source execution already recorded; do not resend")
         if job.state == "paused":
@@ -113,9 +129,74 @@ class SourceSession:
         CollectionAttempt.objects.filter(pk=self.claim.attempt_id).update(
             credential_purpose=purpose.value
         )
-        self.last_receipt_at = None
-        self.last_request = None
-        self.metric_presence = {}
+
+    @transaction.atomic
+    def _resume(self, job, purpose):
+        current = locked_run(self.run.pk, self.run.fence)
+        job = CollectionJob.objects.select_for_update().get(pk=job.pk)
+        execution = CollectionRun.objects.select_for_update().get(content_run=current)
+        requests = list(CollectionRequest.objects.filter(attempt__run=execution))
+        call = OriginalContentCall.objects.get(run=current, stage="discovery")
+        if (
+            current.discovery_state != "failed"
+            or current.outcome.get("phase") != "held"
+            or current.outcome.get("discovery_recovery")
+            or current.provider_calls.count() != 1
+            or call.state != "completed"
+            or current.brand_narratives.exists()
+            or validated_packet(current.snapshot)["sources"]
+            or execution.job_id != job.pk
+            or execution.status != "failed"
+            or execution.completed_at is None
+            or execution.attempts.count() != 1
+            or execution.attempts.exclude(credential_purpose=purpose.value).exists()
+            or len(requests) != 1
+            or requests[0].endpoint_url != "https://api.x.ai/v1/responses"
+            or requests[0].transport_outcome != "received"
+            or not 200 <= (requests[0].http_status or 0) < 300
+            or requests[0].received_at is None
+            or requests[0].scope_run.content_call_id != call.pk
+        ):
+            raise BudgetHeld("saved discovery cannot be resumed safely")
+        # Preserve the failed attempt and physical receipt. Only the aggregate
+        # execution reopens, through the collection engine's existing continuation.
+        current.outcome = {
+            **current.outcome,
+            "phase": "discovering",
+            "discovery_recovery": {
+                "version": 1,
+                "call_id": call.pk,
+                "previous_outcome": current.outcome,
+                "previous_completed_at": execution.completed_at.isoformat(),
+                "resumed_at": timezone.now().isoformat(),
+            },
+        }
+        current.discovery_state = "pending"
+        current.fence += 1
+        current.save(
+            update_fields=["outcome", "discovery_state", "fence", "updated_at"]
+        )
+        execution.completed_at, execution.status, execution.execution_state = (
+            None,
+            "partial",
+            "yielded",
+        )
+        execution.save(
+            update_fields=["completed_at", "status", "execution_state", "updated_at"]
+        )
+        claim = claim_job(
+            job.pk,
+            invocation_id=f"chatter:{current.pk}:saved-discovery-v1",
+            continue_from=execution.pk,
+            manual_authorized=True,
+            typed=True,
+        )
+        CollectionAttempt.objects.filter(pk=claim.attempt_id).update(
+            credential_purpose=purpose.value
+        )
+        self.run.fence, self.run.outcome = current.fence, current.outcome
+        self.last_request, self.last_receipt_at = requests[0], requests[0].received_at
+        return claim
 
     def scope(self, name, query=None, *, tool=False, start=None, end=None):
         query_row = save_query(query) if query else None
@@ -166,6 +247,13 @@ class SourceSession:
         with transaction.atomic():
             locked_run(self.run.pk, self.run.fence)
             with fenced_run(self.claim):
+                if (
+                    CollectionRequest.objects.filter(
+                        attempt__run_id=self.claim.run_id
+                    ).count()
+                    >= self.cfg.chatter.source_request_limit
+                ):
+                    raise BudgetHeld("Chatter source request limit exhausted")
                 if model:
                     if not OriginalContentCall.objects.filter(
                         run=self.run, stage="discovery", state="sent"
@@ -424,11 +512,7 @@ class SourceSession:
         return existing
 
     def close(self, *, success):
-        requests = (
-            CollectionRun.objects.get(pk=self.claim.run_id)
-            .attempts.get(pk=self.claim.attempt_id)
-            .requests
-        )
+        requests = CollectionRequest.objects.filter(attempt__run_id=self.claim.run_id)
         complete = not requests.exclude(transport_outcome="received").exists()
         return finish_run(
             self.claim,

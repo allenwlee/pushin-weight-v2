@@ -80,7 +80,19 @@ def wire(data, model="grok-4.7", *, search=False):
                     "type": "message",
                     "content": [{"type": "output_text", "text": json.dumps(data)}],
                 }
-            ],
+            ]
+            + (
+                [
+                    {
+                        "type": "custom_tool_call",
+                        "name": "x_semantic_search",
+                        "call_id": "fixture-search",
+                        "input": json.dumps({"query": "AI news", "limit": 10}),
+                    }
+                ]
+                if search
+                else []
+            ),
             "usage": {
                 "input_tokens": 1000,
                 "output_tokens": 200,
@@ -94,8 +106,10 @@ def wire(data, model="grok-4.7", *, search=False):
     ).encode()
 
 
+@pytest.mark.parametrize("recover", [False, True])
 def test_discovery_to_pool_publication_uses_real_storage_and_no_duplicate_send(
     monkeypatch,
+    recover,
 ):
     from monitor.editorial import chatter_chain
 
@@ -108,6 +122,7 @@ def test_discovery_to_pool_publication_uses_real_storage_and_no_duplicate_send(
     from monitor.editorial.chatter_chain import (
         reconstruct_selection_request,
         reconstruct_writer_request,
+        resume_chatter_discovery,
         review_chatter,
         run_chatter,
         select_chatter,
@@ -184,7 +199,14 @@ def test_discovery_to_pool_publication_uses_real_storage_and_no_duplicate_send(
             if "activity_window" in payload:
                 return wire(
                     {
-                        "stories": [story],
+                        "stories": [
+                            story,
+                            {
+                                **story,
+                                "story_ref": "S2",
+                                "subject": "A separate lawsuit in the same roundup",
+                            },
+                        ],
                         "keyword_query": '"small lab"',
                         "search_notes": [],
                         "history_requests": [],
@@ -278,14 +300,76 @@ def test_discovery_to_pool_publication_uses_real_storage_and_no_duplicate_send(
     with patch(
         "x_monitor.x_client.XClient._get_bounded", side_effect=get
     ) as source_get:
-        result = run_chatter(
-            envelope,
-            cfg=cfg,
-            transport=transport,
-            enqueue=lambda *args: queued.append(args),
-        )
+        if recover:
+            from monitor.editorial.contracts import ProviderReplyError
+
+            with (
+                patch.object(chatter_chain, "_failure", real_failure),
+                patch.object(
+                    chatter_chain,
+                    "validate_semantic",
+                    side_effect=ProviderReplyError("ambiguous_semantic_identity", {}),
+                ),
+            ):
+                held = run_chatter(
+                    envelope,
+                    cfg=cfg,
+                    transport=transport,
+                    enqueue=lambda *args: queued.append(args),
+                )
+            assert (
+                held["status"] == "held"
+                and len(calls) == 1
+                and source_get.call_count == 0
+            )
+            held_run = OriginalContentRun.objects.get(pk=held["run_id"])
+            original_fence = held_run.fence
+            result = resume_chatter_discovery(
+                held_run.pk,
+                cfg=cfg,
+                transport=transport,
+                enqueue=lambda *args: queued.append(args),
+            )
+            held_run.refresh_from_db()
+            execution = held_run.collection_runs.get()
+            assert (
+                held_run.fence == original_fence + 1
+                and held_run.cycle_started_at == now
+            )
+            assert execution.request_count == 3 and execution.status == "success"
+            assert list(
+                execution.attempts.order_by("ordinal").values_list(
+                    "outcome", "actual_requests"
+                )
+            ) == [("failed", 1), ("success", 2)]
+            assert len(calls) == 1  # The paid discovery reply was reused.
+            from core.models import CollectionScopeRequestUse
+
+            assert execution.scopes.filter(scope_kind="chatter_tool").count() == 1
+            assert (
+                CollectionScopeRequestUse.objects.filter(
+                    scope_run__run=execution
+                ).count()
+                >= 1
+            )
+            assert (
+                resume_chatter_discovery(held_run.pk, cfg=cfg)["status"]
+                == "already_dispatched"
+            )
+        else:
+            result = run_chatter(
+                envelope,
+                cfg=cfg,
+                transport=transport,
+                enqueue=lambda *args: queued.append(args),
+            )
         assert result["status"] == "discovered", result
         assert source_get.call_count == 2
+    shared_source = OriginalContent.objects.filter(
+        run_id=result["run_id"], appearance_kind="semantic_shortlist"
+    )
+    assert shared_source.count() == 2
+    assert len(set(shared_source.values_list("development_id", flat=True))) == 2
     assert queued == [("select", result["run_id"])]
     selected = select_chatter(
         result["run_id"],

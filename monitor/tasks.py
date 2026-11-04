@@ -321,12 +321,14 @@ def refresh_editorial(envelope):
 def chatter_stage(stage, *args):
     from monitor.editorial.chatter_chain import (
         review_chatter,
+        resume_chatter_discovery,
         run_chatter,
         select_chatter,
         write_chatter,
     )
 
-    functions = {"discover": run_chatter, "select": select_chatter, "write": write_chatter, "review": review_chatter}
+    functions = {"discover": run_chatter, "resume-discovery": resume_chatter_discovery,
+                 "select": select_chatter, "write": write_chatter, "review": review_chatter}
     if stage not in functions:
         raise ValueError("unsupported Chatter stage")
     return functions[stage](*args)

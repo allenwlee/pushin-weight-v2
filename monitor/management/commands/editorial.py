@@ -88,6 +88,7 @@ class Command(BaseCommand):
                     from core.models import OriginalContentRun
                     from monitor.editorial.chatter_chain import (
                         review_chatter,
+                        resume_chatter_discovery,
                         run_chatter,
                         select_chatter,
                         write_chatter,
@@ -97,8 +98,11 @@ class Command(BaseCommand):
                         pending.append((stage, arguments))
                     if options["chatter_run"]:
                         run = OriginalContentRun.objects.get(pk=options["chatter_run"], workflow_key="chatter-discovery")
-                        result = {"status": "resuming", "run_id": run.pk}
-                        queue("select", run.pk)
+                        if run.discovery_state == "complete":
+                            result = {"status": "resuming", "run_id": run.pk}
+                            queue("select", run.pk)
+                        else:
+                            result = resume_chatter_discovery(run.pk, cfg=cfg, enqueue=queue)
                     else:
                         result = run_chatter({"schema_version": 1, "source_cycle_id": "operator-chatter",
                             "cycle_started_at": timezone.now().isoformat(), "cutoff": cutoff.isoformat(),
