@@ -4,7 +4,12 @@ from copy import deepcopy
 import pytest
 
 from core.data_source_backfill_cohort import (
-    ENDPOINT, IDENTIFIERS, PRODUCT, PUBLISHER, configure_cohort, preview_cohort,
+    ENDPOINT,
+    IDENTIFIERS,
+    PRODUCT,
+    PUBLISHER,
+    configure_cohort,
+    preview_cohort,
 )
 
 
@@ -67,6 +72,7 @@ def test_reviewed_cohort_is_idempotent_exact_and_preserves_x(monkeypatch):
     # The public command's preview uses the same references without writes.
     import json
     from io import StringIO
+
     from django.core.management import call_command
     monkeypatch.setattr('core.management.commands.backfiller_data_source.validate_backfill_target',
                         lambda **_: {'schema_ready': True})

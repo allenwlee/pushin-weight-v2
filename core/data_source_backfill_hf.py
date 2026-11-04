@@ -4,11 +4,15 @@ from datetime import UTC, timedelta
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
-
 from django.db.models import Sum
 
 from core.benchmark_metric_store import aware_instant
-from core.collection_capture import RequestCapture, archive_legacy, link_request, read_document
+from core.collection_capture import (
+    RequestCapture,
+    archive_legacy,
+    link_request,
+    read_document,
+)
 from core.collection_state import checkpoint_scope, claim_job, fenced_run, finish_run
 from core.hf_metadata_client import HFMetadataClient
 from core.measurement_taxonomy import digest, require

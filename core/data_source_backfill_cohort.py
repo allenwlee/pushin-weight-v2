@@ -6,7 +6,12 @@ from django.db import transaction
 from core.benchmark_metric_identity import configure_collection, register_definitions
 from core.benchmark_metric_store import aware_instant
 from core.data_source_backfill_target import validate_backfill_target
-from core.measurement_taxonomy import configure_taxonomy, digest, require, resolve_subject_id
+from core.measurement_taxonomy import (
+    configure_taxonomy,
+    digest,
+    require,
+    resolve_subject_id,
+)
 from core.models import Account, BrandCompany, CollectionJob, DataSource, Product
 from core.product_vocabulary import metadata_references, product_type_id
 from core.publisher_accounts import register_publisher

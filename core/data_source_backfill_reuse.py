@@ -3,7 +3,12 @@ from copy import deepcopy
 from uuid import UUID
 
 from core.benchmark_metric_store import native_date, persist_source
-from core.data_source_backfill_cohort import END, IDENTIFIERS, START, campaign_specifications
+from core.data_source_backfill_cohort import (
+    END,
+    IDENTIFIERS,
+    START,
+    campaign_specifications,
+)
 from core.data_source_backfill_target import isolated_backfill_review
 from core.measurement_taxonomy import digest, require
 

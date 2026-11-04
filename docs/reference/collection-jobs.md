@@ -108,7 +108,7 @@ change its live cursors, or run inside its fifteen-minute cycle.
 ## Backfiller-data-source
 
 `backfiller_data_source` exposes `inspect`, `register`, `execute`, `resume`, `pause`,
-`replay` and `report`. The default is inspection. A mutation requires `--apply`;
+`replay`, `report`, `prepare-0813`, `plan-0813` and `replay-retained`. The default is inspection. A mutation requires `--apply`;
 execution also requires one explicit source `--job`. `--campaign` selects a group
 for inspection, reporting or pausing. Registration accepts `--specifications` as
 a reviewed JSON instruction, then saves the instruction in `collection_jobs`.
@@ -235,6 +235,14 @@ whole preview object. Reference JSON combines the copied `product`, `publisher`,
 HF catalog identity. Input files are transport only. Completed OpenCode and
 archive-only HF jobs replay their saved numeric evidence with no HTTP and no
 duplicate values. Production promotion remains a separate operation.
+
+A retained production capture is imported as a selected backfill observation with
+its original run, archive and content hash recorded as provenance. Once imported,
+`python manage.py backfiller_data_source --operation replay-retained --run <backfill-run-uuid>`
+verifies the committed selection without writes. Add `--apply` to replay through
+the shared numeric writer. Both paths use the database capture and make zero
+provider requests; the original transport file is unnecessary.
+
 
 ## Reviewed provider identities
 
@@ -454,10 +462,3 @@ runtime pointers cleared. Catalog/content runs are excluded after pointers are
 scrubbed in foreign-key order. See [Staging refresh](../operations/staging-data-refresh.md).
 Production deployment, source activation and actual historical batches are
 separate operations; none follows from registering or inspecting a job.
-
-A retained production capture is imported as a selected backfill observation with
-its original run, archive and content hash recorded as provenance. Once imported,
-`python manage.py backfiller_data_source --operation replay-retained --run <backfill-run-uuid>`
-verifies the committed selection without writes. Add `--apply` to replay through
-the shared numeric writer. Both paths use the database capture and make zero
-provider requests; the original transport file is unnecessary.

@@ -20,13 +20,17 @@ BASE = ('core', '0183_rg6_typed_statistics_identity')
 
 @pytest.mark.parametrize('migration_rehearsal_schema', [BASE], indirect=True)
 def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration_rehearsal_schema):
-    from core.collection_capture import archive_legacy, read_document, run_report_document
-    from core.models import CollectionObservation
+    from core.collection_capture import (
+        archive_legacy,
+        read_document,
+        run_report_document,
+    )
     from core.collection_pages import page_receipts
     from core.collection_storage_migration import (
         archive_legacy_batch,
         stale_legacy_archive_count,
     )
+    from core.models import CollectionObservation
     from monitor.backfill_collection import execute_job
     from tests.test_backfill_collection import ready_job
 

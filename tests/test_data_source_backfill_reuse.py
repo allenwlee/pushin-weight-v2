@@ -50,6 +50,7 @@ def test_retained_hf_capture_selects_one_product_and_replays_without_duplicate_v
         reuse_capture(contract, source='hf', payload=changed, origin=origin)
     assert MetricValue.objects.count() == 3
     import httpx
+
     from core.data_source_backfill_reuse import replay_retained_run
 
     monkeypatch.setattr(httpx.Client, 'send', lambda *_a, **_k: pytest.fail('retained replay made HTTP'))
@@ -59,6 +60,7 @@ def test_retained_hf_capture_selects_one_product_and_replays_without_duplicate_v
 
     import json
     from io import StringIO
+
     from django.core.management import call_command
     monkeypatch.setattr('core.management.commands.backfiller_data_source.validate_backfill_target',
                         lambda **_: {'schema_ready': True})

@@ -78,6 +78,7 @@ def project_x_pages_batch(*, after_id=0, batch_size=100, verify_only=False):
 
 def _verify_page_batch(rows):
     from collections import defaultdict
+
     from core.collection_pages import PAGE_KIND, _receipt_semantics, page_receipts
 
     # Bound the prefetched appearance graph independently of the cursor batch.
@@ -122,8 +123,12 @@ def project_retry_reviews_batch(*, after_id=None, batch_size=100, verify_only=Fa
 
 def project_x_runtime_batch(*, after_id=None, batch_size=100, verify_only=False):
     """Adopt only explicit counters/receipts; absent accounting stays unknown."""
-    from core.collection_staging import adopt_retry_state, staging_receipt, write_staging_receipt
     from core.collection_capture import read_document
+    from core.collection_staging import (
+        adopt_retry_state,
+        staging_receipt,
+        write_staging_receipt,
+    )
     from core.models import CollectionRequest
     from monitor.backfill_collection import _adopt_model_usage, ensure_response_bytes
     from monitor.backfill_retry import RetryControl

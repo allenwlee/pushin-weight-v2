@@ -10,7 +10,12 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 
 def test_discovery_resumes_saved_immutable_head_and_pages(monkeypatch):
     from core.data_source_backfill import execute_phase, register_campaign
-    from core.models import CollectionObservation, CollectionRequest, CollectionRun, DataSource
+    from core.models import (
+        CollectionObservation,
+        CollectionRequest,
+        CollectionRun,
+        DataSource,
+    )
     from tests.test_data_source_backfill import specification
 
     monkeypatch.setattr('core.data_source_backfill_target.validate_backfill_target', lambda **_: {})
@@ -56,8 +61,10 @@ def test_discovery_resumes_saved_immutable_head_and_pages(monkeypatch):
 def test_archive_only_captures_ranges_and_replays_zero_without_http(monkeypatch):
     import io
     from datetime import UTC, datetime
+
     import pyarrow as pa
     import pyarrow.parquet as pq
+
     from core.benchmark_metric_identity import configure_collection
     from core.data_source_backfill_hf import replay_archives
     from core.model_history_collection import execute_model_history
@@ -110,9 +117,11 @@ def test_existing_file_archive_command_keeps_its_output_and_shared_selection(mon
     import json
     import re
     from io import StringIO
+
     import pyarrow as pa
     import pyarrow.parquet as pq
     from django.core.management import call_command
+
     from tests.test_benchmark_download_persistence import configured
 
     contract = configured()
