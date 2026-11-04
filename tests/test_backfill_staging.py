@@ -54,7 +54,8 @@ def test_twenty_simultaneous_requests_without_body_archives(http_pages, monkeypa
     assert report["collection_drained"]
     assert report["prefetch"]["max_buffered"] == 20
     assert Post.objects.count() == CollectionObservation.objects.filter(run_id=report["run_id"], source_subject_kind="post").count() == 20
-    assert not CollectionEvidenceArchive.objects.exclude(capture_kind="legacy_snapshot").exists()
+    # Derived execution/checkpoint evidence has its own archive kinds.
+    assert not CollectionEvidenceArchive.objects.filter(capture_kind="response").exists()
     assert CollectionRequest.objects.filter(request_category="x_backfill_staging", archive__isnull=True,
         transport_outcome="received", accounting_complete=True).count() == 20
     from core.models import CollectionScopeRequestUse
@@ -64,7 +65,9 @@ def test_twenty_simultaneous_requests_without_body_archives(http_pages, monkeypa
     receipts = [staging_receipt(request) for request in CollectionRequest.objects.filter(attempt__run=job.last_attempt)]
     assert len(receipts) == 20
     assert all(len(r["returned_ids"]) == r["raw_count"] == 1 for r in receipts)
-    assert "staging_responses" not in job.last_attempt.report
+    from core.collection_capture import run_report_document
+
+    assert "staging_responses" not in run_report_document(job.last_attempt)
 
 
 def test_fast_page_commits_and_refills_before_slow_request_finishes(http_pages, monkeypatch):  # noqa: F811
@@ -113,17 +116,13 @@ def test_interrupted_page_retries_only_when_uncommitted(http_pages, monkeypatch,
         scope = CollectionScopeRun.objects.filter(run__job=job, scope_kind="x_query").latest("id")
         assert scope.enumeration_complete == after_commit
         # Typed receipt and request-use state alone survive a restart.
-        from core.models import CollectionRun
-
-        CollectionRun.objects.filter(job=job).update(report={})
-        CollectionScopeRun.objects.filter(run__job=job).update(envelopes=[])
         monkeypatch.setattr(PageCheckpoint, "persist", original)
         report = execute_job(job.pk)
     assert report["collection_drained"]
     assert len(state["requests"]) == (1 if after_commit else 2)
     assert report["prefetch"]["lost_responses"] == int(not after_commit)
     assert Post.objects.count() == 1
-    assert not CollectionEvidenceArchive.objects.exclude(capture_kind="legacy_snapshot").exists()
+    assert not CollectionEvidenceArchive.objects.filter(capture_kind="response").exists()
 
 
 def test_unknown_outcome_is_not_automatically_refetched(http_pages, monkeypatch):  # noqa: F811
@@ -166,8 +165,8 @@ def test_error_drains_every_started_request_and_keeps_cursors(http_pages, monkey
         execute_job(job.pk, collection_options={"concurrency": 3})
     assert len(state["requests"]) == 3
     assert CollectionRequest.objects.filter(transport_outcome="received").count() == 3
-    assert not CollectionEvidenceArchive.objects.exclude(capture_kind="legacy_snapshot").exists()
-    assert not CollectionScopeRun.objects.filter(run__job=job, enumeration_complete=True).exists()
+    assert not CollectionEvidenceArchive.objects.filter(capture_kind="response").exists()
+    assert not CollectionScopeRun.objects.filter(run__job=job, scope_kind='x_query', enumeration_complete=True).exists()
 
 
 def test_underfilled_pages_follow_cursor_and_deduplicate(http_pages, monkeypatch):  # noqa: F811
@@ -212,7 +211,7 @@ def test_staging_rare_gate_still_controls_admission(http_pages, monkeypatch, tmp
     assert Post.objects.filter(pk="rare-staging").exists() == kept
     assert CollectionObservation.objects.filter(run__job=job, post_id="rare-staging").exists() == kept
     assert RareTypeSearchHit.objects.get(provider_post_id="rare-staging").gate_state == ("kept" if kept else "junk")
-    assert not CollectionEvidenceArchive.objects.exclude(capture_kind="legacy_snapshot").exists()
+    assert not CollectionEvidenceArchive.objects.filter(capture_kind="response").exists()
 
 
 def test_staging_request_ceiling_survives_resume(http_pages, monkeypatch):  # noqa: F811
