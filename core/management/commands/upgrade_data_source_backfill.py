@@ -47,7 +47,7 @@ class Command(BaseCommand):
                                              for migration, backwards in plan]}
             else:
                 require(EXPAND in executor.loader.applied_migrations,
-                        'apply additive schema through0195 before projection')
+                        'apply the additive schema expansion before projection')
                 require(options['apply'] or options['verify_only'],
                         'choose --apply for bounded copying or --verify-only for parity')
                 from core import collection_storage_migration as copy

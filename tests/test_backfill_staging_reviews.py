@@ -15,6 +15,7 @@ from core.models import (
     CollectionScopeRun,
 )
 from monitor.backfill_prefetch import _endpoint, _request_identity
+from monitor.backfill_retry import RetryControl
 from monitor.backfill_staging import StagingPrefetcher
 from tests.test_backfill_staging import staged_job
 
@@ -40,6 +41,7 @@ def interrupted(monkeypatch, *, reviewed):
     prefetch = StagingPrefetcher.__new__(StagingPrefetcher)
     prefetch.claim = SimpleNamespace(job_id=job.pk)
     prefetch.metrics = {'lost_responses': 0}
+    prefetch.retry = RetryControl()
     return job, run, scope, request, prefetch
 
 

@@ -24,7 +24,8 @@ from core.models import (
     CollectionScopeRun,
 )
 
-EXPAND = ('core', '0195_rg6_archive_import_scope_guard')
+# This additive branch includes0195, without the0196–0221 retirement path.
+EXPAND = ('core', '0222_backfill_retry_policy_versions')
 MODELS = (CollectionRun, CollectionScopeRun, CollectionObservation)
 _projection_lock = threading.Lock()
 
@@ -130,7 +131,11 @@ def project_x_runtime_batch(*, after_id=None, batch_size=100, verify_only=False)
         write_staging_receipt,
     )
     from core.models import CollectionRequest
-    from monitor.backfill_collection import _adopt_model_usage, ensure_response_bytes
+    from monitor.backfill_collection import (
+        _adopt_model_usage,
+        adopt_completed_backfill_result,
+        ensure_response_bytes,
+    )
     from monitor.backfill_retry import RetryControl
 
     query = CollectionRun.objects.filter(job__source_id='x', job__operation='x_backfill',
@@ -184,6 +189,10 @@ def project_x_runtime_batch(*, after_id=None, batch_size=100, verify_only=False)
                 require(staging_receipt(request) == metadata
                         and request.selection_accounted == (str(request.pk) in report.get('prefetch_accounted_requests', [])),
                         'historical staging response receipt differs')
+            if run.status == 'success':
+                # This existing copier proves the original explicit Post-set
+                # certificate against current memberships before retaining it.
+                adopt_completed_backfill_result(run.pk, verify_only=verify_only)
             copied += 1
     return ProjectionBatch(rows[-1][0] if rows else after_id, len(rows), copied if not verify_only else 0)
 

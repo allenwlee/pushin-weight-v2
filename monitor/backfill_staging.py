@@ -45,7 +45,13 @@ from monitor.backfill_prefetch import (
     _request_identity,
     fetch_page,
 )
-from monitor.backfill_retry import PAGE_FAILURE_LIMIT, POLICY, transient
+from monitor.backfill_retry import (
+    COOLDOWNS,
+    PAGE_FAILURE_LIMIT,
+    POLICIES,
+    POLICY,
+    transient,
+)
 from monitor.run_lock import backfill_yield_requested, harvest_writer_lock
 from x_monitor.twitterapi_credentials import (
     TwitterApiCredentialPurpose,
@@ -94,7 +100,7 @@ class StagingPrefetcher(Prefetcher):
             ensure_staging_bytes(run)
         self.retry_at = None
         self.metrics.update(mode="staging", lost_responses=0, max_buffered=0,
-                            retry_policy=POLICY, transient_failures=0, retry_requests=0)
+                            retry_policy=self.retry.policy, transient_failures=0, retry_requests=0)
 
     def _save_retry(self):
         with fenced_run(self.claim) as (_, run):
@@ -111,7 +117,7 @@ class StagingPrefetcher(Prefetcher):
         ).exclude(pk__in=consumed).select_related(
             "scope_run__run", "scope_run__job_target__search_query", "attempt__run"
         ).order_by("started_at", "pk")
-        failures, not_before, group = 0, None, None
+        failures, not_before, group, last_failure = 0, None, None, None
         for request in requests:
             require(x_scope_ownership(request.scope_run) == x_scope_ownership(scope), "staging scope ancestry changed")
             if request.transport_outcome == 'unknown' and has_retry_review(request, self.claim.job_id):
@@ -126,13 +132,14 @@ class StagingPrefetcher(Prefetcher):
                     group = group or request.request_group or str(request.pk)
                 continue
             if (request.http_method == "GET" and request.transport_outcome in {"received", "transport_error", "timeout"}
-                    and transient(request.error_code, request.http_status)):
+                    and transient(request.error_code, request.http_status, policy=self.retry.policy)):
                 original_scope = copy(request.scope_run)
                 original_scope.cursor = request.cursor_before
                 require(request.request_config == _request_identity(original_scope)
                         and request.endpoint_url == _endpoint(original_scope), "staging retry ancestry changed")
                 if request.cursor_before == scope.cursor:
                     failures += 1
+                    last_failure = max(last_failure or request.started_at, request.received_at or request.started_at)
                     group = group or request.request_group or str(request.pk)
                     due = request.retry_after_at or request.started_at + timedelta(seconds=10)
                     not_before = max(not_before or due, due)
@@ -152,7 +159,11 @@ class StagingPrefetcher(Prefetcher):
                 request.body_lost = True
                 request.save(update_fields=["body_lost"])
             self.metrics["lost_responses"] += 1
-        require(failures < PAGE_FAILURE_LIMIT, "staging page retry allowance exhausted")
+        if self.retry.policy == POLICY:
+            require(failures < PAGE_FAILURE_LIMIT, "staging page retry allowance exhausted")
+        elif failures >= PAGE_FAILURE_LIMIT:
+            due = last_failure + timedelta(seconds=COOLDOWNS[-1])
+            not_before = max(not_before or due, due)
         return not_before, group
 
     def _save(self, request, result):
@@ -167,7 +178,7 @@ class StagingPrefetcher(Prefetcher):
         response = {"path": SEARCH_PATH, "status_code": result.response.get("status_code"),
                     "raw_results": len(ids), "response_bytes": len(result.body or b"")}
         cursor = body.get("next_cursor") if isinstance(body, dict) else None
-        retryable = transient(result.error, response["status_code"])
+        retryable = transient(result.error, response["status_code"], policy=self.retry.policy)
         retry_after = None
         if retryable:
             retry_after = result.received_at + timedelta(seconds=max(
@@ -185,7 +196,7 @@ class StagingPrefetcher(Prefetcher):
                 "body_lost": False})
             if retryable:
                 self.retry.failed(result.received_at.timestamp(), retry_after=result.retry_after_seconds or 0,
-                                  rate_limited=response["status_code"] == 429)
+                                  rate_limited=response["status_code"] in ({401, 403, 429} if self.retry.policy == POLICIES[2] else {429}))
                 self.metrics["transient_failures"] += 1
             elif not result.error:
                 self.retry.succeeded()
@@ -198,7 +209,7 @@ class StagingPrefetcher(Prefetcher):
 
     def _failed(self, request, result):
         self._save(request, result)
-        if not transient(result.error, result.response.get("status_code")):
+        if not transient(result.error, result.response.get("status_code"), policy=self.retry.policy):
             self._check_error(result)
 
     @staticmethod
@@ -266,7 +277,7 @@ class StagingPrefetcher(Prefetcher):
                                 attempt = CollectionAttempt.objects.get(pk=self.claim.attempt_id)
                                 request = begin_request(attempt, scope, endpoint_url=_endpoint(scope), cursor=scope.cursor,
                                     request_config=_request_identity(scope), request_category=CATEGORY,
-                                    request_group=group, request_revision=POLICY)
+                                    request_group=group, request_revision=self.retry.policy)
                             self.metrics["retry_requests"] += int(group is not None)
                             future = pool.submit(fetch_page, key, _params(scope), max_bytes=max_bytes, timeout=30)
                             futures[future] = (scope, request, max_bytes)

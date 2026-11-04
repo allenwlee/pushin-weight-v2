@@ -19,7 +19,8 @@ BASE = ('core', '0183_rg6_typed_statistics_identity')
 
 
 @pytest.mark.parametrize('migration_rehearsal_schema', [BASE], indirect=True)
-def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration_rehearsal_schema):
+@pytest.mark.parametrize('retry_policy', ['staging-get-retry/v1', 'staging-get-retry/v2'])
+def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration_rehearsal_schema, retry_policy):
     from core.collection_capture import (
         archive_legacy,
         read_document,
@@ -53,6 +54,8 @@ def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration
     job.last_attempt_id = run.pk
     job.save(update_fields=['last_attempt'])
     MigrationExecutor(connection).migrate([EXPAND])
+    # The additive branch admits retained v2 state before any contraction.
+    MigrationExecutor(connection).migrate([('core', '0222_backfill_retry_policy_versions')])
     original_fields = tuple(CollectionRun._meta.fields)
     copied = project_batch('invocations')
     assert copied.scanned == 1
@@ -84,7 +87,7 @@ def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration
         response_bytes=270, accounting_complete=True, received_at=at)
     staging_metadata = {'raw_count': 3, 'returned_ids': ['kept', None, ''],
                         'body_sha256': 'a' * 64, 'body_lost': True}
-    report.update(response_bytes=270, staging_retry=RetryControl().snapshot(),
+    report.update(response_bytes=270, staging_retry=RetryControl(policy=retry_policy).snapshot(),
         staging_responses={str(request.pk): staging_metadata}, prefetch_accounted_requests=[str(request.pk)])
     run.report, run.request_count = report, 1
     run.save(update_fields=['report', 'request_count'])
@@ -100,6 +103,10 @@ def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration
             pass
     project_batch('x_runtime')
     project_batch('x_runtime', verify_only=True)
+    assert RetryControl.from_run(CollectionRun.objects.get(pk=run.pk)).snapshot() == report['staging_retry']
+    from django.db import IntegrityError, transaction
+    with pytest.raises(IntegrityError), transaction.atomic():
+        CollectionRun.objects.filter(pk=run.pk).update(staging_retry_version=3)
     assert CollectionScopeRun.objects.get(run_id=run.pk, scope_kind='x_model_usage').raw_count == 7
     request.refresh_from_db()
     from core.collection_staging import staging_receipt
@@ -123,7 +130,7 @@ def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration
     with connection.cursor() as cursor:
         cursor.execute("SELECT set_config('pushinweight.rg6_retirement_ready','0201',false)")
     try:
-        MigrationExecutor(connection).migrate([('core', '0221_affiliation_trigger_column_permissions')])
+        MigrationExecutor(connection).migrate([('core', '0223_merge_backfill_retry_policy')])
     finally:
         with connection.cursor() as cursor:
             cursor.execute("RESET pushinweight.rg6_retirement_ready")
@@ -134,6 +141,30 @@ def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration
     assert scope.recorded_cursors == ['saved-cursor', 'late-cursor']
     assert page_receipts(scope) == [{'post_ids': [], 'collection_drained': False,
                                    'raw_count': 0, 'reason': None}]
+
+    # Retained v2 slows a repeatedly failing page; v1 keeps its original stop.
+    from monitor.backfill_prefetch import _endpoint, _request_identity
+    from monitor.backfill_staging import StagingPrefetcher
+    failures = [CollectionRequest.objects.create(
+        attempt=current.attempts.get(), scope_run=scope, ordinal=index,
+        http_method='GET', endpoint_url=_endpoint(scope),
+        request_config=_request_identity(scope), cursor_before=scope.cursor, request_category='x_backfill_staging',
+        transport_outcome='timeout', error_code='Timeout', accounting_complete=False, started_at=timezone.now(),
+    ) for index in range(2, 7)]
+    prefetch = StagingPrefetcher.__new__(StagingPrefetcher)
+    from core.collection_state import claim_job
+    prefetch.claim = claim_job(job.pk, invocation_id='retry-profile-proof',
+                               manual_authorized=True, typed=True, continue_from=current.pk)
+    scope = CollectionScopeRun.objects.get(run_id=prefetch.claim.run_id, scope_kind='x_query')
+    prefetch.retry = RetryControl.from_run(current)
+    prefetch.metrics = {'lost_responses': 0}
+    if retry_policy.endswith('/v1'):
+        with pytest.raises(ValueError, match='page retry allowance exhausted'):
+            prefetch._pending(scope)
+    else:
+        due, group = prefetch._pending(scope)
+        assert due == max(row.started_at for row in failures) + timedelta(seconds=900)
+        assert group is not None
 
 
 def test_projection_context_restores_model_fields_on_failure(monkeypatch):
@@ -165,3 +196,15 @@ def test_projection_context_restores_model_fields_on_failure(monkeypatch):
 def test_projection_refuses_current_database_without_retiring_columns():
     with pytest.raises(ValueError, match='all thirteen'), legacy_projection_models():
         pytest.fail('current schema admitted as legacy source')
+
+
+@pytest.mark.parametrize('policy,status,expected', [
+    ('staging-get-retry/v1', 401, False), ('staging-get-retry/v1', 403, False),
+    ('staging-get-retry/v2', 401, True), ('staging-get-retry/v2', 403, True),
+    ('staging-get-retry/v1', 429, True), ('staging-get-retry/v2', 402, False),
+])
+def test_retry_versions_keep_their_original_error_rules(policy, status, expected):
+    from monitor.backfill_retry import RetryControl, transient
+    original = RetryControl(policy=policy).snapshot()
+    assert RetryControl.restore(original).snapshot() == original
+    assert transient(None, status, policy=policy) is expected

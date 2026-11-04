@@ -10,7 +10,7 @@ from django.db import connection
 
 RESOURCE = 'dpg-dbfemu2vcj2c73fsafe0-a'
 DATABASE = 'xbackfiller'
-SCHEMA_FLOOR = '0221_affiliation_trigger_column_permissions'
+SCHEMA_FLOOR = '0223_merge_backfill_retry_policy'
 _isolated_review = ContextVar('isolated_backfill_review', default=False)
 
 

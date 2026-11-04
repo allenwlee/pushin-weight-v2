@@ -118,7 +118,7 @@ The facade requires an explicit `BACKFILL_DATABASE_URL` and an already-selected
 Django connection to database/login `xbackfiller` on Render resource
 `dpg-dbfemu2vcj2c73fsafe0-a`. It checks both configuration and the authenticated
 session before registration or provider work. Collection requires migration
-0221; inspection reports a missing upgrade without trying to migrate or changing
+0223; inspection reports a missing upgrade without trying to migrate or changing
 connections. `inspect`, `report` and registration previews use read-only
 transactions. Report pages contain at most 100 jobs; continue with the returned
 `next_after` value through `--after`.
@@ -139,7 +139,8 @@ Reports keep written, reused, pending and rejected evidence separate.
 ### Schema preparation and X continuity
 
 `upgrade_data_source_backfill --stage inspect` checks the same destination and
-shows the additive migration plan through 0195. `--stage expand --apply` applies
+shows the additive0222 branch, which includes0195 while leaving the
+0196–0221 retirement path unapplied. `--stage expand --apply` applies
 that stage without removing old columns. The bounded `archives`, `invocations`,
 `continuations`, `cursors`, `bounds`, `targets`, `rare_hits`, `request_uses`,
 `pages`, `retry_reviews` and `x_runtime` stages preserve existing source evidence
@@ -151,9 +152,18 @@ and project current execution records. Resume each projection with its returned
 ownership. The invocation, continuation, cursor, page, retry-review and X-runtime
 stages also accept `--verify-only`. Page parity compares receipt contents,
 including ordered received IDs, rather than only counting child records.
+The additive expansion admits retained retry versions1 and2 before
+projecting their state. Its0223 merge follows the guarded0221
+path. Both retry versions retain their original behavior; new runs default to v1.
+V1 stops after five failures of the same page and treats authorization errors
+as terminal. Retained v2 uses the recorded slower page-recovery rule and
+authorization-recheck behavior. Neither version retries an unknown send without
+its exact recorded operator consent.
 The runtime projection accepts both recorded model-counter formats and preserves
 the original staging receipt, retry state and known byte totals. Missing
-accounting is not inferred as zero. Retry-review projection copies only existing
+accounting is not inferred as zero. Successful ordinary X runs also use the
+existing completed-result copier, which verifies their original explicit Post
+membership certificate. Special enrichment proofs are excluded. Retry-review projection copies only existing
 operator consents for their exact original requests; it grants no new retry.
 
 These commands do not retire storage. Physical contraction follows the existing
