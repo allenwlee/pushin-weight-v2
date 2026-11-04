@@ -193,7 +193,7 @@ def select_snapshot(budget, revision, cohort):
     require(parquet.metadata.num_rows <= 10000000, "archive row cap")
     columns = [
         c
-        for c in ["id", "downloads", "downloadsAllTime", "likes"]
+        for c in ["id", "downloads", "downloadsAllTime", "likes", "trendingScore"]
         if c in parquet.schema_arrow.names
     ]
     require("id" in columns and "downloads" in columns, "archive schema changed")

@@ -20,7 +20,8 @@ def test_reconstruction_is_daily_utc_and_explicitly_not_observed_stock():
         reconstruct_counts(["2026-09-10T23:00:00"], retrieved_at="2026-09-13T00:00:00Z")
 
 
-def test_archive_range_selects_tracked_rows_and_validates_redirects():
+@pytest.mark.parametrize('trending_score', [None, 0.0, 1.75])
+def test_archive_range_selects_tracked_rows_and_validates_redirects(trending_score):
     import io
     import re
 
@@ -37,7 +38,8 @@ def test_archive_range_selects_tracked_rows_and_validates_redirects():
     pq.write_table(
         pa.Table.from_pylist(
             [
-                {"_id": "1", "id": "lab/model", "downloads": 10, "likes": 2},
+                {"_id": "1", "id": "lab/model", "downloads": 10, "likes": 2,
+                 **({'trendingScore': trending_score} if trending_score is not None else {})},
                 {"_id": "2", "id": "other/model", "downloads": 30, "likes": 5},
             ]
         ),
@@ -66,7 +68,11 @@ def test_archive_range_selects_tracked_rows_and_validates_redirects():
         {"id": "a" * 40, "date": "2026-10-01T00:00:00Z"},
         [{"identifier": "lab/model", "_id": "1"}],
     )
-    assert result["rows"] == [{"id": "lab/model", "downloads": 10, "likes": 2}]
+    expected = {"id": "lab/model", "downloads": 10, "likes": 2}
+    if trending_score is not None:
+        expected['trendingScore'] = trending_score
+    assert result["rows"] == [expected]
+    assert ('trendingScore' in result['columns']) == (trending_score is not None)
     assert result["missing_identifiers"] == []
     assert all(len(r["sha256"]) == 64 for r in result["selected_ranges"])
     with pytest.raises(ValueError, match="untrusted"):
