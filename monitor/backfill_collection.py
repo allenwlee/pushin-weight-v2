@@ -301,13 +301,18 @@ def _adopt_model_usage(run):
                      raw_count=0, outcome="adopted", execution_state="completed")
         return
     report = _legacy_budget_report(run)
-    count = report.get("model_requests", 0)
+    usage = report.get('usage')
+    usage = usage if isinstance(usage, dict) else {}
+    count = report.get("model_requests", usage.get("llm_requests"))
     receipts = report.get("staff_relevance", {})
     require(type(count) is int and count >= 0 and isinstance(receipts, dict)
-            and len(receipts) <= count, "invalid legacy model budget")
-    archive = _evidence({key: report.get(key) for key in (
-        "model_requests", "model_responses", "staff_relevance",
-    )}, "x_model_response") if count else None
+            and len(receipts) <= count, "missing or invalid legacy model budget; reconcile before retry")
+    archive = _evidence({
+        'model_requests': count,
+        'model_responses': report.get('model_responses', usage.get('model_responses')),
+        'staff_relevance': report.get('staff_relevance'),
+        'counter_source': 'model_requests' if 'model_requests' in report else 'usage.llm_requests',
+    }, "x_model_response") if count else None
     _typed_scope(run, "x_model_usage", "legacy", phase="backfill_model_v1",
                  raw_count=count, outcome="adopted", execution_state="completed",
                  legacy_archive=archive)

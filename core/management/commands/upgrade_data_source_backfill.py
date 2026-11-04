@@ -18,7 +18,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--stage', choices=['inspect', 'expand', 'archives', 'parity',
             'invocations', 'continuations', 'cursors', 'bounds', 'targets', 'rare_hits',
-            'request_uses', 'pages', 'retry_reviews'], default='inspect')
+            'request_uses', 'pages', 'retry_reviews', 'x_runtime'], default='inspect')
         parser.add_argument('--apply', action='store_true')
         parser.add_argument('--verify-only', action='store_true')
         parser.add_argument('--after-id')
@@ -69,7 +69,7 @@ class Command(BaseCommand):
                                   'request_uses': copy.scope_request_use_mismatch_counts()}
                 else:
                     value = options['after_id']
-                    after = (UUID(value) if stage in {'invocations', 'continuations', 'retry_reviews'} else int(value)) if value else None
+                    after = (UUID(value) if stage in {'invocations', 'continuations', 'retry_reviews', 'x_runtime'} else int(value)) if value else None
                     result = asdict(project_batch(stage, after_id=after,
                         batch_size=options['limit'], verify_only=options['verify_only']))
             self.stdout.write(json.dumps({'target': target, 'stage': stage,

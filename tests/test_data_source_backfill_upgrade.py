@@ -37,7 +37,7 @@ def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration
     OldScope = historical.get_model('core', 'CollectionScopeRun')
     job = ready_job()
     at = timezone.now() - timedelta(hours=1)
-    report = {'response_bytes': 0, 'model_requests': 0}
+    report = {'response_bytes': 0, 'usage': {'llm_requests': 7}}
     run = OldRun.objects.create(job_id=job.pk, ingestion_key='1' * 64, status='partial',
         started_at=at, completed_at=at + timedelta(minutes=1),
         invocations=[{'invocation_id': 'original-operator', 'started_at': at.isoformat()}],
@@ -71,6 +71,19 @@ def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration
     assert int(scope.requested_start_at.timestamp()) == job.scope['since_epoch']
     assert int(scope.requested_end_at.timestamp()) == job.scope['until_epoch']
     assert tuple(CollectionRun._meta.fields) == original_fields
+    from core.models import CollectionRequest
+    from monitor.backfill_retry import RetryControl
+    current_run = CollectionRun.objects.get(pk=run.pk)
+    request = CollectionRequest.objects.create(attempt=current_run.attempts.get(), scope_run_id=old_scope.pk,
+        ordinal=1, http_method='GET', endpoint_url='https://api.twitterapi.io/twitter/tweet/advanced_search',
+        request_category='x_backfill_staging', transport_outcome='received', http_status=200,
+        response_bytes=270, accounting_complete=True, received_at=at)
+    staging_metadata = {'raw_count': 3, 'returned_ids': ['kept', None, ''],
+                        'body_sha256': 'a' * 64, 'body_lost': True}
+    report.update(response_bytes=270, staging_retry=RetryControl().snapshot(),
+        staging_responses={str(request.pk): staging_metadata}, prefetch_accounted_requests=[str(request.pk)])
+    run.report, run.request_count = report, 1
+    run.save(update_fields=['report', 'request_count'])
     review_evidence = {'reason': 'Previously recorded consent', 'at': at.isoformat()}
     with legacy_projection_models():
         review = CollectionObservation.objects.create(run_id=run.pk,
@@ -81,6 +94,14 @@ def test_0183_additive_upgrade_projects_original_invocation_and_cursor(migration
     for table in FIELDS:
         while archive_legacy_batch(table, batch_size=100).more_unarchived:
             pass
+    project_batch('x_runtime')
+    project_batch('x_runtime', verify_only=True)
+    assert CollectionScopeRun.objects.get(run_id=run.pk, scope_kind='x_model_usage').raw_count == 7
+    request.refresh_from_db()
+    from core.collection_staging import staging_receipt
+    assert staging_receipt(request) == staging_metadata
+    assert request.archive_id is None and request.selection_accounted is True
+    assert CollectionRun.objects.get(pk=run.pk).physical_bytes_received == 270
     # Empty obsolete observation JSON must not replace typed review evidence.
     review.refresh_from_db()
     assert read_document(review.legacy_archive) == review_evidence

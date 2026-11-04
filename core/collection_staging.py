@@ -164,7 +164,10 @@ def staging_receipt(request):
 @transaction.atomic
 def write_staging_receipt(request, metadata, *, selection_accounted=False):
     """Record source appearances before the page transaction; do not invent HTTP."""
-    request = CollectionRequest.objects.select_for_update().select_related("scope_run__run").get(pk=request.pk)
+    request = CollectionRequest.objects.select_for_update().select_related("scope_run").only(
+        *(field.attname for field in CollectionRequest._meta.concrete_fields),
+        'scope_run__run_id', 'scope_run__source_dataset_id',
+    ).get(pk=request.pk)
     require(request.request_category == CATEGORY, "staging receipt requires a staging request")
     require(set(metadata) == {"raw_count", "returned_ids", "body_sha256", "body_lost"}, "invalid staging receipt fields")
     count, ids, fingerprint = metadata["raw_count"], metadata["returned_ids"], metadata["body_sha256"]
@@ -193,7 +196,7 @@ def write_staging_receipt(request, metadata, *, selection_accounted=False):
     CollectionObservation.objects.bulk_create([
         CollectionObservation(
             request=request, run_id=request.scope_run.run_id, scope_run=None,
-            source_dataset=request.scope_run.source_dataset,
+            source_dataset_id=request.scope_run.source_dataset_id,
             observation_kind=APPEARANCE_KIND, source_subject_kind="post_appearance",
             receipt_ordinal=position, source_identifier=value or "", source_identifier_is_null=value is None,
             processing_outcome="received", original_retrieved_at=request.received_at,

@@ -120,6 +120,69 @@ def project_retry_reviews_batch(*, after_id=None, batch_size=100, verify_only=Fa
     return ProjectionBatch(rows[-1].pk if rows else after_id, len(rows), copied)
 
 
+def project_x_runtime_batch(*, after_id=None, batch_size=100, verify_only=False):
+    """Adopt only explicit counters/receipts; absent accounting stays unknown."""
+    from core.collection_staging import adopt_retry_state, staging_receipt, write_staging_receipt
+    from core.collection_capture import read_document
+    from core.models import CollectionRequest
+    from monitor.backfill_collection import _adopt_model_usage, ensure_response_bytes
+    from monitor.backfill_retry import RetryControl
+
+    query = CollectionRun.objects.filter(job__source_id='x', job__operation='x_backfill',
+        job__definition__scope__adapter__in=['x-backfill/v1', 'x-backfill/v2']).order_by('pk')
+    if after_id is not None:
+        query = query.filter(pk__gt=after_id)
+    rows = list(query.values_list('pk', 'job_id')[:batch_size])
+    copied = 0
+    for run_id, job_id in rows:
+        with transaction.atomic():
+            CollectionJob.objects.select_for_update().only('pk').get(pk=job_id)
+            run = CollectionRun.objects.select_for_update().get(pk=run_id)
+            report = run.report
+            usage = report.get('usage')
+            usage = usage if isinstance(usage, dict) else {}
+            count = report.get('model_requests', usage.get('llm_requests'))
+            if count is not None:
+                if not verify_only:
+                    _adopt_model_usage(run)
+                marker = run.scopes.get(scope_kind='x_model_usage', scope_key='legacy')
+                require(marker.raw_count == count and marker.outcome == 'adopted',
+                        'historical model count differs')
+                if count:
+                    require(marker.legacy_archive_id is not None
+                            and read_document(marker.legacy_archive)['model_requests'] == count,
+                            'historical model count evidence differs')
+                for identity, receipt in report.get('staff_relevance', {}).items():
+                    call = run.scopes.get(scope_kind='x_model_call', scope_key=identity)
+                    require(call.outcome == receipt['status'] and call.legacy_archive_id is not None
+                            and read_document(call.legacy_archive) == {'identity': identity, **receipt},
+                            'historical model response evidence differs')
+            if report.get('response_bytes') is not None:
+                if not verify_only:
+                    ensure_response_bytes(run)
+                require(run.physical_bytes_received == report['response_bytes'],
+                        'historical response byte count differs')
+            if report.get('staging_retry') is not None:
+                if not verify_only:
+                    adopt_retry_state(run)
+                control = RetryControl.from_run(run)
+                require(control is not None and control.snapshot() == RetryControl.restore(report['staging_retry']).snapshot(),
+                        'historical staging retry state differs')
+            for request in CollectionRequest.objects.filter(attempt__run=run,
+                request_category='x_backfill_staging', transport_outcome='received'):
+                metadata = report.get('staging_responses', {}).get(str(request.pk))
+                if metadata is None:
+                    continue
+                if not verify_only:
+                    request = write_staging_receipt(request, metadata,
+                        selection_accounted=str(request.pk) in report.get('prefetch_accounted_requests', []))
+                require(staging_receipt(request) == metadata
+                        and request.selection_accounted == (str(request.pk) in report.get('prefetch_accounted_requests', [])),
+                        'historical staging response receipt differs')
+            copied += 1
+    return ProjectionBatch(rows[-1][0] if rows else after_id, len(rows), copied if not verify_only else 0)
+
+
 @contextmanager
 def legacy_projection_models():
     """Expose only verified existing JSONB columns, then restore the ORM exactly."""
@@ -170,6 +233,7 @@ def project_batch(stage, *, after_id=None, batch_size=100, verify_only=False):
         'request_uses': (copy.project_scope_request_uses_batch, 0, False),
         'pages': (project_x_pages_batch, 0, True),
         'retry_reviews': (project_retry_reviews_batch, None, True),
+        'x_runtime': (project_x_runtime_batch, None, True),
     }
     require(stage in stages, 'unsupported legacy projection stage')
     function, initial, verifies = stages[stage]
