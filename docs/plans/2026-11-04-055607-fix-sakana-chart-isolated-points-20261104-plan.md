@@ -10,9 +10,8 @@ ollija:
   workflow: work
   delivery_target: production
   delivery_selected_by_user: true
-  delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 ## Plain-English Summary
 
@@ -63,14 +62,10 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
     - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/sakana-chart-isolated-points-20261104` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
     - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/sakana-chart-isolated-points-20261104` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
@@ -122,3 +117,14 @@ None.
 ## Production continuation
 
 Owner requests production deployment. Current product evidence is reused where unchanged; perform clean candidate assurance and candidate performance measurement, review, non-forced authorized delivery, observed exact-SHA deployment and live Sakana pixel/filter verification. Route choice requested because default staging holds separate Chatter work. No staging/peer code is included.
+
+## Production release evidence
+
+- Retain direct-production delivery route selected earlier in this conversation under the current explicit deployment request. Separate Chatter staging963ba4b6 is preserved; no staging or peer implementation included.
+- Clean candidate product71cadac4e939a6d9051e821ded9557a80332250f:496tests passed,198subtests passed;252required PostgreSQL tests executed, zero skipped/errors. Node122chart/125feed checks and timezone checks pass.
+- Candidate Bridgewright assessment:5191/5191 required obligations passed, failed/skipped/errored/missing/unknown all0. Declaration digest506195ebd56892123c9974e5657771479ba6e31febf1c3ef8fb4d07cdef25f3c; control model dd9ec46338b46319778fcdd872cd383d4fdcb8dad22263b0324247b49e4989ee. Prior transient cleanup failures did not recur.
+- Candidate local performance:sealed attemptfe584d204f9199cf89effebc, clean; target revision71cadac4e939a6d9051e821ded9557a80332250f, package0390f3c42195856a67afcb1d62464052cebf3476, declared fixture digest7a9d352f2f6657048737117f20e5a1923063287c52c9d158643f834b4f0eecea. Runtime prepared at task-owned state directory; wrapper forwards exact prepared runtime.
+- First performance attempt6f67f25ea581001675cb5134 was invalid because decorative legend --pw-ping-delay values changed HTML bytes between repetitions (DOM2902both; HTML401137versus401192). Private fixture middleware fixes only that CSS phase at0ms; real performance clocks, chart rendering and animation execution remain active. This is a fixture-only lab condition, not production behavior or a waived assertion. Retry clean, fixture setup/teardown passed.
+- Performance controller/receipts live under /Users/fuchitalee/.local/share/render-operations/2026-11-04-sakana-chart; sealed state under /Users/fuchitalee/.local/share/pushinweight/sakana-chart-performance-20261104. No live web job/test/import was run.
+- Review confirms generic-brand loop, isolated-positive-only markers, existing focus dimming and last-slot beacon; unchanged API/data/counts/feed.
+- This final metadata-only release note preserves product assets/tests/dependencies and therefore reuses71cadac4verification. Record and verify the actual final deployment SHA independently.
