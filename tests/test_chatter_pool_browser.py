@@ -174,9 +174,8 @@ def test_declared_pool_controls_are_independent_reversible_and_read_only(
         }
     )
     assessment = assess_evidence(declaration, evidence)
-    destination = Path(
-        "/Users/fuchitalee/development/pushin-weight-v2/.local/g2-chatter-lfg-20261103"
-    )
+    destination = Path(__file__).resolve().parents[1] / ".ollija" / "tmp"
+    destination.mkdir(parents=True, exist_ok=True)
     (destination / "chatter-ui-evidence.json").write_text(
         evidence.model_dump_json(indent=2)
     )
