@@ -220,7 +220,10 @@ The cohort reserves at most 40 attempts, 25 MiB and 80 seconds per attempt:
 physical requests and uncertain reservations to 1,000. Each attempt allows at
 most 100 requests. This fits the pilot ceiling of 100 requests, 64 MiB and
 300 seconds; inspect the first attempt before continuing. Provider concurrency
-is one. Retained production captures can be selected through
+is one. Archive acquisition needs the existing `[benchmark]` extra (the locked
+PyArrow decoder). Install it in the isolated archive worker; the normal Render
+image does not include it. Metadata discovery, job planning and saved numeric
+replay do not require that decoder. Retained production captures can be selected through
 `core.data_source_backfill_reuse.reuse_capture`; it checks the original hash,
 keeps origin UUIDs as provenance, preserves historical clocks and uses the same
 numeric writer with zero provider calls.

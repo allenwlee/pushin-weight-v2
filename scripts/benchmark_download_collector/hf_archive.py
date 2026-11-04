@@ -13,7 +13,6 @@ from datetime import UTC, date, datetime
 from urllib.parse import urljoin, urlsplit
 
 import httpx
-import pyarrow.parquet as pq
 
 from .identity import require
 
@@ -217,6 +216,8 @@ class RangeFile(io.RawIOBase):
 
 def select_snapshot(budget, revision, cohort):
     """Missing source rows stay missing; no current counters fill past dates."""
+    import pyarrow.parquet as pq
+
     require(
         re.fullmatch("[0-9a-f]{40}", revision["id"]) is not None,
         "invalid archive revision",

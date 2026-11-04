@@ -214,3 +214,25 @@ def test_relationship_history_rejects_foreign_continuation(link):
     with pytest.raises(ValueError, match="foreign"):
         hf_relationship_history(client, "lab", kind="organization")
     assert client.requests == 1
+
+
+def test_revision_planning_does_not_require_optional_parquet_decoder():
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from scripts.benchmark_download_collector import hf_archive
+    program = """
+import builtins
+original = builtins.__import__
+def without_arrow(name, *args, **kwargs):
+    if name == 'pyarrow' or name.startswith('pyarrow.'):
+        raise ModuleNotFoundError('optional decoder intentionally absent')
+    return original(name, *args, **kwargs)
+builtins.__import__ = without_arrow
+from scripts.benchmark_download_collector.hf_archive import select_model_revisions
+rows = select_model_revisions([{'id': 'a' * 40, 'date': '2026-08-13T01:00:00Z', 'title': 'Update models.parquet'}])
+assert list(rows) == ['2026-08-13']
+"""
+    subprocess.run([sys.executable, '-c', program],
+        cwd=Path(hf_archive.__file__).resolve().parents[2], check=True)
