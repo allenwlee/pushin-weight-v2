@@ -25,7 +25,10 @@ def delay_status(now=None, *, activated_at=None):
         except (KeyError, ValueError, TypeError):
             continue
     last = max(successes) if successes else None
-    activated = min((row["created_at"] for row in rows), default=activated_at or now)
+    starts = [row["created_at"] for row in rows]
+    if activated_at is not None:
+        starts.append(activated_at)
+    activated = min(starts, default=now)
     return {
         "delayed": now - (last or activated) >= timedelta(minutes=45),
         "last_success_at": last.isoformat() if last else None,

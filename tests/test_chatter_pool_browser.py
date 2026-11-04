@@ -9,6 +9,40 @@ from tests.test_chatter_pool_readers import published
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
 
+def test_first_failed_run_keeps_activation_age_and_last_good_text(
+    live_server, monkeypatch, settings
+):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    settings.SECURE_SSL_REDIRECT = False
+    settings.ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+    monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", "shared")
+    cfg = chain_config()
+    cfg = cfg.model_copy(
+        update={
+            "public_enabled": True,
+            "chatter": cfg.chatter.model_copy(
+                update={"activated_at": timezone.now() - timedelta(minutes=46)}
+            ),
+        }
+    )
+    monkeypatch.setattr("monitor.editorial.views.load_editorial_config", lambda: cfg)
+    text = published("rest", "884290")
+    run = text.narrative.run
+    run.scope_key, run.discovery_state = "chatter:v1", "failed"
+    run.created_at = timezone.now() - timedelta(minutes=5)
+    run.save(update_fields=["scope_key", "discovery_state", "created_at"])
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page(extra_http_headers={"X-Forwarded-Proto": "https"})
+        page.goto(live_server.url + "/general/?lang=en", wait_until="networkidle")
+        assert page.locator("#chatter .chatter-delay").is_visible()
+        assert text.headline in page.locator("#chatter").inner_text()
+        browser.close()
+
+
 def test_general_pool_controls_and_archive_use_saved_pools(
     live_server, monkeypatch, settings
 ):
@@ -93,7 +127,10 @@ def test_declared_pool_controls_are_independent_reversible_and_read_only(
     results = []
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
-        page = browser.new_page(viewport={"width": 390, "height": 844}, extra_http_headers={"X-Forwarded-Proto": "https"})
+        page = browser.new_page(
+            viewport={"width": 390, "height": 844},
+            extra_http_headers={"X-Forwarded-Proto": "https"},
+        )
 
         def reset():
             page.goto(live_server.url + "/general/?lang=en")
