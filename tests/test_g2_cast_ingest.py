@@ -177,6 +177,21 @@ def test_unverified_identity_never_writes(tmp_path, image_entry):
 
 
 @pytest.mark.django_db(transaction=True)
+def test_unknown_source_and_credit_are_preserved_not_rejected(tmp_path, image_entry):
+    source, _, person, entry = image_entry
+    entry.pop("source_url")
+    entry.pop("credit")
+    row, created = ingest_image(
+        person=person,
+        entry=entry,
+        source_roots=[source],
+        storage=FileSystemStorage(location=tmp_path / "target"),
+        observed_at=timezone.now(),
+    )
+    assert created and row.source_url == "" and row.evidence["credit"] == ""
+
+
+@pytest.mark.django_db(transaction=True)
 def test_malformed_source_accreditation_is_rejected(tmp_path, image_entry):
     source, _, person, entry = image_entry
     entry["recorded_accreditation"] = {"creator": "unexpected key"}
@@ -275,7 +290,7 @@ def test_batch_preflights_every_entry_before_writing(
         "target_bucket": "test-bucket",
         "target_namespace": storage.location,
         "inventory_observed_at": timezone.now().isoformat(),
-        "entries": [entry, {**entry, "credit": "See parent"}],
+        "entries": [entry, {**entry, "source_url": "not-a-url"}],
     }
     manifest = tmp_path / "batch.json"
     manifest.write_text(json.dumps(batch))
@@ -287,7 +302,7 @@ def test_batch_preflights_every_entry_before_writing(
         "receipt": str(tmp_path / "receipt.jsonl"),
         "apply": True,
     }
-    with pytest.raises(CommandError, match="source_and_credit_required"):
+    with pytest.raises(CommandError, match="invalid_source_url"):
         call_command("ingest_g2_cast_assets", **arguments)
     assert PersonMedia.objects.count() == StaffMediaObject.objects.count() == 0
     batch["entries"] = [entry, {**entry}]

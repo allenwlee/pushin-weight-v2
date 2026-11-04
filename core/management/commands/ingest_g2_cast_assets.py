@@ -319,7 +319,7 @@ class Command(BaseCommand):
                     attribution_key = (
                         str(person.pk),
                         entry["expected_sha256"],
-                        entry["source_url"],
+                        entry.get("source_url", ""),
                     )
                     if attribution_key in seen_attributions:
                         raise ValueError("duplicate_batch_attribution")

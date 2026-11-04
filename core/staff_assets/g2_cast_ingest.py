@@ -90,10 +90,10 @@ def validate_entry(person, entry):
     expected = entry.get("expected_sha256")
     if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
         raise ValueError("expected_hash_required")
-    source_url = entry.get("source_url")
+    source_url = entry.get("source_url", "")
     try:
         source = urlsplit(source_url or "")
-        valid_source = (
+        valid_source = not source_url or (
             source.scheme in {"http", "https"}
             and bool(source.hostname)
             and not source.username
@@ -101,14 +101,10 @@ def validate_entry(person, entry):
         )
     except ValueError:
         valid_source = False
-    credit = entry.get("credit")
-    if (
-        not valid_source
-        or not isinstance(credit, str)
-        or not credit.strip()
-        or credit.casefold().startswith("see parent")
-    ):
-        raise ValueError("source_and_credit_required")
+    if not isinstance(source_url, str) or not valid_source:
+        raise ValueError("invalid_source_url")
+    if not isinstance(entry.get("credit", ""), str):
+        raise TypeError("invalid_credit")
     if str(person.pk) != entry.get("candidate_person_id"):
         raise ValueError("person_mismatch")
     identity = entry.get("identity_resolution") or {}
@@ -167,7 +163,7 @@ def _ingest_asset(*, person, entry, source_roots, storage, observed_at, kind, pr
         raise ValueError("source_roots_required")
     validate_entry(person, entry)
     expected = entry["expected_sha256"]
-    source_url = entry["source_url"]
+    source_url = entry.get("source_url", "")
     identity = entry["identity_resolution"]
     validate_media = _validated_image if kind == "image" else _validated_video
     data, width, height, extension, content_type = validate_media(
@@ -184,7 +180,7 @@ def _ingest_asset(*, person, entry, source_roots, storage, observed_at, kind, pr
         "identity_resolution": identity,
         "grade_as_recorded": entry.get("grade"),
         "reuse_as_recorded": entry.get("reuse_status", "unknown"),
-        "credit": entry["credit"],
+        "credit": entry.get("credit", ""),
         "credit_as_recorded": entry.get("credit_as_recorded"),
         "credit_origin": entry.get("credit_origin"),
         "license": entry.get("license"),
