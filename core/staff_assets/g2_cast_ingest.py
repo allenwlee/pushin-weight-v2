@@ -5,20 +5,17 @@ creates people or upgrades identity, suitability, or reuse review states.
 """
 
 import hashlib
-import io
 import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
-from django.db import connection, transaction
-from PIL import Image
 
 from core.media_storage import PrivateR2Storage
 from core.models import PersonMedia, StaffMediaObject
 from core.person_names import digest
-from core.staff_assets.media import MAX_BYTES, MAX_PIXELS
+from core.staff_assets.media import MAX_BYTES, inspect_image_bytes, locked_media_hash
 from monitor.editorial.media import validate_mp4
 
 
@@ -32,36 +29,7 @@ def _validated_image(filename, expected_sha256, roots):
         raise ValueError("invalid_image_size")
     if hashlib.sha256(data).hexdigest() != expected_sha256:
         raise ValueError("source_hash_mismatch")
-    with Image.open(io.BytesIO(data)) as image:
-        if image.format not in {"JPEG", "PNG", "WEBP", "GIF", "MPO"}:
-            raise ValueError("unsupported_image_format")
-        width, height = image.size
-        if width * height > MAX_PIXELS:
-            raise ValueError("image_dimensions_too_large")
-        image.verify()
-    with Image.open(io.BytesIO(data)) as image:
-        fmt = image.format
-        if fmt == "MPO":
-            frames = image.n_frames
-            if not 1 <= frames <= 10:
-                raise ValueError("too_many_mpo_frames")
-            total_pixels = 0
-            for index in range(frames):
-                image.seek(index)
-                total_pixels += image.width * image.height
-                if total_pixels > MAX_PIXELS:
-                    raise ValueError("image_dimensions_too_large")
-                image.load()
-        else:
-            image.load()
-        extension = {
-            "JPEG": "jpg",
-            "PNG": "png",
-            "WEBP": "webp",
-            "GIF": "gif",
-            "MPO": "mpo",
-        }[fmt]
-        content_type = Image.MIME[fmt]
+    width, height, extension, content_type = inspect_image_bytes(data, allow_mpo=True)
     return data, width, height, extension, content_type
 
 
@@ -196,6 +164,14 @@ def _ingest_asset(*, person, entry, source_roots, storage, observed_at, kind, pr
         evidence["recorded_accreditation"] = entry["recorded_accreditation"]
     if entry.get("source_child_sha256"):
         evidence["source_child_sha256"] = entry["source_child_sha256"]
+    # A manifest can describe an identity decision but cannot authenticate it.
+    # Keep the original claim and its lineage; confirmed review is stored separately.
+    legacy_evidence = evidence.copy()
+    evidence["identity_resolution"] = {
+        **identity,
+        "state": "unverified_claim",
+        "state_as_recorded": identity.get("state"),
+    }
     values = {
         "source_url": source_url,
         "original_url": entry.get("original_url") or "",
@@ -206,9 +182,7 @@ def _ingest_asset(*, person, entry, source_roots, storage, observed_at, kind, pr
     }
     fingerprint = digest(values)
     name = f"sha256/{expected[:2]}/{expected}.{extension}"
-    with transaction.atomic():
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT pg_advisory_xact_lock(%s)", [int(expected[:15], 16)])
+    with locked_media_hash(expected):
         obj = StaffMediaObject.objects.filter(pk=expected).first()
         if obj:
             name = obj.storage_name
@@ -228,7 +202,8 @@ def _ingest_asset(*, person, entry, source_roots, storage, observed_at, kind, pr
             (
                 row
                 for row in existing_rows
-                if row.availability == "available" and row.evidence == evidence
+                if row.availability == "available"
+                and row.evidence in (evidence, legacy_evidence)
             ),
             None,
         )

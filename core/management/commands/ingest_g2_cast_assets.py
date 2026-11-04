@@ -115,6 +115,23 @@ class Command(BaseCommand):
                             review_status="confirmed",
                         ).exists():
                             raise ValueError("confirmed_identity_name_changed")
+                        candidates = PersonMedia.objects.filter(
+                            person=person, media_id=entry.get("expected_sha256")
+                        ).only("review_history")
+                        if not any(
+                            isinstance(event, dict)
+                            and event.get("event") == "owner_confirmed_media"
+                            and event.get("person_id") == str(person.pk)
+                            and event.get("sha256") == entry.get("expected_sha256")
+                            and bool(event.get("source_reference"))
+                            for row in candidates
+                            for event in (
+                                row.review_history
+                                if isinstance(row.review_history, list)
+                                else []
+                            )
+                        ):
+                            raise ValueError("confirmed_name_does_not_verify_media")
                     elif proof.get("method") == "owner_selected_cast":
                         if (
                             not proof.get("source_pack_sha256")

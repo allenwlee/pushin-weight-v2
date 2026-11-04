@@ -121,7 +121,7 @@ def test_cast_selection_needs_confirmation_bound_to_exact_file(tmp_path):
         person.pk, permitted_reuse={"unknown"}, storage=storage
     )
     assert [ref.data for ref in pack.references] == [data]
-    assert pack.references[0].owner_confirmed
+    assert not pack.references[0].owner_confirmed
 
 
 @pytest.mark.django_db(transaction=True)
@@ -260,6 +260,40 @@ def test_unexpected_evidence_shape_does_not_hide_other_valid_references(tmp_path
             ref for ref in pack.references if ref.person_media_id == malformed.pk
         ).credit
         == ""
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_unexpected_nested_role_does_not_hide_other_references(tmp_path):
+    person = Person.objects.create()
+    storage = FileSystemStorage(location=tmp_path / "storage")
+    malformed, _ = saved_reference(tmp_path, person, storage, source="malformed")
+    valid, _ = saved_reference(tmp_path, person, storage, color="blue", source="valid")
+    PersonMedia.objects.filter(pk=malformed.pk).update(evidence={"source_role": []})
+    pack = read_graphics_references(
+        person.pk, permitted_reuse={"unknown"}, storage=storage
+    )
+    assert {r.person_media_id for r in pack.references} == {malformed.pk, valid.pk}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_storage_endpoint_failure_is_reported_as_gap(tmp_path):
+    from botocore.exceptions import EndpointConnectionError
+
+    person = Person.objects.create()
+    storage = FileSystemStorage(location=tmp_path / "storage")
+    row, _ = saved_reference(tmp_path, person, storage)
+
+    class UnavailableStorage:
+        def open(self, name, mode):
+            raise EndpointConnectionError(endpoint_url="https://example.org")
+
+    pack = read_graphics_references(
+        person.pk, permitted_reuse={"unknown"}, storage=UnavailableStorage()
+    )
+    assert any(
+        g.person_media_id == row.pk and "storage_unreadable" in g.reasons
+        for g in pack.gaps
     )
 
 

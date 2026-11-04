@@ -72,6 +72,8 @@ def test_real_import_is_idempotent_and_keeps_sources_separate(tmp_path, image_en
         observed_at=timezone.now(),
     )
     assert created and row.availability == "available"
+    assert row.evidence["identity_resolution"]["state"] == "unverified_claim"
+    assert row.evidence["identity_resolution"]["state_as_recorded"] == "verified"
     assert not row.source_verified and not row.individual_portrait
     assert row.suitability == "pending" and row.reuse_status == "unknown"
     with storage.open(row.media.storage_name, "rb") as stream:
@@ -84,6 +86,17 @@ def test_real_import_is_idempotent_and_keeps_sources_separate(tmp_path, image_en
         observed_at=timezone.now(),
     )
     assert not created and again.pk == row.pk
+    legacy_evidence = dict(row.evidence)
+    legacy_evidence["identity_resolution"] = dict(entry["identity_resolution"])
+    PersonMedia.objects.filter(pk=row.pk).update(evidence=legacy_evidence)
+    legacy, created = ingest_image(
+        person=person,
+        entry=entry,
+        source_roots=[source],
+        storage=storage,
+        observed_at=timezone.now(),
+    )
+    assert not created and legacy.pk == row.pk and legacy.evidence == legacy_evidence
     other = {**entry, "source_url": "https://example.org/other"}
     second, created = ingest_image(
         person=person,
@@ -264,7 +277,7 @@ def test_mpo_preserves_original_frames_and_rejects_excessive_frame_count(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_batch_preflights_every_entry_before_writing(
+def test_confirmed_name_alone_does_not_confirm_media(
     tmp_path, image_entry, monkeypatch
 ):
     from core.management.commands import ingest_g2_cast_assets
@@ -280,6 +293,62 @@ def test_batch_preflights_every_entry_before_writing(
         fingerprint="a" * 64,
     )
     entry["identity_resolution"]["confirmed_name"] = "Example"
+    storage = FileSystemStorage(location=tmp_path / "target")
+    storage.bucket_name = "test-bucket"
+    monkeypatch.setattr(ingest_g2_cast_assets, "storages", {"staff_media": storage})
+    batch = {
+        "schema": "g2-cast-import-batch/v1",
+        "target_database": connection.settings_dict["NAME"],
+        "target_bucket": "test-bucket",
+        "target_namespace": storage.location,
+        "inventory_observed_at": timezone.now().isoformat(),
+        "entries": [entry],
+    }
+    manifest = tmp_path / "batch.json"
+    manifest.write_text(json.dumps(batch))
+    with pytest.raises(CommandError, match="confirmed_name_does_not_verify_media"):
+        call_command(
+            "ingest_g2_cast_assets",
+            manifest=str(manifest),
+            source_root=[str(source)],
+            expected_database=connection.settings_dict["NAME"],
+            expected_bucket="test-bucket",
+            receipt=str(tmp_path / "receipt.jsonl"),
+            apply=True,
+        )
+    assert not PersonMedia.objects.exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_batch_preflights_every_entry_before_writing(
+    tmp_path, image_entry, monkeypatch
+):
+    from core.management.commands import ingest_g2_cast_assets
+
+    source, _, person, entry = image_entry
+    Language.objects.get_or_create(code="en")
+    locale, _ = Locale.objects.get_or_create(code="en", defaults={"language_id": "en"})
+    name = PersonName.objects.create(
+        person=person,
+        locale=locale,
+        full_name="Example",
+        review_status="confirmed",
+        fingerprint="a" * 64,
+    )
+    PersonNameEvidence.objects.create(
+        name=name,
+        source_kind="owner_supplied",
+        source_reference="owner:cast",
+        collection_method="explicit_owner_cast_selection",
+        observed_at=timezone.now(),
+        evidence_hash="b" * 64,
+    )
+    entry["identity_resolution"].update(
+        method="owner_selected_cast",
+        owner_selected_name="Example",
+        owner_source_reference="owner:cast",
+        source_pack_sha256="c" * 64,
+    )
     storage = FileSystemStorage(location=tmp_path / "target")
     storage.bucket_name = "test-bucket"
     storage.location = str(tmp_path / "target")
@@ -427,14 +496,27 @@ def test_batch_ingests_video_from_existing_storage(tmp_path, image_entry, monkey
     _, _, person, entry = image_entry
     Language.objects.get_or_create(code="en")
     locale, _ = Locale.objects.get_or_create(code="en", defaults={"language_id": "en"})
-    PersonName.objects.create(
+    name = PersonName.objects.create(
         person=person,
         locale=locale,
         full_name="Example",
         review_status="confirmed",
         fingerprint="a" * 64,
     )
-    entry["identity_resolution"]["confirmed_name"] = "Example"
+    PersonNameEvidence.objects.create(
+        name=name,
+        source_kind="owner_supplied",
+        source_reference="owner:cast",
+        collection_method="explicit_owner_cast_selection",
+        observed_at=timezone.now(),
+        evidence_hash="b" * 64,
+    )
+    entry["identity_resolution"].update(
+        method="owner_selected_cast",
+        owner_selected_name="Example",
+        owner_source_reference="owner:cast",
+        source_pack_sha256="c" * 64,
+    )
     data = b"".join(
         struct.pack(">I4s", 12, name) + b"data" for name in (b"ftyp", b"moov", b"mdat")
     )

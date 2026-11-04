@@ -4,7 +4,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 from django.core.exceptions import ValidationError
 from django.core.files.storage import storages
 
@@ -29,7 +29,7 @@ class Reference:
     individual_portrait: bool
     suitability: str
     evidence: dict
-    owner_confirmed: bool
+    owner_confirmed: bool | None
     review_history: list
 
 
@@ -100,15 +100,16 @@ def read_graphics_references(
         "existing-reference": 1,
         "source-frame": 2,
     }
+
+    def role_order(row):
+        evidence = row.evidence if isinstance(row.evidence, dict) else {}
+        role = evidence.get("source_role")
+        return role_rank.get(role, 3) if isinstance(role, str) else 3
+
     rows.sort(
         key=lambda row: (
             _media_kind(row) != "image",
-            role_rank.get(
-                row.evidence.get("source_role")
-                if isinstance(row.evidence, dict)
-                else None,
-                3,
-            ),
+            role_order(row),
             row.pk,
         )
     )
@@ -121,29 +122,18 @@ def read_graphics_references(
         if kind == "image" and images >= max_images or kind == "video" and videos >= 1:
             continue
         evidence = row.evidence if isinstance(row.evidence, dict) else {}
-        identity = evidence.get("identity_resolution")
-        owner_confirmed = (
-            isinstance(identity, dict)
-            and identity.get("state") == "verified"
-            and (
-                identity.get("method") == "owner_confirmed_media"
-                or (
-                    identity.get("method") == "owner_selected_cast"
-                    and identity.get("owner_confirmed_sha256") == row.media_id
-                    and bool(identity.get("owner_confirmation_reference"))
-                )
-            )
-            and identity.get("person_id") == str(person.pk)
-            and bool(identity.get("evidence"))
-        )
         history = row.review_history if isinstance(row.review_history, list) else []
-        owner_confirmed = owner_confirmed or any(
-            isinstance(event, dict)
-            and event.get("event") == "owner_confirmed_media"
-            and event.get("person_id") == str(person.pk)
-            and event.get("sha256") == row.media_id
-            and bool(event.get("source_reference"))
-            for event in history
+        owner_confirmed = (
+            True
+            if any(
+                isinstance(event, dict)
+                and event.get("event") == "owner_confirmed_media"
+                and event.get("person_id") == str(person.pk)
+                and event.get("sha256") == row.media_id
+                and bool(event.get("source_reference"))
+                for event in history
+            )
+            else None
         )
         credit = evidence.get("credit")
         reasons = []
@@ -175,7 +165,7 @@ def read_graphics_references(
         try:
             with storage.open(obj.storage_name, "rb") as stream:
                 data = stream.read(MAX_BYTES + 1)
-        except (OSError, ClientError, ValueError):
+        except (OSError, BotoCoreError, ClientError, ValueError):
             gaps.append(ReferenceGap(row.pk, ("storage_unreadable",)))
             continue
         if len(data) != obj.byte_size or hashlib.sha256(data).hexdigest() != obj.sha256:
