@@ -181,7 +181,10 @@ def campaign_specifications(contract, *, discovery_job_id=None):
         return {'job_key': key + ':' + suffix, 'source': source, 'purpose': 'catalog',
             'operation': 'model_history', 'contract': None,
             'definition': {'version': 1, 'scope': scope, 'campaign': dict(campaign),
-                'schedule': {'kind': 'manual', 'driver': 'manual'}, 'budgets': dict(budgets)}}
+                'schedule': {'kind': 'manual', 'driver': 'manual'},
+                # Arena's shared window retains the provider population before
+                # selecting this exact model. Byte/time/request caps still apply.
+                'budgets': {**budgets, 'items': 100000 if source == 'arena' else 100}}}
 
     if discovery_job_id:
         discovery = CollectionJob.objects.get(pk=discovery_job_id)
@@ -205,7 +208,7 @@ def campaign_specifications(contract, *, discovery_job_id=None):
             'requested_start_at': START, 'requested_end_at': END}]}
     return [catalog('hf', 'archive-discovery', {**common, 'role': ROLE, 'dataset_id': DATASET,
                 'max_pages': 40}), opencode,
-            catalog('arena', 'arena', {**common, 'arena_config': 'text',
+            catalog('arena', 'arena-native', {**common, 'models': [], 'arena_config': 'text',
                 'native_publication_identifiers': [IDENTIFIERS['arena']]})]
 
 
@@ -223,7 +226,7 @@ def validate_campaign_specification(spec, campaign_definition):
     require(all(campaign[name] == expected[name] for name in (
         'key', 'cohort_hash', 'kind', 'max_invocations', 'max_requests', 'role', 'phase')),
         '0813 campaign identity or ceilings changed')
-    maxima = frozen[0]['definition']['budgets']
+    maxima = frozen[2 if spec['source'] == 'arena' else 0]['definition']['budgets']
     require(all(type(campaign_definition['budgets'].get(name)) is int
                 and 0 < campaign_definition['budgets'][name] <= maximum
                 for name, maximum in maxima.items()), '0813 attempt ceiling exceeded')
@@ -232,7 +235,8 @@ def validate_campaign_specification(spec, campaign_definition):
                     and aware_instant(target['requested_end_at']) == aware_instant(END)
                     for target in spec['targets']), '0813 requested interval changed')
     else:
-        require(scope.get('models') == frozen[0]['definition']['scope']['models']
+        expected_scope = frozen[2 if spec['source'] == 'arena' else 0]['definition']['scope']
+        require(scope.get('models') == expected_scope['models']
                 and scope.get('brand_id') == 'deepseek' and scope.get('cohort_hash') == expected['cohort_hash']
                 and scope.get('global_start_at') == START and scope.get('cutoff') == END,
                 '0813 product selection or interval changed')

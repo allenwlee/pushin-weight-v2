@@ -109,6 +109,20 @@ def test_reviewed_cohort_is_idempotent_exact_and_preserves_x(monkeypatch):
     from core.data_source_backfill import prepare_campaign
     prepared = prepare_campaign(specifications)
     assert {job['source'].pk for job in prepared} == {'hf', 'arena', 'opencode'}
+    # The narrow native-publication route must reach acquisition. A product
+    # with empty provider_pins instead returns unmapped without any request.
+    from core.data_source_backfill import execute_phase, register_campaign
+    monkeypatch.setattr('core.data_source_backfill_target.validate_backfill_target', lambda **_: {})
+    acquired = []
+
+    def publication(claim, job, model, pins, budget, *, key):
+        acquired.append(job.scope['native_publication_identifiers'])
+        return [], {'outcome': 'history_unavailable', 'reason': 'fixture_no_publications'}
+
+    monkeypatch.setattr('core.model_history_collection._publication_evidence', publication)
+    arena = register_campaign([spec for spec in specifications if spec['source'] == 'arena'])[0]
+    execute_phase(arena.pk)
+    assert acquired == [[IDENTIFIERS['arena']]]
     assert all(spec.get('campaign', spec['definition'].get('campaign'))['max_invocations'] == 40
                for spec in specifications)
     expanded = deepcopy(specifications)
