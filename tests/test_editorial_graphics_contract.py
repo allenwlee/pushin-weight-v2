@@ -92,6 +92,7 @@ def test_matching_graphics_uses_existing_picture_and_preserves_unknown_reuse(
     from monitor.editorial.graphics_contract import (
         GraphicsResult,
         make_request,
+        no_art,
         receive_result,
     )
     from tests.editorial_support import person_photo
@@ -99,6 +100,7 @@ def test_matching_graphics_uses_existing_picture_and_preserves_unknown_reuse(
     monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", "shared")
     text = published("rest", "884104")
     request = make_request(text)
+    assert receive_result(request, no_art(request)) == "unavailable"
     _, _, photo = person_photo(
         "red", reuse="unknown"
     )  # Test input state, not a new product policy.
@@ -162,10 +164,12 @@ def test_matching_graphics_uses_existing_picture_and_preserves_unknown_reuse(
         with pytest.raises(ValueError, match="stored ownership"):
             receive_result(request, result)
         text.refresh_from_db()
-        assert "graphics_result" not in text.provenance
+        assert text.provenance["graphics_result"]["outcome"] == "unavailable"
         return
     assert receive_result(request, result) == "complete"
     assert receive_result(request, result) == "complete"
+    with pytest.raises(ValueError, match="conflicting graphics completion"):
+        receive_result(request, no_art(request))
     picture.refresh_from_db()
     assert picture.provenance["reuse_status"] == "unknown"
     text.refresh_from_db()

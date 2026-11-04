@@ -200,7 +200,7 @@ def receive_result(request, result):
     if (
         existing is not None
         and existing != payload
-        and existing["outcome"] != "pending"
+        and existing["outcome"] == "complete"
     ):
         raise ValueError("conflicting graphics completion")
     if result.outcome == "complete":
