@@ -5340,7 +5340,7 @@ class OriginalContentSource(models.Model):
     class Meta:
         db_table = "original_content_sources"
         ordering = ["position"]
-        indexes = [models.Index(fields=["snapshot_run"], condition=models.Q(snapshot_run__isnull=False),
+        indexes: ClassVar[list] = [models.Index(fields=["snapshot_run"], condition=models.Q(snapshot_run__isnull=False),
                                 name="idx_oc_source_snapshot")]
         constraints = [
             models.CheckConstraint(

@@ -319,7 +319,12 @@ def refresh_editorial(envelope):
              ignore_result=True, acks_late=True, reject_on_worker_lost=True,
              soft_time_limit=600, time_limit=660)
 def chatter_stage(stage, *args):
-    from monitor.editorial.chatter_chain import run_chatter, select_chatter, write_chatter, review_chatter
+    from monitor.editorial.chatter_chain import (
+        review_chatter,
+        run_chatter,
+        select_chatter,
+        write_chatter,
+    )
 
     functions = {"discover": run_chatter, "select": select_chatter, "write": write_chatter, "review": review_chatter}
     if stage not in functions:
