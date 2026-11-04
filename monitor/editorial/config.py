@@ -21,8 +21,9 @@ class Route(BaseModel):
         "https://openrouter.ai/api/v1/chat/completions",
         "https://api.deepinfra.com/v1/openai/chat/completions",
         "https://api.openai.com/v1/chat/completions",
+        "https://api.x.ai/v1/responses",
     ]
-    key_env: Literal["OPENROUTER_API_KEY", "DEEPINFRA_API_KEY", "OPENAI_API_KEY"]
+    key_env: Literal["OPENROUTER_API_KEY", "DEEPINFRA_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY_PW"]
     reasoning: Literal["none", "medium", "high", "xhigh", "ultra"] | None = None
     request_profile: Literal["editorial_editor_v1", "editorial_writer_v1"] | None = None
     timeout_seconds: int = Field(default=90, ge=1, le=300)
@@ -38,6 +39,7 @@ class Route(BaseModel):
             "https://openrouter.ai/api/v1/chat/completions": "OPENROUTER_API_KEY",
             DEEPINFRA_ENDPOINT: "DEEPINFRA_API_KEY",
             "https://api.openai.com/v1/chat/completions": "OPENAI_API_KEY",
+            "https://api.x.ai/v1/responses": "XAI_API_KEY_PW",
         }[self.endpoint]
         if self.key_env != expected:
             raise ValueError("credential must match explicit provider route")
@@ -53,10 +55,47 @@ class Route(BaseModel):
         return self
 
 
+class ChatterTrial(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+    scope: str = Field(min_length=1, max_length=70, pattern=r"^chatter-[a-z0-9-]+$")
+    limit_usd: float = Field(gt=0, le=20)
+    carry_usd: float = Field(ge=0, le=20)
+
+
+class ChatterWorkflow(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+    enabled: bool = False
+    discovery: Route | None = None
+    selector: Route | None = None
+    trial: ChatterTrial | None = None
+    max_call_usd: float = Field(default=5, gt=0, le=20)
+    discovery_reservation_usd: float = Field(default=3, gt=0, le=20)
+    selector_reservation_usd: float = Field(default=1.5, gt=0, le=20)
+    max_calls_per_run: int = Field(default=24, ge=1, le=40)
+    max_search_turns: int = Field(default=1, ge=1, le=2)
+    source_timeout_seconds: int = Field(default=45, ge=1, le=120)
+    source_request_limit: int = Field(default=4, ge=2, le=6)
+    source_post_limit: int = Field(default=50, ge=1, le=50)
+    source_request_reservation_usd: float = Field(default=0.10, gt=0, le=1)
+    giant_brands: list[str] = Field(default_factory=lambda: ["openai", "anthropic", "google", "spacexai"])
+
+    @model_validator(mode="after")
+    def validate_routes(self):
+        if self.enabled and any(
+            route is None or route.endpoint != "https://api.x.ai/v1/responses"
+            for route in (self.discovery, self.selector)
+        ):
+            raise ValueError("Chatter requires explicit Grok Responses discovery and selection routes")
+        if self.trial and self.trial.carry_usd > self.trial.limit_usd:
+            raise ValueError("Chatter carry-forward exceeds trial allowance")
+        return self
+
+
 class EditorialConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     enabled: bool = False
     public_enabled: bool = False
+    chatter: ChatterWorkflow = Field(default_factory=ChatterWorkflow)
     daily_usd: float = Field(default=0, ge=0, le=1000)
     assessment_usd: float = Field(default=0, ge=0, le=100)
     daily_calls: int = Field(default=0, ge=0, le=1000)
@@ -132,10 +171,12 @@ class EditorialConfig(BaseModel):
             or not self.daily_calls
         ):
             raise ValueError("derivatives require explicit media budgets")
-        if self.enabled:
+        if self.enabled or self.chatter.enabled:
             from .voices import load_bound_voices
 
             load_bound_voices(self)
+        if self.chatter.enabled and self.writer_route("chatter", "en") is None:
+            raise ValueError("Chatter requires its configured writer routes")
         return self
 
     def picture_mode(self, content_kind: str, source_platform: str = "") -> PictureMode:
@@ -170,6 +211,11 @@ def load_editorial_config(path: Path | None = None) -> EditorialConfig:
             if value.lower() not in {"true", "false"}:
                 raise ValueError(f"{name} must be true or false")
             data[field] = value.lower() == "true"
+    value = os.environ.get("CHATTER_ENABLED")
+    if value is not None:
+        if value.lower() not in {"true", "false"}:
+            raise ValueError("CHATTER_ENABLED must be true or false")
+        data["chatter"] = {**data.get("chatter", {}), "enabled": value.lower() == "true"}
     if "EDITORIAL_DAILY_USD" in os.environ:
         ceiling = Decimal(os.environ["EDITORIAL_DAILY_USD"])
         if not ceiling.is_finite() or not 0 <= ceiling <= Decimal(str(cfg.daily_usd)):

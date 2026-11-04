@@ -13,6 +13,7 @@ from core.measurement_taxonomy import digest, require
 from core.models import CollectionAttempt, CollectionJob, CollectionRun
 
 OPERATIONS = {
+    "chatter_search": ("content", {"x"}),
     "release_acquisition": ("content", {"hf", "github"}),
     "release_document_import": ("content", {"publisher_web", "hf", "github"}),
     "match_crosswalk": ("catalog", {"github", "openrouter", "arena", "opencode"}),
@@ -108,7 +109,7 @@ def validate_definition(
             )
         if driver == "external_render_cron":
             require(
-                purpose == "content" and source_id == "x" and operation == "x_cycle",
+                purpose == "content" and source_id == "x" and operation in {"x_cycle", "chatter_search"},
                 "external driver reserved for X cycle",
             )
     else:

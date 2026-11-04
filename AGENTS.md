@@ -95,6 +95,10 @@ including Claude Code and Codex.
   backfills, reconciliation, probes, and API-backed smoke tests.
 - Callers must declare a credential purpose. Never read the legacy
   `TWITTERAPI_IO_API_KEY`, default a purpose, or fall back between keys.
+- Owner-approved Chatter exception (2026-11-04): registered Chatter keyword
+  searches and source lookups on the existing headline worker may use the
+  scheduled key. Explicit staging validation uses the on-demand purpose and
+  its authorized aggregate allowance.
 - Secret values live only in Render-managed environment configuration (or an
   operator's untracked local secret store); never commit, print, or log them.
 

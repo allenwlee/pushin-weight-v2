@@ -71,7 +71,7 @@ def require_fence(row):
     return current
 
 
-def _completed_text_cost(response, request_metadata):
+def completed_text_cost(response, request_metadata):
     """Missing or invalid billing evidence keeps the full reservation."""
     usage = response.get("usage") if isinstance(response, dict) else None
     if not isinstance(usage, dict):
@@ -177,8 +177,11 @@ def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):
                 state="sent",
                 run__lease_until__lt=timezone.now(),
             ).update(state="ambiguous", error_code="lease_expired")
-            if OriginalContentCall.objects.filter(
-                budget_scope="editorial", state="sent"
+            from django.db.models import Q
+
+            if OriginalContentCall.objects.filter(state="sent").filter(
+                Q(budget_scope="editorial")
+                | Q(workflow_key__in=["chatter-discovery", "social-brief"])
             ).exists():
                 raise BudgetHeld("provider already in flight")
         call = EditorialCall.objects.create(
@@ -202,7 +205,7 @@ def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):
                 call.refresh_from_db()
                 import_call(call, run, request_metadata=request_metadata)
         raise
-    cost = _completed_text_cost(response, request_metadata) if kind == "text" else None
+    cost = completed_text_cost(response, request_metadata) if kind == "text" else None
     charged = min(call.reserved_usd, cost) if cost is not None else call.reserved_usd
     with transaction.atomic():
         advisory_lock(f"content-budget:editorial:{call.budget_day}")

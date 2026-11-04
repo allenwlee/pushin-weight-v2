@@ -131,10 +131,16 @@ def feed_payload(
     if shared_storage():
         from monitor.original_content_readers import shared_feed_payload
 
-        return shared_feed_payload(
+        if track == "chatter" and cfg.chatter.enabled and source_locale is None and editorial_group is None:
+            source_locale, editorial_group = locale, "rest"
+        payload = shared_feed_payload(
             cfg, track=track, locale=locale, cursor=cursor, limit=limit,
             source_locale=source_locale, editorial_group=editorial_group,
         )
+        if track == "chatter" and cfg.chatter.enabled:
+            from .chatter_status import delay_status
+            payload["delay"] = delay_status()
+        return payload
     if source_locale is not None or editorial_group is not None:
         raise ValueError("Chatter pools require shared storage")
     requested_locale = locale

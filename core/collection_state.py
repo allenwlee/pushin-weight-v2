@@ -32,6 +32,7 @@ from core.models import (
     CollectionJobTarget,
     CollectionRun,
     CollectionScopeRun,
+    OriginalContentCall,
     SearchQuery,
 )
 
@@ -319,6 +320,9 @@ def claim_job(
                 or job.source_id == "x" and job.purpose == "content"
                 and job.operation == "x_cycle" and job.mode == "recurring"
                 and manual_authorized
+                or job.source_id == "x" and job.purpose == "content"
+                and job.operation == "chatter_search" and job.mode in {"manual", "recurring"}
+                and manual_authorized
             )
             and (not bounded_campaign or job.campaign_id is not None),
             "typed claim requires a supported sealed campaign and operation",
@@ -471,6 +475,8 @@ def claim_job(
             marker_kind, marker_phase = "x_backfill_execution", "typed-backfill-v1"
         elif job.source_id == "x" and job.operation == "x_cycle":
             marker_kind, marker_phase = "x_cycle_execution", "typed-x-cycle-v1"
+        elif job.source_id == "x" and job.operation == "chatter_search":
+            marker_kind, marker_phase = "chatter_execution", "typed-chatter-v1"
         else:
             raise ValueError("typed collection claim has no execution marker")
         if (
@@ -480,6 +486,7 @@ def claim_job(
             or job.operation == "match_crosswalk"
             or job.source_id == "x" and job.operation == "x_backfill"
             or job.source_id == "x" and job.operation == "x_cycle"
+            or job.source_id == "x" and job.operation == "chatter_search"
         ) and not run.scopes.filter(
             scope_kind=marker_kind, scope_key="execution", phase=marker_phase,
         ).exists():
@@ -992,7 +999,23 @@ def checkpoint_scope(
         from core.collection_datasets import resolve_dataset
 
         if typed:
-            if scope_kind == "metric_fetch":
+            if scope_kind in {"chatter_search", "chatter_tool"}:
+                require(
+                    run.job.source_id == "x" and run.job.purpose == "content"
+                    and run.job.operation == "chatter_search" and run.content_run_id is not None
+                    and projection_contract is None and resource_observation is None
+                    and set(ownership) == {"query_id", "content_call_id"},
+                    "Chatter scope requires its typed authored-run ownership",
+                )
+                require(
+                    type(ownership["content_call_id"]) is int
+                    and OriginalContentCall.objects.filter(pk=ownership["content_call_id"],
+                        run_id=run.content_run_id, stage="discovery").exists()
+                    and (ownership["query_id"] is None or type(ownership["query_id"]) is int
+                         and SearchQuery.objects.filter(pk=ownership["query_id"], query_id__startswith="chatter:").exists()),
+                    "Chatter scope query or call belongs to another execution",
+                )
+            elif scope_kind == "metric_fetch":
                 require(
                     run.job.purpose == "metric"
                     and (
@@ -1379,6 +1402,11 @@ def finish_run(
                 job.source_id == "x" and job.purpose == "content"
                 and job.operation == "x_cycle" and request_count is not None
             )
+            chatter = (
+                job.source_id == "x" and job.purpose == "content"
+                and job.operation == "chatter_search" and run.content_run_id is not None
+                and request_count is not None
+            )
             product_match = (
                 job.purpose == "catalog" and job.operation == "match_crosswalk"
                 and request_count == 0
@@ -1393,7 +1421,7 @@ def finish_run(
                     or job.source_id == "openrouter" and job.operation == "model_inventory"
                 ))
                 or metric_collection or model_history or github_catalog or x_backfill
-                or x_cycle
+                or x_cycle or chatter
                 or product_match or release_acquisition,
                 "typed completion needs a supported collection operation",
             )

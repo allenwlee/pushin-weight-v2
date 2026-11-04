@@ -764,3 +764,31 @@ msgstr "已发布报告"
 #: monitor/templates/monitor/general/_pulse_framework.html
 msgid "Earlier published reports are shown here; they are not forecasts."
 msgstr "此处展示此前发布的报告，内容并非预测。"
+
+
+msgid "Source language"
+msgstr "来源语言"
+
+
+msgid "Group"
+msgstr "分组"
+
+
+msgid "Rest"
+msgstr "其他"
+
+
+msgid "Giants"
+msgstr "巨头"
+
+
+msgid "Read in"
+msgstr "阅读语言"
+
+
+msgid "Show"
+msgstr "显示"
+
+
+msgid "Chatter updates are delayed. The latest available story is shown."
+msgstr "Chatter 更新延迟，当前显示最近发布的报道。"

@@ -10,13 +10,15 @@ from django.utils import timezone
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 BASE = ("core", "0219_release_mapping_reconcile_index")
-TARGET = ("core", "0220_chatter_consideration_ownership")
+EXTENSION = ("core", "0220_chatter_consideration_ownership")
+TARGET = ("core", "0224_chatter_source_snapshot_owner")
 
 
 def test_populated_legacy_citations_survive_chatter_extension_without_new_tables():
     # Never discard another test/session's new-contract records to stage this cohort.
     executor = MigrationExecutor(connection)
-    operations = list(executor.loader.get_migration(*TARGET).operations)
+    assert not runtime_apps.get_model("core", "OriginalContentSource").objects.filter(snapshot_run__isnull=False).exists(), "Shared cohort contains source-owner references"
+    operations = list(executor.loader.get_migration(*EXTENSION).operations)
     for operation in operations:
         if isinstance(operation, migrations.SeparateDatabaseAndState):
             operations.extend(operation.state_operations)
@@ -57,6 +59,12 @@ def test_populated_legacy_citations_survive_chatter_extension_without_new_tables
         copy = current.get_model("core", "OriginalContentText").objects.get(pk=text.pk)
         assert copy.public_id == text.public_id and copy.headline == "Saved headline"
         assert set(connection.introspection.table_names()) == tables
+        # Old workers can finish writes after the additive migration, before code rollout.
+        late = old.get_model("core", "OriginalContent").objects.create(
+            run=run, workflow_key="social-brief", output_key=str(uuid4()),
+            brand_key_snapshot="", status="prepared", attempted_at=timezone.now(),
+        )
+        assert current.get_model("core", "OriginalContent").objects.get(pk=late.pk).consideration_reason == ""
         with connection.cursor() as cursor:
             cursor.execute("SELECT bool_and(convalidated) FROM pg_constraint WHERE conname LIKE 'fk_chatter_%%'")
             assert cursor.fetchone()[0] is True

@@ -1,0 +1,15 @@
+{
+  "headlines": {
+    "en-rest": "REST SOURCE POOL",
+    "en-giant": "GIANT SOURCE POOL"
+  },
+  "languages": [
+    "en",
+    "ja",
+    "zh-cn"
+  ],
+  "groups": [
+    "rest",
+    "giant"
+  ]
+}

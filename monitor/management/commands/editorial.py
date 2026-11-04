@@ -18,7 +18,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "action", choices=["preview", "status", "replay", "run", "picture", "poll"]
+            "action", choices=["preview", "status", "replay", "run", "picture", "poll", "chatter"]
         )
         parser.add_argument("--cutoff", help="Aware ISO-8601 cutoff; defaults to now")
         parser.add_argument("--assessment", type=int)
@@ -28,6 +28,7 @@ class Command(BaseCommand):
         parser.add_argument("--content-id")
         parser.add_argument("--picture-id")
         parser.add_argument("--execute", action="store_true")
+        parser.add_argument("--chatter-run", type=int, help="Resume saved Chatter stages without resending ambiguous calls")
 
     def handle(self, *args, **options):
         cfg = load_editorial_config()
@@ -81,7 +82,38 @@ class Command(BaseCommand):
                     raise CommandError(
                         "--execute is required for provider-capable work"
                     )
-                if action == "poll":
+                if action == "chatter":
+                    if cfg.chatter.trial is None:
+                        raise CommandError("The private Chatter tester requires a finite trial profile")
+                    from core.models import OriginalContentRun
+                    from monitor.editorial.chatter_chain import (
+                        review_chatter,
+                        run_chatter,
+                        select_chatter,
+                        write_chatter,
+                    )
+                    pending = []
+                    def queue(stage, *arguments):
+                        pending.append((stage, arguments))
+                    if options["chatter_run"]:
+                        run = OriginalContentRun.objects.get(pk=options["chatter_run"], workflow_key="chatter-discovery")
+                        result = {"status": "resuming", "run_id": run.pk}
+                        queue("select", run.pk)
+                    else:
+                        result = run_chatter({"schema_version": 1, "source_cycle_id": "operator-chatter",
+                            "cycle_started_at": timezone.now().isoformat(), "cutoff": cutoff.isoformat(),
+                            "dry_run": False, "credential_purpose": "on-demand"}, cfg=cfg, enqueue=queue)
+                    stages = []
+                    while pending:
+                        stage, arguments = pending.pop(0)
+                        if stage == "select":
+                            stages.append(select_chatter(*arguments, cfg=cfg, enqueue=queue))
+                        elif stage == "write":
+                            stages.append(write_chatter(*arguments, cfg=cfg, enqueue=queue))
+                        elif stage == "review":
+                            stages.append(review_chatter(*arguments, cfg=cfg))
+                    result["stages"] = stages
+                elif action == "poll":
                     if not options["picture_id"]:
                         raise CommandError("--picture-id is required")
                     from monitor.editorial.dispatch import dispatch_poll

@@ -2,9 +2,11 @@
 <section class="panel {{ panel.track }}" id="{{ panel.track }}" aria-labelledby="title-{{ panel.track }}">
   <div class="section-head">
     <h2 id="title-{{ panel.track }}"><svg class="icon" aria-hidden="true"><use href="#{{ panel.glyph }}"></use></svg>{{ panel.title }}</h2>
-    {% if panel.status != 'unavailable' %}<a class="editorial-archive human-pane" href="{% url 'editorial_archive' %}?track={{ panel.track }}&amp;lang={{ locale }}">{% translate "Story archive" %} ↗</a>{% endif %}
+    {% if panel.status != 'unavailable' %}<a class="editorial-archive human-pane" href="{% url 'editorial_archive' %}?track={{ panel.track }}&amp;lang={{ locale }}{% if panel.archive_query %}&amp;{{ panel.archive_query }}{% endif %}">{% translate "Story archive" %} ↗</a>{% endif %}
   </div>
   <div class="human-pane editorial-scroll" tabindex="0" aria-label="{{ panel.title }}">
+    {% include 'monitor/editorial/pools.html' with pool_controls=panel.pool_controls %}
+    {% if panel.delayed %}<p class="chatter-delay" role="status">{% translate "Chatter updates are delayed. The latest available story is shown." %}</p>{% endif %}
     {% if panel.framework %}
       {% include 'monitor/general/_pulse_framework.html' %}
       <details class="pulse-published-reports">

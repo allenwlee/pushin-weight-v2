@@ -14,6 +14,7 @@ from core.measurement_taxonomy import digest, require
 from core.models import CollectionJob, CollectionJobTarget
 
 OPTION_TYPES = {
+    "chatter_search": {"credential_purpose": str, "workflow_version": str, "pricing_sha256": str},
     "release_acquisition": {},
     "release_document_import": {},
     "model_inventory": {
@@ -341,7 +342,7 @@ def validate_settings(job):
         )
     if job.schedule_driver == "external_render_cron":
         require(
-            job.operation == "x_cycle"
+            job.operation in {"x_cycle", "chatter_search"}
             and job.source_id == "x"
             and job.purpose == "content",
             "external driver reserved for X cycle",

@@ -13,6 +13,7 @@ from django.views.decorators.http import require_GET
 from monitor.content_views import content_locale, private_response
 from monitor.editorial.readers import feed_payload as editorial_feed
 from monitor.editorial.views import access as editorial_access
+from monitor.editorial.views import pool_controls, pool_options
 from monitor.general_readers import SECTIONS, general_feed
 from monitor.views import (
     _home_preferences_namespace,
@@ -56,7 +57,13 @@ def editorial_panels(request, locale):
         if track == "pulse":
             panel["framework"] = {"status": "unavailable"}
         if cfg is not None:
-            feed = editorial_feed(cfg, track=track, locale=locale, limit=6)
+            options = pool_options(request, cfg, track, locale)
+            feed = editorial_feed(cfg, track=track, limit=6, **({"locale": locale} | options))
+            if options:
+                panel["pool_controls"] = pool_controls(request, options)
+                panel["archive_query"] = urlencode({"source_lang": options["source_locale"],
+                                                    "group": options["editorial_group"], "edition_lang": options["locale"]})
+                panel["delayed"] = feed.get("delay", {}).get("delayed", False)
             items = feed["items"]
             if track == "chatter":
                 primary = feed["hero"] or next(iter(items), None)
@@ -69,7 +76,7 @@ def editorial_panels(request, locale):
             panel.update(
                 items=items,
                 status="ready" if items else "empty",
-                fallback=feed["locale"] != locale,
+                fallback=bool(items) and feed["locale"] != feed["requested_locale"],
             )
         panels[track] = panel
     return panels
@@ -184,6 +191,9 @@ def _settings_links(state, request):
             params.pop("section", None)
             params.pop("locale", None)
             params.pop("notice", None)
+            for pool_key in ("source_lang", "edition_lang"):
+                if params.get(pool_key) == state["locale"]:
+                    params.pop(pool_key, None)
             params["lang"] = state["locale"]
             params[key] = value
             if key == "weights":
@@ -208,6 +218,7 @@ def _settings_links(state, request):
 def general(request):
     try:
         state = selection(request)
+        editorial = editorial_panels(request, state["locale"])
     except ValueError:
         return HttpResponseBadRequest("Invalid General selection")
     locale = state["locale"]
@@ -228,7 +239,7 @@ def general(request):
         context = {
             "state": state,
             "panels": panels,
-            "editorial": editorial_panels(request, locale),
+            "editorial": editorial,
             "locale": locale,
             "preferences_namespace": _home_preferences_namespace(request),
             "settings_links": _settings_links(state, request),

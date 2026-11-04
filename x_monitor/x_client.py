@@ -845,7 +845,23 @@ class XClient:
         ID lists longer than TWEETS_BY_IDS_CHUNK are split across calls.
         Missing/invalid IDs are simply absent from the result.
         """
-        out: dict[str, dict[str, Any]] = {}
+        return {
+            str(tweet["id"]): {
+                key: int(tweet[provider_key])
+                for key, provider_key in (
+                    ("quote_count", "quoteCount"), ("retweet_count", "retweetCount"),
+                    ("reply_count", "replyCount"), ("like_count", "likeCount"),
+                    ("view_count", "viewCount"), ("bookmark_count", "bookmarkCount"),
+                ) if tweet.get(provider_key) is not None
+            }
+            for tweet in self._tweets_by_ids(tweet_ids)
+        }
+
+    def get_posts_by_ids(self, tweet_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Original source text and attribution through the same bounded lookup."""
+        return {str(tweet["id"]): _normalize_tweet(tweet) for tweet in self._tweets_by_ids(tweet_ids)}
+
+    def _tweets_by_ids(self, tweet_ids):
         ids = [str(t) for t in tweet_ids if t]
         for i in range(0, len(ids), TWEETS_BY_IDS_CHUNK):
             chunk = ids[i : i + TWEETS_BY_IDS_CHUNK]
@@ -869,19 +885,7 @@ class XClient:
                 tid = str(t.get("id") or "")
                 if not tid or tid not in chunk:
                     continue
-                out[tid] = {
-                    key: int(t[provider_key])
-                    for key, provider_key in (
-                        ("quote_count", "quoteCount"),
-                        ("retweet_count", "retweetCount"),
-                        ("reply_count", "replyCount"),
-                        ("like_count", "likeCount"),
-                        ("view_count", "viewCount"),
-                        ("bookmark_count", "bookmarkCount"),
-                    )
-                    if t.get(provider_key) is not None
-                }
-        return out
+                yield t
 
     def run_followers(
         self,

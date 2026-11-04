@@ -56,6 +56,9 @@
     const next = new URL(location.href);
     next.searchParams.delete('locale');
     next.searchParams.delete('notice');
+    for (const key of ['source_lang', 'edition_lang']) {
+      if (next.searchParams.get(key) === state.locale) next.searchParams.delete(key);
+    }
     next.searchParams.set('lang', state.locale);
     for (const key of ['weights', 'audience', 'timezone']) next.searchParams.set(key, state[key]);
     return next;

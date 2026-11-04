@@ -252,7 +252,7 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 min hard cap per cycle
 # Exceed the headline task's 12-minute hard limit so a worker loss can safely
 # redeliver the envelope after its irreversible per-window slots are visible.
-CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 15 * 60}
+CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 15 * 60, "queue_order_strategy": "priority"}
 
 # Render cron is the only production scheduler. Keep beat empty so a future
 # worker cannot silently create a second 15-minute harvest scheduler.
@@ -260,6 +260,7 @@ CELERY_BEAT_SCHEDULE = {}
 # Event-driven release work is opt-in. It creates no schedule or beat entry.
 PRODUCT_RELEASE_BACKGROUND_ENABLED = env.bool("PRODUCT_RELEASE_BACKGROUND_ENABLED", default=False)
 CELERY_TASK_ROUTES = {
+    "monitor.tasks.chatter_stage": {"queue": "trend-narratives"},
     "monitor.tasks.acquire_product_release": {"queue": "trend-narratives"},
     "monitor.tasks.recover_due_product_releases": {"queue": "trend-narratives"},
     "monitor.tasks.refresh_editorial": {"queue": "trend-narratives"},

@@ -241,6 +241,9 @@ class ProGeneralStyleBrowserTests(StaticLiveServerTestCase):
                     " || getComputedStyle(document.querySelector('.filter-dropdown.is-portaled')).display === 'none'"
                 )
                 self.assertEqual(run.errors, [])
+                # Chip clicks fetch the feed alongside the chart. Drain both
+                # before fixture TRUNCATE can contend with a live request.
+                page.wait_for_load_state("networkidle")
                 run.context.close()
             finally:
                 browser.close()

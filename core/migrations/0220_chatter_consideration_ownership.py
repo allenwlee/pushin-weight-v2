@@ -125,7 +125,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='originalcontent',
             name='consideration_reason',
-            field=models.TextField(blank=True, default=''),
+            field=models.TextField(blank=True, db_default='', default=''),
         ),
         migrations.AddField(
             model_name='originalcontent',

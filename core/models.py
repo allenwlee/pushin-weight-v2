@@ -5096,7 +5096,7 @@ class OriginalContent(models.Model):
     consideration_state = models.CharField(max_length=16, null=True, blank=True,
         choices=[(value, value) for value in (
             "pending", "selected", "passed_over", "kept", "ineligible", "no_story")])
-    consideration_reason = models.TextField(blank=True, default="")
+    consideration_reason = models.TextField(blank=True, default="", db_default="")
     appearance_kind = models.CharField(max_length=24, null=True, blank=True,
         choices=[(value, value) for value in (
             "semantic_shortlist", "memory_only", "keyword_only", "release")])
@@ -5323,6 +5323,8 @@ class OriginalContentSource(models.Model):
     text = models.ForeignKey(OriginalContentText, null=True, on_delete=models.CASCADE, related_name="sources")
     content = models.ForeignKey(OriginalContent, null=True, on_delete=models.CASCADE,
                                related_name="consideration_sources")
+    snapshot_run = models.ForeignKey(OriginalContentRun, null=True, db_index=False,
+                                    on_delete=models.PROTECT, related_name="frozen_source_uses")
     usage = models.CharField(max_length=16, default="citation", db_default="citation",
         choices=[(value, value) for value in ("citation", "consideration", "background")])
     post = models.ForeignKey(Post, null=True, on_delete=models.PROTECT, related_name="original_content_citations")
@@ -5338,6 +5340,8 @@ class OriginalContentSource(models.Model):
     class Meta:
         db_table = "original_content_sources"
         ordering = ["position"]
+        indexes = [models.Index(fields=["snapshot_run"], condition=models.Q(snapshot_run__isnull=False),
+                                name="idx_oc_source_snapshot")]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(text__isnull=False, content__isnull=True, usage="citation")

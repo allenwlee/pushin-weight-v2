@@ -220,12 +220,15 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
                     (source["post_id"], source["dossier_source_id"]): source
                     for source in citation_values(read_sources(row, usage="consideration"))
                 }
+                owners = {(source.post_id, source.dossier_source_id): source.snapshot_run_id
+                          for source in row.consideration_sources.all()}
                 for value in values:
                     source = expected.get((value["post_id"], value["dossier_source_id"]))
                     if source is None or any(
                         source[key] != val for key, val in value.items() if key != "position"
                     ):
                         raise ValueError("citation does not match a considered source")
+                    value["snapshot_run_id"] = owners[(value["post_id"], value["dossier_source_id"])]
             producer = spec.get("producing_call")
             if not legacy:
                 if producer is None:
@@ -240,10 +243,13 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
                     raise ValueError("producing call does not match saved text")
             existing = row.localized_texts.filter(locale=spec["locale"]).first()
             if existing is not None:
-                saved_sources = list(existing.sources.order_by("position").values(
+                source_fields = [
                     "post_id", "dossier_source_id", "position", "url_snapshot",
                     "author_label_snapshot", "source_hash", "hash_basis",
-                ))
+                ]
+                if row.consideration_state is not None:
+                    source_fields.append("snapshot_run_id")
+                saved_sources = list(existing.sources.order_by("position").values(*source_fields))
                 if not append_locale or (
                     existing.headline != spec["headline"]
                     or existing.secondary != spec["byline"]

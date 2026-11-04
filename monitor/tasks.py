@@ -315,6 +315,18 @@ def refresh_editorial(envelope):
     return run_editorial(envelope)
 
 
+@shared_task(name="monitor.tasks.chatter_stage", autoretry_for=(), max_retries=0,
+             ignore_result=True, acks_late=True, reject_on_worker_lost=True,
+             soft_time_limit=600, time_limit=660)
+def chatter_stage(stage, *args):
+    from monitor.editorial.chatter_chain import run_chatter, select_chatter, write_chatter, review_chatter
+
+    functions = {"discover": run_chatter, "select": select_chatter, "write": write_chatter, "review": review_chatter}
+    if stage not in functions:
+        raise ValueError("unsupported Chatter stage")
+    return functions[stage](*args)
+
+
 @shared_task(name="monitor.tasks.poll_editorial_picture", autoretry_for=(), max_retries=0,
              ignore_result=True, acks_late=True, reject_on_worker_lost=True,
              soft_time_limit=170, time_limit=180)

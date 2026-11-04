@@ -837,3 +837,31 @@ msgstr "公開済みレポート"
 #: monitor/templates/monitor/general/_pulse_framework.html
 msgid "Earlier published reports are shown here; they are not forecasts."
 msgstr "これまでの公開済みレポートです。予測ではありません。"
+
+
+msgid "Source language"
+msgstr "情報源の言語"
+
+
+msgid "Group"
+msgstr "グループ"
+
+
+msgid "Rest"
+msgstr "その他"
+
+
+msgid "Giants"
+msgstr "大手"
+
+
+msgid "Read in"
+msgstr "記事の言語"
+
+
+msgid "Show"
+msgstr "表示"
+
+
+msgid "Chatter updates are delayed. The latest available story is shown."
+msgstr "Chatterの更新が遅れています。現在は最新の公開記事を表示しています。"
