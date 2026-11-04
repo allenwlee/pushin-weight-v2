@@ -179,7 +179,9 @@ the exact Product UUID, HF publisher UUID, confirmed company ownership,
 text-generation task, repository creation timestamp and native HF archive row
 key. Its default preview writes nothing. Applying it imports only the needed
 references, resolves local vocabulary IDs by code, records a local `llm-model`
-review and creates a frozen four-source metric contract. Production catalog
+review and creates a frozen four-source metric contract. The shared registry
+creates the timezone references declared by those definitions before inserting
+them; this does not assign UTC to measurements with unknown timing. Production catalog
 records and source-use statuses are unchanged. It enables the four source
 adapters in this backfill database without registering a recurring schedule.
 
