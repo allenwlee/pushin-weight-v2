@@ -20,8 +20,7 @@ def select_retained_payload(source, payload):
     require(isinstance(payload, dict) and payload.get('status') in {'ok', 'partial'}
             and isinstance(payload.get('rows'), list) and len(payload['rows']) <= 25000,
             'bounded retained payload required')
-    selected = deepcopy(payload)
-    selected['rows'] = []
+    selected = deepcopy({**payload, 'rows': []})
     lower, upper = native_date(START[:10]), native_date(END[:10])
     for row in payload['rows']:
         field = {'hf': 'repo_id', 'arena': 'model_name', 'openrouter': 'model_permaslug'}[source]

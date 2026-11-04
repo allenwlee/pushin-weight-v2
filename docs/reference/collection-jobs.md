@@ -199,6 +199,13 @@ operation. The initial jobs perform HF archive discovery, OpenCode history and
 Arena publication history. OpenRouter is a retained-evidence source for this
 cohort and has no fresh acquisition job.
 
+Metric mappings use the scopes emitted by the shared native adapters: `model`
+for HF and the empty scope for Arena, OpenRouter and OpenCode. Model is their
+subject kind; it is not a universal identifier scope. Arena uses a pinned
+native-publication selection with its exact model name and numeric contract.
+Its job key ends in `arena-native`; it does not use an unpinned product model
+entry, which the general history collector would classify as unmapped.
+
 HF discovery captures an immutable dataset head and saves each commit page,
 continuation and request receipt in PostgreSQL. After it completes, `plan-0813
 --contract UUID --job DISCOVERY_JOB_UUID` returns daily archive jobs from those
@@ -227,6 +234,18 @@ replay do not require that decoder. Retained production captures can be selected
 `core.data_source_backfill_reuse.reuse_capture`; it checks the original hash,
 keeps origin UUIDs as provenance, preserves historical clocks and uses the same
 numeric writer with zero provider calls.
+
+Admission combines durable usage and uncertain reservations across all `0813:`
+campaign revisions. Contract corrections preserve their original identities and
+per-revision report counters; they do not reset the recovery allowance. Claims
+lock the revision owners in one order before reserving requests. Archive
+connection and stream errors finalize a partial attempt through the shared
+failure path, retaining received bytes or unknown accounting for explicit resume.
+
+HF and OpenCode phases allow100 selected items. Arena's shared publication
+window allows100,000 source rows because it captures the provider population
+before selecting this model; its request, byte and elapsed-time limits still
+apply. The numeric contract admits only the reviewed0813 identifier.
 
 ```sh
 python manage.py backfiller_data_source --operation prepare-0813 \
