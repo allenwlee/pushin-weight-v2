@@ -330,8 +330,12 @@ def definition_rows():
 
 
 @transaction.atomic
-def register_definitions():
+def register_definitions(*, sources=None):
+    selected_sources = set(SOURCES) if sources is None else set(sources)
+    require(bool(selected_sources) and selected_sources <= SOURCES.keys(), 'unknown metric registry source')
     for key, (name, kind, url, adapter, normalizer) in SOURCES.items():
+        if key not in selected_sources:
+            continue
         source, created = DataSource.objects.get_or_create(
             pk=key,
             defaults={
@@ -360,11 +364,12 @@ def register_definitions():
             source.save(
                 update_fields=["website_url", "adapter_key", "identifier_normalizer"]
             )
-    for key in METRIC_TYPES:
+    rows = [row for row in definition_rows() if row['source_id'] in selected_sources]
+    selected_types = set(METRIC_TYPES) if sources is None else {row['metric_type_id'] for row in rows}
+    for key in sorted(selected_types):
         MetricType.objects.get_or_create(
             pk=key, defaults={"name": key.replace("_", " ").title()}
         )
-    rows = definition_rows()
     # These identities come from the installed typed definitions, never a
     # provider response or a guessed unit alias.
     units = {row[name] for row in rows for name in ("unit", "window_unit") if row[name]}

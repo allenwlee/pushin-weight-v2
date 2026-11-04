@@ -394,6 +394,15 @@ report. Production activation and automated scheduling remain separate work.
 
 ## Historical backfills and HF engagement
 
+For the database-backed 0813 campaign, use `backfiller_data_source` and the
+[reviewed backfill workflow](../../docs/reference/collection-jobs.md#deepseek-v4-pro-0813-campaign).
+It requires the explicit dedicated backfill connection, saves progress in
+PostgreSQL, and supports bounded HF archive discovery/range reads, sparse Arena
+publications, and OpenCode history with whole UTC days. Its previews are
+read-only. Completed HF/OpenCode jobs replay retained evidence without HTTP or
+duplicate values. Files in the standalone commands below remain transport/cache;
+they are not the database campaign's recovery state.
+
 HF repository likes and account followers use the existing shared state-measurement
 storage. Observed totals can decrease. Timestamp-based reconstructions describe
 relationships still present when fetched; they omit later removals and are stored

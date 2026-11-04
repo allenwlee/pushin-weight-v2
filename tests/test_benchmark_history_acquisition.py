@@ -95,6 +95,55 @@ def test_archive_rejects_full_file_when_range_ignored():
         budget.get("https://huggingface.co/file", 0, 4)
 
 
+def test_native_archive_row_identity_skips_unrelated_row_groups():
+    import io
+    import re
+    import httpx
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from scripts.benchmark_download_collector.hf_archive import ArchiveBudget, select_snapshot
+
+    output = io.BytesIO()
+    pq.write_table(pa.Table.from_pylist([
+        {'_id': '1' * 24, 'id': 'other/model', 'downloads': 999},
+        {'_id': '2' * 24, 'id': 'selected/model', 'downloads': 0},
+    ]), output, row_group_size=1)
+    binary = output.getvalue()
+    ranges = []
+    def send(request):
+        start, end = map(int, re.fullmatch(r'bytes=(\d+)-(\d+)', request.headers['range']).groups())
+        ranges.append((start, end - start + 1))
+        return httpx.Response(206, content=binary[start:end + 1],
+            headers={'content-range': f'bytes {start}-{end}/{len(binary)}'})
+    reader = ArchiveBudget(httpx.Client(transport=httpx.MockTransport(send)), workers=1)
+    result = select_snapshot(reader, {'id': 'a' * 40, 'date': '2026-08-20T01:00:00Z'},
+        [{'identifier': 'selected/model', '_id': '2' * 24}])
+    assert result['rows'] == [{'id': 'selected/model', 'downloads': 0}]
+    group = pq.ParquetFile(io.BytesIO(binary)).metadata.row_group(0)
+    for i in range(group.num_columns):
+        column = group.column(i)
+        if column.path_in_schema in result['columns']:
+            offset = column.dictionary_page_offset if column.has_dictionary_page else column.data_page_offset
+            assert (offset, column.total_compressed_size) not in ranges
+
+
+def test_legacy_and_database_archive_selection_use_latest_actual_utc_publication():
+    from scripts.benchmark_download_collector.hf_archive import select_model_revisions
+
+    commits = [
+        {'id': 'a' * 40, 'date': '2026-08-13T03:00:00Z', 'title': 'Update models.parquet'},
+        {'id': 'b' * 40, 'date': '2026-08-14T01:00:00+02:00', 'title': 'Update models.parquet'},
+        {'id': 'c' * 40, 'date': '2026-08-14T00:00:00Z', 'title': 'Update models.parquet'},
+    ]
+    all_days = select_model_revisions(commits)
+    assert {day: row['id'] for day, row in all_days.items()} == {
+        '2026-08-13': 'b' * 40, '2026-08-14': 'c' * 40}
+    assert select_model_revisions(commits, start_date='2026-08-13', end_date='2026-08-14') == {
+        '2026-08-13': all_days['2026-08-13']}
+    with pytest.raises(ValueError):
+        select_model_revisions(commits, start_date='0813')
+
+
 def test_relationship_pagination_preserves_failure_and_discards_profiles():
     import httpx
 

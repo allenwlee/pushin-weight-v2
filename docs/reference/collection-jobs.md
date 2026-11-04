@@ -1,6 +1,11 @@
 # Collection jobs, evidence and recovery
 
-Shared-reference schema through `0168_rg5_remove_superseded_storage` is live in staging and production on `3d4d341daa52ed3d184184d5b35f27717813d381`. The permanent local PostgreSQL test database matches that physical schema. Runtime and retained-history verification is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
+This reference describes the repository's collection schema through
+`0221_affiliation_trigger_column_permissions`. Models and the ordered migrations
+define the storage contract; inspect each destination's migration ledger before
+using it. The shared local test database can include another branch's migrations
+and must be used through its exclusive-use wrapper. Runtime and retained-history
+verification is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
@@ -109,6 +114,15 @@ for inspection, reporting or pausing. Registration accepts `--specifications` as
 a reviewed JSON instruction, then saves the instruction in `collection_jobs`.
 Deleting that input does not remove the job's recovery state.
 
+The facade requires an explicit `BACKFILL_DATABASE_URL` and an already-selected
+Django connection to database/login `xbackfiller` on Render resource
+`dpg-dbfemu2vcj2c73fsafe0-a`. It checks both configuration and the authenticated
+session before registration or provider work. Collection requires migration
+0221; inspection reports a missing upgrade without trying to migrate or changing
+connections. `inspect`, `report` and registration previews use read-only
+transactions. Report pages contain at most 100 jobs; continue with the returned
+`next_after` value through `--after`.
+
 Each definition pins a typed `backfiller-data-source-v1` campaign identity,
 cohort hash, source role, acquisition/replay phase, contract partition and finite
 invocation/request ceilings. Claiming locks campaign peers in a deterministic
@@ -117,9 +131,110 @@ releases its known unused reservation. An interrupted attempt retains ambiguous
 usage; recovery cannot erase requests whose outcome was never recorded.
 
 The facade invokes the same adapters and run records as normal collection. It
-adds no wrapper run or campaign/checkpoint table. Catalog continuation reuses the
+uses the existing `CollectionCampaign`, jobs, attempts, scopes and archives;
+it adds no feature table or column. Catalog continuation reuses the
 logical run; partial numeric replay starts a new attempt with its saved cursor.
 Reports keep written, reused, pending and rejected evidence separate.
+
+### Schema preparation and X continuity
+
+`upgrade_data_source_backfill --stage inspect` checks the same destination and
+shows the additive migration plan through 0195. `--stage expand --apply` applies
+that stage without removing old columns. The bounded `archives`, `invocations`,
+`continuations`, `cursors`, `bounds`, `targets`, `rare_hits`, `request_uses`,
+`pages`, `retry_reviews` and `x_runtime` stages preserve existing source evidence
+and project current execution records. Resume each projection with its returned
+`last_id` through `--after-id`; an interrupted batch keeps committed records.
+`--limit` is 1–500. `--stage archives` also requires one explicit `--table`.
+
+`--stage parity --verify-only` compares archive/source content and typed query
+ownership. The invocation, continuation, cursor, page, retry-review and X-runtime
+stages also accept `--verify-only`. Page parity compares receipt contents,
+including ordered received IDs, rather than only counting child records.
+The runtime projection accepts both recorded model-counter formats and preserves
+the original staging receipt, retry state and known byte totals. Missing
+accounting is not inferred as zero. Retry-review projection copies only existing
+operator consents for their exact original requests; it grants no new retry.
+
+These commands do not retire storage. Physical contraction follows the existing
+guarded migration graph after source parity, final deltas and compatible active
+consumers have been verified. Live collectors remain operating throughout.
+X and datasource jobs use separate ownership, claims and request accounting;
+datasource work does not take X's harvest-writer lock or change its yield controls.
+
+### DeepSeek V4 Pro 0813 campaign
+
+`prepare-0813` accepts reviewed reference JSON through `--reference`. It validates
+the exact Product UUID, HF publisher UUID, confirmed company ownership,
+text-generation task, repository creation timestamp and native HF archive row
+key. Its default preview writes nothing. Applying it imports only the needed
+references, resolves local vocabulary IDs by code, records a local `llm-model`
+review and creates a frozen four-source metric contract. Production catalog
+records and source-use statuses are unchanged. It enables the four source
+adapters in this backfill database without registering a recurring schedule.
+
+| Source | Reviewed identifier |
+| --- | --- |
+| HF | `deepseek-ai/DeepSeek-V4-Pro-0813`; archive row key `6a7d346291824bcb9cd27db7` |
+| OpenCode | `deepseek/deepseek-v4-pro-0813`; `/data/deepseek/deepseek-v4-pro-0813.json` |
+| Arena | `deepseek-v4-pro-high-20260813`; `text/overall` |
+| OpenRouter | `deepseek/deepseek-v4-pro-20260813` |
+
+The Product UUID is `20d66250-db05-40bf-8fda-94b610bed0c7`. `plan-0813
+--contract UUID` returns reviewed job specifications with no writes or provider
+requests. Register its `specifications` array through the normal `register`
+operation. The initial jobs perform HF archive discovery, OpenCode history and
+Arena publication history. OpenRouter is a retained-evidence source for this
+cohort and has no fresh acquisition job.
+
+HF discovery captures an immutable dataset head and saves each commit page,
+continuation and request receipt in PostgreSQL. After it completes, `plan-0813
+--contract UUID --job DISCOVERY_JOB_UUID` returns daily archive jobs from those
+saved coordinates. The HF reader uses the reviewed native row key to skip
+unrelated file groups, captures each physical range request and runs serially.
+Optional archive columns, including trending score, are admitted only when the
+snapshot contains them. Absent fields or models never become synthetic zeros.
+
+The requested interval is August 13 through September 10, 2026: UTC
+`[2026-08-13T00:00:00Z, 2026-09-11T00:00:00Z)`. OpenCode uses sealed typed
+targets with these explicit bounds. It retains the complete export and selects
+unchanged reported dates; it does not infer years, repair source dates or
+backdate today's measurements. A valid export with no requested history gets
+the explicit `requested_history_unavailable` outcome. Failed source retrieval or
+invalid source data remains a failure.
+
+The cohort reserves at most 40 attempts, 25 MiB and 80 seconds per attempt:
+1,000 MiB and 3,200 seconds in total. The shared campaign separately limits
+physical requests and uncertain reservations to 1,000. Each attempt allows at
+most 100 requests. This fits the pilot ceiling of 100 requests, 64 MiB and
+300 seconds; inspect the first attempt before continuing. Provider concurrency
+is one. Retained production captures can be selected through
+`core.data_source_backfill_reuse.reuse_capture`; it checks the original hash,
+keeps origin UUIDs as provenance, preserves historical clocks and uses the same
+numeric writer with zero provider calls.
+
+```sh
+python manage.py backfiller_data_source --operation prepare-0813 \
+  --reference "$(cat reviewed-0813-reference.json)"
+python manage.py backfiller_data_source --operation prepare-0813 \
+  --reference "$(cat reviewed-0813-reference.json)" --apply
+python manage.py backfiller_data_source --operation plan-0813 --contract CONTRACT_UUID
+python manage.py backfiller_data_source --operation register \
+  --specifications "$(cat reviewed-0813-jobs.json)"
+python manage.py backfiller_data_source --operation register \
+  --specifications "$(cat reviewed-0813-jobs.json)" --apply
+python manage.py backfiller_data_source --operation execute --job JOB_UUID --apply
+python manage.py backfiller_data_source --operation resume --job JOB_UUID --apply
+python manage.py backfiller_data_source --operation report --campaign CAMPAIGN_KEY
+python manage.py backfiller_data_source --operation replay --job COMPLETED_JOB_UUID --apply
+```
+
+`reviewed-0813-jobs.json` contains the returned `specifications` array, not the
+whole preview object. Reference JSON combines the copied `product`, `publisher`,
+`ownership` and `task` evidence, with `product.hf_archive_row_id` from the retained
+HF catalog identity. Input files are transport only. Completed OpenCode and
+archive-only HF jobs replay their saved numeric evidence with no HTTP and no
+duplicate values. Production promotion remains a separate operation.
 
 ## Reviewed provider identities
 
@@ -339,3 +454,10 @@ runtime pointers cleared. Catalog/content runs are excluded after pointers are
 scrubbed in foreign-key order. See [Staging refresh](../operations/staging-data-refresh.md).
 Production deployment, source activation and actual historical batches are
 separate operations; none follows from registering or inspecting a job.
+
+A retained production capture is imported as a selected backfill observation with
+its original run, archive and content hash recorded as provenance. Once imported,
+`python manage.py backfiller_data_source --operation replay-retained --run <backfill-run-uuid>`
+verifies the committed selection without writes. Add `--apply` to replay through
+the shared numeric writer. Both paths use the database capture and make zero
+provider requests; the original transport file is unnecessary.

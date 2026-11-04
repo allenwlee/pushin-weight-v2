@@ -17,6 +17,7 @@ from core.collection_state import (
     BusyJob,
     checkpoint_scope,
     claim_job,
+    fenced_run,
     finish_run,
 )
 from core.measurement_taxonomy import digest, require
@@ -388,6 +389,10 @@ def execute_model_history(job_id, *, budget=None, key=None):
     )
     validate_model_pins(job)
     history_statistics_contract(job)
+    if job.scope.get('backfill_archive_only') is True:
+        from core.data_source_backfill_hf import validate_archive_only
+
+        validate_archive_only(job)
     claim = claim_job(job.pk, typed=True)
     job = _runtime_publication_window(claim, job)
     owned_client = None
@@ -487,6 +492,20 @@ def _execute_models(claim, job, budget, *, key, before):
     items = [0]
     if job.source_id == "hf":
         acquire_hf_archives(claim, job, budget)
+        if job.scope.get('backfill_archive_only') is True:
+            from django.db.models import Sum
+            from core.models import CollectionRequest
+
+            requests = CollectionRequest.objects.filter(attempt__run_id=claim.run_id)
+            accounted = not requests.filter(accounting_complete=False).exists()
+            with fenced_run(claim) as (_, run):
+                run.physical_bytes_received = requests.aggregate(total=Sum('response_bytes'))['total'] if accounted else None
+                run.save(update_fields=['physical_bytes_received'])
+            return finish_run(claim, typed=True, status='success',
+                request_count=requests.count(), selected_count=1,
+                success_count=int(run.scopes.filter(scope_kind='archive_import',
+                    result_run__success_count__gt=0).exists()),
+                physical_accounting_complete=accounted)
     scope = job.scope
     if (
         job.source_id in {"openrouter", "arena"}

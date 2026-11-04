@@ -283,6 +283,10 @@ def execute_due_job(job, decision, budget):
     from core.model_inventory import execute_model_inventory
 
     if job.operation == "collect_metrics":
+        from core.data_source_backfill_opencode import (
+            history_window,
+            is_opencode_history,
+        )
         now = timezone.now().astimezone(UTC)
         config = job.contract.source_configuration[job.source_id]
         end = now.date() - timedelta(
@@ -295,6 +299,10 @@ def execute_due_job(job, decision, budget):
             if job.source_id == "openrouter"
             else end
         )
+        if is_opencode_history(job):
+            from datetime import date
+            first, last = history_window(job)
+            start, end = date.fromisoformat(first), date.fromisoformat(last)
         before = budget.remaining
         preceding_attempt = job.last_attempt_id
         from scripts.benchmark_download_collector.sources import SourceError

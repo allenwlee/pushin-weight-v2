@@ -122,6 +122,14 @@ class Command(BaseCommand):
                     or job.operation != "collect_metrics"
                 ):
                     raise ValueError("metric job/contract/source mismatch")
+                from core.data_source_backfill_opencode import (
+                    history_window,
+                    is_opencode_history,
+                )
+                if is_opencode_history(job):
+                    first, last = history_window(job)
+                    require((options['start_date'], options['end_date']) == (first, last),
+                            'requested dates differ from sealed OpenCode history bounds')
                 for flag, name in (
                     ("max_requests", "requests"),
                     ("max_seconds", "seconds"),
@@ -209,6 +217,11 @@ class Command(BaseCommand):
                                 )
                             ],
                         )
+                        if options['job'] and is_opencode_history(job):
+                            from core.data_source_backfill_opencode import (
+                                select_history_window,
+                            )
+                            result = select_history_window(result, params['start_date'], params['end_date'])
                     else:
                         result = sources.arena(
                             budget,

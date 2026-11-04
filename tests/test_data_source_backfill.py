@@ -35,6 +35,8 @@ def isolated_campaign_target(monkeypatch):
         'core.management.commands.backfiller_data_source.validate_backfill_target',
         lambda **_: {'schema_ready': True, 'database': 'local-test'},
     )
+    monkeypatch.setattr('core.data_source_backfill_target.validate_backfill_target',
+                       lambda **_: {'schema_ready': True, 'database': 'local-test'})
 
 
 def specification():
@@ -201,6 +203,7 @@ def test_default_inspect_and_registration_preview_are_nonmutating(monkeypatch):
 
 def test_campaign_report_is_paged_and_usage_is_shared(monkeypatch):
     from copy import deepcopy
+
     from core import data_source_backfill as service
 
     first = specification()
@@ -224,6 +227,7 @@ def test_campaign_report_is_paged_and_usage_is_shared(monkeypatch):
 
 def test_command_reports_use_readonly_transactions(monkeypatch):
     from django.db import connection
+
     from core import data_source_backfill as service
 
     registered()
@@ -258,6 +262,7 @@ def test_campaign_report_does_not_parse_full_last_attempt_payload(monkeypatch):
 
 def test_legacy_usage_streams_archives_instead_of_caching_all_bodies(monkeypatch):
     from django.db.models import QuerySet
+
     from core.data_source_backfill import campaign_usage
 
     job = legacy_campaign_job()

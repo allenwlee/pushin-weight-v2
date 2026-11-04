@@ -567,7 +567,7 @@ class RequestCapture:
     def __init__(self, claim):
         self.claim = claim
 
-    def start(self, scope, endpoint_url, *, etag=None):
+    def start(self, scope, endpoint_url, *, etag=None, request_config=None, request_category=None):
         from core.collection_state import fenced_run
 
         with fenced_run(self.claim):
@@ -582,6 +582,8 @@ class RequestCapture:
                 requested_start_date=scope.requested_start_date,
                 requested_end_date=scope.requested_end_date,
                 request_revision=scope.requested_revision,
+                request_config=request_config,
+                request_category=request_category,
             )
 
     def received(

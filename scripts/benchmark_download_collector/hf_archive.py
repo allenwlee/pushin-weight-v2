@@ -9,7 +9,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -18,11 +18,38 @@ import pyarrow.parquet as pq
 from .identity import require
 
 
+def select_model_revisions(commits, *, start_date=None, end_date=None):
+    """Latest model-file commit per UTC publication day for both backfill callers.
+
+    Preserve the original source timestamp and API ordering for equal clocks.
+    An optional end date is exclusive.
+    """
+    require(isinstance(commits, list) and len(commits) <= 10000, 'archive commit selection cap')
+    require(all(isinstance(row, dict) for row in commits), 'invalid archive commit rows')
+    for value in (start_date, end_date):
+        require(value is None or date.fromisoformat(value).isoformat() == value, 'explicit archive day required')
+    selected, clocks = {}, {}
+    for row in commits:
+        if 'models.parquet' not in row.get('title', ''):
+            continue
+        require(re.fullmatch('[0-9a-f]{40}', row.get('id', '')), 'invalid archive revision')
+        at = datetime.fromisoformat(row['date'])
+        require(at.tzinfo is not None and at.utcoffset() is not None, 'archive publication timezone required')
+        at = at.astimezone(UTC)
+        day = at.date().isoformat()
+        if (start_date is not None and day < start_date) or (end_date is not None and day >= end_date):
+            continue
+        if day not in selected or at > clocks[day]:
+            selected[day] = {key: row[key] for key in ('id', 'date', 'title')}
+            clocks[day] = at
+    return selected
+
+
 class ArchiveBudget:
     """One physical request/byte/deadline budget shared by range-read workers."""
 
     def __init__(
-        self, client, *, requests=150000, max_bytes=32 * 1024**3, seconds=7200
+        self, client, *, requests=150000, max_bytes=32 * 1024**3, seconds=7200, workers=4
     ):
         self.client = client
         self.requests = self.bytes = 0
@@ -30,6 +57,8 @@ class ArchiveBudget:
         self.deadline = time.monotonic() + seconds
         self.lock = threading.Lock()
         self.not_before = 0.0
+        require(type(workers) is int and 1 <= workers <= 4, "invalid archive concurrency")
+        self.workers = workers
 
     def get(self, url, start, length):
         require(0 <= start and 0 < length <= 128 * 1024**2, "invalid range")
@@ -157,8 +186,8 @@ class RangeFile(io.RawIOBase):
         return start, data
 
     def prefetch(self, ranges):
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            for start, data in pool.map(self.fetch, ranges):
+        def retain(results):
+            for start, data in results:
                 self.cache[start] = data
                 self.range_hashes.append(
                     {
@@ -167,6 +196,11 @@ class RangeFile(io.RawIOBase):
                         "sha256": hashlib.sha256(data).hexdigest(),
                     }
                 )
+        if self.budget.workers == 1:
+            retain(map(self.fetch, ranges))
+        else:
+            with ThreadPoolExecutor(max_workers=self.budget.workers) as pool:
+                retain(pool.map(self.fetch, ranges))
 
     def read(self, n=-1):
         n = min(n if n >= 0 else self.size - self.pos, self.size - self.pos)

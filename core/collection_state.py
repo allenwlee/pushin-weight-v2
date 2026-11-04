@@ -302,6 +302,13 @@ def claim_job(
     )
     validate_job(job)
     if typed:
+        from core.data_source_backfill_opencode import (
+            history_window,
+            is_opencode_history,
+        )
+        if is_opencode_history(job):
+            history_window(job)
+    if typed:
         require(
             (
                 job.purpose == "catalog"
@@ -1021,6 +1028,12 @@ def checkpoint_scope(
                     run.job, run, scope_kind, scope_key, ownership,
                     projection_contract, resource_observation,
                 )
+            elif scope_kind == "hf_archive_catalog":
+                from core.data_source_backfill_hf import validate_discovery_scope
+
+                require(projection_contract is None and resource_observation is None,
+                        "unexpected HF archive catalog owner")
+                validate_discovery_scope(run.job, scope_key, ownership)
             elif scope_kind == "model_catalog" and run.job.source_id == "openrouter":
                 require(projection_contract is None, "unexpected inventory contract")
                 from core.model_inventory import validate_typed_scope
