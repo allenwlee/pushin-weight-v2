@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from core import data_source_backfill as service
+from core.data_source_backfill_target import validate_backfill_target
 from core.collection_jobs import set_job_state
 from core.models import CollectionJob, DataSource, MetricCollectionContract
 
@@ -24,6 +25,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         operation, apply = options['operation'], options['apply']
         try:
+            target = validate_backfill_target(
+                require_write=apply and operation not in {'inspect', 'report'})
+            if not target['schema_ready']:
+                self.stdout.write(json.dumps({'target': target, 'operation': operation,
+                    'applied': False, 'requires_schema_upgrade': True}))
+                return
             selection = {'campaign_key': options['campaign'], 'job_id': options['job']}
             if operation == 'register':
                 if not options['specifications']:
@@ -53,6 +60,7 @@ class Command(BaseCommand):
                             set_job_state(job.pk, 'paused')
                 report = service.report_campaign(**selection)
             report.update(operation=operation, applied=apply and operation not in {'inspect', 'report'})
+            report['target'] = target
             self.stdout.write(json.dumps(report, ensure_ascii=False))
         except (ValueError, TypeError, KeyError, CollectionJob.DoesNotExist,
                 DataSource.DoesNotExist, MetricCollectionContract.DoesNotExist) as exc:

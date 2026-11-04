@@ -28,6 +28,15 @@ from tests.test_collection_jobs import job as base_job
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
+@pytest.fixture(autouse=True)
+def isolated_campaign_target(monkeypatch):
+    """Campaign behavior uses local fixtures; target checks have their own tests."""
+    monkeypatch.setattr(
+        'core.management.commands.backfiller_data_source.validate_backfill_target',
+        lambda **_: {'schema_ready': True, 'database': 'local-test'},
+    )
+
+
 def specification():
     original = base_job()
     publisher = upsert_account(source="github", external_identifier="42",
