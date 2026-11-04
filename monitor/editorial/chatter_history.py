@@ -306,19 +306,24 @@ def save_query(text, *, development=None):
     return query
 
 
-def appearance_history(development, cutoff, *, periods=8):
+def appearance_history(development, cutoff, *, periods=8, observed_at=None):
     if type(periods) is not int or not 1 <= periods <= 96:
         raise ValueError("history period limit exceeded")
+    # Keep the board anchored to its source cycle even when a queue crosses a
+    # fifteen-minute boundary. The current discovery is observed after its cutoff.
+    observed_at = observed_at or cutoff
+    if observed_at < cutoff:
+        raise ValueError("history observation precedes its cycle")
     slots = [interval_start(cutoff) - timedelta(minutes=15 * index) for index in range(periods)]
     runs = {run.interval: run for run in OriginalContentRun.objects.filter(
         workflow_key=WORKFLOW, scope_key=SCOPE, interval__in=slots, facts_as_of__lte=cutoff,
     ).annotate(discovery_observed=Exists(OriginalContentCall.objects.filter(
         run_id=OuterRef("pk"), workflow_key=WORKFLOW, stage="discovery",
-        state="completed", completed_at__lte=cutoff,
+        state="completed", completed_at__lte=observed_at,
     )))}
     appearances = {row.run_id: row for row in OriginalContent.objects.filter(
         development=development, run_id__in=[run.pk for run in runs.values()],
-        attempted_at__lte=cutoff, discovery_call__completed_at__lte=cutoff,
+        attempted_at__lte=observed_at, discovery_call__completed_at__lte=observed_at,
         appearance_kind="semantic_shortlist", discovery_call__state="completed",
         discovery_call__run_id=F("run_id"), discovery_call__workflow_key=WORKFLOW,
     )}

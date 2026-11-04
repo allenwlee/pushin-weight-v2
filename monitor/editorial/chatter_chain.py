@@ -444,7 +444,7 @@ def _discover(
         if query:
             pages = list(
                 sources.client.run_search_pages(
-                    query,
+                    f"({query})",
                     max_results=20,
                     max_pages=1,
                     max_per_page=20,
@@ -521,7 +521,13 @@ def _discover(
             save_query(item["keyword_query"], development=story)
             assigned.update(item["post_ids"])
         for identity in dict.fromkeys(keyword_ids):
-            if identity in assigned:
+            source = packet.get(identity)
+            if (
+                identity in assigned
+                or not source
+                or source["created_at"] is None
+                or datetime.fromisoformat(source["created_at"]) < keyword_start
+            ):
                 continue
             story, _ = EditorialStory.objects.get_or_create(
                 development_key="chatter-source:" + digest(identity),
