@@ -139,7 +139,7 @@ def feed_payload(
         )
         if track == "chatter" and cfg.chatter.enabled:
             from .chatter_status import delay_status
-            payload["delay"] = delay_status()
+            payload["delay"] = delay_status(activated_at=cfg.chatter.activated_at)
         return payload
     if source_locale is not None or editorial_group is not None:
         raise ValueError("Chatter pools require shared storage")

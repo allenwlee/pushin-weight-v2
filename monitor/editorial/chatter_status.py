@@ -9,7 +9,7 @@ from core.models import OriginalContentRun
 from .chatter_history import SCOPE, WORKFLOW
 
 
-def delay_status(now=None):
+def delay_status(now=None, *, activated_at=None):
     now = now or timezone.now()
     rows = list(
         OriginalContentRun.objects.filter(workflow_key=WORKFLOW, scope_key=SCOPE)
@@ -25,7 +25,7 @@ def delay_status(now=None):
         except (KeyError, ValueError, TypeError):
             continue
     last = max(successes) if successes else None
-    activated = min((row["created_at"] for row in rows), default=now)
+    activated = min((row["created_at"] for row in rows), default=activated_at or now)
     return {
         "delayed": now - (last or activated) >= timedelta(minutes=45),
         "last_success_at": last.isoformat() if last else None,

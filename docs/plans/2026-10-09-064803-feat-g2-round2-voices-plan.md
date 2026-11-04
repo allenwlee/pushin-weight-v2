@@ -513,6 +513,8 @@ Integrate main's affiliation trigger fix through `0221_affiliation_trigger_colum
 **Test scenarios:** normal interval trigger to stored story; duplicate trigger; worker loss after send; stale fence; quiet interval; review/provider/media failure; source count/link read-back; matching late artwork; browser locale and Chatter group switches, empty pool and runtime replacement without a generation request; EN/rest first visit, JA/Chinese site-language defaults, and independent edition language; healthy keep/no-story resets delay age, failures do not, 45-minute boundary, initial activation and successful recovery.
 **Verification:** functional regression net spans caller, database and rendered content. Bound runtime/cost and ensure one slow art job cannot silently exhaust the text budget. Load fix-ui before browser-facing implementation.
 
+**Activation clock:** configure an explicit timezone-aware `CHATTER_ACTIVATED_AT` with the Chatter enablement. Before any run reaches the database, use that timestamp for the initial 45-minute grace period; thereafter successful evaluation timestamps remain authoritative. This extends the existing strict configuration, adds no persistence column, and covers a broker failure before the first run. Frozen selection/writer input construction and request reconstruction live in `chatter_inputs.py`, with the same shared queue/tester callers and immutable request hashes.
+
 ### U25. Deliver repair and new workflow to staging in order
 
 **Goal / requirements:** observe repair-first and subsequent new-workflow behavior on staging; C-R10–17 and KTD-C6–7.
