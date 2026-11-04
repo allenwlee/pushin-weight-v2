@@ -7,7 +7,7 @@ from typing import Literal
 
 import yaml
 from django.conf import settings
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from x_monitor.deepinfra import DEEPINFRA_ENDPOINT, DEEPSEEK_0731_MODEL
 
@@ -65,6 +65,7 @@ class ChatterTrial(BaseModel):
 class ChatterWorkflow(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     enabled: bool = False
+    activated_at: AwareDatetime | None = None
     discovery: Route | None = None
     selector: Route | None = None
     trial: ChatterTrial | None = None
@@ -216,6 +217,11 @@ def load_editorial_config(path: Path | None = None) -> EditorialConfig:
         if value.lower() not in {"true", "false"}:
             raise ValueError("CHATTER_ENABLED must be true or false")
         data["chatter"] = {**data.get("chatter", {}), "enabled": value.lower() == "true"}
+    if "CHATTER_ACTIVATED_AT" in os.environ:
+        data["chatter"] = {
+            **data.get("chatter", {}),
+            "activated_at": os.environ["CHATTER_ACTIVATED_AT"],
+        }
     if "EDITORIAL_DAILY_USD" in os.environ:
         ceiling = Decimal(os.environ["EDITORIAL_DAILY_USD"])
         if not ceiling.is_finite() or not 0 <= ceiling <= Decimal(str(cfg.daily_usd)):

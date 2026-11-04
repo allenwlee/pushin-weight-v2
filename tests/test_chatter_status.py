@@ -10,6 +10,30 @@ from tests.test_original_content_consideration import consideration
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
+def test_activation_clock_without_any_dispatched_run():
+    from monitor.editorial.chatter_status import delay_status
+
+    now = timezone.now()
+    activated = now - timedelta(minutes=45)
+    assert delay_status(now, activated_at=activated)["delayed"]
+    assert not delay_status(now - timedelta(seconds=1), activated_at=activated)[
+        "delayed"
+    ]
+
+
+def test_runtime_activation_time_is_aware_and_rejects_a_naive_value(monkeypatch):
+    from monitor.editorial.config import load_editorial_config
+
+    monkeypatch.setenv("CHATTER_ACTIVATED_AT", "2026-11-04T01:00:00+00:00")
+    assert (
+        load_editorial_config().chatter.activated_at.isoformat()
+        == "2026-11-04T01:00:00+00:00"
+    )
+    monkeypatch.setenv("CHATTER_ACTIVATED_AT", "2026-11-04T01:00:00")
+    with pytest.raises(ValueError, match="timezone"):
+        load_editorial_config()
+
+
 def test_45_minute_boundary_uses_successful_evaluation_including_keep():
     from monitor.editorial.chatter_status import delay_status
 
