@@ -56,10 +56,20 @@ CATEGORY = "x_backfill_staging"
 
 
 def validate_staging(scope):
-    require(os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT") == "staging",
+    from monitor.backfill_database import identity, scope_relocated
+
+    moved = scope_relocated(scope)
+    dedicated = scope.get("response_storage") == "database"
+    if dedicated:
+        actual = identity()
+        require(os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT") == "backfill"
+                and actual["name"] == actual["user"] == "xbackfiller"
+                and scope.get("database_host") == actual["host"],
+                "dedicated backfill database required")
+    require(moved or dedicated or os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT") == "staging",
             "direct ingestion requires staging environment")
-    require(scope.get("staging_host") == settings.DATABASES["default"].get("HOST")
-            and bool(scope.get("staging_host")), "staging database host changed")
+    require(moved or dedicated or (scope.get("staging_host") == settings.DATABASES["default"].get("HOST")
+            and bool(scope.get("staging_host"))), "staging database host changed")
     # The frozen Call A author roles can name brands outside the keyword set.
     # Check their foreign keys before HTTP admission, not after a paid response.
     needed = set(scope.get("brands", []))

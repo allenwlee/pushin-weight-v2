@@ -199,7 +199,7 @@ def execution_options(
 def selected_runtime(recipe, runtime=None):
     """Attest reviewed code without modifying frozen recipe hashes or job keys."""
     spec = copy.deepcopy(recipe["spec"])
-    staging = any(w["collection_definition"]["scope"].get("response_storage") == "staging"
+    staging = any(w["collection_definition"]["scope"].get("response_storage") in {"staging", "database"}
                   for w in recipe["template"]["windows"])
     required = RUNTIME_MODULES | ({"monitor/backfill_staging.py", "monitor/backfill_collection.py", "monitor/run_lock.py"} if staging else set())
     if runtime is not None:
