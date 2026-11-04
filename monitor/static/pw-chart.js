@@ -258,6 +258,29 @@
     ctx.restore();
   }
 
+  function drawIsolatedPoints(chart, args) {
+    var dataset = chart.data.datasets[args.index];
+    var points = (args.meta && args.meta.data) || [];
+    var brand = brandOfDataset(dataset);
+    var focused = focusedBrand();
+    var ctx = chart.ctx;
+    ctx.save();
+    ctx.fillStyle = colorWithAlpha(dataset.borderColor,
+      focused && brand !== focused ? DIM_LINE_ALPHA : 1);
+    // Gaps leave a lone nonzero bucket without a line segment. Its marker
+    // preserves that observation; the last slot already has its beacon.
+    for (var index = 0; index < points.length - 1; index++) {
+      var point = points[index];
+      if (!point || point.skip || !Number.isFinite(dataset.data[index]) ||
+          dataset.data[index] <= 0 || !Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
+      if ((index > 0 && Number.isFinite(dataset.data[index - 1])) ||
+          Number.isFinite(dataset.data[index + 1])) continue;
+      shapePath(ctx, brandStyle(brand).shape, point.x, point.y, 3);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawCountLabels(chart, args) {
     var dataset = chart.data.datasets[args.index];
     var area = chart.chartArea;
@@ -323,6 +346,7 @@
       if (!dataset._isTotalLine || args.meta.hidden) return;
       var phase = (nowMs() % PING_CYCLE_MS) / PING_CYCLE_MS;
       drawBeacon(chart, args, phase);
+      drawIsolatedPoints(chart, args);
       if (focusedBrand() && brandOfDataset(dataset) === focusedBrand()) drawCountLabels(chart, args);
     },
   };
