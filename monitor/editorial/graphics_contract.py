@@ -211,6 +211,11 @@ def receive_result(request, result):
             revision_hash=request.fingerprint,
             state="complete",
         )
+        if picture.text_id not in (None, text.pk) or picture.run_id not in (
+            None,
+            request.run_id,
+        ):
+            raise ValueError("graphics stored ownership mismatch")
         if not picture.source_media_id or picture.source_media_id not in [
             asset.sha256 for asset in result.references
         ]:

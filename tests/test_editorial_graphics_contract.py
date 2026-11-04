@@ -82,7 +82,10 @@ def test_late_result_cannot_replace_the_current_story(monkeypatch):
 
 
 @pytest.mark.usefixtures("editorial_storage")
-def test_matching_graphics_uses_existing_picture_and_preserves_unknown_reuse(monkeypatch):
+@pytest.mark.parametrize("contradiction", [None, "text", "run"])
+def test_matching_graphics_uses_existing_picture_and_preserves_unknown_reuse(
+    monkeypatch, contradiction
+):
     from hashlib import sha256
 
     from core.models import EditorialPicture
@@ -148,6 +151,19 @@ def test_matching_graphics_uses_existing_picture_and_preserves_unknown_reuse(mon
             },
         ],
     )
+    if contradiction:
+        other = published("giant", "884105")
+        setattr(
+            picture,
+            contradiction,
+            other if contradiction == "text" else other.narrative.run,
+        )
+        picture.save(update_fields=[contradiction])
+        with pytest.raises(ValueError, match="stored ownership"):
+            receive_result(request, result)
+        text.refresh_from_db()
+        assert "graphics_result" not in text.provenance
+        return
     assert receive_result(request, result) == "complete"
     assert receive_result(request, result) == "complete"
     picture.refresh_from_db()
