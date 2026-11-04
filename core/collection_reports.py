@@ -208,11 +208,11 @@ def _redact(value):
     return value
 
 
-def job_status(job_id, *, now=None):
-    return _redact(_job_status(job_id, now=now))
+def job_status(job_id, *, now=None, include_run_report=True):
+    return _redact(_job_status(job_id, now=now, include_run_report=include_run_report))
 
 
-def _job_status(job_id, *, now=None):
+def _job_status(job_id, *, now=None, include_run_report=True):
     now = now or timezone.now()
     job = CollectionJob.objects.select_related(
         "source", "active_run", "last_attempt", "last_success"
@@ -229,7 +229,7 @@ def _job_status(job_id, *, now=None):
         if job.next_retry_at and job.next_retry_at > now
         else job.state
     )
-    attempt_report = run_report_document(attempt) if attempt else {}
+    attempt_report = run_report_document(attempt) if attempt and include_run_report else {}
     coverage = attempt_report.get("coverage", [])
     matching_progress = None
     if job.operation == "match_crosswalk":
@@ -262,6 +262,7 @@ def _job_status(job_id, *, now=None):
         "selected_models": scope.get("models", []),
         "qualification": scope.get("qualification"),
         "coverage": coverage,
+        "run_report_included": include_run_report,
         "coverage_evaluations": len(coverage),
         "unevaluated_cells": max(0, len(scope.get("models", [])) - len(coverage)),
         "all_requested_history_available": attempt_report.get(

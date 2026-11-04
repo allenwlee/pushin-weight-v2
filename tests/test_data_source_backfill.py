@@ -241,6 +241,21 @@ def test_command_reports_use_readonly_transactions(monkeypatch):
     assert seen == ['on']
 
 
+def test_campaign_report_does_not_parse_full_last_attempt_payload(monkeypatch):
+    from core.data_source_backfill import report_campaign
+
+    job = registered()
+    set_job_state(job.pk, 'ready')
+    claim = claim_job(job.pk, invocation_id='summary', manual_authorized=True, typed=True)
+    finish_run(claim, status='success', typed=True, request_count=0,
+               physical_accounting_complete=True)
+    monkeypatch.setattr('core.collection_reports.run_report_document',
+                        lambda *_: pytest.fail('summary parsed full run report'))
+    cell = report_campaign(campaign_key='campaign')['cells'][0]
+    assert cell['last_attempt']['run_id'] == str(claim.run_id)
+    assert cell['run_report_included'] is False
+
+
 def test_legacy_usage_streams_archives_instead_of_caching_all_bodies(monkeypatch):
     from django.db.models import QuerySet
     from core.data_source_backfill import campaign_usage

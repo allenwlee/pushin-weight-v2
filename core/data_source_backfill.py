@@ -215,7 +215,8 @@ def report_campaign(*, campaign_key=None, job_id=None, limit=25, after_job_key=N
         if key not in usages:
             usages[key] = campaign_usage(job)
         cells.append(
-            {**job_status(job.pk), "campaign": campaign, "usage": usages[key]}
+            {**job_status(job.pk, include_run_report=False), "campaign": campaign,
+             "usage": usages[key]}
         )
     require(not job_id or len(cells) == 1, "campaign job not found")
     return {
