@@ -73,7 +73,7 @@ class ChatterWorkflow(BaseModel):
     discovery_reservation_usd: float = Field(default=3, gt=0, le=20)
     selector_reservation_usd: float = Field(default=1.5, gt=0, le=20)
     max_calls_per_run: int = Field(default=24, ge=1, le=40)
-    max_search_turns: int = Field(default=1, ge=1, le=2)
+    max_search_turns: int = Field(default=2, ge=1, le=2)
     source_timeout_seconds: int = Field(default=45, ge=1, le=120)
     source_request_limit: int = Field(default=4, ge=2, le=6)
     source_post_limit: int = Field(default=50, ge=1, le=50)

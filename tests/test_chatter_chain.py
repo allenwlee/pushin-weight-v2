@@ -22,6 +22,31 @@ from tests.test_chatter_discovery import selection
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
+def test_failed_search_attempt_is_briefed_without_counting_a_fresh_story():
+    from monitor.editorial.chatter_chain import _history
+    from monitor.editorial.chatter_history import SCOPE, WORKFLOW
+    from tests.test_original_content_consideration import consideration, producer
+
+    content = consideration()
+    run = content.run
+    run.scope_key = SCOPE
+    run.discovery_state = "failed"
+    run.save(update_fields=["scope_key", "discovery_state"])
+    call = producer(content, "en")
+    call.workflow_key, call.stage = WORKFLOW, "discovery"
+    call.response_payload = {
+        "data": {"stories": [17], "keyword_query": ""},
+        "search_activity": [],
+    }
+    call.save(update_fields=["workflow_key", "stage", "response_payload"])
+    candidates, _, brief = _history(timezone.now() + timedelta(seconds=1))
+    assert candidates == {} and brief["subjects"] == []
+    assert len(brief["recent_searches"]) == 1
+    assert brief["recent_searches"][0]["discovery_state"] == "failed"
+    assert brief["recent_searches"][0]["tool_activity"] == []
+    assert brief["recent_searches"][0]["stories"] == []
+
+
 def chain_config():
     route = Route(
         model="grok-4.7",

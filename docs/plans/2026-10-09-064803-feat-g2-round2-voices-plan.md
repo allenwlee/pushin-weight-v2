@@ -515,6 +515,9 @@ Integrate main's affiliation trigger fix through `0221_affiliation_trigger_colum
 
 **Activation clock:** configure an explicit timezone-aware `CHATTER_ACTIVATED_AT` with the Chatter enablement. Before any run reaches the database, use that timestamp for the initial 45-minute grace period; thereafter successful evaluation timestamps remain authoritative. This extends the existing strict configuration, adds no persistence column, and covers a broker failure before the first run. Frozen selection/writer input construction and request reconstruction live in `chatter_inputs.py`, with the same shared queue/tester callers and immutable request hashes.
 
+**Native search protocol:** the tool-enabled Responses request uses the saved working agent form without forcing JSON text formatting during tool execution. Allow two assistant turns for the search-and-answer sequence; retain the instruction to perform one semantic search and count actual tools separately. Tool-free selection still requests JSON mode. Validate the final task JSON and observed semantic execution before source collection or healthy evaluation; proposed search arguments are not results. The [xAI tool-usage contract](https://docs.x.ai/developers/tools/tool-usage-details) distinguishes assistant turns from individual tool calls, so `max_turns` is not reported as the physical search count.
+Recent-search briefings include completed provider attempts whose subsequent discovery was held, tagged with their failed state and excluding malformed story-note fragments. They remain separate from accepted candidates, healthy evaluations and fresh appearance counts; a failed or unproductive attempt must remain available for avoiding repetition.
+
 ### U25. Deliver repair and new workflow to staging in order
 
 **Goal / requirements:** observe repair-first and subsequent new-workflow behavior on staging; C-R10–17 and KTD-C6–7.

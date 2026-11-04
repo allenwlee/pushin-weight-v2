@@ -14,6 +14,62 @@ from tests.test_original_content_consideration import consideration
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
+def test_native_tool_input_preserves_query_identity_and_semantic_threshold():
+    from monitor.editorial.providers import search_activity
+
+    observed = search_activity(
+        {
+            "output": [
+                {
+                    "type": "custom_tool_call",
+                    "call_id": "xs_fixture",
+                    "name": "x_semantic_search",
+                    "input": json.dumps(
+                        {
+                            "query": "new and continuing AI developments",
+                            "limit": 10,
+                            "min_score_threshold": 0.1,
+                        }
+                    ),
+                }
+            ]
+        }
+    )
+    assert observed[0]["call_id"] == "xs_fixture"
+    assert observed[0]["arguments"] == {
+        "query": "new and continuing AI developments",
+        "limit": 10,
+        "min_score_threshold": 0.1,
+    }
+    assert observed[0]["results_visible"] is False
+
+
+def test_native_search_agent_can_finish_before_json_validation():
+    from datetime import UTC, datetime
+
+    from monitor.editorial.chatter_discovery import semantic_request
+    from monitor.editorial.providers import request_payload
+    from tests.test_chatter_chain import chain_config
+
+    cfg = chain_config()
+    built = semantic_request(
+        datetime(2026, 11, 4, 2, 10, tzinfo=UTC),
+        {"subjects": [], "recent_searches": []},
+        cfg,
+    )
+    body = request_payload(cfg.chatter.discovery, built)
+    # Match the saved working agent form: search first, then return the requested JSON.
+    assert body["max_turns"] == 2
+    assert "text" not in body
+    assert body["tools"] == [
+        {"type": "x_search", "from_date": "2026-11-01", "to_date": "2026-11-05"}
+    ]
+    assert body["parallel_tool_calls"] is False
+    selector = request_payload(cfg.chatter.selector, {"system": "Select", "user": "{}"})
+    assert selector["text"]["format"]["type"] == "json_object"
+    assert "tools" not in selector
+
+
 def test_grok_responses_keeps_actual_tool_and_billing_counts_without_raw_envelope(
     monkeypatch,
 ):

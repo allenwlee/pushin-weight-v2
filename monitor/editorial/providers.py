@@ -32,7 +32,7 @@ def request_payload(route, request):
             "model": route.model, "max_output_tokens": route.max_output_tokens,
             "input": [{"role": "system", "content": request["system"]},
                       {"role": "user", "content": content}],
-            "text": {"format": {"type": "json_object"}}, "store": False,
+            "store": False,
             "service_tier": "default", "prompt_cache_key": "pushinweight-chatter-v1",
         }
         if route.reasoning:
@@ -44,6 +44,8 @@ def request_payload(route, request):
             if len(tools["tools"]) != 1 or tools["tools"][0].get("type") != "x_search":
                 raise ValueError("Chatter only enables X search")
             body.update(tools, parallel_tool_calls=False)
+        else:
+            body["text"] = {"format": {"type": "json_object"}}
         return body
     body = {
         "model": route.model,
@@ -139,7 +141,7 @@ def search_activity(decoded):
             continue
         if item.get("name") not in {"x_semantic_search", "x_keyword_search", "x_user_search", "x_thread_fetch"}:
             continue
-        arguments = item.get("arguments")
+        arguments = item.get("input", item.get("arguments"))
         try:
             arguments = json.loads(arguments) if isinstance(arguments, str) else arguments
         except ValueError:
@@ -150,8 +152,15 @@ def search_activity(decoded):
                 value = arguments.get(key)
                 if type(value) in {str, int} and len(str(value)) <= 4096:
                     kept[key] = value
-        activity.append({"sequence": len(activity) + 1, "name": item["name"],
-                         "arguments": kept, "results_visible": False})
+            threshold = arguments.get("min_score_threshold")
+            if type(threshold) in {int, float} and 0 <= threshold <= 1:
+                kept["min_score_threshold"] = threshold
+        entry = {"sequence": len(activity) + 1, "name": item["name"],
+                 "arguments": kept, "results_visible": False}
+        call_id = item.get("call_id", item.get("id"))
+        if isinstance(call_id, str) and re.fullmatch(r"[a-zA-Z0-9_.:-]{1,200}", call_id):
+            entry["call_id"] = call_id
+        activity.append(entry)
     return activity
 
 
