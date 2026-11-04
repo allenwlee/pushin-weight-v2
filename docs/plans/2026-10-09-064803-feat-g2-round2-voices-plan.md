@@ -241,6 +241,7 @@ Names below describe a versioned wire contract, not new database JSON columns.
 - Result identity: echo request/story/revision/locale, outcome, source/reference lineage, producing-call IDs, stored master/export references and hashes, dimensions/duration, display credits, watermark state, cost/timing and actionable gaps.
 - Completion: distinguish first-text readiness from Graphics package readiness. The current charter asks Graphics for a video plus a matching GIF/still; text fallback does not claim that package is complete. Chatter's five-minute first-text target is not a new video duration or an independent reset of the Graphics clock.
 - Publication: Chatter validates ownership/revision and attaches only to the matching text; duplicate completions are idempotent and stale completions never advance the selected story. Credit gaps remain evaluation findings with honest attribution.
+- Transition: pending, unavailable and failed results allow text fallback and may receive a later matching complete package. A completed package cannot be overwritten by a later fallback or conflicting completion.
 - Failure: article readiness is independent of image generation; a failed visual premise causes factual copy adjustment, not invented imagery. No automatic cast-wide collection or unbounded generation retry.
 
 #### Storage design and constraints
