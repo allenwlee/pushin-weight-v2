@@ -127,6 +127,52 @@ and cycle summary fields, not only Render success.
 Do not establish a harvest fix from a helper-only unit test or from
 re-deriving call structure without reading `monitor/cycle.py` + policy.
 
+## Mandatory query-byte gate in EVERY harvester plan and review
+
+**DO NOT APPROVE A HARVESTER PLAN OR RELEASE WITHOUT THIS CHECK.** Query
+length means **UTF-8 bytes of the complete provider request**, never Python
+character count. Multilingual text can pass a 512-character check and still
+exceed the provider's **512-byte** limit. A green helper test, an estimated
+length, or a count of logical calls is not evidence that a request fits.
+
+Before approving every harvester plan, reviewing its implementation, or
+releasing it:
+
+1. Inventory **every enabled planned search call**, including unchanged list,
+   brand, discovery and supplemental calls. Inspect the actual scheduled and
+   manual/backfill callers; do not audit only the edited B/C fragment.
+2. Render the final query through the production request path, including
+   Boolean grouping, quotes, list IDs, active author/other exclusions and both
+   timestamp bounds. Measure `len(final_query.encode("utf-8"))` **after all
+   additions**. Use realistic maximum-width runtime values. Audit each distinct
+   request shape; an unbounded base query passing does not prove its bounded
+   request passes.
+3. Put an explicit query-byte review in the existing plan: call ID, complete
+   request bytes, remaining bytes (`512 - request_bytes`), audited
+   code/policy/config revision and regression-test evidence. At 512 bytes there
+   is **zero headroom**; never describe it as room for another alias. Record
+   disabled optional and immutable historical queries separately, including
+   known overflows; they are not passed enabled-call checks or permission to
+   activate them.
+4. **Any enabled-call overflow, missing call or missing evidence blocks plan
+   approval and release.** Preserve the shared fail-before-dispatch byte guard.
+   Never truncate queries, silently drop aliases/context/exclusions/time bounds,
+   or loosen the guard to get green. Restructure logical brand/family blocks
+   within the owner's call budget; a budget increase needs the owner's decision.
+   Keep frozen historical queries immutable and explicitly reject an oversized
+   replay before provider dispatch.
+5. Maintain regressions for CJK/multilingual queries that fit in characters but
+   overflow in bytes, and for suffix/time-bound additions that push a fitting
+   base query over the cap. Exercise real scheduled/backfill callers with fake
+   clients and inspect their effective wire queries. No live provider probe is
+   needed or authorized by this gate.
+6. Repeat the byte audit after any query, alias, policy, exclusion registry,
+   timestamp formatting or request-renderer change, **and after integrating
+   main**. Earlier evidence is reusable only when every relevant input matches.
+
+Reviewers must explicitly confirm this gate in their verdict. **"Under 512
+characters" is a failed review, not an approximation of a passed byte check.**
+
 ## Pin the defect before fixing it (M18)
 
 Add or strengthen a regression pin that exercises the **production call
