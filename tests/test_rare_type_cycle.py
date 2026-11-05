@@ -73,6 +73,15 @@ def _call(cfg, tmp_path):
     return next(call for call in calls if call.call_id == RARE_EXTRA_CALL_ID)
 
 
+def _runtime_call(cfg, tmp_path):
+    # Exercise execution bookkeeping with a valid test query. The immutable
+    # legacy query exceeds the provider byte cap and is tested separately.
+    call = _call(cfg, tmp_path)
+    call.query_string = "hiring"
+    call.query_length = len(call.query_string.encode("utf-8"))
+    return call
+
+
 class FakeApi:
     timeout_s = 30
     max_retries = 2
@@ -98,7 +107,7 @@ def test_checked_in_config_keeps_discovery_lane_optional():
     assert cfg.discovery.rare_types.targeted_extraction_enabled is False
     assert cfg.targeted_extraction.enabled is False
     assert sorted(call.call_id for call in CycleRunner(cfg=cfg)._plan_calls()) == [
-        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4",
+        "A", "B1", "B2", "B3", "B4", "C1", "C2", "C3", "C4",
     ]
     assert RARE_EXTRA_CALL_ID not in [
         call.call_id for call in plan_discovery_calls(cfg, list_id=42, now=NOW)
@@ -151,7 +160,7 @@ def test_production_runtime_activation_reaches_planner_without_old_packs(
     assert cfg.discovery.personnel.enabled is False
     assert [call.call_id for call in calls[-1:]] == [RARE_EXTRA_CALL_ID]
     assert sorted(call.call_id for call in calls[:-1]) == [
-        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4",
+        "A", "B1", "B2", "B3", "B4", "C1", "C2", "C3", "C4",
     ]
 
 
@@ -302,7 +311,7 @@ def test_runtime_content_and_threshold_hashes_cannot_reuse_signed_assessment(
 
 def test_same_slot_executes_one_zero_retry_page_and_persists_provenance(tmp_path):
     cfg = load_config(REPO / "config.yaml")
-    call = _call(cfg, tmp_path)
+    call = _runtime_call(cfg, tmp_path)
     api = FakeApi(
         [
             {
@@ -332,7 +341,7 @@ def test_same_slot_executes_one_zero_retry_page_and_persists_provenance(tmp_path
 
 def test_query_versions_keep_immutable_source_query_rows(tmp_path):
     cfg = load_config(REPO / "config.yaml")
-    call = _call(cfg, tmp_path)
+    call = _runtime_call(cfg, tmp_path)
     first = CycleRunner(cfg=cfg, _clock=lambda: NOW)._run_rare_type_search(
         call, FakeApi([{"tweets": []}]), now=NOW
     )
@@ -347,10 +356,11 @@ def test_query_versions_keep_immutable_source_query_rows(tmp_path):
     assert runs[1].source_query.keywords["query_version"] == "rare-types-next"
 
 
-def test_rendered_query_length_failure_makes_zero_provider_calls(tmp_path):
+@pytest.mark.parametrize("query", ["x" * 500, planned_query_string()])
+def test_rendered_query_length_failure_makes_zero_provider_calls(tmp_path, query):
     cfg = load_config(REPO / "config.yaml")
     call = _call(cfg, tmp_path)
-    call.query_string = "x" * 500
+    call.query_string = query
     api = FakeApi([])
     result = CycleRunner(cfg=cfg, _clock=lambda: NOW)._run_rare_type_search(
         call, api, now=NOW
@@ -365,7 +375,7 @@ def test_rendered_query_length_failure_makes_zero_provider_calls(tmp_path):
 
 def test_error_retains_reservation_and_does_not_retry(tmp_path):
     cfg = load_config(REPO / "config.yaml")
-    call = _call(cfg, tmp_path)
+    call = _runtime_call(cfg, tmp_path)
     api = FakeApi([RuntimeError("timeout")])
     result = CycleRunner(cfg=cfg, _clock=lambda: NOW)._run_rare_type_search(
         call, api, now=NOW
@@ -382,7 +392,7 @@ def test_scheduled_cycle_call_chain_uses_scheduled_credential_and_no_replay(
     tmp_path, monkeypatch
 ):
     cfg = load_config(REPO / "config.yaml")
-    call = _call(cfg, tmp_path)
+    call = _runtime_call(cfg, tmp_path)
     api = FakeApi([{"tweets": []}])
     purposes = []
     monkeypatch.setattr(CycleRunner, "_plan_calls", lambda self: [call])
@@ -406,7 +416,7 @@ def test_scheduled_cycle_call_chain_uses_scheduled_credential_and_no_replay(
 
 def test_daily_budget_exhaustion_skips_only_rare_provider_call(tmp_path):
     cfg = load_config(REPO / "config.yaml")
-    call = _call(cfg, tmp_path)
+    call = _runtime_call(cfg, tmp_path)
     # Exercise the exhaustion branch with a deliberately smaller test-only cap;
     # the checked-in 28,800 cap admits all 96 normal quarter-hour slots.
     call.daily_credit_ceiling = 6000

@@ -70,7 +70,7 @@ def test_plan_calls_for_cycle_uses_enabled_models_as_query_allowlist():
     calls = plan_calls_for_cycle(cfg=cfg)
 
     assert {call.call_id for call in calls} == {
-        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4"
+        "A", "B1", "B2", "B3", "B4", "C1", "C2", "C3", "C4"
     }
     assert all("dots3-note" not in call.query_string for call in calls)
 
@@ -87,11 +87,12 @@ def test_plan_calls_for_cycle_brand_filter_builds_only_that_brands_calls():
     with override_settings(X_MONITOR_CYCLE_BRAND_FILTER="dots"):
         calls = plan_calls_for_cycle(cfg=cfg)
 
-    assert [call.call_id for call in calls] == ["A", "B1"]
-    b1 = calls[1].query_string
-    assert '"dots 3 note"' in b1
-    assert "DeepSeek" not in b1
-    assert "Hunyuan" not in b1
+    # Approved portfolio refactor places the whole Dots block in C4.
+    assert [call.call_id for call in calls] == ["A", "C4"]
+    query = calls[1].query_string
+    assert '"dots 3 note"' in query
+    assert "DeepSeek" not in query
+    assert "Hunyuan" not in query
 
 
 def test_cycle_runner_plan_calls_does_not_abort_with_self_undefined():
