@@ -65,6 +65,8 @@ def test_plan_calls_for_cycle_uses_enabled_models_as_query_allowlist():
     from x_monitor.config import load_config
 
     cfg = load_config(CONFIG_PATH)
+    # Positive control: probe a spelling the current policy actually emits.
+    assert any("dots3" in call.query_string for call in plan_calls_for_cycle(cfg=cfg))
     cfg.enabled_models.remove("dots")
 
     calls = plan_calls_for_cycle(cfg=cfg)
@@ -72,7 +74,7 @@ def test_plan_calls_for_cycle_uses_enabled_models_as_query_allowlist():
     assert {call.call_id for call in calls} == {
         "A", "B1", "B2", "B3", "B4", "C1", "C2", "C3", "C4"
     }
-    assert all("dots3-note" not in call.query_string for call in calls)
+    assert all("dots3" not in call.query_string for call in calls)
 
 
 def test_plan_calls_for_cycle_brand_filter_builds_only_that_brands_calls():
