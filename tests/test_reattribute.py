@@ -34,22 +34,22 @@ def _seed_db(d: Path, posts: list, detection: dict | None = None) -> None:
     store = Store(db)
     detection = detection or {}
     store._conn.execute(
-        "INSERT OR IGNORE INTO brands(nickname, display_name, accent_color, "
+        "INSERT OR IGNORE INTO brands(brand_id, display_name, accent_color, "
         "is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
         ("minimax", "MiniMax", "#a855f7", 0, "2026-06-19T00:00:00+00:00"),
     )
     store._conn.execute(
-        "INSERT OR IGNORE INTO brands(nickname, display_name, accent_color, "
+        "INSERT OR IGNORE INTO brands(brand_id, display_name, accent_color, "
         "is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
         ("qwen", "Qwen", "#22c55e", 0, "2026-06-19T00:00:00+00:00"),
     )
     store._conn.execute(
-        "INSERT OR IGNORE INTO brands(nickname, display_name, accent_color, "
+        "INSERT OR IGNORE INTO brands(brand_id, display_name, accent_color, "
         "is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
         ("deepseek", "DeepSeek", "#0ea5e9", 0, "2026-06-19T00:00:00+00:00"),
     )
     store._conn.execute(
-        "INSERT OR IGNORE INTO brands(nickname, display_name, accent_color, "
+        "INSERT OR IGNORE INTO brands(brand_id, display_name, accent_color, "
         "is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
         ("_unattributed", "Unattributed", "#6b7280", 1, "2026-06-19T00:00:00+00:00"),
     )
@@ -91,12 +91,6 @@ def _seed_db(d: Path, posts: list, detection: dict | None = None) -> None:
             (qid, brand_id, json.dumps(kws), "2026-06-19T00:00:00+00:00"),
         )
     for p_item in posts:
-        if p_item.get("author_id"):
-            store._conn.execute(
-                "INSERT OR IGNORE INTO accounts(author_id, handle, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?)",
-                (p_item["author_id"], p_item.get("author_handle", "user1"),
-                 "2026-06-19T00:00:00+00:00", "2026-06-19T00:00:00+00:00"),
-            )
         entities = p_item.get("entities", {})
         if not isinstance(entities, str):
             entities = json.dumps(entities)
@@ -111,7 +105,7 @@ def _seed_db(d: Path, posts: list, detection: dict | None = None) -> None:
             (
                 p_item["tweet_id"],
                 p_item.get("author_handle", "user1"),
-                store._conn.execute("SELECT id FROM accounts WHERE author_id=?", (p_item["author_id"],)).fetchone()[0] if p_item.get("author_id") else None,
+                p_item.get("author_id"),
                 p_item.get("text"),
                 p_item.get("lang", "en"),
                 p_item.get("created_at", "2026-06-19T00:00:00+00:00"),
@@ -182,7 +176,7 @@ def test_reattribute_writes_posts_brands(tmp_path: Path):
         store = Store(d / "x.db")
         try:
             rows = store._conn.execute(
-                "SELECT b.nickname AS brand_id, pb.weight FROM posts_brands pb JOIN brands b ON b.id=pb.brand_id ORDER BY b.nickname"
+                "SELECT brand_id, weight FROM posts_brands ORDER BY brand_id"
             ).fetchall()
         finally:
             store.close()
@@ -204,12 +198,12 @@ def test_reattribute_handles_legacy_entities_json_string(tmp_path: Path):
         db = d / "x.db"
         store = Store(db)
         store._conn.execute(
-            "INSERT OR IGNORE INTO brands(nickname, display_name, accent_color, "
+            "INSERT OR IGNORE INTO brands(brand_id, display_name, accent_color, "
             "is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
             ("minimax", "MiniMax", "#a855f7", 0, "2026-06-19T00:00:00+00:00"),
         )
         store._conn.execute(
-            "INSERT OR IGNORE INTO brands(nickname, display_name, accent_color, "
+            "INSERT OR IGNORE INTO brands(brand_id, display_name, accent_color, "
             "is_sentinel, created_at) VALUES (?, ?, ?, ?, ?)",
             ("_unattributed", "Unattributed", "#6b7280", 1,
              "2026-06-19T00:00:00+00:00"),
@@ -217,11 +211,7 @@ def test_reattribute_handles_legacy_entities_json_string(tmp_path: Path):
         store._conn.execute(
             "INSERT OR IGNORE INTO brand_keywords(brand_id, pattern, is_regex, added_at) "
             "VALUES (?, ?, ?, ?)",
-            ("minimax", "MiniMax", 0, "2026-06-19T00:00:00+00:00"),
-        )
-        store._conn.execute(
-            "INSERT OR IGNORE INTO accounts(author_id, handle, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?)",
-            ("u1", "u1", "2026-06-19T00:00:00+00:00", "2026-06-19T00:00:00+00:00"),
+            ("minimax", "Kimi", 0, "2026-06-19T00:00:00+00:00"),
         )
         # Insert post with entities as a JSON string (legacy migrator behavior).
         store._conn.execute(
@@ -231,7 +221,7 @@ def test_reattribute_handles_legacy_entities_json_string(tmp_path: Path):
                 created_at, fetched_at, entities
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("1", "u1", store._conn.execute("SELECT id FROM accounts WHERE author_id='u1'").fetchone()[0], "MiniMax is awesome", "en",
+            ("1", "u1", "u1", "Kimi is awesome", "en",
              "2026-06-19T00:00:00+00:00",
              "2026-06-19T00:00:00+00:00",
              json.dumps({"hashtags": []})),
@@ -242,7 +232,8 @@ def test_reattribute_handles_legacy_entities_json_string(tmp_path: Path):
         store = Store(d / "x.db")
         try:
             rows = store._conn.execute(
-                "SELECT b.nickname AS brand_id FROM posts_brands pb JOIN brands b ON b.id=pb.brand_id WHERE b.nickname <> '_unattributed'"
+                "SELECT brand_id FROM posts_brands WHERE brand_id <> "
+                "'_unattributed'"
             ).fetchall()
         finally:
             store.close()

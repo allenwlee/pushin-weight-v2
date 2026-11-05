@@ -281,24 +281,32 @@ def test_glm_has_handle_only_path_before():
 # -------------------------------------------------------------------------
 
 EXPECTED_AFTER_BRAND_TO_CALL_IDS = {
-    'minimax': {'C3'}, 'qwen': {'C3'}, 'deepseek': {'C3'}, 'glm': {'C3'},
-    'mimo': {'B4'}, 'moonshot_kimi': {'B3'}, 'inclusionai': {'B3'},
-    'mistral': {'B2'}, 'stepfun': {'B2'}, 'ernie': {'B1'}, 'hunyuan': {'C4'},
-    'dots': {'C4'}, 'llama': {'B1'}, 'nemo_megatron': {'C1', 'C2'},
-    'doubao': {'B4'}, 'yi': {'C3'}, 'sensechat': {'B1'}, 'exaone': {'B4'},
-    'kuaishou': {'B3'}, 'sakana_ai': {'B2'}, 'upstage': {'B3'},
+    "minimax": {"B1", "B2"}, "qwen": {"B1", "B2"},
+    "deepseek": {"B1", "B2"}, "stepfun": {"B1", "B2"},
+    "hunyuan": {"B1", "B2"}, "dots": {"B1"},
+    "mimo": {"B3", "C1"}, "mistral": {"B2", "C1"},
+    "moonshot_kimi": {"B3", "C1"}, "yi": {"B3", "C1"},
+    "llama": {"B3", "C4"}, "ernie": {"B3", "C2"},
+    "upstage": {"B3", "C2"}, "doubao": {"B3", "C3"},
+    "sensechat": {"B3", "C3"}, "kuaishou": {"C3"},
+    "glm": {"C3"}, "inclusionai": {"B2"}, "sakana_ai": {"B2"},
+    "nemo_megatron": {"B2"}, "exaone": {"B2"},
 }
 
-EXPECTED_AFTER_CO_ALLOWLIST_SIZES = {'B1': 0, 'C1': 0, 'C2': 0, 'C3': 0, 'C4': 0, 'B2': 0, 'B3': 0, 'B4': 0}
+EXPECTED_AFTER_CO_ALLOWLIST_SIZES = {
+    "B1": 0, "B2": 0, "B3": 0, "C1": 5, "C2": 7, "C3": 5, "C4": 5,
+}
 
-EXPECTED_AFTER_B1_BRANDS = {'llama', 'sensechat', 'ernie'}
+EXPECTED_AFTER_B1_BRANDS = {
+    "minimax", "qwen", "deepseek", "stepfun", "hunyuan", "dots",
+}
 
 EXPECTED_AFTER_B2_HANDLES = (
     "MiniMaxAgent", "MiniMax_AI", "hailuo_ai", "Ali_TongyiLab",
     "Alibaba_Qwen", "deepseek_ai", "AntLingAGI", "TheInclusionAI",
     "ZhihuFrontier", "robbyant_brain", "MistralAI", "StepFun_ai",
     "stepfunai", "TencentHunyuan", "NVIDIAAI", "NVIDIAAIDev",
-    "LG_AI_Research", "SakanaAILabs", "dotsstudioai",
+    "LG_AI_Research", "SakanaAILabs",
 )
 
 EXPECTED_AFTER_B3_HANDLES = (
@@ -313,7 +321,9 @@ EXPECTED_AFTER_QUERIES = {
     if call_id != "A"
 }
 
-EXPECTED_AFTER_QUERY_LENGTHS = {'B1': 413, 'C1': 431, 'C2': 233, 'C3': 370, 'C4': 370, 'B2': 438, 'B3': 411, 'B4': 395}
+EXPECTED_AFTER_QUERY_LENGTHS = {
+    "B1": 388, "B2": 305, "B3": 214, "C1": 227, "C2": 140, "C3": 247, "C4": 380,
+}
 
 
 @pytest.fixture(scope="module")
@@ -338,8 +348,6 @@ def policy_calls(harvest_policy, policy_specs):
 def _policy_coverage(policy, specs):
     coverage: dict[str, set[str]] = {}
     for spec in specs:
-        for name in spec.component_names:
-            coverage.setdefault(name.split("/", 1)[0], set()).add(spec.call_id)
         for nickname in spec.wide_net_brands:
             coverage.setdefault(nickname, set()).add(spec.call_id)
         for nickname in spec.brands:
@@ -361,23 +369,23 @@ def test_policy_after_co_allowlist_sizes(policy_specs):
     } == EXPECTED_AFTER_CO_ALLOWLIST_SIZES
 
 
-def test_policy_after_brand_blocks_and_all_previous_handles(policy_specs):
+def test_policy_after_b1_b2_b3_coverage(policy_specs):
     by_id = {spec.call_id: spec for spec in policy_specs}
-    assert set(by_id["B1"].component_names) == EXPECTED_AFTER_B1_BRANDS
-    handles = {h for spec in policy_specs for h in spec.unfiltered_handles}
-    assert handles == set(EXPECTED_AFTER_B2_HANDLES) | set(EXPECTED_AFTER_B3_HANDLES)
-    assert "Zai_org" not in handles
+    assert set(by_id["B1"].wide_net_brands) == EXPECTED_AFTER_B1_BRANDS
+    assert tuple(by_id["B2"].handles) == EXPECTED_AFTER_B2_HANDLES
+    assert tuple(by_id["B3"].handles) == EXPECTED_AFTER_B3_HANDLES
+    assert "Zai_org" not in by_id["B2"].handles
 
 
 def test_policy_after_hunyuan_glm_dots_declarations(harvest_policy):
     hunyuan = harvest_policy.brands["hunyuan"]
     assert hunyuan.paths == frozenset({"bare", "handle"})
-    assert hunyuan.tokens == ('Hunyuan', 'Hunyuan4', '混元', '腾讯混元', 'Hunyuan3D', 'HunyuanVideo', 'HunyuanImage', 'Hy-MT2', 'Hy-Memory', 'HY-World', '混元3', '混元4', '混元5')
+    assert hunyuan.tokens == ("Hunyuan", "混元", "腾讯混元")
     assert hunyuan.handles == ("TencentHunyuan",)
     assert hunyuan.version_family is not None
     assert (hunyuan.version_family.prefix, hunyuan.version_family.current_major) == ("Hy", 4)
     assert (hunyuan.version_family.lookback, hunyuan.version_family.lookahead) == (1, 1)
-    assert hunyuan.version_family.extra_suffixes == ("-preview",)
+    assert hunyuan.version_family.extra_suffixes == ()
 
     glm = harvest_policy.brands["glm"]
     assert glm.paths == frozenset({"co"})
@@ -389,9 +397,21 @@ def test_policy_after_hunyuan_glm_dots_declarations(harvest_policy):
     assert (glm.version_family.lookback, glm.version_family.lookahead) == (1, 1)
 
     dots = harvest_policy.brands["dots"]
-    assert dots.paths == frozenset({"bare", "handle"})
-    assert dots.handles == ("dotsstudioai",)
-    assert dots.tokens == ('dots3-note', 'dots studio', '"dots 3 note"', '"dots-3-note"', '"dots.3-note"', '"dots3 note"', '"dots-studio"', 'dots.ocr', 'dots.tts', 'dots.llm1', 'dots.vlm', 'dots.mocr', 'DotsOCR', '"dots OCR"', 'studio-dots-ai')
+    assert dots.paths == frozenset({"bare"})
+    assert not dots.handles
+    assert dots.tokens == (
+        "dots studio",
+        '"dots 3 note"',
+        '"dots-3-note"',
+        '"dots.3-note"',
+        '"dots3 note"',
+        '"dots-studio"',
+        "dots.ocr",
+        "dots.tts",
+        "dots.llm1",
+        "dots.vlm",
+        "dots.mocr",
+    )
     assert "dots" not in dots.tokens
     assert dots.version_family is not None
     assert (dots.version_family.prefix, dots.version_family.current_major) == ("dots", 3)

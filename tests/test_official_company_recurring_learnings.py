@@ -114,7 +114,7 @@ def recurring_cycle(monkeypatch, seeded_policy_keywords):
             ).run()
         assert result["status"] != "aborted"
         assert [planned["call_id"] for planned in result["planned_calls"]] == [
-            "A", "B1", "C1", "C2", "C3", "C4", "B2", "B3", "B4",
+            "A", "B1", "C1", "C2", "C3", "C4", "B2", "B3",
         ]
         assert lists.add.called == allow_list_add
         return result["official_company_discovery"]

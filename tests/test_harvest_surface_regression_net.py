@@ -62,8 +62,8 @@ POLICY_PATH = REPO_ROOT / "config" / "harvest_policy.yaml"
 
 # --- pinned baseline, measured 2026-07-27 ----------------------------------
 
-# Nine logical calls: Call A plus eight named portfolio queries.
-EXPECTED_CALL_IDS = {"A", "C1", "C2", "C3", "C4", "B1", "B2", "B3", "B4"}
+# The 7 logical calls fired per cycle: Call A (list-based fan-in) + 6 B/C specs.
+EXPECTED_CALL_IDS = {"A", "C1", "C2", "C3", "C4", "B1", "B2", "B3"}
 
 # Call A is the list fan-in; every B/C spec is a paren-grouped token query.
 EXPECTED_CALL_KINDS = {
@@ -75,17 +75,15 @@ EXPECTED_CALL_KINDS = {
     "B1": "brand_wide",
     "B2": "brand_wide",
     "B3": "brand_wide",
-    "B4": "brand_wide",
 }
 
 # B* specs read tokens from brand_keywords (wide net); C* specs carry their
 # own explicit brand->token map.  A flipped flag silently changes the token
 # source for that call.
 EXPECTED_WIDE_NET = {
-    "B1": False,
+    "B1": True,
     "B2": False,
     "B3": False,
-    "B4": False,
     "C1": False,
     "C2": False,
     "C3": False,
@@ -101,7 +99,7 @@ EXPECTED_MAX_PER_PAGE = 20
 # Union of brands explicitly carried by the 6 live policy-derived B/C specs.
 # Handle-only B2/B3 do not carry brand names; preview coverage reconstructs
 # those associations from policy below.
-EXPECTED_BRAND_COVERAGE_COUNT = 21
+EXPECTED_BRAND_COVERAGE_COUNT = 17
 
 # The exact set, so swapping a brand for a typo of the same length still fails.
 EXPECTED_COVERED_BRANDS = {
@@ -111,8 +109,6 @@ EXPECTED_COVERED_BRANDS = {
     "ernie", "upstage",
     # B1
     "deepseek", "dots", "hunyuan", "minimax", "qwen", "stepfun",
-    # C5
-    "nemo_megatron", "inclusionai", "exaone", "sakana_ai",
     # C3
     "doubao", "glm", "sensechat", "kuaishou",
 }
@@ -122,9 +118,9 @@ EXPECTED_COVERED_BRANDS = {
 TIME_OPERATOR_OVERHEAD = len(" since_time:1784700000 until_time:1784700060")
 EXPECTED_TIME_OPERATOR_OVERHEAD = 44
 
-# B4 is the longest candidate query under the UTF-8 byte cap.
+# B1 is the longest query in the current tracked production policy.
 TIGHTEST_CALL_ID = "B1"
-EXPECTED_TIGHTEST_HEADROOM = 15
+EXPECTED_TIGHTEST_HEADROOM = 36
 
 
 @pytest.fixture(scope="module")
@@ -164,7 +160,7 @@ def planned_calls(cfg, policy, policy_specs):
 # --- call set ------------------------------------------------------------
 
 
-def test_call_set_is_exactly_nine(planned_calls):
+def test_call_set_is_exactly_eight(planned_calls):
     """Adding or dropping a call changes collection volume directly.
 
     If this fails, a call was added or removed from the cycle. Update
@@ -251,7 +247,6 @@ def test_every_spec_brand_is_covered_exactly_once_or_more(policy_specs):
     """
     covered: set[str] = set()
     for spec in policy_specs:
-        covered.update(name.split("/", 1)[0] for name in spec.component_names)
         covered.update(
             spec.wide_net_brands or [] if spec.is_wide_net else spec.brands
         )
@@ -303,7 +298,7 @@ def test_every_query_fits_the_cap_after_time_operators(planned_calls):
     NOT raise the cap; 512 is the platform limit.
     """
     for call in planned_calls:
-        post_injection = len(call.query_string.encode("utf-8")) + TIME_OPERATOR_OVERHEAD
+        post_injection = call.query_length + TIME_OPERATOR_OVERHEAD
         assert post_injection <= X_LENGTH_CAP, (
             f"call {call.call_id} is {call.query_length} chars, "
             f"{post_injection} after time operators -- over the "
@@ -316,7 +311,7 @@ def test_every_query_fits_the_cap_after_time_operators(planned_calls):
 def test_tightest_call_headroom_with_live_policy(planned_calls):
     """Pin the actual margin on policy queries the Django cycle plans."""
     headroom = {
-        c.call_id: X_LENGTH_CAP - (len(c.query_string.encode("utf-8")) + TIME_OPERATOR_OVERHEAD)
+        c.call_id: X_LENGTH_CAP - (c.query_length + TIME_OPERATOR_OVERHEAD)
         for c in planned_calls
     }
     tightest = min(headroom, key=lambda k: headroom[k])

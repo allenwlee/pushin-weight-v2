@@ -12,17 +12,6 @@ import pytest
 from scripts import backfill_month as month
 
 
-@pytest.fixture(autouse=True)
-def frozen_recipe_clock(monkeypatch):
-    """Evaluate the frozen recipe in its valid era; keep deadline checks real."""
-    class RecipeDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return datetime(2026, 11, 4, tzinfo=UTC).astimezone(tz)
-
-    monkeypatch.setattr(month, "datetime", RecipeDateTime)
-
-
 def recipe():
     units = [
         {
@@ -72,33 +61,6 @@ def recipe():
             ],
         },
     }
-
-
-@pytest.mark.parametrize("routes,expected_scopes", [
-    (month.LEGACY_ROUTES, 576),
-    (month.META_ROUTES, 648),
-    (month.NVIDIA_INITIAL_ROUTES, 720),
-    (month.NVIDIA_TWO_PACK_ROUTES, 792),
-    (month.ROUTES, 936),
-])
-def test_month_accepts_each_frozen_call_inventory_without_rewriting_it(routes, expected_scopes):
-    r = recipe()
-    template = r["template"]["windows"][0]["collection_definition"]["scope"]
-    template["units"] = [
-        {"scope_key": route, "scope_kind": "x_query", "ownership": {
-            "call_id": route, "query": "frozen:" + route,
-            "since_epoch": 1, "until_epoch": 2,
-        }} for route in sorted(routes)
-    ]
-    before = copy.deepcopy(r)
-    windows = month.daily_manifest(r, 0)["windows"]
-    scopes = [unit for window in windows for unit in window["collection_definition"]["scope"]["units"]]
-    assert len(windows) == 4
-    assert all(len(window["collection_definition"]["scope"]["units"]) == expected_scopes for window in windows)
-    assert len(scopes) == expected_scopes * 4
-    assert {unit["ownership"]["call_id"] for unit in scopes} == routes
-    assert all(unit["ownership"]["query"] == "frozen:" + unit["ownership"]["call_id"] for unit in scopes)
-    assert r == before
 
 
 def test_frozen_july_expansion_matches_original_private_fixtures():

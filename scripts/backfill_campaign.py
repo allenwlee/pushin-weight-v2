@@ -125,7 +125,7 @@ def manifest(
     validate_concurrency(direct_concurrency)
     deadline = deadline or timezone.now() + timedelta(hours=72)
     planned = plan_calls_for_cycle(cfg, scheduled_exclusions=True)
-    admitted = {"A", "B1", "B2", "B3", "B4", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "RARE_EXTRA"}
+    admitted = {"A", "B1", "B2", "B3", "C1", "C2", "C3", "C4", "RARE_EXTRA"}
     if not planned or not any(c.call_id == "A" for c in planned) or any(
         c.call_id not in admitted for c in planned
     ):

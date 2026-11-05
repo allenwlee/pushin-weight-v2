@@ -462,7 +462,6 @@ review_reasons:
 # Call A (the curated X-list) is last because it carries the highest
 # signal-per-tweet ratio.
 degraded_skip_order:
-  - B4
   - B3
   - B2
   - B1

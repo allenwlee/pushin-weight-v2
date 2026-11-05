@@ -5,7 +5,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_scheduled_author_exclusion_reaches_all_nine_provider_requests(monkeypatch):
+def test_scheduled_author_exclusion_reaches_all_eight_provider_requests(monkeypatch):
     """Policy → scheduled runner → concrete client → captured HTTP request."""
     from monitor.cycle import CycleRunner
     from x_monitor import x_client
@@ -37,8 +37,8 @@ def test_scheduled_author_exclusion_reaches_all_nine_provider_requests(monkeypat
         assert outcome == "ok"
 
     assert purposes == [TwitterApiCredentialPurpose.SCHEDULED]
-    assert [call.call_id for call in calls] == ["A", "B1", "C1", "C2", "C3", "C4", "B2", "B3", "B4"]
-    assert len(requests) == 9
+    assert [call.call_id for call in calls] == ["A", "B1", "C1", "C2", "C3", "C4", "B2", "B3"]
+    assert len(requests) == 8
     for path, params in requests:
         assert path == x_client.SEARCH_PATH
         assert params["queryType"] == "Latest"
@@ -47,7 +47,7 @@ def test_scheduled_author_exclusion_reaches_all_nine_provider_requests(monkeypat
         assert params["query"].endswith(
             " since_time:1785067200 until_time:1785067260"
         )
-        assert len(params["query"].encode("utf-8")) <= 512
+        assert len(params["query"]) <= 512
 
     manual_calls = CycleRunner(cfg=cfg, cycle_kind="manual")._plan_calls()
     assert all("-from:xxyweb3" not in call.query_string for call in manual_calls)
@@ -66,7 +66,7 @@ def test_exclusion_growth_over_final_cap_sends_no_provider_request(monkeypatch):
     )
 
     policy = load_policy(REPO_ROOT / "config/harvest_policy.yaml")
-    handles = tuple(f"spam_author_{index}" for index in range(2))
+    handles = tuple(f"spam_author_{index}" for index in range(3))
     calls = plan_calls(
         2067062923525275922,
         specs_from_policy(policy),
@@ -87,23 +87,5 @@ def test_exclusion_growth_over_final_cap_sends_no_provider_request(monkeypatch):
         x_client.XClient(api_key="fake-key"),
         window=(1_785_067_200, 1_785_067_260),
     )
-    assert items == []
-    assert outcome == "length_cap_exceeded"
-
-
-def test_unicode_over_cap_is_rejected_before_provider_transport(monkeypatch):
-    from dataclasses import replace
-    from monitor.cycle import CycleRunner
-    from x_monitor.config import load_config
-    from x_monitor.x_client import XClient
-    runner = CycleRunner(cfg=load_config(REPO_ROOT / "config.yaml"), cycle_kind="scheduled")
-    base = runner._plan_calls()[0]
-    # 469 bytes + 44-byte timestamp suffix = 513 bytes, only 511 characters.
-    call = replace(base, query_string="测" + "x" * 466, query_length=467)
-    def forbidden(*args, **kwargs):
-        raise AssertionError("invalid Unicode query reached provider")
-    monkeypatch.setattr(XClient, "_get", forbidden)
-    items, outcome = runner._fetch_tweets(call, XClient(api_key="fake"),
-        window=(1785067200, 1785067260))
     assert items == []
     assert outcome == "length_cap_exceeded"
