@@ -354,9 +354,9 @@ Owner explicitly requests a strongly worded harvester-skill rule and a push. Add
 
 ## Complete request-byte review after main integration
 
-Audited application/policy/config revision f44ec567 (runtime code unchanged from integrated1d8dc046); exact request hashes and source evidence: deployment/complete-enabled-byte-audit.json under the existing root evidence directory. Shared planner plus XClient._effective_search_query renders all nine base calls, active -from:xxyweb3 exclusion and two ten-digit bounds. Both unchanged production special-event calls are included using their real renderer; their runtime path has no extra author suffix. Manual/current-policy backfill shapes are rendered separately without scheduled author exclusion. No provider call.
+Audited application/policy/config revision f44ec567 (runtime code unchanged from integrated1d8dc046); exact request hashes and source evidence: deployment/complete-enabled-byte-audit.json under the existing root evidence directory. Shared planner plus XClient._effective_search_query renders all nine base calls, active -from:xxyweb3 exclusion and two ten-digit bounds. Both unchanged production special-event calls are included using their real renderer; their runtime path has no extra author suffix. Manual shapes are rendered separately without scheduled author exclusion. Current-policy backfill retains scheduled exclusions and uses the larger scheduled-row sizes. No provider call.
 
-| Call | Scheduled request bytes | Remaining bytes | Manual/backfill bytes |
+| Call | Scheduled request bytes | Remaining bytes | Manual request bytes |
 |---|---:|---:|---:|
 | A | 96 | 416 | 82 |
 | B1 | 511 | 1 | 497 |
@@ -373,3 +373,5 @@ Audited application/policy/config revision f44ec567 (runtime code unchanged from
 Verdict: all11enabled requests fit the512bytecap; B1,B2,B3have1byteheadroom, not room for an additional alias. Disabled immutable legacy RARE_EXTRA is565bytes after bounds and fails closed, separately covered by the no-dispatch test. Character counts are not accepted as byte proof. Scheduled transport capture, Unicode overflow, suffix-growth and backfill tests are within the632passed checks; the two existing special-event renderer/scheduled-caller checks additionally cover the unchanged production calls. Their focused test receipt is recorded separately. Ten-digit base-call bounds describe current real windows; hypothetical wider inputs remain subject to the same fail-before-dispatch guard. No runtime changes in this review amendment.
 
 The two additional existing special-event checks passed (2requiredPostgres,0skips/errors): exact selected renderer with eleven-digit epochs and the real scheduled caller dispatching both queries once without replay.634distinct local checks now passed; runtime code remains unchanged. Exact original20-post health follow-up after30minutes has2complete/18unhealthy, no missing IDs; language20/20 and required Chinese translation18/18, commentary2/20 in each language. This existing-production baseline still fails health/acceptance gates and is not represented as a passed enrichment check. No repair or extra provider call was launched.
+
+Byte-review verdict: PASS. Independent reviewer re-rendered all11enabled calls and confirmed complete request bytes/headroom. Documentation now explicitly distinguishes manual queries from current-policy backfill, which uses the larger scheduled sizes. No runtime finding.
