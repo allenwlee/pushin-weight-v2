@@ -1103,8 +1103,8 @@ def test_oversized_frozen_legacy_rare_query_stops_before_dispatch(pipeline, monk
         if unit["ownership"]["call_id"] == "RARE_EXTRA":
             unit["ownership"]["query"] = oversized
     # A new fixture job avoids mutating an existing frozen recipe.
-    from core.models import DataSource
     from core.collection_jobs import register_job, set_job_state
+    from core.models import DataSource
     source = DataSource.objects.get(pk="x")
     frozen = register_job(job_key="oversized-frozen-rare", source=source, purpose="content",
         operation="x_backfill", mode="historical", definition=definition)
