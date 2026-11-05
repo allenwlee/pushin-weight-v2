@@ -495,6 +495,8 @@ def policy_job(monkeypatch, tmp_path, *, calls, rare=False, selected_calls=None)
     cfg = load_config(Path("config.yaml"))
     if rare:
         from tests.test_rare_type_cycle import _enable
+        monkeypatch.setattr("x_monitor.rare_type_extra_search.RARE_TYPE_EXTRA_SEARCH_GROUPS",
+                            ('("we are hiring" OR 招聘) (AI OR LLM)',))
         _enable(cfg, tmp_path)
     monkeypatch.setattr("monitor.backfill_collection.load_config", lambda path: cfg)
     extra = {"call_ids": selected_calls} if selected_calls is not None else {}

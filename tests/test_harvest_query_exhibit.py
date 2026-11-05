@@ -35,12 +35,11 @@ EXPECTED_PLANNER_CALL_ORDER = ("A", "B1", "C1", "C2", "C3", "C4", "B2", "B3")
 EXPECTED_QUERY_EXHIBIT = {
     "A": "(list:2067062923525275922) min_faves:0",
     "B1": (
-        "((DeepSeek OR 深度求索) OR (dots3-note OR dots studio OR \"dots 3 note\" "
+        "((DeepSeek OR 深度求索) OR (dots studio OR \"dots 3 note\" "
         "OR \"dots-3-note\" OR \"dots.3-note\" OR \"dots3 note\" OR "
         "\"dots-studio\" OR dots.ocr OR dots.tts OR dots.llm1 OR dots.vlm OR "
         "dots.mocr OR dots3 OR dots4) "
-        "OR (Hunyuan OR (混元 (AI OR 模型 OR 3D OR 腾讯)) OR 腾讯混元 OR Hy3 OR Hy4 OR Hy5 OR Hy4-preview "
-        "OR Hy5-preview) OR (Hailuo OR MiniMax OR (海螺 (AI OR 模型 OR H3 OR 歌曲))) OR (Qwen OR Qwen3 OR "
+        "OR (Hunyuan OR (混元 (AI OR 模型 OR 3D OR 腾讯)) OR 腾讯混元 OR Hy3 OR Hy4 OR Hy5) OR (Hailuo OR MiniMax OR (海螺 (AI OR 模型 OR H3 OR 歌曲))) OR (Qwen OR Qwen3 OR "
         "通义千问) OR (StepFun OR 阶跃星辰)) min_faves:0"
     ),
     "C1": (

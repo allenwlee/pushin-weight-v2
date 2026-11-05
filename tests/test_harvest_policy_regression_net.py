@@ -322,7 +322,7 @@ EXPECTED_AFTER_QUERIES = {
 }
 
 EXPECTED_AFTER_QUERY_LENGTHS = {
-    "B1": 432, "B2": 305, "B3": 214, "C1": 227, "C2": 140, "C3": 247, "C4": 380,
+    "B1": 388, "B2": 305, "B3": 214, "C1": 227, "C2": 140, "C3": 247, "C4": 380,
 }
 
 
@@ -385,7 +385,7 @@ def test_policy_after_hunyuan_glm_dots_declarations(harvest_policy):
     assert hunyuan.version_family is not None
     assert (hunyuan.version_family.prefix, hunyuan.version_family.current_major) == ("Hy", 4)
     assert (hunyuan.version_family.lookback, hunyuan.version_family.lookahead) == (1, 1)
-    assert hunyuan.version_family.extra_suffixes == ("-preview",)
+    assert hunyuan.version_family.extra_suffixes == ()
 
     glm = harvest_policy.brands["glm"]
     assert glm.paths == frozenset({"co"})
@@ -400,7 +400,6 @@ def test_policy_after_hunyuan_glm_dots_declarations(harvest_policy):
     assert dots.paths == frozenset({"bare"})
     assert not dots.handles
     assert dots.tokens == (
-        "dots3-note",
         "dots studio",
         '"dots 3 note"',
         '"dots-3-note"',

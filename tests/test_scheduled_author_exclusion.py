@@ -74,8 +74,8 @@ def test_exclusion_growth_over_final_cap_sends_no_provider_request(monkeypatch):
         excluded_author_handles=handles,
     )
     b1 = next(call for call in calls if call.call_id == "B1")
-    assert len(b1.query_string) <= 512
-    assert len(b1.query_string) + 44 > 512
+    assert len(b1.query_string.encode("utf-8")) <= 512
+    assert len(b1.query_string.encode("utf-8")) + 44 > 512
 
     def forbidden_get(*_args, **_kwargs):
         raise AssertionError("over-cap query reached provider transport")

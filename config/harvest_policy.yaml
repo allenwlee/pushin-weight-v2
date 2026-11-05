@@ -213,13 +213,10 @@ brands:
       current_major: 4
       lookback: 1
       lookahead: 1
-      extra_suffixes:
-      - -preview
   dots:
     paths:
     - bare
     tokens:
-    - dots3-note
     - dots studio
     - '"dots 3 note"'
     - '"dots-3-note"'
