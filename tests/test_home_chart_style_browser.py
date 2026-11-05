@@ -152,6 +152,65 @@ class HomeChartStyleBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_isolated_sakana_posts_stay_visible_after_brand_filter(self) -> None:
+        from core.models import Post, PostBrand
+
+        Brand.objects.update_or_create(
+            nickname="sakana_ai", defaults={"display_name": "Sakana AI", "accent_color": "#e00000"}
+        )
+        for index, hours in enumerate((3, 9)):
+            post = Post.objects.create(
+                tweet_id=f"isolated-sakana-{index}", text=f"isolated Sakana evidence {index}",
+                created_at=timezone.now() - timedelta(hours=hours),
+            )
+            PostBrand.objects.create(post=post, brand_id="sakana_ai")
+        _clear_home_pulse_cache()
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale in ("en", "zh_cn"):
+                    run = open_page(browser, self.live_server_url)
+                    page = run.page
+                    goto_home(run, self.live_server_url, f"locale={locale}&window=1")
+                    for filtered in (False, True):
+                        if filtered:
+                            page.locator('[data-pw-pulse-entry="sakana_ai"]').click()
+                            page.wait_for_function("""() => {
+                                const c = document.querySelector('[data-pw-chart] canvas');
+                                const p = c && JSON.parse(c.dataset.home);
+                                return p && p.applied_filters.brands.length === 1 &&
+                                    p.applied_filters.brands[0] === 'sakana_ai';
+                            }""")
+                        state = page.evaluate("""() => {
+                            const canvas = document.querySelector('[data-pw-chart] canvas');
+                            const chart = Chart.getChart(canvas);
+                            chart.draw();
+                            const index = chart.data.datasets.findIndex(d => d.label === 'sakana_ai (total)');
+                            const meta = chart.getDatasetMeta(index);
+                            const ctx = canvas.getContext('2d');
+                            const ratio = chart.currentDevicePixelRatio;
+                            return meta.data.flatMap((point, i) => {
+                                if (meta.controller.getParsed(i).y !== 1) return [];
+                                const pixels = ctx.getImageData(
+                                    Math.round(point.x * ratio) - 4,
+                                    Math.round(point.y * ratio) - 4, 9, 9).data;
+                                let red = 0;
+                                for (let p = 0; p < pixels.length; p += 4) {
+                                    if (pixels[p] > 150 && pixels[p+1] < 90 &&
+                                        pixels[p+2] < 90 && pixels[p+3] > 120) red++;
+                                }
+                                return [{red, x: point.x, y: point.y}];
+                            });
+                        }""")
+                        self.assertEqual(len(state), 2, state)
+                        self.assertTrue(all(point["red"] > 0 for point in state),
+                                        f"isolated points invisible: filtered={filtered}, {state}")
+                    self.assertIn("isolated Sakana evidence", page.locator("body").inner_text())
+                    self.assertEqual(run.errors, [])
+                    run.context.close()
+            finally:
+                browser.close()
+
     def test_legend_reads_meta_for_the_llama_brand(self) -> None:
         Brand.objects.update_or_create(
             nickname="llama",
