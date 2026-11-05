@@ -593,6 +593,12 @@ def test_small_projection_budget_is_partial_then_resumes_pending_rows():
 def test_campaign_facade_accounts_publication_requests_on_shared_child(monkeypatch):
     from core.data_source_backfill import campaign_usage, execute_phase
 
+    # Local fixtures exercise accounting; dedicated target tests verify real DB identity.
+    target_checks = []
+    monkeypatch.setattr(
+        "core.data_source_backfill_target.validate_backfill_target",
+        lambda **kw: target_checks.append(kw),
+    )
     monkeypatch.setenv("BENCHMARK_OPENROUTER_API_KEY", "fixture")
     source, _product, scope = publication_scope()
     campaign = {
@@ -626,6 +632,7 @@ def test_campaign_facade_accounts_publication_requests_on_shared_child(monkeypat
     assert run.request_count == 0
     usage = campaign_usage(job)
     assert usage["recorded_requests"] == len(requests) == 1
+    assert target_checks == [{"require_write": True}]
 
 
 def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benchmark():

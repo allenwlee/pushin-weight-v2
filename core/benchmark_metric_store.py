@@ -295,7 +295,11 @@ def native_rows(source, payload):
                 "metrics": {},
             }
             if row.get("status") == "error":
-                out.update(status="error", error_code="source_subject_error")
+                out.update(status="error", error_code=(
+                    "requested_history_unavailable"
+                    if payload.get('coverage') == 'requested_model_history'
+                    and row.get('error_code') == 'requested_history_unavailable'
+                    else "source_subject_error"))
             else:
                 label = native_date(row["date"])
                 revision = aware_instant(metadata["updated_at"])

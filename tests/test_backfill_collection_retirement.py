@@ -89,7 +89,8 @@ def test_model_relevance_replay_survives_failure_without_retired_columns(pipelin
         assert read_document(reserved.legacy_archive)["usage"] == {"cost_usd": "0.0001"}
 
 
-def test_unknown_model_outcome_and_historical_reservation_never_get_reissued(pipeline, monkeypatch, tmp_path):
+@pytest.mark.parametrize('counter_path', ['root', 'usage'])
+def test_unknown_model_outcome_and_historical_reservation_never_get_reissued(pipeline, monkeypatch, tmp_path, counter_path):
     job = policy_job(monkeypatch, tmp_path, calls={"A"})
     cfg = load_config(Path("config.yaml"))
     identity = hashlib.sha256(json.dumps([cfg.llm.model_dump(mode="json"), "system", "user"], sort_keys=True).encode()).hexdigest()
@@ -98,6 +99,8 @@ def test_unknown_model_outcome_and_historical_reservation_never_get_reissued(pip
                           physical_accounting_complete=False)
     old = {"model_requests": job.scope["maximum_model_requests"], "response_bytes": 123,
            "staff_relevance": {identity: {"status": "sent", "model": cfg.llm.relevancy_model}}}
+    if counter_path == 'usage':
+        old['usage'] = {'llm_requests': old.pop('model_requests')}
     original.legacy_archive = archive_legacy({"report": old})
     original.physical_bytes_received = None
     original.save(update_fields=["legacy_archive", "physical_bytes_received"])
@@ -111,17 +114,25 @@ def test_unknown_model_outcome_and_historical_reservation_never_get_reissued(pip
             budget.relevance(cfg)("system", "user")
         with pytest.raises(BackfillBudgetExhausted, match="durable model allowance"):
             budget.claim_llm_request()
-        assert CollectionScopeRun.objects.get(run_id=first.run_id, scope_kind="x_model_usage").raw_count == old["model_requests"]
+        usage = CollectionScopeRun.objects.get(run_id=first.run_id, scope_kind="x_model_usage")
+        assert usage.raw_count == job.scope['maximum_model_requests']
+        assert read_document(usage.legacy_archive)['counter_source'] == (
+            'model_requests' if counter_path == 'root' else 'usage.llm_requests')
 
 
-def test_zero_http_history_without_model_budget_evidence_refuses_before_transport(pipeline):
+@pytest.mark.parametrize('retained_bytes_only', [False, True])
+def test_zero_http_history_without_model_budget_evidence_refuses_before_transport(pipeline, retained_bytes_only):
     job = ready_job()
     claim = claim_job(job.pk, invocation_id="unarchived", manual_authorized=True, typed=True)
     original = finish_run(claim, status="failed", typed=True, request_count=0,
                           physical_accounting_complete=False)
     original.scopes.filter(scope_kind="x_backfill_execution").delete()
     assert original.request_count == 0 and original.legacy_archive_id is None
-    with denied_retirement_columns(), pytest.raises(ValueError, match="legacy backfill budget evidence"):
+    if retained_bytes_only:
+        original.legacy_archive = archive_legacy({'report': {'response_bytes': 0}})
+        original.save(update_fields=['legacy_archive'])
+    reason = 'missing or invalid legacy model budget' if retained_bytes_only else 'legacy backfill budget evidence'
+    with denied_retirement_columns(), pytest.raises(ValueError, match=reason):
         execute_job(job.pk)
     assert pipeline.requests == []
 

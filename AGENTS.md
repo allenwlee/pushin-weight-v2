@@ -362,4 +362,12 @@ persistent infrastructure; do not delete it at task completion. A fresh producti
 restore or replacement requires a separate explicit request. Tests that create
 additional databases must be adapted before running against this shared instance. The
 pytest wrapper also refuses pending migrations so test setup cannot silently change the shared schema.
+
+A refusal because the shared database has migrations absent from this worktree
+(another session applied its branch) is not a blocker. Run the tests from a
+disposable detached checkout of this change (`git worktree add --detach`) that
+also holds exactly those migration files, copied from the branch that added
+them (`git log --all -1 --format=%h -- core/migrations/<file>` finds it). Never
+commit the copies, and never migrate, reset, or recreate the shared database to
+get past the refusal. Remove the disposable checkout afterwards.
 <!-- END SHARED LOCAL TEST DATABASE -->

@@ -72,7 +72,7 @@ def emit(event, value):
 
 def database_identity():
     with connection.cursor() as cursor:
-        cursor.execute("SELECT current_database(),current_user")
+        cursor.execute("SELECT current_database(),session_user")
         name, role = cursor.fetchone()
     return {"name": name, "user": role}
 
@@ -112,14 +112,16 @@ def manifest(
     direct_concurrency=32,
     response_storage="archive",
 ):
-    if response_storage not in {"archive", "staging"}:
+    if response_storage not in {"archive", "staging", "database"}:
         raise ValueError("unsupported_response_storage")
-    if response_storage == "staging":
+    if response_storage in {"staging", "database"}:
         from django.conf import settings
 
         from monitor.backfill_staging import validate_staging
         staging_host = settings.DATABASES["default"].get("HOST")
-        validate_staging({"staging_host": staging_host})
+        storage_scope = {"response_storage": response_storage,
+                         "staging_host" if response_storage == "staging" else "database_host": staging_host}
+        validate_staging(storage_scope)
     validate_concurrency(direct_concurrency)
     deadline = deadline or timezone.now() + timedelta(hours=72)
     planned = plan_calls_for_cycle(cfg, scheduled_exclusions=True)
@@ -177,8 +179,8 @@ def manifest(
             maximum_models=window["maximum_model_requests"],
         )
         definition["scope"]["deadline"] = deadline.isoformat()
-        if response_storage == "staging":
-            definition["scope"].update(response_storage="staging", staging_host=staging_host)
+        if response_storage in {"staging", "database"}:
+            definition["scope"].update(storage_scope)
         for extra_index, (call, query) in enumerate(supplemental_queries):
             definition["scope"]["units"].append({
                 "scope_key": f"{call}:supplement:{extra_index}", "scope_kind": "x_query",
@@ -847,13 +849,9 @@ def run(frozen, cfg, *, evaluate_at_end=False, runtime_revision=None):
         != frozen["runtime_config_sha256"]
     ):
         raise RuntimeError("pinned_runtime_config_changed")
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT current_database(),current_user")
-        if cursor.fetchone() != (
-            frozen["database"]["name"],
-            frozen["database"]["user"],
-        ):
-            raise RuntimeError("campaign_database_identity_rejected")
+    from monitor.backfill_database import campaign_database_matches
+    if not campaign_database_matches(frozen, database_identity()):
+        raise RuntimeError("campaign_database_identity_rejected")
     validate_storage_schema()
     # A dedicated session keeps this campaign lock while ordinary connections
     # close between waits. No application row or transaction remains locked.

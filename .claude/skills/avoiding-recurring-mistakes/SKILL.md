@@ -52,7 +52,7 @@ If you find yourself writing something that contradicts these, stop and read the
 
 ---
 
-## M2 — Don't over-reach. Do only what's asked.
+## M2 — Don't add deliverables nobody asked for
 
 **Pattern the user kept correcting.** The assistant offers "while I'm at it" / "let me also commit/push/merge" actions that the user did not request. The user then has to say "no, just X" or "go back to Y".
 
@@ -61,7 +61,7 @@ If you find yourself writing something that contradicts these, stop and read the
 > "let me also commit all our fixes and push to Render" — agent volunteered commit/push without being asked.
 > "actually before you execute, take a look at feat/posts-raw-denormalize, should we merge these to main first?" — agent was about to merge without checking parallel work.
 
-**Rule.** Stay within the requested task. Do not volunteer unrelated commits, releases, or production changes. When the user has already authorized delivery, retain that authorization across status questions and continue the necessary work. Stop or narrow the task when the user directs it, or when a concrete blocker requires information or authority the session does not provide. A later owner waiver retires the affected workflow steps; do not recreate them in another checklist.
+**Rule.** Do not volunteer deliverables the user did not request: extra units or features, commits, pushes, merges, releases, production changes or data writes. Building the requested work on existing code is not one of these. Searching for code that already does part of the job, refactoring it so the old callers and the new work share one path, and retiring what the change makes redundant are part of the task (M7, M19). Do them without asking and record them in the existing plan or change description. When the user has already authorized delivery, retain that authorization across status questions and continue the necessary work. Stop or narrow the task when the user directs it, or when a concrete blocker requires information or authority the session does not provide. A later owner waiver retires the affected workflow steps; do not recreate them in another checklist.
 
 **Exception.** If a step is required to make the requested step work (e.g., "to run this query I need to psql in first"), state the prerequisite plainly as part of the same answer, not as an extra task.
 
@@ -476,7 +476,7 @@ authorize retiring tables or migrating business data without task scope.
 | # | Mistake | One-line rule |
 |---|---|---|
 | M1 | Re-deriving settled decisions | Re-read `AGENTS.md` + `CONCEPTS.md` before editing |
-| M2 | Volunteering commit/push/merge | End the turn with literal answer; don't offer extras |
+| M2 | Volunteering unrequested deliverables | Don't offer extras; reuse and refactor work is part of the task |
 | M3 | Scope ambiguity | Repeat keep/revert list back BEFORE acting |
 | M4 | Parallel-session collision | `git fetch` + check `feat/*` branches before merging |
 | M5 | Verification as retrofit | Name risk-specific proof; public UI needs real rendered route/DOM evidence |

@@ -19,6 +19,7 @@ from core.models import (
     SourceMetric,
     SourceSubjectMapping,
     TaxonomyVersion,
+    TimeZone,
 )
 from core.publisher_accounts import get_publisher
 
@@ -330,8 +331,12 @@ def definition_rows():
 
 
 @transaction.atomic
-def register_definitions():
+def register_definitions(*, sources=None):
+    selected_sources = set(SOURCES) if sources is None else set(sources)
+    require(bool(selected_sources) and selected_sources <= SOURCES.keys(), 'unknown metric registry source')
     for key, (name, kind, url, adapter, normalizer) in SOURCES.items():
+        if key not in selected_sources:
+            continue
         source, created = DataSource.objects.get_or_create(
             pk=key,
             defaults={
@@ -360,17 +365,25 @@ def register_definitions():
             source.save(
                 update_fields=["website_url", "adapter_key", "identifier_normalizer"]
             )
-    for key in METRIC_TYPES:
+    rows = [row for row in definition_rows() if row['source_id'] in selected_sources]
+    selected_types = set(METRIC_TYPES) if sources is None else {row['metric_type_id'] for row in rows}
+    for key in sorted(selected_types):
         MetricType.objects.get_or_create(
             pk=key, defaults={"name": key.replace("_", " ").title()}
         )
-    rows = definition_rows()
     # These identities come from the installed typed definitions, never a
     # provider response or a guessed unit alias.
     units = {row[name] for row in rows for name in ("unit", "window_unit") if row[name]}
-    if MeasurementUnit._meta.db_table in connection.introspection.table_names():
+    tables = set(connection.introspection.table_names())
+    if MeasurementUnit._meta.db_table in tables:
         MeasurementUnit.objects.bulk_create(
             [MeasurementUnit(code=code) for code in sorted(units)], ignore_conflicts=True
+        )
+    if TimeZone._meta.db_table in tables:
+        zones = {row['source_timezone_reference_id'] for row in rows
+                 if row['source_timezone_reference_id'] is not None}
+        TimeZone.objects.bulk_create(
+            [TimeZone(code=code) for code in sorted(zones)], ignore_conflicts=True
         )
     fields = {field.attname for field in SourceMetric._meta.concrete_fields}
     for row in rows:

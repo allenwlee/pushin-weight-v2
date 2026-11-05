@@ -464,7 +464,11 @@ def acquire_hf_archives(claim, job, budget):
         }
         if model["creation"].get("source") == "hf":
             identifiers.add(model["creation"]["native_identifier"])
-        selected.extend({"identifier": identifier} for identifier in identifiers)
+        selected.extend({"identifier": identifier,
+                         **({'_id': model['creation']['hf_archive_row_id']}
+                            if scope.get('backfill_archive_only') is True
+                            and model['creation'].get('hf_archive_row_id') else {})}
+                        for identifier in identifiers)
     require(selected, "archive cohort has no HF identifiers")
     snapshots = []
     for revision in revisions:
@@ -502,7 +506,7 @@ def acquire_hf_archives(claim, job, budget):
             )
             snap = observation_documents(old)[0]
         else:
-            _checkpoint(
+            capture_scope = _checkpoint(
                 claim,
                 job,
                 revision,
@@ -511,11 +515,18 @@ def acquire_hf_archives(claim, job, budget):
                 ownership={"dataset_id": DATASET, "cohort_hash": scope["cohort_hash"]},
             )
             budget.check()
+            archive_client = budget.client
+            if scope.get('backfill_archive_only') is True:
+                from core.data_source_backfill_hf import ArchiveCaptureClient
+
+                archive_client = ArchiveCaptureClient(budget.client, claim, capture_scope,
+                    budget.max_bytes - budget.total_bytes_read)
             reader = ArchiveBudget(
-                budget.client,
+                archive_client,
                 requests=budget.remaining,
                 max_bytes=budget.max_bytes - budget.total_bytes_read,
                 seconds=budget.deadline - budget.clock(),
+                workers=1 if scope.get('backfill_archive_only') is True else 4,
             )
             try:
                 result = select_snapshot(reader, revision, selected)

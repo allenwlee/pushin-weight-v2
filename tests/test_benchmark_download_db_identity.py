@@ -12,15 +12,8 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
 def setup_spec():
-    from django.db import connection
-
     from core.benchmark_metric_identity import register_definitions
-    from core.models import TimeZone
 
-    # Historical migration rehearsals may run this shared fixture before the
-    # timezone catalogue exists. Seed it only when that schema is present.
-    if TimeZone._meta.db_table in connection.introspection.table_names():
-        TimeZone.objects.get_or_create(pk="UTC")
     register_definitions()
     # Test-only reviewed grants; real source rights are never inferred from these.
     from core.benchmark_attribution import USES
@@ -137,3 +130,14 @@ def test_hf_namespace_bridge_preserves_identity_and_provenance():
     assert product.publisher_account_id == account.pk
     assert product.publisher_ownership.ownership_confirmed is True
     assert CompanyAccount.objects.get(account=account).company_id == "lab"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_registry_establishes_declared_timezone_without_fixture_primer():
+    from core.benchmark_metric_identity import register_definitions
+    from core.models import SourceMetric, TimeZone
+    assert not SourceMetric.objects.filter(source_timezone_reference_id='UTC').exists()
+    TimeZone.objects.filter(pk='UTC').delete()
+    register_definitions(sources=('opencode',))
+    assert TimeZone.objects.filter(pk='UTC').exists()
+    assert SourceMetric.objects.filter(source_id='opencode', source_timezone_reference_id='UTC').exists()

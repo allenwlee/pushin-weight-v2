@@ -87,7 +87,7 @@ class Command(BaseCommand):
             help="Physical search request start rate (default10).",
         )
         parser.add_argument(
-            "--response-storage", choices=["archive", "staging"], default=None,
+            "--response-storage", choices=["archive", "staging", "database"], default=None,
             help="New instructions only: staging saves Posts and receipts without full response archives.",
         )
         parser.add_argument(
@@ -95,6 +95,10 @@ class Command(BaseCommand):
             type=Path,
             help="Month runtime JSON: runtime_revision and source_sha256; paired with --runtime-revision.",
         )
+        parser.add_argument("--database-relocation", type=Path,
+                            help="Verified storage relocation receipt for preserved jobs.")
+        parser.add_argument("--database-relocation-sha256",
+                            help="Expected SHA256 of the relocation receipt.")
         mode = parser.add_mutually_exclusive_group()
         mode.add_argument(
             "--execute",
@@ -108,6 +112,15 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        from monitor.backfill_database import relocated_database
+        try:
+            with relocated_database(options.get("database_relocation"),
+                                    options.get("database_relocation_sha256")):
+                return self._handle(*args, **options)
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
+
+    def _handle(self, *args, **options):
         try:
             phase = options["phase"]
             if options["response_storage"] is not None:

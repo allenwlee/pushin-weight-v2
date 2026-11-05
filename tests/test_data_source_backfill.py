@@ -25,7 +25,18 @@ from core.models import (
 )
 from tests.test_collection_jobs import job as base_job
 
-pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
+
+
+@pytest.fixture(autouse=True)
+def isolated_campaign_target(monkeypatch):
+    """Campaign behavior uses local fixtures; target checks have their own tests."""
+    monkeypatch.setattr(
+        'core.management.commands.backfiller_data_source.validate_backfill_target',
+        lambda **_: {'schema_ready': True, 'database': 'local-test'},
+    )
+    monkeypatch.setattr('core.data_source_backfill_target.validate_backfill_target',
+                       lambda **_: {'schema_ready': True, 'database': 'local-test'})
 
 
 def specification():
@@ -188,6 +199,97 @@ def test_default_inspect_and_registration_preview_are_nonmutating(monkeypatch):
     assert preview['applied'] is False
     assert list(CollectionJob.objects.values()) == before
     assert not CollectionRun.objects.exists()
+
+
+def test_campaign_report_is_paged_and_usage_is_shared(monkeypatch):
+    from copy import deepcopy
+
+    from core import data_source_backfill as service
+
+    first = specification()
+    second = deepcopy(first)
+    second['job_key'] += ':second'
+    service.register_campaign([first, second])
+    calls = []
+    monkeypatch.setattr(service, 'campaign_usage', lambda job: (
+        calls.append(job.pk) or {'invocations': 0, 'reserved_requests': 0, 'recorded_requests': 0}))
+    page = service.report_campaign(campaign_key='campaign', limit=1)
+    assert page['job_count'] == 1 and page['total_job_count'] == 2
+    assert page['next_after'] == first['job_key']
+    next_page = service.report_campaign(campaign_key='campaign', limit=1,
+                                        after_job_key=page['next_after'])
+    assert next_page['cells'][0]['job_key'] == second['job_key']
+    assert next_page['next_after'] is None
+    calls.clear()
+    assert service.report_campaign(campaign_key='campaign', limit=2)['job_count'] == 2
+    assert len(calls) == 1
+
+
+def test_command_reports_use_readonly_transactions(monkeypatch):
+    from django.db import connection
+
+    from core import data_source_backfill as service
+
+    registered()
+    original = service.report_campaign
+    seen = []
+
+    def inspect(**kwargs):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_setting('transaction_read_only')")
+            seen.append(cursor.fetchone()[0])
+        return original(**kwargs)
+
+    monkeypatch.setattr(service, 'report_campaign', inspect)
+    assert command()['applied'] is False
+    assert seen == ['on']
+
+
+def test_campaign_report_does_not_parse_full_last_attempt_payload(monkeypatch):
+    from core.data_source_backfill import report_campaign
+
+    job = registered()
+    set_job_state(job.pk, 'ready')
+    claim = claim_job(job.pk, invocation_id='summary', manual_authorized=True, typed=True)
+    finish_run(claim, status='success', typed=True, request_count=0,
+               physical_accounting_complete=True)
+    monkeypatch.setattr('core.collection_reports.run_report_document',
+                        lambda *_: pytest.fail('summary parsed full run report'))
+    cell = report_campaign(campaign_key='campaign')['cells'][0]
+    assert cell['last_attempt']['run_id'] == str(claim.run_id)
+    assert cell['run_report_included'] is False
+
+
+def test_legacy_usage_streams_archives_instead_of_caching_all_bodies(monkeypatch):
+    from django.db.models import QuerySet
+
+    from core.data_source_backfill import campaign_usage
+
+    job = legacy_campaign_job()
+    CollectionRun.objects.create(job=job, ingestion_key='b' * 64, status='success',
+        completed_at=timezone.now(), request_count=2,
+        legacy_archive=campaign_archive(invocations=1, reserved_requests=3, recorded_requests=2))
+    original = QuerySet.__iter__
+
+    def forbid_archive_cache(query):
+        if query.model is CollectionRun and query.query.select_related:
+            pytest.fail('campaign usage cached archive-bearing run rows')
+        return original(query)
+
+    monkeypatch.setattr(QuerySet, '__iter__', forbid_archive_cache)
+    assert campaign_usage(job) == {'invocations': 1, 'reserved_requests': 3, 'recorded_requests': 2}
+
+
+def test_legacy_usage_refuses_oversize_archive_before_reading_body(monkeypatch):
+    from core.data_source_backfill import campaign_usage
+    job = legacy_campaign_job()
+    archive = archive_legacy({'report': {'padding': 'x' * (16 * 1024 * 1024)}})
+    CollectionRun.objects.create(job=job, ingestion_key='d' * 64,
+        status='success', completed_at=timezone.now(), legacy_archive=archive)
+    monkeypatch.setattr('core.collection_capture.read_document',
+                        lambda *_: pytest.fail('oversize archive body was read'))
+    with pytest.raises(ValueError, match='archive exceeds report byte limit'):
+        campaign_usage(job)
 
 
 def test_registration_is_paused_idempotent_and_rejects_changed_partition():
@@ -384,3 +486,79 @@ def test_ambiguous_reservation_blocks_other_source_phase():
     with pytest.raises(ValueError, match='request limit'):
         claim_job(second.pk, typed=True)
     assert not second.runs.exists()
+
+
+def revision_budget_jobs(requests):
+    from copy import deepcopy
+
+    from core.collection_jobs import register_job
+    from core.models import DataSource
+
+    spec = specification()
+    spec['definition']['campaign'].update(key='0813:revision-a', max_invocations=40, max_requests=1000)
+    spec['definition']['budgets']['requests'] = requests
+    second = deepcopy(spec)
+    second['definition']['campaign']['key'] = '0813:revision-b'
+    jobs = []
+    # Isolate the locked claim guard from the separate narrow cohort validator.
+    # These two immutable owners stand for the two already-observed revisions.
+    for index, value in enumerate((spec, second)):
+        jobs.append(register_job(job_key=f'0813:revision-{index}:guard',
+            source=DataSource.objects.get(pk=value['source']), purpose=value['purpose'],
+            operation=value['operation'], mode='historical', definition=value['definition']))
+    return jobs
+
+
+@pytest.mark.parametrize('limit', ['requests', 'attempts'])
+def test_0813_contract_revisions_share_exhausted_budget(limit):
+    from core.data_source_backfill import campaign_usage
+
+    jobs = revision_budget_jobs(100 if limit == 'requests' else 1)
+    for _ in range(10 if limit == 'requests' else 40):
+        set_job_state(jobs[0].pk, 'ready')
+        claim = claim_job(jobs[0].pk, typed=True)
+        finish_run(claim, status='partial', typed=True, request_count=0,
+                   error_code='fixture_interrupted', physical_accounting_complete=False)
+    assert campaign_usage(jobs[1]) == {'invocations': 0, 'reserved_requests': 0, 'recorded_requests': 0}
+    set_job_state(jobs[1].pk, 'ready')
+    before = CollectionAttempt.objects.count()
+    with pytest.raises(ValueError, match='campaign invocation/request limit exhausted'):
+        claim_job(jobs[1].pk, typed=True)
+    assert CollectionAttempt.objects.count() == before
+
+
+def test_0813_revisions_serialize_the_last_request_reservation():
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from django.db import close_old_connections
+
+    from core.data_source_backfill import campaign_budget_usage
+
+    jobs = revision_budget_jobs(100)
+    for _ in range(9):
+        set_job_state(jobs[0].pk, 'ready')
+        claim = claim_job(jobs[0].pk, typed=True)
+        finish_run(claim, status='partial', typed=True, request_count=0,
+                   error_code='fixture_interrupted', physical_accounting_complete=False)
+    for job in jobs:
+        set_job_state(job.pk, 'ready')
+    ready = Barrier(2)
+
+    def reserve(job_id):
+        close_old_connections()
+        try:
+            ready.wait(timeout=10)
+            try:
+                claim_job(job_id, typed=True)
+                return 'claimed'
+            except ValueError as exc:
+                assert str(exc) == 'campaign invocation/request limit exhausted'
+                return 'limited'
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(reserve, [job.pk for job in jobs]))
+    assert sorted(outcomes) == ['claimed', 'limited']
+    assert campaign_budget_usage(jobs[0])['reserved_requests'] == 1000

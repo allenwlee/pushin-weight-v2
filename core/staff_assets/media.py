@@ -6,6 +6,7 @@ import ipaddress
 import socket
 import time
 import warnings
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
@@ -25,6 +26,17 @@ MAX_PIXELS = 40_000_000
 
 def media_storage():
     return storages["staff_media"]
+
+
+@contextmanager
+def locked_media_hash(sha):
+    """Serialize changes to one content-addressed object within a transaction."""
+    from django.db import connection
+
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(%s)", [int(sha[:15], 16)])
+        yield
 
 
 def local_bytes(asset_root, relative_path):
@@ -116,36 +128,52 @@ def fetch_public(url, *, max_bytes=MAX_BYTES):
     raise ValueError("Too many media redirects")
 
 
-def store_image(data):
-    if len(data) > MAX_BYTES:
-        raise ValueError("Media exceeds byte limit")
+def inspect_image_bytes(data, *, allow_mpo=False):
+    """Inspect bounded image bytes without changing their original encoding."""
+    formats = {"JPEG", "PNG", "WEBP", "GIF"}
+    if allow_mpo:
+        formats.add("MPO")
     with warnings.catch_warnings():
         warnings.simplefilter("error", Image.DecompressionBombWarning)
         with Image.open(io.BytesIO(data)) as image:
             width, height = image.size
-            if width * height > MAX_PIXELS or image.format not in {
-                "JPEG",
-                "PNG",
-                "WEBP",
-                "GIF",
-            }:
+            if width * height > MAX_PIXELS or image.format not in formats:
                 raise ValueError("Unsupported image format or dimensions")
             image.verify()
         with Image.open(io.BytesIO(data)) as image:
-            image.load()
-            extension = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp", "GIF": "gif"}[
-                image.format
-            ]
-            content_type = Image.MIME[image.format]
+            image_format = image.format
+            if image_format == "MPO":
+                if not 1 <= image.n_frames <= 10:
+                    raise ValueError("too_many_mpo_frames")
+                pixels = 0
+                for index in range(image.n_frames):
+                    image.seek(index)
+                    pixels += image.width * image.height
+                    if pixels > MAX_PIXELS:
+                        raise ValueError("image_dimensions_too_large")
+                    image.load()
+            else:
+                image.load()
+            extension = {
+                "JPEG": "jpg",
+                "PNG": "png",
+                "WEBP": "webp",
+                "GIF": "gif",
+                "MPO": "mpo",
+            }[image_format]
+            content_type = Image.MIME[image_format]
+    return width, height, extension, content_type
+
+
+def store_image(data):
+    if len(data) > MAX_BYTES:
+        raise ValueError("Media exceeds byte limit")
+    width, height, extension, content_type = inspect_image_bytes(data)
     sha = hashlib.sha256(data).hexdigest()
     storage = media_storage()
     path = f"sha256/{sha[:2]}/{sha}.{extension}"
     # Serialize local/storage writes by content hash, retaining every attribution.
-    with transaction.atomic():
-        from django.db import connection
-
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT pg_advisory_xact_lock(%s)", [int(sha[:15], 16)])
+    with locked_media_hash(sha):
         existing = StaffMediaObject.objects.filter(pk=sha).first()
         if existing:
             path = existing.storage_name

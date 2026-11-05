@@ -283,9 +283,11 @@ def claim_job(
         _require_legacy_fields(CollectionRun, "report")
     if bounded_campaign:
         if candidate.campaign_id:
-            from core.models import CollectionCampaign
+            from core.data_source_backfill import budget_campaigns
 
-            CollectionCampaign.objects.select_for_update().get(pk=candidate.campaign_id)
+            locked_campaigns = list(
+                budget_campaigns(candidate).select_for_update().order_by('pk')[:1001])
+            require(len(locked_campaigns) <= 1000, 'campaign revision inspection cap')
         else:
             list(
                 CollectionJob.objects.select_for_update()
@@ -301,6 +303,13 @@ def claim_job(
         .get(pk=job_id)
     )
     validate_job(job)
+    if typed:
+        from core.data_source_backfill_opencode import (
+            history_window,
+            is_opencode_history,
+        )
+        if is_opencode_history(job):
+            history_window(job)
     if typed:
         require(
             (
@@ -355,10 +364,10 @@ def claim_job(
                 stop_reason="expired_lease",
             )
     if bounded_campaign:
-        from core.data_source_backfill import campaign_usage, validate_campaign
+        from core.data_source_backfill import campaign_budget_usage, validate_campaign
 
         campaign = validate_campaign(job.instructions, contract_id=job.contract_id)
-        usage = campaign_usage(job)
+        usage = campaign_budget_usage(job)
         require(
             usage["invocations"] < campaign["max_invocations"]
             and usage["reserved_requests"] + job.budgets["requests"]
@@ -1021,6 +1030,12 @@ def checkpoint_scope(
                     run.job, run, scope_kind, scope_key, ownership,
                     projection_contract, resource_observation,
                 )
+            elif scope_kind == "hf_archive_catalog":
+                from core.data_source_backfill_hf import validate_discovery_scope
+
+                require(projection_contract is None and resource_observation is None,
+                        "unexpected HF archive catalog owner")
+                validate_discovery_scope(run.job, scope_key, ownership)
             elif scope_kind == "model_catalog" and run.job.source_id == "openrouter":
                 require(projection_contract is None, "unexpected inventory contract")
                 from core.model_inventory import validate_typed_scope
