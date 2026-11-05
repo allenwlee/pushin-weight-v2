@@ -109,10 +109,11 @@ def validate_scope(job, cfg):
     require(scope.get("credential_purpose") == TwitterApiCredentialPurpose.ON_DEMAND.value,
             "on-demand credential purpose required")
     actual_db = {key.lower(): settings.DATABASES["default"].get(key) for key in ("NAME", "USER")}
-    require(scope.get("database") == actual_db, "backfill database identity changed")
+    from monitor.backfill_database import job_database_matches
+    require(job_database_matches(job, actual_db), "backfill database identity changed")
     storage = scope.get("response_storage", "archive")
-    require(storage in {"archive", "staging"}, "unsupported response storage")
-    if storage == "staging":
+    require(storage in {"archive", "staging", "database"}, "unsupported response storage")
+    if storage in {"staging", "database"}:
         from monitor.backfill_staging import validate_staging
         validate_staging(scope)
     require(scope.get("config_digest") == config_digest(cfg, version=version), "backfill configuration changed")
@@ -300,13 +301,18 @@ def _adopt_model_usage(run):
                      raw_count=0, outcome="adopted", execution_state="completed")
         return
     report = _legacy_budget_report(run)
-    count = report.get("model_requests", 0)
+    usage = report.get('usage')
+    usage = usage if isinstance(usage, dict) else {}
+    count = report.get("model_requests", usage.get("llm_requests"))
     receipts = report.get("staff_relevance", {})
     require(type(count) is int and count >= 0 and isinstance(receipts, dict)
-            and len(receipts) <= count, "invalid legacy model budget")
-    archive = _evidence({key: report.get(key) for key in (
-        "model_requests", "model_responses", "staff_relevance",
-    )}, "x_model_response") if count else None
+            and len(receipts) <= count, "missing or invalid legacy model budget; reconcile before retry")
+    archive = _evidence({
+        'model_requests': count,
+        'model_responses': report.get('model_responses', usage.get('model_responses')),
+        'staff_relevance': report.get('staff_relevance'),
+        'counter_source': 'model_requests' if 'model_requests' in report else 'usage.llm_requests',
+    }, "x_model_response") if count else None
     _typed_scope(run, "x_model_usage", "legacy", phase="backfill_model_v1",
                  raw_count=count, outcome="adopted", execution_state="completed",
                  legacy_archive=archive)
@@ -758,6 +764,9 @@ def _drain_historical_rare(claim, job, cfg, budget):
 
 
 def _report(job, run_id):
+    from monitor.backfill_database import relocation_audit
+
+    audit = relocation_audit()
     rows = list(CollectionScopeRun.objects.filter(run_id=run_id, scope_kind="x_query"))
     members = set(CollectionObservation.objects.filter(
         run__job=job, source_subject_kind="post",
@@ -770,6 +779,7 @@ def _report(job, run_id):
     ).count()
     requests = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
     report = {
+        **({"database_relocation": audit} if audit else {}),
         "job_id": str(job.pk), "run_id": str(run_id),
         "credential_purpose": TwitterApiCredentialPurpose.ON_DEMAND.value,
         "collection_drained": bool(rows) and all(row.enumeration_complete for row in rows),
@@ -869,7 +879,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
 
     job = CollectionJob.objects.get(pk=job_id)
     from core.models import CollectionRequest
-    direct_staging = job.scope.get("response_storage") == "staging"
+    direct_staging = job.scope.get("response_storage") in {"staging", "database"}
     use_prefetch = direct_staging or collection_options is not None or CollectionRequest.objects.filter(
         attempt__run__job=job, request_category="x_backfill_prefetch",
     ).exists()

@@ -104,7 +104,10 @@ def prepare_campaign(specifications):
     prepared, identities, keys = [], set(), set()
     for spec in specifications:
         require(isinstance(spec, dict), "source job specification required")
-        require(spec.get("source") in HISTORY_SOURCES, "unsupported campaign source")
+        opencode = (spec.get('source'), spec.get('purpose'), spec.get('operation')) == (
+            'opencode', 'metric', 'collect_metrics')
+        require(spec.get("source") in HISTORY_SOURCES or opencode,
+                "unsupported campaign source")
         require(spec.get("job_key") not in keys, "duplicate job key")
         keys.add(spec.get("job_key"))
         source = DataSource.objects.get(pk=spec["source"])
@@ -114,6 +117,27 @@ def prepare_campaign(specifications):
             else None
         )
         definition = spec["definition"]
+        typed = definition.get('version') == 2
+        require(not opencode or typed, 'OpenCode history requires typed instructions')
+        campaign_definition = definition
+        if typed:
+            from core.collection_instructions import (
+                SETTINGS,
+                _normalize_references,
+                validate_settings,
+            )
+            settings = spec.get('settings', {})
+            require(isinstance(settings, dict) and set(settings) <= set(SETTINGS)
+                    and not set(settings).intersection({
+                'campaign_id', 'campaign_role', 'campaign_phase'}),
+                'campaign specification owns campaign relationships')
+            candidate = CollectionJob(source=source, contract=contract, purpose=spec['purpose'],
+                operation=spec['operation'], mode='historical', instruction_version=2,
+                definition=definition, **_normalize_references(CollectionJob, settings))
+            validate_settings(candidate)
+            campaign_definition = {'campaign': spec['campaign'], 'scope': {},
+                'budgets': {name: settings.get('max_' + name)
+                            for name in ('requests', 'bytes', 'seconds', 'items')}}
         validate_definition(
             source_id=source.pk,
             purpose=spec["purpose"],
@@ -122,9 +146,29 @@ def prepare_campaign(specifications):
             contract_id=contract.pk if contract else None,
             definition=definition,
         )
+        if not typed and (definition['scope'].get('role') == 'backfill_archive_discovery'
+                          or definition['scope'].get('backfill_archive_only') is True):
+            from core.data_source_backfill_hf import (
+                validate_archive_only,
+                validate_discovery,
+            )
+
+            candidate = CollectionJob(source=source, contract=contract, purpose=spec['purpose'],
+                operation=spec['operation'], mode='historical', definition=definition)
+            if definition['scope'].get('backfill_archive_only') is True:
+                validate_archive_only(candidate)
+            else:
+                validate_discovery(candidate)
         campaign = validate_campaign(
-            definition, contract_id=contract.pk if contract else None
+            campaign_definition, contract_id=contract.pk if contract else None
         )
+        if campaign['key'].startswith('0813:'):
+            from core.data_source_backfill_cohort import validate_campaign_specification
+
+            validate_campaign_specification(spec, campaign_definition)
+        if opencode:
+            from core.data_source_backfill_opencode import preview_history_targets
+            preview_history_targets(contract, spec.get('targets'))
         require(
             (campaign["role"] != "inventory" or spec["operation"] != "model_history"),
             "inventory cannot own deep history",
@@ -146,6 +190,8 @@ def prepare_campaign(specifications):
                 "operation": spec["operation"],
                 "mode": "historical",
                 "definition": definition,
+                **({'settings': dict(settings), 'targets': spec.get('targets', []),
+                    '_campaign_definition': campaign_definition} if typed else {}),
             }
         )
     require(len(identities) == 1, "mixed campaign keys or cohorts")
@@ -167,17 +213,31 @@ def prepare_campaign(specifications):
     return prepared
 
 
-@transaction.atomic
 def register_campaign(specifications):
     """Register paused source phases atomically; identical re-registration is safe."""
+    from core.data_source_backfill_target import validate_backfill_target
+    validate_backfill_target(require_write=True)
+    return _register_campaign(specifications)
+
+
+@transaction.atomic
+def _register_campaign(specifications):
     # Existing source rows serialize concurrent initial registrations as well as
     # later additions, when no campaign job exists yet to lock.
+    prepared = prepare_campaign(specifications)
     list(
         DataSource.objects.select_for_update()
-        .filter(pk__in=HISTORY_SOURCES)
+        .filter(pk__in={spec['source'].pk for spec in prepared})
         .order_by("pk")
     )
-    return [register_job(**spec) for spec in prepare_campaign(specifications)]
+    jobs = []
+    for spec in prepared:
+        campaign_definition = spec.pop('_campaign_definition', None)
+        if campaign_definition is not None:
+            spec['settings'].update(campaign_fields(campaign_definition,
+                contract_id=spec['contract'].pk if spec['contract'] else None))
+        jobs.append(register_job(**spec))
+    return jobs
 
 
 def campaign_jobs(*, campaign_key=None, job_id=None):
@@ -198,21 +258,60 @@ def campaign_jobs(*, campaign_key=None, job_id=None):
     return jobs.select_related("source", "contract", "campaign").order_by("created_at", "job_key")
 
 
-def report_campaign(*, campaign_key=None, job_id=None):
-    cells = []
-    for job in campaign_jobs(campaign_key=campaign_key, job_id=job_id):
+def report_campaign(*, campaign_key=None, job_id=None, limit=25, after_job_key=None):
+    require(type(limit) is int and 1 <= limit <= 100, "report limit must be from1 to100")
+    require(after_job_key is None or isinstance(after_job_key, str) and len(after_job_key) <= 128,
+            "invalid report cursor")
+    jobs = campaign_jobs(campaign_key=campaign_key, job_id=job_id).order_by('job_key')
+    total = jobs.count()
+    if after_job_key:
+        jobs = jobs.filter(job_key__gt=after_job_key)
+    page = list(jobs[:limit + 1])
+    cells, usages = [], {}
+    for job in page[:limit]:
         validate_job(job)
         campaign = validate_campaign(job.instructions, contract_id=job.contract_id)
+        key = job.campaign_id or campaign['key']
+        if key not in usages:
+            usages[key] = campaign_usage(job)
         cells.append(
-            {**job_status(job.pk), "campaign": campaign, "usage": campaign_usage(job)}
+            {**job_status(job.pk, include_run_report=False), "campaign": campaign,
+             "usage": usages[key]}
         )
     require(not job_id or len(cells) == 1, "campaign job not found")
     return {
         "schema_version": 1,
         "job_count": len(cells),
+        "total_job_count": total,
+        "next_after": page[limit - 1].job_key if len(page) > limit else None,
         "cells": cells,
         "complete_public_history_claimed": False,
     }
+
+
+def budget_campaigns(job):
+    """Keep the fixed 0813 allowance across immutable contract corrections."""
+    campaigns = CollectionCampaign.objects.filter(pk=job.campaign_id)
+    if job.campaign_id and job.campaign.campaign_key.startswith('0813:'):
+        campaigns = CollectionCampaign.objects.filter(
+            policy_version='backfiller-data-source-v1', campaign_key__startswith='0813:')
+    return campaigns
+
+
+def campaign_budget_usage(job):
+    """Per-revision reports stay intact; admission sums the recovery task."""
+    if not job.campaign_id or not job.campaign.campaign_key.startswith('0813:'):
+        return campaign_usage(job)
+    require(job.budgets['seconds'] <= 80 and job.budgets['bytes'] <= 25 * 1024**2
+            and job.budgets['requests'] <= 100, '0813 attempt ceiling exceeded')
+    peers = list(CollectionJob.objects.filter(campaign__in=budget_campaigns(job))
+        .select_related('campaign').order_by('campaign_id', 'pk').distinct('campaign_id')[:1001])
+    require(len(peers) <= 1000, '0813 campaign revision inspection cap')
+    usage = {'invocations': 0, 'reserved_requests': 0, 'recorded_requests': 0}
+    for peer in peers:
+        for name, value in campaign_usage(peer).items():
+            usage[name] += value
+    return usage
 
 
 def campaign_usage(job):
@@ -249,10 +348,17 @@ def campaign_usage(job):
     from core.collection_capture import run_report_document
 
     usage = {"invocations": 0, "reserved_requests": 0, "recorded_requests": 0}
-    for run in CollectionRun.objects.select_related("job", "legacy_archive").filter(
+    for run in CollectionRun.objects.select_related("job", "legacy_archive").defer(
+        "legacy_archive__body",
+    ).filter(
         job__definition__campaign__kind="backfiller-data-source-v1",
         job__definition__campaign__key=job.campaign_settings["key"],
-    ):
+    ).iterator(chunk_size=1):
+        require(
+            run.legacy_archive_id is None
+            or run.legacy_archive.byte_count <= 16 * 1024 * 1024,
+            "legacy campaign archive exceeds report byte limit; use isolated adoption",
+        )
         reservation = run_report_document(run).get("campaign_usage", {})
         usage["invocations"] += reservation.get("invocations", 0)
         usage["reserved_requests"] += reservation.get("reserved_requests", 0)
@@ -432,6 +538,14 @@ def project_legacy_campaigns(*, verify_only=False):
 
 
 def execute_phase(job_id, *, budget=None, executor=None, replay=False, projector=None):
+    from core.data_source_backfill_target import isolated_backfill_review
+
+    with isolated_backfill_review():
+        return _execute_phase(job_id, budget=budget, executor=executor,
+                              replay=replay, projector=projector)
+
+
+def _execute_phase(job_id, *, budget=None, executor=None, replay=False, projector=None):
     """Run one explicitly selected phase; adapter acquires the shared fenced claim.
 
     Acquisition executors follow execute_due_job(job, decision, budget). Projectors
@@ -440,17 +554,41 @@ def execute_phase(job_id, *, budget=None, executor=None, replay=False, projector
     """
     job = campaign_jobs(job_id=job_id).get()
     validate_job(job)
+    if job.scope.get('backfill_archive_only') is True and job.state == 'completed':
+        from core.data_source_backfill_hf import replay_archives
+
+        return replay_archives(job)
+    if job.scope.get('role') == 'backfill_archive_discovery':
+        from core.data_source_backfill_hf import (
+            discovered_revisions,
+            execute_discovery,
+            validate_discovery,
+        )
+
+        validate_discovery(job)
+        if job.state == 'completed':
+            return discovered_revisions(job.pk)
+        require(not replay, 'archive discovery reuses its saved pages through resume')
+        require(executor is None, 'archive discovery owns its provider executor')
+        executor = execute_discovery
     campaign = validate_campaign(job.instructions, contract_id=job.contract_id)
+    from core.data_source_backfill_opencode import is_opencode_history, replay_history
+    if is_opencode_history(job) and job.state == 'completed':
+        return replay_history(job)
     require(replay == (campaign["phase"] == "replay"), "campaign replay phase mismatch")
     if replay and projector is None:
         from core.source_metric_projection import replay_saved_evidence
 
         projector = replay_saved_evidence
+    from core.data_source_backfill_opencode import history_window, is_opencode_history
+    if is_opencode_history(job):
+        history_window(job)
     require(
-        executor is not None or replay or job.operation != "collect_metrics",
+        executor is not None or replay or job.operation != "collect_metrics"
+        or is_opencode_history(job),
         "direct metric acquisition hook is unavailable",
     )
-    usage = campaign_usage(job)
+    usage = campaign_budget_usage(job)
     require(
         usage["invocations"] < campaign["max_invocations"]
         and usage["reserved_requests"] + job.budgets["requests"]

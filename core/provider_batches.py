@@ -69,7 +69,8 @@ def enrichment_control_status(job_id):
         # assume its configured application role without changing that login.
         cursor.execute("SELECT current_database(),session_user")
         name, role = cursor.fetchone()
-    if job.scope.get("database") != {"name": name, "user": role}:
+    from monitor.backfill_database import job_database_matches
+    if not job_database_matches(job, {"name": name, "user": role}):
         raise BatchAdmissionError("enrichment_database_identity_mismatch")
     batches = job.provider_batches.all()
     first = batches.order_by("created_at", "pk").first()

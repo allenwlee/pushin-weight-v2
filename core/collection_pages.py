@@ -33,7 +33,9 @@ def _scope_compatibility():
 @transaction.atomic
 def append_page_receipt(scope, envelope, *, cursor=None, legacy_archive=None):
     """Caller fences its run; this transaction also supports bounded old-data copy."""
-    scope = CollectionScopeRun.objects.select_for_update().select_related("run").get(pk=scope.pk)
+    scope = CollectionScopeRun.objects.select_for_update().select_related("run").only(
+        "pk", "run_id", "run__job_id", "scope_kind", "source_dataset_id", "job_target_id",
+    ).get(pk=scope.pk)
     require(scope.scope_kind == "x_query", "page receipt requires an X query scope")
     ordinal = scope.child_scopes.filter(scope_kind=PAGE_KIND).count()
     received = envelope.get("received_post_ids", [])
@@ -58,8 +60,8 @@ def append_page_receipt(scope, envelope, *, cursor=None, legacy_archive=None):
     observed_at = aware_instant(envelope["observed_at"]) if envelope.get("observed_at") else None
     archive = legacy_archive or archive_legacy(envelope)
     child = CollectionScopeRun.objects.create(
-        run=scope.run, parent_scope=scope, source_dataset=scope.source_dataset,
-        job_target=scope.job_target, scope_kind=PAGE_KIND,
+        run=scope.run, parent_scope=scope, source_dataset_id=scope.source_dataset_id,
+        job_target_id=scope.job_target_id, scope_kind=PAGE_KIND,
         scope_key=digest(["x-page", scope.pk, ordinal]), **_scope_compatibility(),
         checkpoint_ordinal=ordinal, pages_received=envelope.get("pages_received"),
         raw_count=envelope.get("raw_count", 0), raw_count_known="raw_count" in envelope,
@@ -74,7 +76,7 @@ def append_page_receipt(scope, envelope, *, cursor=None, legacy_archive=None):
         legacy_archive=archive,
     )
     marker = CollectionObservation.objects.create(
-        run=scope.run, scope_run=child, source_dataset=scope.source_dataset,
+        run=scope.run, scope_run=child, source_dataset_id=scope.source_dataset_id,
         source_subject_kind="aggregate", source_identifier=child.scope_key,
         observation_kind=PAGE_KIND, observation_key=digest(["x-page", child.pk]),
         original_retrieved_at=observed_at, observed_at=observed_at or timezone.now(),
@@ -84,7 +86,7 @@ def append_page_receipt(scope, envelope, *, cursor=None, legacy_archive=None):
     retained = set(envelope.get("post_ids", []))
     inbox = set(envelope.get("inbox_post_ids", []))
     appearances = [CollectionObservation(
-        run=scope.run, scope_run=child, source_dataset=scope.source_dataset,
+        run=scope.run, scope_run=child, source_dataset_id=scope.source_dataset_id,
         source_subject_kind="post_appearance", source_identifier=identifier or "",
         source_identifier_is_null=identifier is None, receipt_ordinal=position,
         observation_kind=APPEARANCE_KIND, observation_key=digest(["x-appearance", child.pk, position]),
@@ -136,7 +138,7 @@ def append_page_receipt(scope, envelope, *, cursor=None, legacy_archive=None):
             ])
     CollectionObservation.objects.bulk_create([
         CollectionObservation(
-            run=scope.run, scope_run=child, source_dataset=scope.source_dataset,
+            run=scope.run, scope_run=child, source_dataset_id=scope.source_dataset_id,
             source_subject_kind="aggregate", source_identifier=child.scope_key,
             observation_kind="x_page_diagnostic", receipt_ordinal=position,
             observation_key=digest(["x-page-diagnostic", child.pk, position]),
@@ -146,15 +148,17 @@ def append_page_receipt(scope, envelope, *, cursor=None, legacy_archive=None):
     return child
 
 
-def page_receipts(scope):
+def page_receipts(scope, *, children=None):
     """Read typed receipts; post_ids are membership sets, received IDs are ordered.
 
     The exact legacy post_ids sequence remains in the referenced archive. All
     operational consumers reconcile membership with set/distinct semantics.
     """
     result = []
-    children = scope.child_scopes.filter(scope_kind=PAGE_KIND).order_by("checkpoint_ordinal")
-    for child in children.prefetch_related("observations__inputs__input_observation", "request_uses__request__scope_run", "rare_hit_memberships"):
+    if children is None:
+        children = scope.child_scopes.filter(scope_kind=PAGE_KIND).order_by("checkpoint_ordinal").prefetch_related(
+            "observations__inputs__input_observation", "request_uses__request__scope_run", "rare_hit_memberships")
+    for child in children:
         require(child.checkpoint_ordinal == len(result), "page checkpoint order is incomplete")
         observations = list(child.observations.all())
         marker = next(row for row in observations if row.observation_kind == PAGE_KIND)
@@ -192,7 +196,7 @@ def page_receipts(scope):
             inbox = [row.source_identifier for row in appearances if row.processing_outcome == "retained_inbox"]
             if inbox:
                 envelope["inbox_post_ids"] = inbox
-        hits = list(child.rare_hit_memberships.values_list("rare_hit_id", flat=True))
+        hits = [row.rare_hit_id for row in child.rare_hit_memberships.all()]
         if hits:
             envelope["rare_hit_ids"] = sorted(hits)
         uses = list(child.request_uses.all())

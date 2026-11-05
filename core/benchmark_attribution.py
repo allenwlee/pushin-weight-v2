@@ -222,6 +222,9 @@ def enforce_use(
 
 
 def enforce_source_collection(contract, source, *, dataset=None, isolated_review=False):
+    from core.data_source_backfill_target import in_isolated_backfill_review
+
+    isolated_review = isolated_review or in_isolated_backfill_review()
     comparison = {
         "lines": [{"source": source}],
         "attributions": [{"source": source, "dataset_id": dataset}],

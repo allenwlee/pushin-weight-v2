@@ -8970,6 +8970,7 @@ class CollectionJob(models.Model):
 
 
 class CollectionRun(models.Model):
+    # One recorded retry policy per logical run; NULL means it is unknown.
     staging_retry_version = models.PositiveSmallIntegerField(null=True)
     staging_retry_phase = models.PositiveSmallIntegerField(null=True)
     staging_retry_cooldowns = models.PositiveSmallIntegerField(null=True)
@@ -9051,7 +9052,7 @@ class CollectionRun(models.Model):
                     staging_retry_cooldowns__isnull=True, staging_retry_successes__isnull=True,
                     staging_retry_until__isnull=True, staging_retry_failures__isnull=True,
                 ) | models.Q(
-                    staging_retry_version=1, staging_retry_version__isnull=False,
+                    staging_retry_version__in=(1, 2), staging_retry_version__isnull=False,
                     staging_retry_phase__isnull=False, staging_retry_phase__lte=3,
                     staging_retry_cooldowns__isnull=False, staging_retry_cooldowns__lte=3,
                     staging_retry_successes__isnull=False, staging_retry_successes__lte=4,
@@ -9647,7 +9648,7 @@ class CollectionScopeCursorReceipt(models.Model):
 
 
 class CollectionObservationInput(models.Model):
-    """One captured reply or preceding resource result used by an observation."""
+    """One request receipt or preceding resource result used by an observation."""
 
     observation = models.ForeignKey(CollectionObservation, on_delete=models.PROTECT, related_name="inputs")
     input_request = models.ForeignKey(CollectionRequest, null=True, on_delete=models.PROTECT)

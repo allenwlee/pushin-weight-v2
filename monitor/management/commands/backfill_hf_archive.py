@@ -12,6 +12,7 @@ from core.hf_metadata_client import HFMetadataClient
 from core.measurement_taxonomy import digest
 from scripts.benchmark_download_collector.hf_archive import (
     ArchiveBudget,
+    select_model_revisions,
     select_snapshot,
 )
 
@@ -95,15 +96,7 @@ class Command(BaseCommand):
                     break
             else:
                 raise CommandError("archive revision page cap")
-            revisions = {}
-            for row in commits:
-                if (
-                    "models.parquet" in row["title"]
-                    and row["date"][:10] not in revisions
-                ):
-                    revisions[row["date"][:10]] = {
-                        k: row[k] for k in ["id", "date", "title"]
-                    }
+            revisions = select_model_revisions(commits)
             if not revisions:
                 raise CommandError("No model revisions")
             report.update(

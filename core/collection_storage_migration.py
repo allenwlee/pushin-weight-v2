@@ -1879,7 +1879,8 @@ def _legacy_owner_predicate(table: str) -> str:
     if table == "collection_observations":
         return (
             "(t.observation_kind IS NULL OR t.observation_kind NOT IN "
-            "('x_page_checkpoint','x_page_appearance','x_page_diagnostic','x_request_appearance','hf_catalog_listing','coverage','product_match_decision')) "
+            "('x_page_checkpoint','x_page_appearance','x_page_diagnostic','x_request_appearance',"
+            "'x_staging_retry_approval','hf_catalog_listing','coverage','product_match_decision')) "
             "AND (t.projection_kind IS NULL OR t.projection_kind NOT IN "
             "('github-catalog-object-v1','hf-native-history-v1',"
             "'hf-archive-snapshot-v1','hf-archive-row-v1',"

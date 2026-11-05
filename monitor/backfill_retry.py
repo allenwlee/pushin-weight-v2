@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from core.measurement_taxonomy import require
 
 POLICY = "staging-get-retry/v1"
+POLICIES = {1: POLICY, 2: "staging-get-retry/v2"}
 PAGE_FAILURE_LIMIT = 5
 COOLDOWNS = (60, 300, 900)
 PHASES = ("closed", "open", "probe", "ramp")
@@ -15,9 +16,11 @@ RETRY_FIELDS = (
 )
 
 
-def transient(error, status):
+def transient(error, status, *, policy=POLICY):
     # Missing/malformed replies and unknown sends are not transport failures.
-    return status in {429, 500, 502, 503, 504} or (
+    require(policy in POLICIES.values(), "unknown staging retry policy")
+    return status in ({401, 403, 429, 500, 502, 503, 504} if policy == POLICIES[2]
+                      else {429, 500, 502, 503, 504}) or (
         status is None and error in {"Timeout", "ConnectionError"}
     )
 
@@ -29,14 +32,15 @@ class RetryControl:
     cooldowns: int = 0
     until: float = 0
     successes: int = 0
+    policy: str = POLICY
 
     @classmethod
     def restore(cls, saved):
         if saved is None:
             return cls()
         require(set(saved) == {"policy", "phase", "failures", "cooldowns", "until", "successes"}
-                and saved["policy"] == POLICY, "invalid staging retry state")
-        value = cls(**{k: v for k, v in saved.items() if k != "policy"})
+                and saved["policy"] in POLICIES.values(), "invalid staging retry state")
+        value = cls(**saved)
         require(value.phase in {"closed", "open", "probe", "ramp"}
                 and type(value.cooldowns) is int and 0 <= value.cooldowns <= len(COOLDOWNS)
                 and type(value.successes) is int and 0 <= value.successes <= 4
@@ -48,7 +52,7 @@ class RetryControl:
         return value
 
     def snapshot(self):
-        return {"policy": POLICY, **asdict(self)}
+        return asdict(self)
 
     @classmethod
     def from_run(cls, run):
@@ -56,10 +60,10 @@ class RetryControl:
         if run.staging_retry_version is None:
             require(all(getattr(run, name) is None for name in RETRY_FIELDS), "partial staging retry state")
             return None
-        require(run.staging_retry_version == 1 and type(run.staging_retry_phase) is int
+        require(run.staging_retry_version in POLICIES and type(run.staging_retry_phase) is int
                 and 0 <= run.staging_retry_phase < len(PHASES), "invalid staging retry version or phase")
         return cls.restore({
-            "policy": POLICY, "phase": PHASES[run.staging_retry_phase],
+            "policy": POLICIES[run.staging_retry_version], "phase": PHASES[run.staging_retry_phase],
             "cooldowns": run.staging_retry_cooldowns, "successes": run.staging_retry_successes,
             "until": run.staging_retry_until, "failures": run.staging_retry_failures,
         })
@@ -67,7 +71,8 @@ class RetryControl:
     def save(self, run):
         """Caller holds the run fence; validate before even a bulk-compatible save."""
         self.restore(self.snapshot())
-        values = (1, PHASES.index(self.phase), self.cooldowns, self.successes, self.until, list(self.failures))
+        version = next(version for version, policy in POLICIES.items() if policy == self.policy)
+        values = (version, PHASES.index(self.phase), self.cooldowns, self.successes, self.until, list(self.failures))
         for name, value in zip(RETRY_FIELDS, values, strict=True):
             setattr(run, name, value)
         run.save(update_fields=[*RETRY_FIELDS, "updated_at"])

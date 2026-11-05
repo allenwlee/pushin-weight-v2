@@ -69,6 +69,17 @@ def test_ordered_grouped_checkpoint_preserves_duplicates_and_null_vs_empty_ids(s
     assert CollectionObservation.objects.filter(source_subject_kind="post").count() == 1
 
 
+def test_prefetched_page_receipts_do_not_query_per_scope(scope, django_assert_num_queries):
+    append_page_receipt(scope, {"post_ids": [], "raw_count": 0, "received_post_ids": []})
+    children = list(scope.child_scopes.filter(scope_kind="x_page_checkpoint")
+                    .order_by("checkpoint_ordinal").prefetch_related(
+                        "observations__inputs__input_observation",
+                        "request_uses__request__scope_run", "rare_hit_memberships"))
+    expected = page_receipts(scope)
+    with django_assert_num_queries(0):
+        assert page_receipts(scope, children=children) == expected
+
+
 @pytest.mark.parametrize("failed", [False, True])
 def test_page_checkpoint_uses_typed_prefix_with_unusable_retired_payload(failed):
     from monitor.backfill_collection import PageCheckpoint

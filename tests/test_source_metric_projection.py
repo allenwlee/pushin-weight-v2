@@ -1009,6 +1009,18 @@ def test_replay_command_default_hook_is_bounded_resumable_and_has_no_http(monkey
 
     from core.data_source_backfill import register_campaign
 
+    # Local fixtures exercise replay; dedicated target tests verify real DB identity.
+    target_checks = []
+
+    def local_target(**kwargs):
+        target_checks.append(kwargs)
+        return {"schema_ready": True, "database": "local-test"}
+
+    for path in (
+        "core.data_source_backfill_target.validate_backfill_target",
+        "core.management.commands.backfiller_data_source.validate_backfill_target",
+    ):
+        monkeypatch.setattr(path, local_target)
     monkeypatch.setattr(
         "httpx.Client.send", lambda *a, **kw: pytest.fail("HTTP forbidden")
     )
@@ -1055,6 +1067,7 @@ def test_replay_command_default_hook_is_bounded_resumable_and_has_no_http(monkey
     selected.refresh_from_db()
     assert selected.state == "completed"
     assert run_report_document(selected.last_success)["physical_accounting_complete"] is True
+    assert target_checks and all(check == {"require_write": True} for check in target_checks)
 
 
 def test_unknown_flow_can_be_absent_while_likes_survive_and_optional_versions_are_pinned():

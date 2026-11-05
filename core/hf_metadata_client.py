@@ -445,16 +445,18 @@ class HFMetadataClient:
         return result
 
     def history_page(
-        self, repo_id: str, revision: str, kind: str, cursor: str | None = None
+        self, repo_id: str, revision: str, kind: str, cursor: str | None = None,
+        *, repo_type: str = "model",
     ) -> MetadataResponse:
         """Public commit/tree metadata at one immutable revision; no blobs."""
         if (
             not REPO_ID.fullmatch(repo_id)
             or not re.fullmatch(r"[0-9a-f]{40}", revision)
             or kind not in {"commits", "tree"}
+            or repo_type not in {"model", "dataset"}
         ):
             return MetadataResponse("malformed")
-        path = f"/models/{repo_id}/{kind}/{revision}"
+        path = f"/{repo_type}s/{repo_id}/{kind}/{revision}"
         params = {"recursive": "true", "expand": "true"} if kind == "tree" else {}
         page = None
         if cursor:
