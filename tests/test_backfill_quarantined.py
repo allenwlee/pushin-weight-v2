@@ -28,7 +28,7 @@ def test_historical_backfill_still_requires_since():
         call_command("backfill")
 
 
-def test_dots_only_backfill_dry_run_selects_only_b1(monkeypatch):
+def test_dots_only_backfill_dry_run_selects_only_c4(monkeypatch):
     from monitor import cycle as cycle_mod
 
     monkeypatch.setattr(
@@ -51,12 +51,12 @@ def test_dots_only_backfill_dry_run_selects_only_b1(monkeypatch):
         "--brands",
         "dots",
         "--call-ids",
-        "B1",
+        "C4",
         "--dry-run",
         stdout=stdout,
     )
 
-    assert "Would execute calls: ['B1']" in stdout.getvalue()
+    assert "Would execute calls: ['C4']" in stdout.getvalue()
 
 
 def test_brand_scoped_backfill_rejects_unrelated_call_before_provider(

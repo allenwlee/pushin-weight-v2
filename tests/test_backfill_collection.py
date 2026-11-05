@@ -508,6 +508,8 @@ def policy_job(monkeypatch, tmp_path, *, calls, rare=False, selected_calls=None)
         requests=3, model_requests=60, seconds=300, maximum_requests=20, maximum_models=100,
         **extra,
     )
+    applicable = {unit["ownership"]["call_id"] for unit in definition["scope"]["units"]}
+    assert calls <= applicable, f"fixture requests calls absent from its brand scope: {calls - applicable}"
     for unit in definition["scope"]["units"]:
         if unit["ownership"]["call_id"] not in calls:
             unit.update(outcome="complete", enumeration_complete=True)

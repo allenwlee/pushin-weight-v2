@@ -418,7 +418,7 @@ def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(http_page
     from tests.test_backfill_collection import policy_job
     from x_monitor.jev_decisions import QUESTION_SET, JevDecisionsClient, JevResponse
 
-    job = policy_job(monkeypatch, tmp_path, calls={"B1", "RARE_EXTRA"}, rare=True)
+    job = policy_job(monkeypatch, tmp_path, calls={"C3", "RARE_EXTRA"}, rare=True)
     rare_query = next(u["ownership"]["query"] for u in job.scope["units"]
                       if u["ownership"]["call_id"] == "RARE_EXTRA")
     monkeypatch.setenv("TYPESAFE_API_KEY", "fixture-only")
@@ -447,7 +447,7 @@ def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(http_page
     assert len(state["requests"]) == 2 and len(model_calls) == 1
     assert set(Post.objects.values_list("pk", flat=True)) == {"rare-kept", "ordinary-1", "ordinary-2"}
     scopes = CollectionScopeRun.objects.filter(run_id=report["run_id"])
-    for call, expected in (("RARE_EXTRA", 1), ("B1", 2)):
+    for call, expected in (("RARE_EXTRA", 1), ("C3", 2)):
         scope = scopes.get(scope_key=call)
         assert not hasattr(scope, "envelopes")
         pages = [entry for entry in page_receipts(scope) if entry.get("prefetch_request_id")]
