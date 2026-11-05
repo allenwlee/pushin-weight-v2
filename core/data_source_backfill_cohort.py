@@ -113,21 +113,37 @@ def _configure_cohort(reference, preview, reviewed_by):
     taxonomy = configure_taxonomy({'reviewed_by': reviewed_by,
         'subjects': [{'kind': 'product', 'key': PRODUCT}]})
     sid = str(resolve_subject_id('product', PRODUCT))
-    mappings = []
+    contract = configure_collection(cohort_collection_spec(
+        taxonomy_id=taxonomy.pk, subject_id=sid, reviewed_by=reviewed_by,
+        archive_row_key=reference['product']['hf_archive_row_id'],
+        reference_sha256=preview['reference_sha256'],
+        product_type_review=preview['local_product_type_review']))
+    return {**preview, 'writes': True, 'contract_id': str(contract.pk),
+            'contract_hash': contract.contract_hash, 'taxonomy_id': str(taxonomy.pk), 'subject_id': sid}
+
+
+def cohort_collection_spec(*, taxonomy_id, subject_id, reviewed_by, archive_row_key,
+                           reference_sha256, product_type_review):
+    """The reviewed 0813 numeric contract input, shared by backfill and transfer.
+
+    Every database builds its own contract from this one specification, so the
+    catalog, mapping and methodology hashes agree wherever the catalog does.
+    """
     urls = {'hf': 'https://huggingface.co/' + IDENTIFIERS['hf'],
         'opencode': 'https://opencode.ai' + ENDPOINT,
         'arena': 'https://arena.ai/leaderboard/text/overall',
         'openrouter': 'https://openrouter.ai/' + IDENTIFIERS['openrouter']}
+    mappings = []
     for source, identifier in IDENTIFIERS.items():
         mappings.append({'source': source, 'external_identifier': identifier,
             'source_subject_kind': 'repository' if source == 'hf' else 'model',
             'identifier_scope': 'model' if source == 'hf' else '',
-            'subject_id': sid, 'evidence_url': urls[source],
+            'subject_id': str(subject_id), 'evidence_url': urls[source],
             **({'publisher_account_key': PUBLISHER} if source == 'hf' else {}),
-            **({'identifier_metadata': {'archive_row_key': reference['product']['hf_archive_row_id']}}
+            **({'identifier_metadata': {'archive_row_key': archive_row_key}}
                if source == 'hf' else {}),
             **({'identifier_metadata': {'endpoint_path': ENDPOINT}} if source == 'opencode' else {})})
-    contract = configure_collection({'taxonomy_version': str(taxonomy.pk),
+    return {'taxonomy_version': str(taxonomy_id),
         'reviewed_by': reviewed_by, 'mappings': mappings,
         'source_configuration': {
             'hf': {'metrics': ['downloads', 'downloads_all_time', 'likes', 'trending_score'],
@@ -137,10 +153,8 @@ def _configure_cohort(reference, preview, reviewed_by):
             'openrouter': {'metrics': ['total_tokens'], 'completed_day_lag': 1},
             'opencode': {'metrics': ['tokens', 'unique_users', 'sessions']},
         }, 'methodology': {'aggregation': 'fixed_cohort',
-            'backfill_reference_sha256': preview['reference_sha256'],
-            'local_product_type_review': preview['local_product_type_review']}})
-    return {**preview, 'writes': True, 'contract_id': str(contract.pk),
-            'contract_hash': contract.contract_hash, 'taxonomy_id': str(taxonomy.pk), 'subject_id': sid}
+            'backfill_reference_sha256': reference_sha256,
+            'local_product_type_review': product_type_review}}
 
 
 def campaign_specifications(contract, *, discovery_job_id=None):
