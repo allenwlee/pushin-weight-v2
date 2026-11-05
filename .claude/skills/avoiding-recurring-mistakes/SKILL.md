@@ -16,7 +16,7 @@ duplication as a new-source convention.
 ## When this skill triggers
 
 Any work in this repo. Especially:
-- harvest / cycle / backfiller / classifier code changes — also load `.claude/skills/change-harvester/SKILL.md` before editing those surfaces
+- harvest / cycle / X post backfill / classifier code changes — also load `.claude/skills/change-harvester/SKILL.md` before editing those surfaces
 - Django migrations (`core/migrations/`), schema edits (`core/models.py`)
 - prod DB queries via Render CLI
 - i18n catalog / locale strings
@@ -144,7 +144,13 @@ Public templates/static assets contain product content only; put implementation 
 
 ---
 
-## M7 — DRY: harvest / cycle / backfiller share a core
+## M7 — DRY: harvest / cycle / X post backfill share a core
+
+"Backfiller" in this rule's history means the **X post backfill**
+(`manage.py backfill`). The separate **Backfiller data source**
+(`backfiller_data_source`, numeric measurements in the `xbackfiller` database)
+follows the same principle differently: it reuses the normal source-collection
+adapters and numeric writer, not `CycleRunner`. `CONCEPTS.md` defines both.
 
 **Pattern the user kept correcting.** Agent built backfiller as a separate code path that duplicated harvest pipeline code. User had to push back with "are we practicing DRY? shouldn't backfiller largely re-use the harvest codebase?"
 

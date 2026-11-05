@@ -1,10 +1,10 @@
 ---
 module: ops
 date: 2026-07-29
-problem_type: recipe
+problem_type: best_practice
 component: render-postgres
 severity: critical
-last_updated: 2026-07-29
+last_updated: 2026-11-05
 status: verified-once
 origin_session: 2026-07-29 (fuchitalee, M3.0)
 origin_issue: docs/issues/2026-07-29-internal-restore-failed-pg-restore-eof.md
@@ -17,8 +17,15 @@ origin_plan: docs/plans/2026-07-29-002-fix-zero-downtime-prod-db-ops-plan.md
 ## TL;DR
 
 A reusable procedure for any massive prod DB op on Render Postgres
-(full restore, denormalize, chunked backfill): load into a non-serving
-**shadow** instance, verify, then cut over with a seconds-long flip.
+(a full restore, or a denormalizing migration that fills new columns in
+chunks): load into a non-serving **shadow** instance, verify, then cut over
+with a seconds-long flip. The harvest keeps running throughout.
+
+"Chunked backfill" in this recipe means a schema migration filling columns
+(migration `0006` below). It is not the X post backfill
+(`manage.py backfill`), the Backfiller data source
+(`manage.py backfiller_data_source`), or a Backfill transfer; `CONCEPTS.md`
+defines those.
 The old "DROP SCHEMA public CASCADE then pg_restore" pattern is
 forbidden — it has caused **two** 0-table prod incidents in this repo
 (see plan 2026-07-29-002 for the causal chain).
@@ -40,16 +47,25 @@ forbidden — it has caused **two** 0-table prod incidents in this repo
 
 ## Prerequisites
 
-- Render Postgres free-tier is hostile to dual-copy and long backfills.
+- Render Postgres free-tier is hostile to dual-copy and long column-fill migrations.
   **Upgrade to at least `basic_1gb` before any restore.** Symptoms that
   force an upgrade:
   - Free disk < `2×(expanded dump size) + 500 MB WAL`
   - 0003-style "single multi-hour txn" migration projected to exceed
     the free-tier disk (this repo hit the wall at ~806 MB / 1 GB)
   - Need a second DB instance for true blue-green (recommended)
-- Cron paused before load+cutover (change schedule to `"0 0 31 2 *"`
-  in `render.yaml`, deploy, then revert after recovery verified). See
-  the decision documented in plan 2026-07-29-002 §U0.
+- **Harvest left running.** `AGENTS.md` makes live-operation continuity a
+  release invariant: do not pause, suspend or reschedule the
+  `pushinweight-harvest` cron to get a stable copy. The live database keeps
+  receiving rows after the dump, so plan a bounded **final delta**: copy and
+  verify every row written to the live database after the dump point, just
+  before the flip. If the operation cannot be completed while the harvest
+  runs, redesign it rather than taking a planned gap. Only a current explicit
+  owner order can stop the cron; its skipped windows must then be recorded
+  and reconciled in `docs/operations/pause-and-resume-harvest-cron.md`.
+  A temporary schedule hold written into `render.yaml` can also be undone by
+  Blueprint sync (see Sources). This replaces the July cron-pause step
+  (plan 2026-07-29-002 §U0).
 - md5-pinned dump file on fuchitalee. Verify md5 *before* any schema work.
   Note: `scp` from fuchitalee to the operator host is **not** a viable transport for
   dumps > 5 MB — fuchitalee's home router has a ~1400-byte PMTU blackhole on long
@@ -180,11 +196,17 @@ posts-raw-denormalize-staging-verified-2026-07-28.md`.
 
 **Path A — second DB instance (preferred):**
 
-1. Set `DATABASE_URL` on `pushinweight-web`, `pushinweight-worker`,
-   `pushinweight-beat`, and `pushinweight-harvest` to the shadow URL.
-2. Trigger a redeploy (or wait for the next auto-deploy).
-3. Smoke: `render psql <shadow-db> -c "SELECT count(*) FROM posts;"`
-4. Smoke: web returns 200, feed loads.
+1. Copy and verify the final delta (rows written to live after the dump).
+2. Set `DATABASE_URL` to the shadow URL on every active service whose
+   `render.yaml` entry reads it. As of 2026-11-05 those are
+   `pushinweight-web`, `pushinweight-harvest`, `pushinweight-jobs`,
+   `pushinweight-home-counts`, `pushinweight-headlines`,
+   `pushinweight-synthesis` and `pushinweight-enrichment`; re-derive the list
+   from `render.yaml` before cutover. The legacy worker and beat services are
+   suspended and must not be reactivated.
+3. Trigger a redeploy (or wait for the next auto-deploy).
+4. Smoke: `render psql <shadow-db> -c "SELECT count(*) FROM posts;"`
+5. Smoke: web returns 200, feed loads.
 
 > **Cutover verification (post-deploy)**: After step 1 sets `DATABASE_URL` on the new live DB instance, verify on the dashboard that each dependent service's `DATABASE_URL` env var actually resolved to the new connection string. Render's blueprint sync from `fromDatabase` in render.yaml is not reliable on a previously-deployed service — the running service may keep the old `DATABASE_URL` even after the new deploy. If the build fails because `migrate` couldn't connect to the OLD DB hostname, that means the env var stayed stale. Manually override `DATABASE_URL` on each service via the dashboard. Watch the first 30 minutes of `/feed/` and `/accounts/login/` for 502s after every cutover.
 
@@ -201,12 +223,15 @@ COMMIT;
 
 ### 6. Verify + hold + cleanup
 
-- Wait at least **one full harvest cycle** (~30 minutes with `*/15`
-  cron) on the new live DB with no errors.
+- Wait at least **one full harvest cycle** (the cron runs every 15
+  minutes) on the new live DB with no errors, and confirm its rows land in
+  the new database.
 - `render psql <old-db>` count == `0` for user tables (or stop polling).
 - Drop old DB (`render postgres delete <old-db-name> --confirm`).
-- Revert cron schedule from `"0 0 31 2 *"` back to `*/15` in
-  `render.yaml`, push.
+- Confirm no harvest window was skipped. If an owner-ordered stop or an
+  outage did skip one, record and reconcile it in
+  `docs/operations/pause-and-resume-harvest-cron.md`; a healthy next cycle
+  does not recover missed data.
 - Update the relevant docs/solutions/ with verified pins.
 - Close the originating issue.
 
@@ -230,14 +255,15 @@ Before cutover, all must be true:
 - [ ] Shadow `SELECT count(*) FROM posts` matches expected count
 - [ ] Shadow migrations applied (if dump is pre-migration) in safe order
 - [ ] No `DROP SCHEMA public` in any committed `build.sh` on main
-- [ ] Cron paused before load, will resume after cutover
+- [ ] Harvest left running; final-delta copy planned for rows written after the dump
 
 After cutover, all must be true:
 
-- [ ] Web + worker + beat + cron running against new live DB
+- [ ] Every active `DATABASE_URL` consumer in `render.yaml` running against the new live DB; legacy worker and beat still suspended
+- [ ] Final delta copied and verified
 - [ ] `/feed` loads, harvest runs once without error
 - [ ] Old DB dropped after ≥1 green harvest cycle
-- [ ] `render.yaml` cron schedule restored to operational value
+- [ ] No skipped harvest window, or every owner-ordered stop window recorded and reconciled in `docs/operations/pause-and-resume-harvest-cron.md`
 - [ ] Originating issue closed with verified pin doc link
 - [ ] After deploy: `render deploys list` shows the latest deploy 'Live' AND a quick `curl -I https://<service-url>/accounts/login/` returns 200 (not 502). If you see 502 immediately after cutover, the env var stayed stale.
 
@@ -247,3 +273,5 @@ After cutover, all must be true:
 - Incident: `docs/solutions/data-migration/posts-raw-denormalize-prod-incident-2026-07-28.md`
 - Recovery: `docs/solutions/data-migration/posts-raw-denormalize-prod-recovery-verified-2026-07-28.md`
 - Failed branch that motivated this recipe: `fix/posts-restore-internal` (deleted 2026-07-29)
+- Live-operation continuity rule: `AGENTS.md`, "Harvester changes"
+- [Render Blueprint sync can undo temporary production release holds](../workflow-issues/2026-10-27-184738-render-blueprint-sync-overwrites-release-holds.md)

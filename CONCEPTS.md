@@ -55,7 +55,10 @@ spending or production activation.
 ### X post backfill
 
 Explicit historical collection of X posts for a bounded publication-time window,
-with recovery progress tracked separately from recurring harvesting.
+with recovery progress tracked separately from recurring harvesting. It runs as
+`manage.py backfill` (or `manage.py run_backfill` for month campaigns), searches
+X through the same pipeline as the recurring harvest, and writes posts to the
+production database. It is not the Backfiller data source.
 
 Finishing the selected searches and enriching their saved posts are separate
 outcomes; neither alone proves that every eligible historical post was found.
@@ -67,7 +70,21 @@ data into PushinWeight's shared collection and measurement storage. Its componen
 name is **backfiller-data-source**; the command is `backfiller_data_source`.
 It shares acquisition, validation and numeric ingestion with normal source
 collection. Committed database state allows interrupted work to resume. It is
-separate from the X post backfiller and does not imply complete provider history.
+separate from the X post backfill and does not imply complete provider history.
+Moving its reviewed results into production is a separate Backfill transfer.
+
+### Backfill transfer
+
+Promotion of a reviewed backfill-database measurement contract into another
+database by rebuilding the contract there and replaying its saved source
+captures through the normal measurement writer, keeping the result only when
+every replayed value matches the reviewed original.
+
+Rows are never copied, because record identities differ between databases. A
+rehearsal runs the same transfer and discards it. Measurements the target
+already holds for the same source, metric and day are reported as equivalent or
+conflicting, never overwritten, and days without source evidence stay empty.
+Re-running a completed transfer changes nothing.
 
 ### Native-resource measurement
 
@@ -312,6 +329,7 @@ The pattern matters because operators triaging failures want to grep a stable pr
 
 - "query id" was used for both the v1.6 `Q`-string ids (`Q1`..`Q6`) and the current short-code call ids (`A`, `B1`..`B3`, `C1`..`C3`). The short-code call id is canonical; `Q`-string references in older docs are historical-only.
 - "call" was used for both the *plan* unit (one fetch+classify cycle) and the *type* (account vs brand-wide). Both are in use; the type is named "call kind" to disambiguate.
+- "Backfill" alone had named three things: X post backfill, Backfiller data source collection into the backfill database, and Backfill transfer into production. Use the specific term. Schema migrations that fill new columns (for example migration `0006` of the posts denormalization) are a separate, generic use; name the migration instead.
 - "Through production" had been used for both a Git push and a verified deployment. It names the delivery endpoint; the selected route governs intermediate steps, and service deployment evidence establishes that the endpoint was reached.
 
 ## Enrichment provider routing
@@ -471,6 +489,21 @@ canonical JSON body hash. OpenCode updates UTC daily totals hourly. Repeated
 snapshots are revisions of one daily window, not independent hourly usage.
 Unchanged values retain the original observation; each successful check retains
 references and its own retrieval time. Current-day reports have an incomplete end.
+
+### Measurement contract
+
+A reviewed, immutable definition of which provider identifiers map to which
+measurement subjects and which metric definitions are collected for them,
+identified by a hash of that definition.
+*Avoid:* collection contract, numeric contract
+
+Every stored measurement belongs to the contract it was collected under, and
+readers select values through a contract's reviewed mappings, so values
+collected under one contract are not visible through another. Changing a
+reviewed input creates a new contract instead of editing the old one. The
+identity hash also covers database-local references, so the same reviewed
+definition rebuilt in another database gets a different hash while its catalog,
+mapping and methodology digests still match.
 
 ### Measurement contract pin
 

@@ -102,10 +102,19 @@ invocations use `record_rejection`, which neither acquires nor replaces a claim.
 Historical content continuation copies only the preceding attempt from the same
 frozen job. Imported pilot checkpoints retain provenance without inventing old
 attempt timestamps. The deployed X runtime uses the shared content persistence
-interface under separate ownership. Source backfills do not replace its controller,
-change its live cursors, or run inside its fifteen-minute cycle.
+interface under separate ownership. Backfiller data source jobs do not replace its
+controller, change its live cursors, or run inside its fifteen-minute cycle.
 
 ## Backfiller-data-source
+
+The Backfiller data source collects numeric provider measurements (for example
+Hugging Face downloads, Arena ratings and OpenRouter tokens) into a separate
+backfill database. It is not the X post backfill: `manage.py backfill` and
+`manage.py run_backfill` recover past X posts into production through the
+harvest's shared `CycleRunner` and are described in `docs/deploy/render.md`
+("Historical X batch jobs and safe handover"). Moving reviewed backfill
+measurements into production is a third operation, the Backfill transfer
+(below). `CONCEPTS.md` defines all three terms.
 
 `backfiller_data_source` exposes `inspect`, `register`, `execute`, `resume`, `pause`,
 `replay`, `report`, `prepare-0813`, `plan-0813` and `replay-retained`. The default is inspection. A mutation requires `--apply`;
@@ -268,7 +277,7 @@ whole preview object. Reference JSON combines the copied `product`, `publisher`,
 `ownership` and `task` evidence, with `product.hf_archive_row_id` from the retained
 HF catalog identity. Input files are transport only. Completed OpenCode and
 archive-only HF jobs replay their saved numeric evidence with no HTTP and no
-duplicate values. Production promotion remains a separate operation.
+duplicate values. Production promotion is a separate Backfill transfer, described below.
 
 A retained production capture is imported as a selected backfill observation with
 its original run, archive and content hash recorded as provenance. Once imported,
@@ -276,6 +285,53 @@ its original run, archive and content hash recorded as provenance. Once imported
 verifies the committed selection without writes. Add `--apply` to replay through
 the shared numeric writer. Both paths use the database capture and make zero
 provider requests; the original transport file is unnecessary.
+
+### Backfill transfer into production
+
+`python manage.py transfer_backfill_contract` moves one reviewed measurement
+contract from the backfill database into another database by replaying it,
+never by copying rows. Integer IDs, the taxonomy version's random key and the
+contract hash differ between databases, so the target rebuilds the contract
+from the same reviewed collection specification and replays each saved source
+capture through the shared numeric writer. The transfer is currently
+implemented for the reviewed DeepSeek V4 Pro 0813 cohort; its product and
+contract constants come from `core/data_source_backfill_cohort.py`.
+
+Export runs against the backfill database. It validates the backfill
+connection identity and reads inside a read-only transaction:
+
+```bash
+python manage.py transfer_backfill_contract --export --contract CONTRACT_UUID --out BUNDLE.json
+```
+
+The bundle (format `backfill-contract-transfer-v1`) holds each capture's payload
+and source metadata, the expected observation and value records, and the chart
+reader's expected points, all covered by a content hash. Replay runs against the
+target and is a rehearsal by default: the same code runs and then rolls back.
+`--apply` commits only when every check reports zero problems:
+
+```bash
+python manage.py transfer_backfill_contract --bundle BUNDLE.json --target-database DATABASE_NAME
+python manage.py transfer_backfill_contract --bundle BUNDLE.json --target-database DATABASE_NAME --apply
+```
+
+`--target-database` must equal the target session's `current_database()`, and
+the backfill database is refused as a target. Before its write transaction the
+replay re-reads every capture that was itself copied from a production capture
+and requires the same selected payload, and it reconciles each source, metric
+and day against values already in the target (equivalent, conflicting,
+inserted-only, or captures that disagree). Inside one transaction it sets the
+product type to `llm-model` only when the type is empty (any other existing type
+is refused), rebuilds the contract,
+replays captures in their original order, and compares every non-local field
+and every reader point with the bundle. A failed check raises an error and
+commits nothing. Re-running an applied bundle writes nothing, because replay
+ingestion keys are deterministic. The command makes no provider requests and
+does not pause or join the X harvest. Run it as a Render one-off job at the
+deployed revision, not inside the web service.
+
+The reasoning and the 0813 receipts are in
+`docs/solutions/data-migration/2026-11-05-150150-replay-reviewed-backfill-measurements-into-production.md`.
 
 
 ## Reviewed provider identities
