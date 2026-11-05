@@ -335,3 +335,11 @@ Full code review at /tmp/compound-engineering-501/ce-code-review/20261105-131710
 Read-only production keyword inventory finds137missing mappings across14brands, including75NVIDIA aliases. Prepare candidate-code one-off activation in batches of at most32total additions, using the existing onboard_brand --sync-policy-keywords command and idempotent dry-run/apply semantics. Complete and verify mappings before switching images. This additive preparation leaves the old policy's coverage valid and preserves live writers. No run_cycle/provider diagnostic is launched; acceptance observes the next natural cron.
 
 Dots affiliation is complete: existing brands_accounts(dots,@dotsstudioai,official) and brands_companies(dots,xiaohongshu) were verified; missing companies_accounts(xiaohongshu,existing account,official,ownership_confirmed=true) was inserted and read back. Account2085289191609716736 was reused. No account, company or brand duplication and no schema change.
+
+## Production integration verification
+
+Merged current production main5ba74af3 into candidate1d8dc046. Focused review of the three overlapping backfill files reports no findings. 401local checks including ollija pass. Shared test DB required existing upstream0222retry constraint/0223empty merge, applied under exclusive wrapper with zero other clients; candidate adds no delivered migration. Hash-verified Chatter discovery overlays plus a temporary empty test-only merge reconcile already-applied parallel migration leaves; remove after testing.
+
+Browser scope: no application page, template, route, CSS or JavaScript changed; application browser tests Skip (backend-only refactor). Exact-query HTML remains separately verified. Documentation skipped: query byte-limit reasoning and provider-test correction are already preserved in code, tests and this plan. No separate learning duplicates them.
+
+Initial enrichment-relevant latest20 baseline (before deployment) is unhealthy20/20, complete0,pending0; both persisted-health and acceptance gates failed. This is existing production evidence, not candidate behavior. Retain ordered cohort IDs for the one allowed30-minute exact-cohort follow-up. No repair or provider diagnostic is authorized by this observation. Evidence under the root data/runs/2026-11-05-102849-locked-12h-portfolio-audit/deployment directory.
