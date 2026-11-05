@@ -41,8 +41,9 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol
+from urllib.parse import unquote, urlsplit
 
 from core.classification_contract import (
     CONTRACT_VERSION as _STAGE1_CONTRACT_VERSION,
@@ -96,7 +97,7 @@ logger = logging.getLogger(__name__)
 
 
 Source = Literal[
-    "author_account", "user_mention", "hashtag", "body_keyword", "search_term"
+    "author_account", "user_mention", "hashtag", "body_keyword", "search_term", "url_keyword"
 ]
 
 
@@ -114,6 +115,7 @@ BRAND_SOURCE_PRIORITY: dict[Source, float] = {
     "user_mention":  1.0,
     "hashtag":       0.9,
     "body_keyword":  0.7,
+    "url_keyword":   0.7,
     "search_term":   0.6,
 }
 
@@ -197,6 +199,10 @@ def validate_raw_token(source: Source, raw_token: str) -> None:
                 f"body_keyword raw_token must not have surrounding "
                 f"whitespace; got {raw_token!r}"
             )
+    elif source == "url_keyword":
+        parsed = urlsplit(raw_token)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("url_keyword requires an absolute HTTP(S) URL")
     elif source == "author_account":
         # Stable author ID plus membership/role provenance, assembled by
         # monitor.cycle after current list membership and role resolution.
@@ -224,7 +230,7 @@ class MentionRow:
         brand_id:      resolved brand_id (or None for un-attributed
                        user_mentions we want to preserve for later
                        backfill; NULL brand_id is allowed by the PK)
-        source:        one of user_mention/hashtag/body_keyword/search_term
+        source:        observed author, mention, hashtag, body, URL, or search evidence
         raw_token:     per-source format (see validate_raw_token)
         mentioned_at:  ISO-8601 UTC timestamp; denormalized from
                        posts.created_at so posts_brands_mentions is queryable
@@ -273,6 +279,7 @@ def extract_user_mentions(
     post: dict[str, Any],
     brands_accounts: dict[str, str],
     entities: Any,
+    *, handles: dict[str, str] | None = None,
 ) -> list[MentionRow]:
     """Emit one MentionRow per @handle in `entities.user_mentions[]`.
 
@@ -301,7 +308,7 @@ def extract_user_mentions(
     ents = _normalize_entities(entities)
     mentions = ents.get("user_mentions")
     if not isinstance(mentions, list):
-        return []
+        mentions = []
 
     out: list[MentionRow] = []
     seen_ids: set[str] = set()
@@ -311,10 +318,13 @@ def extract_user_mentions(
         author_id = mention_id(m)
         # Preserve existing username precedence when both handle aliases occur.
         username = entity_text(m, "username", "screen_name")
-        if not author_id or not username or author_id in seen_ids:
+        handle_brand = (handles or {}).get(username.casefold())
+        if (not username or (not author_id and not handle_brand)
+                or (author_id and author_id in seen_ids)):
             continue
-        seen_ids.add(author_id)
-        brand_id = brands_accounts.get(author_id)
+        if author_id:
+            seen_ids.add(author_id)
+        brand_id = brands_accounts.get(author_id) or handle_brand
         raw_token = f"@{username}"
         out.append(MentionRow(
             post_id=post_id,
@@ -323,6 +333,12 @@ def extract_user_mentions(
             raw_token=raw_token,
             mentioned_at=mentioned_at,
         ))
+    if handles:
+        text = "\n".join(str(post.get(k) or "") for k in ("text", "quoted_text"))
+        for match in re.finditer(r"(?<![A-Za-z0-9_@])@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])", text):
+            brand_id = handles.get(match.group(1).casefold())
+            if brand_id and not any(m.brand_id == brand_id for m in out):
+                out.append(MentionRow(post_id, brand_id, "user_mention", match.group(0), mentioned_at))
     return out
 
 
@@ -393,13 +409,17 @@ def extract_hashtag_mentions(
 class ContextualKeywordIndex:
     base: tuple[re.Pattern[str] | None, dict[str, str]]
     contexts: dict[tuple[str, str], re.Pattern[str]]
+    url_brands: frozenset[str] = frozenset()
+    handles: dict[str, str] = field(default_factory=dict)
 
 
-def _context_term_pattern(term: str) -> str:
-    # ASCII word boundaries must permit adjoining Chinese/Japanese characters.
+def _literal_term_pattern(term: str) -> str:
+    # Permit adjoining East Asian text, while retaining Unicode word guards
+    # for Latin/Greek/etc. names (MiMoé must not become a MiMo match).
     escaped = re.escape(term)
     east_asian = _is_cjk(term) or any("\u3040" <= ch <= "\u30ff" for ch in term)
-    return escaped if east_asian else rf"(?<![a-zA-Z0-9_]){escaped}(?![a-zA-Z0-9_])"
+    allowed = r"\u2460-\u24ff\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u1100-\u11ff\u3130-\u318f\uac00-\ud7af\U00020000-\U0002fa1f"
+    return escaped if east_asian else rf"(?<![^\W{allowed}]){escaped}(?![^\W{allowed}])"
 
 
 def compile_keyword_index(
@@ -414,7 +434,7 @@ def compile_keyword_index(
 
     CJK tokens use substring match (no \\b) because the Python re
     engine treats CJK as \\W and \\b does not anchor correctly at
-    CJK/non-CJK boundaries. ASCII tokens use word-boundary to avoid
+    CJK/non-CJK boundaries. Latin tokens use explicit boundaries to avoid
     matching "Kimi" inside "Kimimania". Regex patterns are used
     verbatim (caller is responsible for their correctness).
 
@@ -437,11 +457,25 @@ def compile_keyword_index(
     from .harvest_policy import normalize_policy_token
 
     contexts = {}
+    enabled = {brand for brand, _, _ in brand_keywords}
+    handles = {}
+    if policy is not None:
+        for brand in policy.brands.values():
+            if brand.nickname in enabled and brand.match_handle_mentions:
+                for handle in brand.handles:
+                    key = handle.casefold()
+                    if key in handles and handles[key] != brand.nickname:
+                        raise ValueError(f"ambiguous policy mention handle: {handle}")
+                    handles[key] = brand.nickname
+    url_brands = (
+        frozenset(b.nickname for b in policy.brands.values() if b.match_link_urls and b.nickname in enabled)
+        if policy is not None else frozenset()
+    )
     if policy is not None:
         for brand in policy.brands.values():
             for rule in brand.alias_context:
                 contexts[(brand.nickname, normalize_policy_token(rule.alias))] = re.compile(
-                    "|".join(_context_term_pattern(term) for term in rule.any_of), re.IGNORECASE,
+                    "|".join(_literal_term_pattern(term) for term in rule.any_of), re.IGNORECASE,
                 )
     if contexts:
         # Longer literal evidence (腾讯混元, Muse Voice, Meta Llama) must win
@@ -471,22 +505,14 @@ def compile_keyword_index(
                 token_to_brand[pattern] = brand_id
         else:
             esc = re.escape(pattern)
-            if _is_cjk(pattern):
-                # CJK: substring, no \b (Python \b doesn't anchor
-                # correctly at CJK/non-CJK boundaries).
-                parts.append(f"({esc})")
-                if esc not in token_to_brand:
-                    token_to_brand[esc] = brand_id
-            else:
-                contextual_literal = any(brand_id == b and (pattern.casefold() == alias or pattern.casefold().startswith(alias + " ")) for b, alias in contexts)
-                parts.append("(" + _context_term_pattern(pattern) + ")" if contextual_literal else r"\b(" + esc + r")\b")
-                if esc not in token_to_brand:
-                    token_to_brand[esc] = brand_id
+            parts.append("(" + _literal_term_pattern(pattern) + ")")
+            if esc not in token_to_brand:
+                token_to_brand[esc] = brand_id
     if not parts:
         return None, {}
     compiled = re.compile("|".join(parts), re.IGNORECASE)
     base = (compiled, token_to_brand)
-    return ContextualKeywordIndex(base, contexts) if contexts else base
+    return ContextualKeywordIndex(base, contexts, url_brands, handles) if contexts or url_brands or handles else base
 
 
 def detect_brand_mentions(
@@ -594,6 +620,40 @@ def extract_body_keywords(
                    raw_token=raw_token, mentioned_at=mentioned_at)
         for raw_token, brand_id in _keyword_matches(text, compiled_keyword_index)
     ]
+
+
+def extract_url_keywords(
+    post: dict[str, Any],
+    compiled_keyword_index: tuple[re.Pattern[str] | None, dict[str, str]] | ContextualKeywordIndex,
+) -> list[MentionRow]:
+    """Match opted-in brands using observed expanded link destinations.
+
+    Preserve the original text/entities. Host/path evidence is a URL source,
+    not an invented body keyword or a claim that a linked page was fetched.
+    """
+    if (
+        not isinstance(compiled_keyword_index, ContextualKeywordIndex)
+        or not compiled_keyword_index.url_brands
+    ):
+        return []
+    post_id = str(post.get("tweet_id") or post.get("id") or "")
+    mentioned_at = str(post.get("created_at") or "")
+    if not post_id or not mentioned_at:
+        return []
+    mentions = []
+    for entity in _normalize_entities(post.get("entities")).get("urls", []):
+        url = entity_text(entity, "expanded_url", "expandedUrl", "url")
+        try:
+            parsed = urlsplit(url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                continue
+        except ValueError:
+            continue
+        evidence = unquote(parsed.hostname + parsed.path)
+        for brand in detect_brand_mentions(evidence, compiled_keyword_index):
+            if brand in compiled_keyword_index.url_brands:
+                mentions.append(MentionRow(post_id, brand, "url_keyword", url, mentioned_at))
+    return mentions
 
 
 # --- Extractor 4: search terms (R6) -------------------------------------
@@ -740,9 +800,11 @@ def attribute_to_brands(
     """
     entities = post.get("entities")
     mentions: list[MentionRow] = []
-    mentions.extend(extract_user_mentions(post, brands_accounts, entities))
+    handles = compiled_keyword_index.handles if isinstance(compiled_keyword_index, ContextualKeywordIndex) else None
+    mentions.extend(extract_user_mentions(post, brands_accounts, entities, handles=handles))
     mentions.extend(extract_hashtag_mentions(post, brand_hashtags, entities))
     mentions.extend(extract_body_keywords(post, compiled_keyword_index))
+    mentions.extend(extract_url_keywords(post, compiled_keyword_index))
     mentions.extend(extract_search_term_match(post, search_query, brand_search_terms))
 
     # Dedup by (brand_id, source). user_mention + hashtag share source

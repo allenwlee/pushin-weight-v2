@@ -47,7 +47,7 @@ def pipeline(monkeypatch, tmp_path, seeded_policy_keywords):
     monkeypatch.setattr("x_monitor.x_client.requests.get", get)
     def run(**kwargs):
         call_command("backfill", since="2026-08-09T00:00:00Z", until="2026-08-09T00:15:00Z",
-                     brands="qwen", call_ids="B1", max_results=20, max_pages=1,
+                     brands="qwen", call_ids="C3", max_results=20, max_pages=1,
                      pause=0, stdout=StringIO(), stderr=StringIO(), **kwargs)
         return json.loads(next(tmp_path.glob("*.json")).read_text())
     return SimpleNamespace(responses=responses, requests=requests, purposes=purposes,
@@ -98,7 +98,7 @@ def test_page_after_first_failure_retains_received_posts(pipeline):
     # A two-page unit starts exactly two physical requests, and retains page 1.
     with pytest.raises(CommandError, match="attempt failed"):
         call_command("backfill", since="2026-08-09T00:00Z", until="2026-08-09T00:15Z",
-                     brands="qwen", call_ids="B1", max_results=40, max_pages=2,
+                     brands="qwen", call_ids="C3", max_results=40, max_pages=2,
                      pause=0, stdout=StringIO(), stderr=StringIO())
     state = json.loads(next(pipeline.directory.glob("*.json")).read_text())
     assert Post.objects.filter(pk="1").exists()
@@ -183,7 +183,7 @@ def test_batch_searches_whole_month_and_checkpoints_each_page(pipeline, monkeypa
     pipeline.responses.extend(page(str(n), cursor=f"page-{n}" if n < 7 else None)
                               for n in range(1, 8))
     call_command("backfill", batch=True, since="2026-08-01", until="2026-08-31",
-                 brands="qwen", call_ids="B1", run_seconds=3600, pause=900,
+                 brands="qwen", call_ids="C3", run_seconds=3600, pause=900,
                  stdout=StringIO(), stderr=StringIO())
     state = json.loads(next(pipeline.directory.glob("*.json")).read_text())
     assert len(state["units"]) == 1 and state["finished"]
@@ -243,7 +243,7 @@ def test_enrichment_resume_visits_other_units_before_retrying_pending_unit(pipel
     second["tweets"][0]["createdAt"] = "Sun Aug 09 00:20:00 +0000 2026"
     pipeline.responses.extend([first, second])
     options = {"since": "2026-08-09T00:00Z", "until": "2026-08-09T00:30Z",
-               "brands": "qwen", "call_ids": "B1", "max_results": 20, "max_pages": 1,
+               "brands": "qwen", "call_ids": "C3", "max_results": 20, "max_pages": 1,
                "batch_size": 3, "pause": 0, "stdout": StringIO(), "stderr": StringIO()}
     call_command("backfill", **{**options, "batch_size": 2})
     pipeline.cohorts.clear()
@@ -375,7 +375,7 @@ def test_historical_query_is_frozen_and_reaches_shared_transport(pipeline):
     state = pipeline.run(query=query)
     assert pipeline.requests[0]["query"].startswith(query + " since_time:")
     assert state["identity"]["query_override"] == query
-    assert state["identity"]["queries"] == {"B1": query}
+    assert state["identity"]["queries"] == {"C3": query}
     with pytest.raises(CommandError, match="identity changed"):
         pipeline.run(query='"Qwen3.8"')
     assert len(pipeline.requests) == 1
@@ -421,7 +421,7 @@ def test_pause_releases_writer_lock_to_another_connection(pipeline, monkeypatch)
             acquisitions.append(pool.submit(compete).result())
     monkeypatch.setattr(backfill._time, "sleep", pause)
     call_command("backfill", since="2026-08-09T00:00Z", until="2026-08-09T00:15Z",
-                 brands="qwen", call_ids="B1", max_results=20, max_pages=1,
+                 brands="qwen", call_ids="C3", max_results=20, max_pages=1,
                  batch_size=2, pause=1, stdout=StringIO(), stderr=StringIO())
     assert acquisitions == [True]
 

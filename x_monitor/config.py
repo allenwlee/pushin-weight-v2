@@ -55,10 +55,11 @@ VALID_REVIEW_REASONS: frozenset[str] = frozenset(
     }
 )
 
-# The v2 scheduler has eight logical calls. This is deliberately independent
+# The current tracked-brand pool has nine logical calls including Call A.
+# This is deliberately independent
 # of KNOWN_MODELS: the latter is a frozen compatibility registry for legacy
 # consumers, while policy/config own the live call vocabulary.
-VALID_CALL_IDS: tuple[str, ...] = ("A", "B1", "B2", "B3", "C1", "C2", "C3", "C4")
+VALID_CALL_IDS: tuple[str, ...] = ("A", "B1", "B2", "B3", "C1", "C2", "C3", "C4", "B4")
 # Keep this in lockstep with onboard_brand's existing natural-key contract.
 _NICKNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 
@@ -1006,11 +1007,10 @@ class Config(BaseModel):
     review_reasons: list[str] = Field(
         default_factory=lambda: list(VALID_REVIEW_REASONS)
     )
-    # C4 is first among the constrained calls because its new aliases have
-    # the broadest result-volume risk. Call A remains last: it has the best
-    # signal-per-tweet ratio.
-    degraded_skip_order: list[Literal["A", "B1", "B2", "B3", "C1", "C2", "C3", "C4"]] = Field(
-        default_factory=lambda: ["B3", "B2", "B1", "C4", "C3", "C2", "C1", "A"]
+    # Preserve the existing deterministic skip priority for packed search calls.
+    # Call A remains last.
+    degraded_skip_order: list[Literal["A", "B1", "B2", "B3", "C1", "C2", "C3", "C4", "B4"]] = Field(
+        default_factory=lambda: ["B4", "B3", "B2", "B1", "C4", "C3", "C2", "C1", "A"]
     )
 
     @model_validator(mode="after")

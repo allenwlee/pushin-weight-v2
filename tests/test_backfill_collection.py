@@ -455,7 +455,7 @@ def test_current_policy_job_command_plans_all_routes_without_provider(pipeline, 
     definition = json.loads(output.getvalue())["definition"]
     scope = definition["scope"]
     assert {unit["ownership"]["call_id"] for unit in scope["units"]} == {
-        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4", "RARE_EXTRA",
+        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4", "B4", "RARE_EXTRA",
     }
     assert scope["author_scope"]["historical_membership_reconstructed"] is False
     assert scope["maximum_model_requests"] > 0
@@ -495,6 +495,11 @@ def policy_job(monkeypatch, tmp_path, *, calls, rare=False, selected_calls=None)
     cfg = load_config(Path("config.yaml"))
     if rare:
         from tests.test_rare_type_cycle import _enable
+        # Exercise inbox/recovery with a valid query. The frozen legacy default
+        # is 565 UTF-8 bytes with bounds; its rejection has a separate test.
+        # Keep every inbox, gate, cursor, accounting and resumption assertion.
+        monkeypatch.setattr("x_monitor.rare_type_extra_search.RARE_TYPE_EXTRA_SEARCH_GROUPS",
+                            ('("we are hiring" OR 招聘) (AI OR LLM)',))
         _enable(cfg, tmp_path)
     monkeypatch.setattr("monitor.backfill_collection.load_config", lambda path: cfg)
     extra = {"call_ids": selected_calls} if selected_calls is not None else {}
@@ -596,7 +601,7 @@ def test_saved_explicit_route_selection_cannot_hide_a_different_missing_route(
 
     job = policy_job(monkeypatch, tmp_path, calls={"A"}, selected_calls=["A"])
     definition = copy.deepcopy(job.definition)
-    definition["scope"]["selected_call_ids"] = ["B1"]
+    definition["scope"]["selected_call_ids"] = ["C3"]
     source = job.source
     job.delete()
     job = register_job(job_key="tampered-selection", source=source, purpose="content",
@@ -927,10 +932,12 @@ def test_page_ledger_reconciles_duplicate_ids_and_every_deterministic_rejection(
     from dataclasses import replace
 
     from monitor import cycle
-    original = cycle.plan_calls_for_cycle
-    monkeypatch.setattr(cycle, "plan_calls_for_cycle", lambda *args, **kwargs: [
+    original = cycle.CycleRunner._plan_calls
+    # Inject the exclusion into the executed frozen call, independently of
+    # today's packing. The ledger must account for this rejection unchanged.
+    monkeypatch.setattr(cycle.CycleRunner, "_plan_calls", lambda self: [
         replace(call, not_include=["forbidden"]) if call.call_id == "B1" else call
-        for call in original(*args, **kwargs)
+        for call in original(self)
     ])
     body = page("kept")
     body["tweets"].append(dict(body["tweets"][0]))
@@ -980,7 +987,7 @@ def test_staff_timeout_preserves_shared_fail_open_and_continues_pages_and_routes
     account = _seed_author(edges=[("qwen", "staff")])
     list_id = _resolve_x_monitor_list_id(load_config(Path("config.yaml")))
     TwitterListMembership.objects.filter(account=account).update(list_id=list_id)
-    job = policy_job(monkeypatch, tmp_path, calls={"A", "B1"})
+    job = policy_job(monkeypatch, tmp_path, calls={"A", "C3"})
     monkeypatch.setenv("DEEPINFRA_ON_DEMAND", "test-on-demand")
     monkeypatch.setattr("x_monitor.reattribute.build_relevancy_client_from_env", REAL_RELEVANCY_FACTORY)
     model_calls = []
@@ -1083,3 +1090,25 @@ def test_backfill_provider_entities_reach_shared_post_writer(pipeline, provider_
         compiled_keyword_index=(None, {}), search_query=[], brand_search_terms={},
     )
     assert {(m.brand_id, m.source) for m in mentions} == {("qwen", "user_mention"), ("qwen", "hashtag")}
+
+
+def test_oversized_frozen_legacy_rare_query_stops_before_dispatch(pipeline, monkeypatch, tmp_path):
+    from x_monitor.rare_type_extra_search import planned_query_string
+    # Freeze the actual legacy query and preserve its exact historical text.
+    oversized = planned_query_string()
+    job = policy_job(monkeypatch, tmp_path, calls={"RARE_EXTRA"}, rare=True)
+    import copy
+    definition = copy.deepcopy(job.definition)
+    for unit in definition["scope"]["units"]:
+        if unit["ownership"]["call_id"] == "RARE_EXTRA":
+            unit["ownership"]["query"] = oversized
+    # A new fixture job avoids mutating an existing frozen recipe.
+    from core.models import DataSource
+    from core.collection_jobs import register_job, set_job_state
+    source = DataSource.objects.get(pk="x")
+    frozen = register_job(job_key="oversized-frozen-rare", source=source, purpose="content",
+        operation="x_backfill", mode="historical", definition=definition)
+    frozen = set_job_state(frozen.pk, "ready")
+    with pytest.raises(ValueError, match="provider query length exceeded"):
+        run(frozen)
+    assert not pipeline.requests

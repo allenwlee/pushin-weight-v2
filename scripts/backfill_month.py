@@ -28,7 +28,10 @@ RUNTIME_MODULES = {
 }
 
 
-ROUTES = LEGACY_ROUTES | {"C4"}
+META_ROUTES = LEGACY_ROUTES | {"C4"}
+NVIDIA_INITIAL_ROUTES = META_ROUTES | {"C5"}
+NVIDIA_TWO_PACK_ROUTES = NVIDIA_INITIAL_ROUTES | {"C6"}
+ROUTES = NVIDIA_TWO_PACK_ROUTES | {"C7", "C8"}
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
@@ -62,7 +65,7 @@ def daily_manifest(recipe, index):
         u["ownership"]["call_id"]
         for u in base["collection_definition"]["scope"]["units"]
     }
-    if routes not in (LEGACY_ROUTES, ROUTES) or len(base["collection_definition"]["scope"]["units"]) != len(routes):
+    if routes not in (LEGACY_ROUTES, META_ROUTES, NVIDIA_INITIAL_ROUTES, NVIDIA_TWO_PACK_ROUTES, ROUTES) or len(base["collection_definition"]["scope"]["units"]) != len(routes):
         raise ValueError("month_route_inventory_changed")
     frozen["campaign"] = spec["campaign"] + "-" + lower.date().isoformat()
     frozen["month_instruction"] = {

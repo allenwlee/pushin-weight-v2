@@ -151,8 +151,9 @@ def _select_posts(
     else:
         sql = (
             "SELECT p.* FROM posts p "
-            "JOIN posts_brands pb ON pb.post_id = p.tweet_id "
-            "WHERE pb.brand_id = ? "
+            "JOIN posts_brands pb ON pb.post_id = p.id "
+            "JOIN brands b ON b.id = pb.brand_id "
+            "WHERE b.nickname = ? "
             "ORDER BY p.tweet_id"
         )
         params = (brand_filter,)

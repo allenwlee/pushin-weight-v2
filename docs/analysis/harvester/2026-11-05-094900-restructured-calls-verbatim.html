@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Applied harvest queries — offline DB proof</title>
+<style>
+:root { --bg:#fbfbf9; --fg:#1d1d1b; --muted:#66655f; --card:#ffffff; --line:#e3e1da; --code:#f4f3ee; }
+@media (prefers-color-scheme: dark) { :root { --bg:#161614; --fg:#ecebe6; --muted:#a3a29b; --card:#1f1f1c; --line:#33322e; --code:#262622; } }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width:960px; margin:0 auto; padding:24px 16px 64px; }
+h1 { font-size:22px; margin:0 0 8px; }
+h2 { font-size:17px; margin:0 0 4px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
+p { margin:4px 0; }
+.intro { color:var(--muted); }
+.role { font-weight:600; }
+.meta { color:var(--muted); font-size:13px; }
+section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin:16px 0; }
+pre { background:var(--code); border-radius:6px; padding:12px; margin:10px 0 6px; font:13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre.fmt { overflow-x:auto; }
+pre.raw { white-space:pre-wrap; word-break:break-all; }
+summary { cursor:pointer; color:var(--muted); font-size:13px; }
+nav a { margin-right:10px; font-family:ui-monospace, monospace; color:inherit; }
+table{width:100%;border-collapse:collapse;margin:14px 0}th,td{text-align:right;padding:6px 9px;border-bottom:1px solid var(--line)}th:first-child,td:first-child{text-align:left}
+</style>
+</head>
+<body>
+<main>
+<h1>Applied queries: 8,190 of 8,281 posts matched</h1>
+<p class="intro"><strong>Applied locally · not deployed · zero provider calls.</strong> Nov 4 22:00 → Nov 5 10:00 JST.</p>
+<p class="intro"><strong>Eight additional relevant posts; zero lost matches.</strong> Corrected baseline 8,182 → 8,190 (98.9%). One earlier baseline correction for ④Muse is not a query gain.</p>
+<p class="intro">Nine base calls, maximum 511 UTF-8 bytes with bounds. Counts include current saved Call A membership. Local stored-text/quote/entity matching; historical list membership and X indexing/pagination are not reconstructed.</p>
+<p class="intro"><strong>496 regression checks passed.</strong> All previous branches, contexts, handles and saved historical behavior remain covered. Existing DB labels are unchanged.</p>
+<nav><a href="#A">A</a> <a href="#B1">B1</a> <a href="#C1">C1</a> <a href="#C2">C2</a> <a href="#C3">C3</a> <a href="#C4">C4</a> <a href="#B2">B2</a> <a href="#B3">B3</a> <a href="#B4">B4</a></nav><section id="brand-totals"><h2>DB counts and extra-candidate percentages</h2><p><strong>Extra % = extra candidates ÷ existing DB-tagged posts ×100.</strong> These are raw candidate matches, not validated relevant gains. Extra posts are already stored but lack this brand label. Posts absent from the DB remain unmeasured.</p><table><tr><th>Brand</th><th>DB tagged</th><th>Existing caught</th><th>Extra candidates</th><th>Extra / DB</th><th>Potential total</th></tr><tr><td>DeepSeek</td><td>1873</td><td>1822</td><td>23</td><td>1.2%</td><td>1845</td></tr><tr><td>Dots</td><td>2</td><td>2</td><td>3</td><td>150.0%</td><td>5</td></tr><tr><td>ByteDance / Doubao</td><td>84</td><td>84</td><td>26</td><td>31.0%</td><td>110</td></tr><tr><td>ERNIE</td><td>6</td><td>6</td><td>2</td><td>33.3%</td><td>8</td></tr><tr><td>EXAONE</td><td>1</td><td>1</td><td>0</td><td>0.0%</td><td>1</td></tr><tr><td>GLM</td><td>350</td><td>350</td><td>5</td><td>1.4%</td><td>355</td></tr><tr><td>Hunyuan</td><td>694</td><td>694</td><td>12</td><td>1.7%</td><td>706</td></tr><tr><td>InclusionAI</td><td>13</td><td>12</td><td>0</td><td>0.0%</td><td>12</td></tr><tr><td>Kuaishou / Kling</td><td>5</td><td>5</td><td>19</td><td>380.0%</td><td>24</td></tr><tr><td>Meta / Llama</td><td>3903</td><td>3901</td><td>5</td><td>0.1%</td><td>3906</td></tr><tr><td>MiMo</td><td>34</td><td>34</td><td>2</td><td>5.9%</td><td>36</td></tr><tr><td>MiniMax</td><td>429</td><td>403</td><td>3</td><td>0.7%</td><td>406</td></tr><tr><td>Mistral</td><td>98</td><td>98</td><td>13</td><td>13.3%</td><td>111</td></tr><tr><td>Kimi</td><td>716</td><td>716</td><td>22</td><td>3.1%</td><td>738</td></tr><tr><td>NVIDIA</td><td>51</td><td>51</td><td>410</td><td>803.9%</td><td>461</td></tr><tr><td>Qwen</td><td>928</td><td>928</td><td>15</td><td>1.6%</td><td>943</td></tr><tr><td>Sakana AI</td><td>0</td><td>0</td><td>4</td><td>N/A (zero baseline)</td><td>4</td></tr><tr><td>SenseTime</td><td>4</td><td>4</td><td>0</td><td>0.0%</td><td>4</td></tr><tr><td>StepFun</td><td>6</td><td>6</td><td>61</td><td>1016.7%</td><td>67</td></tr><tr><td>Upstage</td><td>23</td><td>21</td><td>0</td><td>0.0%</td><td>21</td></tr><tr><td>Yi</td><td>9</td><td>9</td><td>1</td><td>11.1%</td><td>10</td></tr></table><p>626 candidate brand/post pairs across 579 stored posts. Brand totals overlap. Percentages above 100% mean more extra candidates than existing tagged posts; a zero baseline has no percentage.</p></section><section><h2>Same frozen DB window</h2><table><tr><th>Brand</th><th>In DB</th><th>Before</th><th>Applied</th><th>Caught</th></tr><tr><td>DeepSeek</td><td>1,873</td><td>1,821</td><td>1,822</td><td>97.3%</td></tr><tr><td>Dots</td><td>2</td><td>2</td><td>2</td><td>100.0%</td></tr><tr><td>ByteDance / Doubao</td><td>84</td><td>83</td><td>84</td><td>100.0%</td></tr><tr><td>ERNIE</td><td>6</td><td>6</td><td>6</td><td>100.0%</td></tr><tr><td>EXAONE</td><td>1</td><td>1</td><td>1</td><td>100.0%</td></tr><tr><td>GLM</td><td>350</td><td>350</td><td>350</td><td>100.0%</td></tr><tr><td>Hunyuan</td><td>694</td><td>694</td><td>694</td><td>100.0%</td></tr><tr><td>InclusionAI</td><td>13</td><td>12</td><td>12</td><td>92.3%</td></tr><tr><td>Kuaishou / Kling</td><td>5</td><td>5</td><td>5</td><td>100.0%</td></tr><tr><td>Meta / Llama</td><td>3,903</td><td>3,899</td><td>3,901</td><td>99.9%</td></tr><tr><td>MiMo</td><td>34</td><td>34</td><td>34</td><td>100.0%</td></tr><tr><td>MiniMax</td><td>429</td><td>401</td><td>403</td><td>93.9%</td></tr><tr><td>Mistral</td><td>98</td><td>98</td><td>98</td><td>100.0%</td></tr><tr><td>Kimi</td><td>716</td><td>713</td><td>716</td><td>100.0%</td></tr><tr><td>NVIDIA</td><td>51</td><td>51</td><td>51</td><td>100.0%</td></tr><tr><td>Qwen</td><td>928</td><td>927</td><td>928</td><td>100.0%</td></tr><tr><td>Sakana AI</td><td>0</td><td>0</td><td>0</td><td>—</td></tr><tr><td>SenseTime</td><td>4</td><td>4</td><td>4</td><td>100.0%</td></tr><tr><td>StepFun</td><td>6</td><td>6</td><td>6</td><td>100.0%</td></tr><tr><td>Upstage</td><td>23</td><td>21</td><td>21</td><td>91.3%</td></tr><tr><td>Yi</td><td>9</td><td>9</td><td>9</td><td>100.0%</td></tr></table><p>Added 千问, 字节扣子/Coze, contextual Moonshot, Llama pretraining and DeepSeek V4.1F. Whole-brand groups remain declared in policy. Source labels define denominators and can be wrong; remaining misses were reviewed rather than forcing generic matches.</p></section>
+
+<section id="A">
+  <h2>A</h2>
+  <p class="role">Curated list</p>
+  <p class="meta">Applied local policy · 96/512 UTF-8 bytes with time bounds · 52 characters</p>
+  <pre class="fmt">(list:2067062923525275922) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(list:2067062923525275922) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="B1">
+  <h2>B1</h2>
+  <p class="role">Established AI platforms</p>
+  <p class="meta">Applied local policy · 511/512 UTF-8 bytes with time bounds · 427 characters</p>
+  <pre class="fmt">(
+    &quot;Muse Image&quot;
+    OR &quot;Muse Video&quot;
+    OR &quot;Muse Voice&quot;
+    OR Llama (
+        llm
+        OR model
+        OR api
+        OR agentic
+        OR huggingface
+        OR pretraining
+    )
+    OR (Meta OR Muse) (
+        AI
+        OR model
+        OR models
+        OR agent
+        OR agents
+        OR code
+        OR Wonder
+        OR Spark
+        OR Glimmer
+        OR research
+        OR release
+        OR 模型
+        OR 智能体
+        OR トークン
+    )
+    OR @AIatMeta
+    OR SenseChat
+    OR SenseTime
+    OR SenseNova
+    OR 商汤
+    OR 日日新
+    OR @SenseTime_AI
+    OR ERNIE
+    OR 文心一言
+    OR 文心
+    OR PaddleOCR
+    OR @ErnieforDevs
+    OR @PaddlePaddle
+) -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(&quot;Muse Image&quot; OR &quot;Muse Video&quot; OR &quot;Muse Voice&quot; OR Llama (llm OR model OR api OR agentic OR huggingface OR pretraining) OR (Meta OR Muse) (AI OR model OR models OR agent OR agents OR code OR Wonder OR Spark OR Glimmer OR research OR release OR 模型 OR 智能体 OR トークン) OR @AIatMeta OR SenseChat OR SenseTime OR SenseNova OR 商汤 OR 日日新 OR @SenseTime_AI OR ERNIE OR 文心一言 OR 文心 OR PaddleOCR OR @ErnieforDevs OR @PaddlePaddle) -from:xxyweb3</pre></details>
+</section>
+<section id="C1">
+  <h2>C1</h2>
+  <p class="role">NVIDIA models and technical AI stack</p>
+  <p class="meta">Applied local policy · 489/512 UTF-8 bytes with time bounds · 445 characters</p>
+  <pre class="fmt">(
+    NeMo
+    OR Megatron
+    OR Nemotron
+    OR Alpamayo
+    OR BioNeMo
+    OR NemoClaw
+    OR GR00T
+    OR TensorRT
+    OR TRT-LLM
+    OR Parakeet
+    OR Canary
+    OR Audio2Face
+    OR DLSS
+    OR NV-Embed
+    OR NV-CLIP
+    OR NemoGuard
+    OR NVLM
+    OR CUDA
+    OR cuDNN
+    OR CUTLASS
+    OR NCCL
+    OR RAPIDS
+    OR cuML
+    OR cuDF
+    OR cuVS
+    OR DeepStream
+    OR Holoscan
+    OR Omniverse
+    OR PhysicsNeMo
+    OR Earth-2
+    OR CorrDiff
+    OR FourCastNet
+    OR MONAI
+    OR Auto-Ontology
+    OR AI-Q
+    OR Garak
+    OR cuOpt
+    OR cuGraph
+    OR Jetson
+    OR JetPack
+) -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(NeMo OR Megatron OR Nemotron OR Alpamayo OR BioNeMo OR NemoClaw OR GR00T OR TensorRT OR TRT-LLM OR Parakeet OR Canary OR Audio2Face OR DLSS OR NV-Embed OR NV-CLIP OR NemoGuard OR NVLM OR CUDA OR cuDNN OR CUTLASS OR NCCL OR RAPIDS OR cuML OR cuDF OR cuVS OR DeepStream OR Holoscan OR Omniverse OR PhysicsNeMo OR Earth-2 OR CorrDiff OR FourCastNet OR MONAI OR Auto-Ontology OR AI-Q OR Garak OR cuOpt OR cuGraph OR Jetson OR JetPack) -from:xxyweb3</pre></details>
+</section>
+<section id="C2">
+  <h2>C2</h2>
+  <p class="role">NVIDIA company and product names</p>
+  <p class="meta">Applied local policy · 319/512 UTF-8 bytes with time bounds · 247 characters</p>
+  <pre class="fmt">(
+    NVIDIA
+    OR 英伟达
+    OR 輝達
+    OR 英偉達
+    OR エヌビディア
+    OR @NVIDIAAI
+    OR @NVIDIAAIDev
+    OR Cosmos
+    OR Isaac
+    OR NIM
+    OR Riva
+    OR Dynamo
+    OR Triton
+    OR Eagle
+    OR TAO
+    OR Morpheus
+    OR Merlin
+    OR Maxine
+    OR Modulus
+    OR Clara
+    OR Ising
+    OR ACE
+    OR Tokkio
+    OR Edify
+    OR DRIVE
+) -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(NVIDIA OR 英伟达 OR 輝達 OR 英偉達 OR エヌビディア OR @NVIDIAAI OR @NVIDIAAIDev OR Cosmos OR Isaac OR NIM OR Riva OR Dynamo OR Triton OR Eagle OR TAO OR Morpheus OR Merlin OR Maxine OR Modulus OR Clara OR Ising OR ACE OR Tokkio OR Edify OR DRIVE) -from:xxyweb3</pre></details>
+</section>
+<section id="C3">
+  <h2>C3</h2>
+  <p class="role">General-purpose model platforms</p>
+  <p class="meta">Applied local policy · 476/512 UTF-8 bytes with time bounds · 384 characters</p>
+  <pre class="fmt">(
+    Hailuo
+    OR MiniMax
+    OR 海螺 (AI OR 模型 OR H3 OR 歌曲)
+    OR @MiniMaxAgent
+    OR @MiniMax_AI
+    OR @hailuo_ai
+    OR Qwen
+    OR Qwen3
+    OR 通义千问
+    OR 千问
+    OR @Ali_TongyiLab
+    OR @Alibaba_Qwen
+    OR DeepSeek
+    OR 深度求索
+    OR V4.1F
+    OR @deepseek_ai
+    OR OxAlpha
+    OR ox-alpha
+    OR (glm OR ChatGLM OR Zhipu OR 智谱 OR Z.ai) (llm OR model OR api OR agentic OR huggingface)
+    OR Yi
+    OR 01.AI
+    OR 零一万物
+    OR 万智
+    OR Wanzhi
+    OR @01AI_Yi
+) -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(Hailuo OR MiniMax OR 海螺 (AI OR 模型 OR H3 OR 歌曲) OR @MiniMaxAgent OR @MiniMax_AI OR @hailuo_ai OR Qwen OR Qwen3 OR 通义千问 OR 千问 OR @Ali_TongyiLab OR @Alibaba_Qwen OR DeepSeek OR 深度求索 OR V4.1F OR @deepseek_ai OR OxAlpha OR ox-alpha OR (glm OR ChatGLM OR Zhipu OR 智谱 OR Z.ai) (llm OR model OR api OR agentic OR huggingface) OR Yi OR 01.AI OR 零一万物 OR 万智 OR Wanzhi OR @01AI_Yi) -from:xxyweb3</pre></details>
+</section>
+<section id="C4">
+  <h2>C4</h2>
+  <p class="role">Chinese social-platform model labs</p>
+  <p class="meta">Applied local policy · 460/512 UTF-8 bytes with time bounds · 384 characters</p>
+  <pre class="fmt">(
+    Hunyuan
+    OR Hunyuan4
+    OR 腾讯混元
+    OR Hunyuan3D
+    OR HunyuanVideo
+    OR HunyuanImage
+    OR Hy-MT2
+    OR Hy-Memory
+    OR HY-World
+    OR 混元3
+    OR 混元4
+    OR 混元5
+    OR Hy3
+    OR Hy4
+    OR Hy5
+    OR 混元 (AI OR 模型 OR 3D OR 腾讯)
+    OR @TencentHunyuan
+    OR dots studio
+    OR &quot;dots 3 note&quot;
+    OR &quot;dots.3-note&quot;
+    OR dots.ocr
+    OR dots.tts
+    OR dots.llm1
+    OR dots.vlm
+    OR dots.mocr
+    OR DotsOCR
+    OR &quot;dots OCR&quot;
+    OR dots3
+    OR dots4
+    OR @dotsstudioai
+) -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(Hunyuan OR Hunyuan4 OR 腾讯混元 OR Hunyuan3D OR HunyuanVideo OR HunyuanImage OR Hy-MT2 OR Hy-Memory OR HY-World OR 混元3 OR 混元4 OR 混元5 OR Hy3 OR Hy4 OR Hy5 OR 混元 (AI OR 模型 OR 3D OR 腾讯) OR @TencentHunyuan OR dots studio OR &quot;dots 3 note&quot; OR &quot;dots.3-note&quot; OR dots.ocr OR dots.tts OR dots.llm1 OR dots.vlm OR dots.mocr OR DotsOCR OR &quot;dots OCR&quot; OR dots3 OR dots4 OR @dotsstudioai) -from:xxyweb3</pre></details>
+</section>
+<section id="B2">
+  <h2>B2</h2>
+  <p class="role">Independent model research labs</p>
+  <p class="meta">Applied local policy · 511/512 UTF-8 bytes with time bounds · 452 characters</p>
+  <pre class="fmt">(
+    Mistral
+    OR Mixtral
+    OR Codestral
+    OR Devstral
+    OR Voxtral
+    OR Magistral
+    OR Ministral
+    OR Pixtral
+    OR Mathstral
+    OR Leanstral
+    OR LIDstral
+    OR Timestral
+    OR @MistralAI
+    OR Sakana
+    OR SakanaAI
+    OR SakanaAILabs
+    OR サカナAI
+    OR Namazu
+    OR ShinkaEvolve
+    OR &quot;AI Scientist&quot;
+    OR &quot;Darwin Gödel Machine&quot;
+    OR @SakanaAILabs
+    OR StepFun
+    OR 阶跃星辰
+    OR Step-5
+    OR Step5
+    OR Step-3.5-Flash
+    OR &quot;Step 3.7 Flash&quot;
+    OR StepAudio
+    OR Step-Audio
+    OR Step-Video
+    OR @StepFun_ai
+    OR @stepfunai
+) -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(Mistral OR Mixtral OR Codestral OR Devstral OR Voxtral OR Magistral OR Ministral OR Pixtral OR Mathstral OR Leanstral OR LIDstral OR Timestral OR @MistralAI OR Sakana OR SakanaAI OR SakanaAILabs OR サカナAI OR Namazu OR ShinkaEvolve OR &quot;AI Scientist&quot; OR &quot;Darwin Gödel Machine&quot; OR @SakanaAILabs OR StepFun OR 阶跃星辰 OR Step-5 OR Step5 OR Step-3.5-Flash OR &quot;Step 3.7 Flash&quot; OR StepAudio OR Step-Audio OR Step-Video OR @StepFun_ai OR @stepfunai) -from:xxyweb3</pre></details>
+</section>
+<section id="B3">
+  <h2>B3</h2>
+  <p class="role">Asian model studios</p>
+  <p class="meta">Applied local policy · 511/512 UTF-8 bytes with time bounds · 425 characters</p>
+  <pre class="fmt">(
+    Kimi
+    OR 月之暗面
+    OR 暗面
+    OR MoonshotAI
+    OR K2
+    OR K3
+    OR Kimi3
+    OR Moonshot (
+        AI
+        OR LLM
+        OR model
+        OR API
+        OR tokens
+        OR weights
+        OR 模型
+        OR 参数
+    )
+    OR @Kimi_Moonshot
+    OR InclusionAI
+    OR Ling
+    OR Ring
+    OR Ming
+    OR @AntLingAGI
+    OR @TheInclusionAI
+    OR @ZhihuFrontier
+    OR @robbyant_brain
+    OR Upstage
+    OR Solar Pro
+    OR Solar LLM
+    OR 업스테이지
+    OR &quot;Solar Open&quot;
+    OR &quot;Solar Mini&quot;
+    OR @upstageai
+    OR Kuaishou
+    OR KwaiYii
+    OR Kling
+    OR 可灵
+    OR 可靈
+    OR 快手
+    OR @Kling_ai
+) -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(Kimi OR 月之暗面 OR 暗面 OR MoonshotAI OR K2 OR K3 OR Kimi3 OR Moonshot (AI OR LLM OR model OR API OR tokens OR weights OR 模型 OR 参数) OR @Kimi_Moonshot OR InclusionAI OR Ling OR Ring OR Ming OR @AntLingAGI OR @TheInclusionAI OR @ZhihuFrontier OR @robbyant_brain OR Upstage OR Solar Pro OR Solar LLM OR 업스테이지 OR &quot;Solar Open&quot; OR &quot;Solar Mini&quot; OR @upstageai OR Kuaishou OR KwaiYii OR Kling OR 可灵 OR 可靈 OR 快手 OR @Kling_ai) -from:xxyweb3</pre></details>
+</section>
+<section id="B4">
+  <h2>B4</h2>
+  <p class="role">Consumer-platform AI portfolios</p>
+  <p class="meta">Applied local policy · 501/512 UTF-8 bytes with time bounds · 409 characters</p>
+  <pre class="fmt">(
+    MiMo
+    OR (Xiaomi OR 小米) (
+        AI
+        OR LLM
+        OR model
+        OR models
+        OR agent
+        OR agents
+        OR 模型
+        OR 大模型
+        OR 人工智能
+        OR 智能体
+    )
+    OR @XiaomiMiMo
+    OR @XiaomiMiMoDevs
+    OR Doubao
+    OR ByteDance
+    OR 豆包
+    OR 字节跳动
+    OR Seedance
+    OR Seedream
+    OR Seed2.1
+    OR SeedRealtime
+    OR &quot;Seed Audio&quot;
+    OR SeedAudio
+    OR &quot;Seed Diffusion&quot;
+    OR SeedDiffusion
+    OR 字节扣子
+    OR Coze
+    OR @BytePlusGlobal
+    OR @bytedanceoss
+    OR @doubaoai
+    OR EXAONE
+    OR &quot;LG AI&quot;
+    OR @LG_AI_Research
+) -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(MiMo OR (Xiaomi OR 小米) (AI OR LLM OR model OR models OR agent OR agents OR 模型 OR 大模型 OR 人工智能 OR 智能体) OR @XiaomiMiMo OR @XiaomiMiMoDevs OR Doubao OR ByteDance OR 豆包 OR 字节跳动 OR Seedance OR Seedream OR Seed2.1 OR SeedRealtime OR &quot;Seed Audio&quot; OR SeedAudio OR &quot;Seed Diffusion&quot; OR SeedDiffusion OR 字节扣子 OR Coze OR @BytePlusGlobal OR @bytedanceoss OR @doubaoai OR EXAONE OR &quot;LG AI&quot; OR @LG_AI_Research) -from:xxyweb3</pre></details>
+</section>
+</main>
+</body>
+</html>

@@ -6,7 +6,7 @@ out low-engagement posts. The user lowered this to 0 so the list call
 surfaces every post from the curated handles, not just ones that
 already have traction.
 
-The constant MIN_FAVES_FOR_LIST_CALL in x_monitor/run.py is the
+The constant MIN_FAVES_FOR_LIST_CALL in x_monitor/query_plan.py is the
 single source of truth. This test pins both:
   (a) the constant must exist and equal 0;
   (b) `_planned_call_to_query` must consult it for `account` calls
@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,19 +61,21 @@ def test_build_query_uses_constant_for_call_a() -> None:
     )
 
 
-def test_planned_call_to_query_uses_constant_for_account_calls() -> None:
-    """_planned_call_to_query must read the constant for `account`
-    calls, not hardcode 1."""
-    src = _read("x_monitor/run.py")
-    # The branch must reference MIN_FAVES_FOR_LIST_CALL.
-    pattern = (
-        r'call\.call_kind\s*==\s*"account"\s*:\s*\n\s*'
-        r'qid,\s*min_faves\s*=\s*"Q1",\s*MIN_FAVES_FOR_LIST_CALL'
-    )
-    assert re.search(pattern, src), (
-        "_planned_call_to_query must use MIN_FAVES_FOR_LIST_CALL "
-        "(not a hardcoded 1) for `account` calls."
-    )
+def test_planned_call_to_query_uses_constant_for_account_calls(monkeypatch) -> None:
+    """Exercise the current converter; its old Q1 assignment is retired."""
+    from x_monitor import run
+    from x_monitor.query_plan import PlannedCall
+
+    # A distinct value proves the account path reads the constant rather
+    # than merely returning the same currently configured zero by accident.
+    monkeypatch.setattr(run, "MIN_FAVES_FOR_LIST_CALL", 7)
+    for call_id, kind, expected in [("A", "account", 7), ("B1", "brand_wide", 0)]:
+        call = PlannedCall(call_id=call_id, call_kind=kind, brand_id="*", bucket=None,
+                           query_string="fixture", query_length=7)
+        query = run._planned_call_to_query(call)
+        assert query.id == call_id
+        assert query.min_faves == expected
+        assert query.query_string == "fixture"
 
 
 def test_no_hardcoded_min_faves_equals_one_for_account() -> None:

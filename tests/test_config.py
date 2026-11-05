@@ -152,7 +152,7 @@ daily_ceiling: 100
 def test_default_skip_order_is_r17():
     """The seven logical calls have one deterministic degraded skip order."""
     c = Config(enabled_models=["minimax"], daily_ceiling=100)
-    assert c.degraded_skip_order == ["B3", "B2", "B1", "C3", "C2", "C1", "A"]
+    assert c.degraded_skip_order == ["B4", "B3", "B2", "B1", "C4", "C3", "C2", "C1", "A"]
 
 
 def test_skip_order_must_contain_all_query_ids():
