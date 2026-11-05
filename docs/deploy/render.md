@@ -241,7 +241,7 @@ TwitterAPI credentials are also purpose-separated and fail closed:
 | Purpose | Render-managed variable | Authorized callers |
 |---|---|---|
 | Scheduled | `TWITTERAPI_IO_SCHEDULED_API_KEY` | Recurring `run_cycle` search and metrics |
-| On demand | `TWITTERAPI_IO_ON_DEMAND_API_KEY` | Explicit batches, backfills, reconciliation, probes, and smoke tests |
+| On demand | `TWITTERAPI_IO_ON_DEMAND_API_KEY` | Explicit batches, X post backfills, reconciliation, probes, and smoke tests |
 
 Store both production values in the existing `pushinweight-secrets`
 environment group. Do not define the retired unsuffixed name, duplicate a key
@@ -276,8 +276,10 @@ commit a connection string to source control.
 
 ### Historical X batch jobs and safe handover
 
-Historical backfill uses a Render one-off job created from the deployed
-`pushinweight-harvest` revision. The one-off has its own process and compute;
+Historical X post backfill (`manage.py backfill` and `manage.py run_backfill`)
+uses a Render one-off job created from the deployed `pushinweight-harvest`
+revision. This section does not cover the Backfiller data source or a Backfill
+transfer of numeric measurements; see `docs/reference/collection-jobs.md`. The one-off has its own process and compute;
 the recurring `run_cycle --scheduled` command and schedule stay unchanged.
 The backfill command selects `TWITTERAPI_IO_ON_DEMAND_API_KEY` explicitly.
 Use the existing Render-managed credentials rather than copying them to the

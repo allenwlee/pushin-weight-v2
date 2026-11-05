@@ -1,6 +1,6 @@
 ---
 name: change-harvester
-description: Use when changing harvest/cycle behavior in pushin-weight-v2 — CycleRunner, run_cycle, backfill, harvest policy, TwitterAPI search calls (A/B/C), cursors, metrics refresh, translator/classifier post-fetch, Render harvest cron, credit burn, or fetch-vs-insert anomalies.
+description: Use when changing harvest/cycle behavior in pushin-weight-v2 — CycleRunner, run_cycle, the X post backfill (manage.py backfill / run_backfill), harvest policy, TwitterAPI search calls (A/B/C), cursors, metrics refresh, translator/classifier post-fetch, Render harvest cron, credit burn, or fetch-vs-insert anomalies.
 ---
 
 # Change Harvester — pushin-weight-v2
@@ -9,8 +9,13 @@ Turn a harvest change (bug, policy tweak, config wiring, cost fix) into a
 minimal, verified change that cannot silently ship a green cron with zero work.
 
 This skill is the harvest twin of `.claude/skills/fix-ui/SKILL.md`.
+"Backfill" in this skill always means the **X post backfill**
+(`monitor/management/commands/backfill.py`, `run_backfill`). The Backfiller
+data source (`backfiller_data_source`) and the Backfill transfer
+(`transfer_backfill_contract`) handle numeric measurements, not X posts, and
+are outside this skill; see `CONCEPTS.md`.
 **Always also load** `.claude/skills/avoiding-recurring-mistakes/SKILL.md`
-before editing harvest code — especially **M7** (DRY cycle/backfill),
+before editing harvest code — especially **M7** (DRY cycle/X post backfill),
 **M8** (LLM/DB guards), **M12** (explicit model/env), **M17** (production
 pause authorization), and **M18** (call-chain regression nets). If this skill and the avoid-mistakes
 skill disagree on pause/resume or config SSOT, follow `AGENTS.md` +
@@ -49,7 +54,7 @@ State exact **TOUCH**, **PRESERVE**, and **ASK FIRST** boundaries.
 | --- | --- |
 | 7-call hybrid shape (A + B1 + B2 + B3 + C1 + C2 + C3) | Volume / purity contract |
 | `config.yaml` + `x_monitor.config.load_config` as runtime SSOT | Drift caused multi-hour dead deploys |
-| Shared `plan_calls_for_cycle` / `CycleRunner` for harvest **and** backfill | M7 — no parallel pipeline |
+| Shared `plan_calls_for_cycle` / `CycleRunner` for harvest **and** X post backfill | M7 — no parallel pipeline |
 | One-shot metrics refresh delay/cap semantics | Credit + freshness tradeoff |
 | Render service inventory (pause only harvest when asked) | Web must stay up |
 | Unrelated UI / feed / i18n | Wrong skill surface |
@@ -140,7 +145,7 @@ releasing it:
 
 1. Inventory **every enabled planned search call**, including unchanged list,
    brand, discovery and supplemental calls. Inspect the actual scheduled and
-   manual/backfill callers; do not audit only the edited B/C fragment.
+   manual/X post backfill callers; do not audit only the edited B/C fragment.
 2. Render the final query through the production request path, including
    Boolean grouping, quotes, list IDs, active author/other exclusions and both
    timestamp bounds. Measure `len(final_query.encode("utf-8"))` **after all
@@ -163,7 +168,7 @@ releasing it:
    replay before provider dispatch.
 5. Maintain regressions for CJK/multilingual queries that fit in characters but
    overflow in bytes, and for suffix/time-bound additions that push a fitting
-   base query over the cap. Exercise real scheduled/backfill callers with fake
+   base query over the cap. Exercise real scheduled/X post backfill callers with fake
    clients and inspect their effective wire queries. No live provider probe is
    needed or authorized by this gate.
 6. Repeat the byte audit after any query, alias, policy, exclusion registry,
@@ -211,7 +216,7 @@ Function-level green while production still omits `cfg=` is incomplete.
 | Surface | Primary paths |
 | --- | --- |
 | Cycle orchestration | `monitor/cycle.py`, `monitor/management/commands/run_cycle.py` |
-| Backfill (must share core) | `monitor/management/commands/backfill.py` |
+| X post backfill (must share core) | `monitor/management/commands/backfill.py`, `monitor/backfill_collection.py` |
 | Policy / query bands | `x_monitor/harvest_policy.py`, `config.yaml`, `x_monitor/config.py` |
 | Persist / dedup | `x_monitor/store.py` (and related) |
 | Translator / lang | `x_monitor/translator.py`, attribution factories |

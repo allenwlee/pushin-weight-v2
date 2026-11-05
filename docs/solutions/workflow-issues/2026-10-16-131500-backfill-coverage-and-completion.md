@@ -10,10 +10,17 @@ applies_when:
   - "Accepting a historical X backfill as equivalent to scheduled collection"
   - "Explaining low recovered volume or comparing historical days"
   - "Scaling a verified daily batch to a month"
-tags: ["backfiller", "collection-coverage", "pagination", "reconciliation", "enrichment", "provenance", "harvester-parity"]
+tags: ["x-post-backfill", "backfiller", "collection-coverage", "pagination", "reconciliation", "enrichment", "provenance", "harvester-parity"]
 ---
 
 # Prove X backfill coverage separately from processing completion
+
+> **Which backfill this is.** This learning is about the **X post backfill**
+> (`manage.py backfill` and `manage.py run_backfill`), which recovers past X
+> posts into the production Post tables. It is not the **Backfiller data
+> source** (`manage.py backfiller_data_source`, numeric provider measurements
+> in the separate `xbackfiller` database) or a **Backfill transfer** of those
+> measurements into production. `CONCEPTS.md` defines all three.
 
 ## Context
 
@@ -24,8 +31,9 @@ the subsequent August 9 investigation still found a collection-scope gap
 (session history). The resolved lesson is how to distinguish and verify those
 claims. The total missing August 9 population remains unresolved.
 
-The inspected backfill adapter accepts only B1–B3 and C1–C3. Normal collection
-also has Call A and RARE_EXTRA paths. Reusing CycleRunner and its Post writer
+The inspected X backfill adapter accepted only B1–B3 and C1–C3 (C4 has since
+been added to `monitor/backfill_collection.py`). Normal collection also has
+Call A and RARE_EXTRA paths, which the adapter still excludes. Reusing CycleRunner and its Post writer
 therefore did not establish equivalent collection scope. Independently, the
 enrichment verifier accepts a selected set of saved IDs: it cannot discover
 posts the provider never returned or an omitted route never requested.
@@ -157,7 +165,8 @@ exhaustion or full equivalence. Do not merge the two investigations' outcomes.
 - [Backfill collection adapter](../../../monitor/backfill_collection.py): `CALL_IDS`, `validate_scope`, request loop and committed checkpoints.
 - [Shared runner](../../../monitor/cycle.py): `plan_calls_for_cycle`, scheduled author exclusions, Call A role handling and rare-type search.
 - [Persisted enrichment verification](../../../monitor/backfill_enrichment.py): `completion_facts` and `verify_cohort`.
-- [Historical pipeline-wiring learning](../architecture-patterns/backfiller-and-llm-classifier-pipeline-wiring.md): useful origin of shared orchestration; its July scheduler, JSON-state and inference instructions need a scoped refresh before operational use.
+- [X post backfill pipeline learning](../architecture-patterns/backfiller-and-llm-classifier-pipeline-wiring.md): shared `CycleRunner` orchestration, explicit caps, writer-lock coexistence with the live harvest, and collection-job resumability.
+- [Replay reviewed backfill measurements into production](../data-migration/2026-11-05-150150-replay-reviewed-backfill-measurements-into-production.md): the Backfill transfer for the separate Backfiller data source; a different backfill with different evidence.
 
 Private source receipts remain on fuchitalee under
 `~/.local/share/render-operations/2026-10-16-aug09-staging-promotion/` and

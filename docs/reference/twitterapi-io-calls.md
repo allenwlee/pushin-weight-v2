@@ -15,7 +15,7 @@ tweets vs $3/1k on Apify).
 
 **API key env vars:** `TWITTERAPI_IO_SCHEDULED_API_KEY` is used only by the
 Render harvest cron. `TWITTERAPI_IO_ON_DEMAND_API_KEY` is used by explicit
-backfills, reconciliation, probes, and smoke tests. Callers declare one
+X post backfills, reconciliation, probes, and smoke tests. Callers declare one
 purpose and never fall back to the other key or the retired unsuffixed name.
 **Base URL:** `https://api.twitterapi.io`
 **HTTP method:** All calls are `GET` with `params=...` query string.

@@ -78,8 +78,8 @@ must have its skipped time windows recorded and reconciled under
 `docs/operations/pause-and-resume-harvest-cron.md`. Restoring a schedule and
 seeing one healthy run does not recover missed data.
 
-Before changing harvest/cycle behavior (CycleRunner, `run_cycle`, backfill,
-harvest policy, A/B/C TwitterAPI calls, cursors, metrics refresh, translator
+Before changing harvest/cycle behavior (CycleRunner, `run_cycle`, the X post
+backfill (`manage.py backfill` / `run_backfill`), harvest policy, A/B/C TwitterAPI calls, cursors, metrics refresh, translator
 or classifier post-fetch, Render harvest cron, credit burn, or
 fetch-vs-insert anomalies), read and follow
 `.claude/skills/change-harvester/SKILL.md` **and**
@@ -87,12 +87,21 @@ fetch-vs-insert anomalies), read and follow
 M12, M17, M18). This applies to every agent working in this repository,
 including Claude Code and Codex.
 
+"Backfill" names three different operations; say which one. The **X post
+backfill** above recovers past X posts into production through `CycleRunner`.
+The **Backfiller data source** (`manage.py backfiller_data_source`) collects
+numeric provider measurements into the separate `xbackfiller` database, and a
+**Backfill transfer** (`manage.py transfer_backfill_contract`) promotes reviewed
+measurements from it into production. The last two use their own collection
+jobs, make no TwitterAPI calls and do not take the harvest writer lock.
+`CONCEPTS.md` defines all three.
+
 ### TwitterAPI credential purposes
 
 - `TWITTERAPI_IO_SCHEDULED_API_KEY` is only for recurring collection through
   `run_cycle` and its scheduled search/metrics path.
 - `TWITTERAPI_IO_ON_DEMAND_API_KEY` is only for explicitly launched batches,
-  backfills, reconciliation, probes, and API-backed smoke tests.
+  X post backfills, reconciliation, probes, and API-backed smoke tests.
 - Callers must declare a credential purpose. Never read the legacy
   `TWITTERAPI_IO_API_KEY`, default a purpose, or fall back between keys.
 - Secret values live only in Render-managed environment configuration (or an

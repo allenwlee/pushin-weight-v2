@@ -4,21 +4,22 @@ date: 2026-07-24
 problem_type: architecture_pattern
 component: service_object
 severity: high
-last_updated: 2026-07-26
+last_updated: 2026-11-05
 applies_when:
-  - "Building a batched, resumable date-range processing tool that reuses an existing pipeline"
-  - "Wiring an LLM-based classifier into an existing data processing workflow with guardrails"
-  - "Designing Django management commands that need to process historical data in chunks"
+  - "Recovering past X posts for a bounded time window through the existing harvest pipeline"
+  - "Wiring translation and classification into historical X post recovery with spend caps"
+  - "Running a long X post backfill as a Render one-off without disturbing the 15-minute harvest"
 symptoms:
-  - "Need to backfill historical data through an existing pipeline without rewriting it"
-  - "LLM classification is slow and expensive — needs rate limiting and cost guardrails"
-  - "Multiple build/deploy issues surfaced (missing dependencies, stale i18n config, filesystem assumptions on Render)"
+  - "Need X posts from a past window that the 15-minute harvest missed"
+  - "LLM classification of recovered posts is slow and expensive and needs caps"
+  - "A long recovery outlives one Render one-off job and must resume"
 root_cause: incomplete_setup
 resolution_type: tooling_addition
 related_components:
   - background_job
   - tooling
 tags:
+  - x-post-backfill
   - backfiller
   - llm-classifier
   - harvest-cycle
@@ -28,253 +29,260 @@ tags:
   - render-deploy
 ---
 
-# Backfiller Tool: Date-Bounded Historical Data Recovery
+# X post backfill: date-bounded historical post recovery through the shared harvest pipeline
+
+> **Which backfill this is.** This learning covers the **X post backfill**:
+> `python manage.py backfill` (and the month campaigns run by
+> `python manage.py run_backfill`). It searches X through TwitterAPI.io for a
+> past window and writes Posts into the production database through the same
+> `CycleRunner` as the 15-minute harvest. It is **not** the **Backfiller data
+> source** (`python manage.py backfiller_data_source`), which collects numeric
+> provider measurements such as Hugging Face downloads, Arena ratings and
+> OpenRouter tokens into the separate `xbackfiller` database. It is also not a
+> **Backfill transfer**, which moves those reviewed measurements into
+> production. For those, read
+> [Replay reviewed backfill measurements into production](../data-migration/2026-11-05-150150-replay-reviewed-backfill-measurements-into-production.md)
+> and `docs/reference/collection-jobs.md`. `CONCEPTS.md` defines all three terms.
 
 ## Context
 
-The v2 Django harvest cycle (`monitor/cycle.py`) runs on a 15-minute cron via Render's Celery beat scheduler. Each cycle plans a set of API calls, fetches recent tweets, attributes them to brands, and persists results via the Django ORM. This steady-state harvesting works well for ongoing coverage, but it cannot reach backward into the past: the regular cycle does not accept time-range parameters, and there was no mechanism to fill historical gaps without manual scripting.
+The production harvest runs every 15 minutes as the Render cron
+`pushinweight-harvest` (`python manage.py run_cycle --scheduled`, defined in
+`render.yaml`). Celery beat is not a production scheduler. Each cycle plans a
+set of TwitterAPI calls, fetches recent posts, attributes them to brands,
+persists them through the Django ORM, and then translates and classifies them.
+That forward-moving window cannot reach back into the past. When the harvest
+misses a window (a deployment gap, an outage, a query defect), `run_cycle`
+alone cannot recover it.
 
-Two concrete gaps exposed this need:
-
-1. **Deployment downtime gaps.** During the Jul 22-23 Render deployment cutover, the v2 harvest was not running. When it came back online, roughly 1,600+ posts from that window were missing. Running `manage.py run_cycle` would only fetch posts from "now" — it could not backfill the missed interval.
-
-2. **LLM classification relay.** The v2 cycle's `_run_post_fetch` method was stubbed out — posts were persisted without `text_en`, `text_zh_cn`, `PostBrandSignal`, or `PostBrandDiscourse` rows. Without real classification, the v2 stack had no labeled data for downstream analytics.
-
-The solution needed two capabilities: a way to bound harvest calls to arbitrary time windows (the backfiller), and a way to run the full translation + classification pipeline on fetched posts (the LLM classifier wiring). Critically, both had to coexist with the regular 15-minute harvest without blocking it.
+The X post backfill exists for that case. Its durable lesson is architectural:
+recovery reuses the harvest pipeline rather than duplicating it, runs inside
+explicit spend and time caps, and stays out of the live harvest's way.
 
 ## Guidance
 
-### Architecture: The Backfiller as a Thin Orchestration Layer
+### The X post backfill is a thin orchestration layer over `CycleRunner`
 
-The backfiller (`monitor/management/commands/backfill.py`) is a Django management command that reuses the entire `CycleRunner` pipeline: plan calls, fetch tweets, attribute to brands, persist via ORM, translate, and classify. It is not a separate code path — it is an orchestration wrapper (~300 lines) that configures the same `CycleRunner` with time-bound parameters and then drives it in batched, resumable fashion.
+`monitor/management/commands/backfill.py` does not contain its own fetch,
+attribute or persist logic. It sets a fixed time window and caps, then drives
+the same `CycleRunner` the scheduled harvest uses. Two seams make this work:
 
-The pipeline reuse is enabled by two design decisions:
+- **`plan_calls_for_cycle(cfg)`** in `monitor/cycle.py` is the one call planner
+  shared by `CycleRunner` and the backfill command. Both pass the `Config`
+  loaded by `x_monitor.config.load_config`, so the scheduled harvest and the
+  backfill plan the same queries for the same brands.
+- **`_backfill_call_ids`** on `CycleRunner.__init__` narrows the full plan to
+  the selected call IDs (for example `B1`), so the backfill can run one call at
+  a time through the standard cycle machinery.
 
-**`plan_calls_for_cycle()` — a shared entry point.** Extracted from `CycleRunner._plan_calls()` to module-level, this function reads `X_MONITOR_LIST_ID`, brand filter, primary keywords, and `x_query_specs` from Django settings. Both `CycleRunner` and the backfill command call it, ensuring consistent call planning regardless of entry point.
+The backfill selects only the core logical calls (`x_monitor.config.VALID_CALL_IDS`).
+Optional discovery searches have their own evidence and budgets and do not
+silently join a recovery. Historical Call A is refused unless a frozen
+account-population manifest exists; select B/C calls for bounded recovery.
+`--brands` must name enabled models and drops Call A.
 
-**`_backfill_call_ids` — single-call execution mode.** The `CycleRunner.__init__` accepts an optional `_backfill_call_ids` parameter. When set, `CycleRunner.run()` narrows the full call plan to only the matching call IDs. This allows the backfiller to execute one call at a time while still using the standard cycle machinery.
+### Time window
 
-### Time Window Configuration
-
-The backfiller accepts `--since` and `--until` with second-level precision:
-
-```
-python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00
-```
-
-These are parsed from ISO format (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`), converted to epoch seconds, and threaded through the settings pipeline:
+`--since` and `--until` are both required (except for `--quarantined` replays).
+They are fixed bounds in UTC, `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`, so the run
+can resume against the same window. The command threads them through Django
+settings that `CycleRunner` reads:
 
 ```
 backfill._parse_iso()
-  → settings.X_MONITOR_CYCLE_SINCE_TIME (epoch int)
-  → settings.X_MONITOR_CYCLE_UNTIL_TIME (epoch int)
-  → CycleRunner._fetch_tweets() reads from settings
-  → TwitterApiClient.run_search(since_time=, until_time=)
-  → apify.py injects `since_time:<epoch> until_time:<epoch>` into query strings
+  → settings.X_MONITOR_CYCLE_SINCE_TIME / X_MONITOR_CYCLE_UNTIL_TIME (epoch)
+  → settings.X_MONITOR_CYCLE_LIMIT_PER_CALL / X_MONITOR_CYCLE_MAX_PAGES_PER_CALL
+  → CycleRunner fetch → TwitterAPI search with since_time/until_time
 ```
 
-The `until_time` parameter is a new addition to the pipeline — `apify.py` already supported `since_time` for the regular harvest's sliding window; the backfiller added the matching upper bound so search results stay strictly within the target interval.
+`--query` overrides the frozen historical query for exactly one brand and one
+B/C call. It must omit time operators, because the command's bounds own the
+interval. The command rejects a query whose length, after the appended
+`since_time:`/`until_time:` window, exceeds 512 **characters**. Since
+2026-11-04 the provider has silently returned nothing for queries over 512
+UTF-8 **bytes** including that window. A Chinese-heavy query can pass the
+character check and still come back empty, so count bytes yourself.
 
-### Dynamic Resource Estimation
+### Explicit caps, not estimates
 
-The backfiller computes `max_results` and `max_pages` from the window size rather than requiring the operator to guess. It uses a 2,350 posts/day baseline (measured from the Jul 21 steady-state harvest) with a 2x safety margin:
+The July design estimated `max_results` and `max_pages` from a posts-per-day
+baseline. That estimator is gone. `--safety-margin` survives only as a
+validated, deprecated option. Every invocation now runs under explicit caps:
 
-```python
-def _compute_params(since_epoch, until_epoch, safety_margin):
-    gap_hours = max((until_epoch - since_epoch) / 3600.0, 1.0)
-    est_total = int(_EST_DAILY_POSTS * (gap_hours / 24))
-    est_per_call = max(est_total // _EST_CALLS_PER_CYCLE, 50)
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--max-results` | 100 | Per-unit result cap; must be a multiple of 20 (complete pages) |
+| `--max-pages` | 5 | Per-unit page cap |
+| `--max-api-requests` | 10 | Invocation-wide HTTP request cap |
+| `--max-llm-calls` | 60 | Invocation-wide model transport cap, including retries |
+| `--run-seconds` | 300 | Invocation deadline; at most 780 outside `--batch` |
+| `--slice-minutes` | 15 | Fixed unit duration for ordinary runs |
+| `--batch-size` | 1 unit (or the HTTP allowance with `--batch`) | Work steps per invocation |
 
-    max_results = int(min(est_per_call * safety_margin, _MAX_RESULTS_CEILING))
-    max_results = max(max_results, 100)
-    max_pages = min(
-        max(int((max_results / _TWEETS_PER_PAGE) * safety_margin) + 1, 5),
-        _MAX_PAGES_CEILING,
-    )
-    return max_results, max_pages, est_total
-```
+Caps do not grow with the window. A long window with default caps simply needs
+more invocations, or `--batch`, or a frozen collection job.
 
-Ceilings (`_MAX_RESULTS_CEILING=1000`, `_MAX_PAGES_CEILING=100`) prevent runaway API consumption on large windows. Operators can override the computed values with `--max-results` and `--max-pages`.
+### Staying out of the live harvest's way
 
-### Batched Execution with Cooperative Scheduling
+Ordinary runs process one 15-minute unit per invocation by default. Before each
+unit, the command checks the time to the next 15-minute slot
+(`_seconds_to_next_slot`). If the unit's remaining deadline plus a 120-second
+reserve would not fit before that slot, it defers instead of competing with the
+cron. Each unit also takes `harvest_writer_lock(execution_mode="backfill")`
+(`monitor/run_lock.py`) and stops if the shared Post writer is busy. The
+`--pause` seconds between units are spent without holding the lock.
 
-The backfiller does not attempt to process an entire window in one shot. Instead, it processes `--batch-size` calls per invocation (default: 3), pauses between calls (`--pause` seconds, default: 5), writes progress to a state file, and exits. This is deliberate for coexistence with the regular harvest:
+`--batch` collects a whole historical window as one unit. Each step is one
+20-result page with a committed cursor, so the unit repeats until it drains.
+It skips the slot wait but still takes the writer lock. It does no inline model
+work (`--max-llm-calls` and `--enrichment-limit` are forced to 0).
 
-- Each batch creates a fresh `CycleRunner` instance and runs `runner.run()`.
-- Between batches, the regular 15-minute harvest cron can grab the pipeline lock or simply interleave its calls.
-- The `--pause` flag creates breathing room between calls within a batch.
+The backfill uses TwitterAPI's on-demand credential lane:
+`CycleRunner.twitterapi_credential_purpose` returns `ON_DEMAND` for backfill and
+manual cycles and `SCHEDULED` only for the cron. Run long recoveries as a Render
+one-off job from the deployed `pushinweight-harvest` revision (see
+"Historical X batch jobs and safe handover" in `docs/deploy/render.md`). Never
+run them inside the live web service, and never pause the cron to make room.
+AGENTS.md makes live-operation continuity a release invariant.
 
-This is not a producer-consumer queue — it is cooperative yielding: the backfiller does a small chunk of work and releases control back to the system.
+### Resumability: host checkpoints for short runs, PostgreSQL jobs for campaigns
 
-### State Files for Resumability
+Ordinary runs checkpoint to
+`data/backfill/<since_epoch>-<until_epoch>[-<scope_hash>].json`. The scope
+hash separates different brand and call selections over the same window. Fixed
+bounds, policy and limits must match the checkpoint to resume. `--status`
+prints it, `--reset` discards it, `--retry-blocked` retries an anomalous unit
+after its cause is fixed, and `--state-dir` points at a durable directory on
+the executing host.
 
-Progress is tracked in `data/backfill/<since_epoch>-<until_epoch>.json`:
+Render one-off jobs do not share a filesystem, so a host checkpoint dies with
+its job. Campaigns that span invocations use frozen collection jobs instead:
 
-```json
-{
-  "since_epoch": 1753142400,
-  "until_epoch": 1753268400,
-  "since_label": "2026-07-22T05:00",
-  "until_label": "2026-07-23T21:00",
-  "gap_hours": 35.0,
-  "est_total_posts": 3429,
-  "max_results": 1000,
-  "max_pages": 100,
-  "calls_total": 6,
-  "calls_completed_ids": ["call_a_01", "call_a_02"],
-  "calls_completed": 2,
-  "total_inserted": 823,
-  "runs": [],
-  "finished": false,
-  "calls_remaining": ["call_a_03", "call_a_04", "call_b_01", "call_b_02"]
-}
-```
+- `--plan-collection-job KEY` freezes a reusable current-policy historical job
+  (`--dry-run` prints it only).
+- `--collection-job JOB_UUID` executes that frozen job. Progress, page
+  checkpoints and provider evidence live in PostgreSQL through
+  `monitor/backfill_collection.py`. Its adapter accepts `B1`–`B3` and `C1`–`C4`
+  and requires the on-demand credential.
+- `run_backfill --month-recipe` runs month campaigns in phases (see
+  `docs/deploy/render.md`).
 
-On subsequent runs with the same `--since`/`--until`, the backfiller loads the state file, skips completed calls, and picks up where it left off. `--status` prints the current progress; `--reset` discards the state and starts fresh.
+### Translation and classification of recovered posts
 
-**Render limitation:** Render jobs do not share a filesystem. State files persist only within a single job's lifetime. This means a backfill must complete in one Render job invocation — run it with a large enough `--batch-size` (or default to all calls) when executing on Render, and monitor until completion.
+`CycleRunner._run_post_fetch` runs the same two stages for backfilled and
+scheduled posts:
 
-### LLM Classifier Wiring
+1. **Translate** with `x_monitor.translator.translate_batch_pragmatics`.
+2. **Classify** with `x_monitor.attribution.classify_batch_pragmatics_full`,
+   after converting Django `Brand` rows to the classifier's `BrandRow` shape.
+   Per-brand results are stored as `PostBrandSignal` rows.
 
-The `_run_post_fetch` method in `CycleRunner` was rewired from a stub to real v1 function calls. The pipeline is:
+Clients are role-specific: `build_translator_client_from_env` and
+`build_classifier_client_from_env` in `x_monitor/reattribute.py`. Backfill
+cycles pass `deepinfra_key_env="DEEPINFRA_ON_DEMAND"`, so recovery spend uses
+the on-demand DeepInfra credential rather than the scheduled one.
 
-1. **Build Anthropic client** via `x_monitor.reattribute.build_anthropic_client_from_env()` — reads `DEEPSEEK_API_KEY` and `X_MONITOR_CLASSIFIER_BASE_URL` from environment.
+Guardrails:
 
-2. **Convert Django `Brand` models to v1 `BrandRow` namedtuples.** The v1 classifier expects `BrandRow(brand_id, display_name, accent_color, is_sentinel)`. The Django `Brand.nickname` field maps to `BrandRow.brand_id`.
+- `X_MONITOR_LLM_PAUSE_SECONDS` (default 1 s) spaces classifier request starts.
+- `--max-llm-calls` caps model transport for the whole invocation, retries
+  included. Remaining posts stay unenriched for a later invocation.
+- Concurrency is bounded by `enrichment.translation_concurrency` and
+  `enrichment.classification_concurrency` in `config.yaml`. It is not
+  unbounded, and it is no longer strictly sequential.
+- `--enrichment-limit` (default 5) freezes the small cohort of recovered posts
+  that an ordinary run enriches inline.
 
-3. **Stage 1 — Translate:** `x_monitor.translator.translate_batch_pragmatics(tweets, ["en", "zh_cn"], client)` produces `text_en`, `text_zh_cn`, and `lang_detected` for each post. Results are persisted to the `Post` model's `text_en`, `text_zh_cn`, and `lang_detected` fields via `update_or_create`.
+To re-enrich posts that are already stored, do not re-fetch them from X. Use
+`--enrich-native` (native model batches) or `--enrich-direct` (ordinary
+DeepInfra calls, `--enrichment-concurrency` default 32). Both make zero X
+requests and require `DEEPINFRA_ON_DEMAND`. `--enrichment-control
+status|pause|resume` inspects or controls a collection job's enrichment.
 
-4. **Stage 2 — Classify:** `x_monitor.attribution.classify_batch_pragmatics_full(tweets, brand_registry, client)` produces per-brand `(post_type, sentiment)` decompositions and optional `discourse_role` / `china_nationalism` / `us_nationalism` flags. Results are persisted to `PostBrandSignal` and `PostBrandDiscourse` tables.
+### Build and deploy notes from the original build
 
-**Guardrails** prevent runaway API spend:
-
-- **Pause between batches:** `X_MONITOR_LLM_PAUSE_SECONDS` (default 1s) — inserted after every classification batch boundary.
-- **Hard cap:** `_max_llm_calls` (set via `--max-llm-calls` on the backfill command) — classification stops when the counter is reached. Remaining posts are persisted without labels and will be picked up by the next invocation.
-- **Batch size:** `X_MONITOR_CLASSIFY_BATCH_SIZE` (default 20) controls how many posts go into each LLM call.
-- **Sequential processing:** Classification runs inline within `_run_post_fetch` — no async, no concurrent workers. This is deliberate: the LLM API has rate limits, and concurrent calls would amplify failure modes.
-
-### Build/Deploy Gotchas Encountered
-
-Several environment-specific issues were discovered and fixed during this build:
-
-1. **`LANGUAGE_CODE="zh-cn"` breaks Django startup.** After an i18n revert, the settings file retained `LANGUAGE_CODE="zh-cn"` but no compiled `.mo` file existed. Django's startup checks failed. Fix: revert to `LANGUAGE_CODE="en"` until i18n is re-enabled.
-
-2. **`compilemessages` requires `gettext` on the host.** Render's Python runtime does not include GNU gettext. Running `python manage.py compilemessages` fails. Fix: skip compilemessages in build.sh; either commit pre-compiled `.mo` files or defer i18n.
-
-3. **Render jobs do not share a filesystem.** State files written by one Render job are invisible to another. Backfill jobs must complete within a single invocation.
-
-4. **`plan_calls()` does not accept `limit_per_call` as a keyword argument.** The backfill initially passed `limit_per_call` to the shared `plan_calls()` function, but the function signature only accepts `list_id`, `x_query_specs`, and `primary_keywords`. Fix: pass `max_results`/`max_pages` through Django settings instead, where `CycleRunner._fetch_tweets()` reads them.
+- `plan_calls_for_cycle` takes no per-call limits. Per-call result and page
+  caps travel through the `X_MONITOR_CYCLE_*` settings shown above. That is
+  still how the command passes them.
+- The July i18n workarounds (forcing `LANGUAGE_CODE="en"` and skipping
+  `compilemessages`) are superseded. `project/settings.py` uses `zh-hans`, and
+  `build.sh` runs `compilemessages`. See the i18n debugging journey under
+  Related.
 
 ## Why This Matters
 
-The alternative to a reusable orchestration layer would have been duplicating the fetch-attribute-persist pipeline inside the management command. That would create three problems:
+Duplicating fetch, attribute and persist logic inside the backfill command
+would let the two copies drift: a fix to `CycleRunner` would not reach
+recovery, and every pipeline change would need testing at two entry points.
+Keeping one planner (`plan_calls_for_cycle`) and one runner (`CycleRunner`),
+with the backfill only setting bounds, caps and checkpoints, keeps scheduled
+and historical collection on one source of truth. The repo enforces the same
+rule as M7 in `.claude/skills/avoiding-recurring-mistakes/SKILL.md`.
 
-1. **Divergent behavior.** Two copies of the harvest logic would inevitably drift — a bug fix in `CycleRunner` would not propagate to the backfill command, and vice versa.
+Sharing the pipeline is not the same as sharing collection scope. Proving that
+a backfill found what the scheduled harvest would have found is a separate
+claim; see the coverage learning under Related.
 
-2. **Configuration leakage.** The backfill would need its own copies of `plan_calls`, `_fetch_tweets`, `_attribute_items`, and `_persist_items`, each with duplicate parameter plumbing.
-
-3. **Testing surface explosion.** Every change to the pipeline would need to be verified against two entry points with different state management.
-
-By extracting `plan_calls_for_cycle()` to module level and adding the `_backfill_call_ids` single-call mode to `CycleRunner`, the backfiller becomes a pure orchestration concern: it sets up time-bounded settings, drives `CycleRunner` in batches, and manages state files. The pipeline itself remains a single source of truth in `CycleRunner.run()`.
-
-The cooperative batching design (process `--batch-size` calls, write state, exit) is also important. Alternatives considered:
-
-- **Monolithic single-run:** Process the entire window in one invocation. Simple but risky — if the job fails at call 5 of 6, all progress is lost (no state file without explicit checkpointing), and the regular harvest is blocked for the duration.
-
-- **Background queue per call:** Enqueue each call as a Celery task. More resilient but adds infrastructure complexity (Celery routing, task deduplication, result backend) for what is fundamentally a one-off recovery operation.
-
-The cooperative batching approach hits the middle ground: it checkpoints progress so failure is cheap, it yields between batches so the regular harvest is not starved, and it requires no additional infrastructure beyond the Django management command framework.
+Coexistence matters as much as reuse. Slot-aware deferral, the shared writer
+lock and on-demand credentials let a recovery run alongside the live harvest
+without stealing its slot, its writer or its credit lane. That is what lets
+recovery proceed without the planned harvest gaps AGENTS.md forbids.
 
 ## When to Apply
 
-**Use the backfiller when:**
+**Use the X post backfill when:**
 
-- A deployment or outage gap needs filling (e.g., hours or days of missed harvest).
-- You need bounded historical data for a specific analysis window.
-- A migration or schema change requires re-fetching and re-processing posts from a past interval.
-- You are testing LLM classification changes and want to re-classify a known time range.
+- A deployment, outage or query defect left a window of X posts unharvested.
+- You need X posts from a specific past window for analysis.
 
-**Use the regular harvest (`manage.py run_cycle` or the Celery beat scheduler) when:**
+**Use the regular harvest** (the `pushinweight-harvest` cron running
+`run_cycle --scheduled`) for ongoing, forward-looking collection. The backfill
+is not a scheduler.
 
-- Ongoing, forward-looking coverage is the goal.
-- The 15-minute sliding window is sufficient.
-- You want automated, hands-off operation.
+**Use something else when:**
 
-**Do NOT use the backfiller for:**
-
-- Windows larger than a few days without adjusting `--max-results` and `--max-pages`. The API will truncate results, and you may miss posts even though the backfiller reports completion.
-- Replacing the regular harvest. The backfiller is a recovery/analysis tool, not a production scheduler.
-- Continuous re-backfilling of the same window. The state file prevents reprocessing completed calls, but posts already persisted via `update_or_create` will be updated in-place — repeated runs won't create duplicates, but they will re-fetch and re-persist the same data, wasting API credits.
+- The posts are already stored and only need translation or classification:
+  use `--enrich-native` or `--enrich-direct` instead of re-fetching.
+- The data is numeric provider measurements (Hugging Face, Arena, OpenRouter,
+  OpenCode): that is the Backfiller data source and Backfill transfer, not this
+  command.
+- The window spans many invocations or Render jobs: freeze a collection job
+  (`--plan-collection-job`) rather than relying on a host checkpoint file.
 
 ## Examples
 
-### Fill a Deployment Gap
+These mirror the command's own usage block in
+`monitor/management/commands/backfill.py`.
 
 ```bash
-# Plan first (dry-run)
-python manage.py backfill \
-  --since 2026-07-22T05:00 \
-  --until 2026-07-23T21:00 \
-  --dry-run
+# Plan only
+python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --dry-run
 
-# Execute with moderate batch size and LLM cap
-python manage.py backfill \
-  --since 2026-07-22T05:00 \
-  --until 2026-07-23T21:00 \
-  --batch-size 6 \
-  --pause 10 \
-  --max-llm-calls 50
+# One scoped unit: one brand, one call
+python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 \
+  --brands qwen --call-ids B1
 
-# Check progress
-python manage.py backfill \
-  --since 2026-07-22T05:00 \
-  --until 2026-07-23T21:00 \
-  --status
+# Bound the whole invocation, including model calls and HTTP retries
+python manage.py backfill --since 2026-08-09T00:00Z --until 2026-08-09T00:15Z \
+  --brands qwen --call-ids B1 --max-api-requests 10 --max-llm-calls 60
+
+# Resume: re-run the same command; the scoped checkpoint picks up where it stopped
+python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 \
+  --brands qwen --call-ids B1
+
+# Start the same scope over
+python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 \
+  --brands qwen --call-ids B1 --reset
+
+# Whole-window historical collection with page checkpoints and no inline model work
+python manage.py backfill --batch --since 2026-08-01 --until 2026-08-31 \
+  --call-ids B1,B2,B3,C1,C2,C3 --max-api-requests 500 --run-seconds 3600
 ```
 
-### Targeted Re-Classification of a Known Window
+## Related
 
-```bash
-python manage.py backfill \
-  --since 2026-07-22T14:00 \
-  --until 2026-07-22T18:00 \
-  --max-llm-calls 100
-```
-
-### Resume After Failure
-
-If a backfill invocation fails partway through (e.g., Render job timeout), simply re-run the same command:
-
-```bash
-# State file at data/backfill/1753142400-1753268400.json tracks progress
-python manage.py backfill \
-  --since 2026-07-22T05:00 \
-  --until 2026-07-23T21:00
-```
-
-The backfiller loads the state file, finds `calls_completed_ids: ["call_a_01", "call_a_02"]`, and picks up with `call_a_03`. No manual tracking is required.
-
-### Reset and Start Over
-
-```bash
-python manage.py backfill \
-  --since 2026-07-22T05:00 \
-  --until 2026-07-23T21:00 \
-  --reset
-```
-
-### Override Computed Parameters
-
-```bash
-# Force smaller results window (useful for testing)
-python manage.py backfill \
-  --since 2026-07-22T05:00 \
-  --until 2026-07-23T21:00 \
-  --max-results 200 \
-  --max-pages 10 \
-  --batch-size 2
-```
-
-## Related Docs
-
-- `docs/solutions/workflow-issues/django-i18n-locale-toggle-debugging-journey.md` — full post-mortem of the zh_CN i18n feature; explains the locale middleware fix, the `zh-cn` vs `zh-hans` directory naming, and why fixes #1 and #2 above are now superseded.
+- [Prove X backfill coverage separately from processing completion](../workflow-issues/2026-10-16-131500-backfill-coverage-and-completion.md): finishing searches and enriching saved posts do not prove historical coverage.
+- [Replay reviewed backfill measurements into production](../data-migration/2026-11-05-150150-replay-reviewed-backfill-measurements-into-production.md): the Backfill transfer for the separate Backfiller data source. It shares the word "backfill" but not this command.
+- `docs/deploy/render.md`, "Historical X batch jobs and safe handover": Render one-off execution, month campaigns and enrichment phase commands.
+- `docs/reference/collection-jobs.md`: collection jobs, runs and checkpoints.
+- `docs/solutions/workflow-issues/django-i18n-locale-toggle-debugging-journey.md`: why the July i18n workarounds were superseded.
