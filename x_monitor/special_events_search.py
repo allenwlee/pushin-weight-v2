@@ -7,7 +7,7 @@ import json
 from x_monitor.queries import assert_under_length_cap
 from x_monitor.x_client import XClient
 
-QUERY_VERSION = "special-events-v1-2026-10-27"
+QUERY_VERSION = "special-events-v1-2026-11-05"
 CALL_IDS = ("SPECIALEVENTS1", "SPECIALEVENTS2")
 RUN_LANES = dict(
     zip(CALL_IDS, ("special-events/general", "special-events/releases"), strict=True)
@@ -15,17 +15,19 @@ RUN_LANES = dict(
 
 GENERAL_QUERY = (
     '(("I\'ve joined" OR "I joined" OR "I left" OR "我加入" OR "我离开" OR 出任 OR 换帅 OR に入社 OR を退職) '
-    '(AI OR LLM OR OpenAI OR Anthropic) OR ("I\'ve joined @deepseek_ai") OR '
+    '(AI OR LLM OR OpenAI OR Anthropic) OR "I\'ve joined" '
+    '(@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai) OR '
     '("we\'re hiring" OR "currently hiring" OR 招聘 OR 募集中) (engineer OR researcher) OR '
     '("we\'ll be at" OR 登壇) ("AI conference" OR summit) OR '
-    '("applications open" OR "apply by" OR 申请) (hackathon OR fellowship) (AI OR LLM)) min_faves:0'
+    '("applications open" OR "apply by" OR 申请) (hackathon OR fellowship) (AI OR LLM))'
 )
 RELEASE_QUERY = (
     "((introducing OR announce OR announcing OR announced OR release OR released OR releasing OR "
     'launch OR launched OR launching OR "is here" OR available OR arrived OR "open weights" OR '
     "开源 OR 发布 OR 上线 OR 推出 OR 公開 OR リリース) "
     "(model OR models OR weights OR Preview OR LLM OR VLM OR checkpoint OR agent OR agents OR "
-    'harness OR toolkit OR SDK OR "AI tool" OR "AI assistant") OR url:huggingface.co OR url:hf.co) min_faves:0'
+    'harness OR toolkit OR SDK OR "AI tool" OR "AI assistant" OR 模型 OR モデル OR 权重) '
+    'OR url:huggingface.co OR url:hf.co)'
 )
 QUERIES = dict(zip(CALL_IDS, (GENERAL_QUERY, RELEASE_QUERY), strict=True))
 

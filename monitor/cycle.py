@@ -31,6 +31,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -158,7 +159,7 @@ from x_monitor.attribution import (
 from x_monitor.config import Config, CycleConfig, load_config
 from x_monitor.harvest_policy import HarvestPolicy
 from x_monitor.jev_decisions import build_jev_decision_gate
-from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
+from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap, query_size_bytes
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.tweet_entities import merge_entities
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
@@ -1371,6 +1372,31 @@ def _matches_any_term(text: str, quoted_text: str, terms: list[str]) -> bool:
     return any(term in haystack for term in terms if term)
 
 
+def _excluded_by_call(item: dict[str, Any], call: PlannedCall) -> bool:
+    """Keep legacy exclusions; packed brand filters cannot veto another brand.
+
+    Account mentions remain an independent, unfiltered retrieval path, as they
+    were in B2/B3 before packing. No change to stored labels is made here.
+    """
+    from x_monitor.attribution import matches_brand_exclusion
+
+    body, quoted = item.get("text") or "", item.get("quoted_text") or ""
+    if _matches_any_term(body, quoted, [t.lower() for t in call.not_include if t]):
+        return True
+    if not call.brand_not_include:
+        return False
+    handles = {h.casefold() for h in call.unfiltered_handles}
+    if handles and any(m.casefold() in handles for m in re.findall(
+        r"(?<![A-Za-z0-9_@])@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])", body + "\n" + quoted
+    )):
+        return False
+    brands = item.get("brand_ids") or []
+    return bool(brands) and all(
+        matches_brand_exclusion(body + "\n" + quoted, call.brand_not_include.get(b, []))
+        for b in brands
+    )
+
+
 def _apply_relevancy_gate(
     items: list[dict[str, Any]],
     *,
@@ -1747,7 +1773,7 @@ def _resolve_x_query_specs(
     if policy is None:
         policy = load_policy(Path("config") / "harvest_policy.yaml")
     specs = validate_derived_call_ids(
-        specs_from_policy(policy, brand_nicknames=cfg.enabled_models)
+        specs_from_policy(policy, brand_nicknames=cfg.enabled_models), policy=policy
     )
     return list(specs)
 
@@ -2439,6 +2465,21 @@ class CycleRunner:
 
     def _plan_calls(self) -> list[PlannedCall]:
         """Build the per-cycle call list via plan_calls_for_cycle()."""
+        context = self._backfill_context
+        if context is not None and context.query_override:
+            selected = self._backfill_call_ids or []
+            if self.cycle_kind != "backfill" or len(selected) != 1:
+                raise ValueError("a historical query override requires exactly one backfill call")
+            if not context.match_scheduled_policy:
+                # The validated historical recipe owns its query and ID. It
+                # must not disappear or inherit unrelated filters when today's
+                # brand packing changes. Current-policy jobs additionally check
+                # their frozen policy digest before reaching this path.
+                query = context.query_override
+                assert_under_length_cap(query)
+                return [PlannedCall(call_id=selected[0],
+                    call_kind="account" if selected[0] == "A" else "brand_wide",
+                    brand_id="*", bucket=None, query_string=query, query_length=len(query))]
         try:
             calls = plan_calls_for_cycle(
                 self.cfg, scheduled_exclusions=(self.cycle_kind == "scheduled" or bool(
@@ -2455,6 +2496,8 @@ class CycleRunner:
             if len(selected) != 1:
                 raise ValueError("a historical query override requires exactly one call")
             query = self._backfill_context.query_override
+            if selected[0] not in {call.call_id for call in calls}:
+                raise ValueError("frozen current-policy call is missing from its validated policy")
             calls = [
                 replace(call, query_string=query, query_length=len(query))
                 if call.call_id == selected[0] else call for call in calls
@@ -2613,16 +2656,16 @@ class CycleRunner:
             assert_under_length_cap(effective_query)
         except ValueError as exc:
             logger.error(
-                "_fetch_tweets: %s would be %d chars after injecting the time "
+                "_fetch_tweets: %s would be %d UTF-8 bytes after injecting the time "
                 "operators (cap %d); skipping the call rather than letting "
                 "TwitterAPI.io return a silent zero. %s",
                 call.call_id,
-                len(effective_query),
+                query_size_bytes(effective_query),
                 X_LENGTH_CAP,
                 exc,
             )
             self._errors.append(
-                f"fetch.{call.call_id}: query length {len(effective_query)} "
+                f"fetch.{call.call_id}: query length {query_size_bytes(effective_query)} UTF-8 bytes "
                 f"exceeds {X_LENGTH_CAP} after time operators"
             )
             return [], "length_cap_exceeded"
@@ -4815,17 +4858,7 @@ class CycleRunner:
                             if not item.get("_unattributed")
                             or item.get("_call_a_staff_candidate")
                         ]
-                    terms = [term.lower() for term in (call.not_include or []) if term]
-                    if terms:
-                        kept = [
-                            item
-                            for item in kept
-                            if not _matches_any_term(
-                                item.get("text") or "",
-                                item.get("quoted_text") or "",
-                                terms,
-                            )
-                        ]
+                    kept = [item for item in kept if not _excluded_by_call(item, call)]
                     (
                         kept,
                         inserted,
@@ -5454,29 +5487,14 @@ class CycleRunner:
                 [item for item in items if id(item) not in kept_identities], "unmatched_attribution",
             )
 
-            # U5 runtime wire-in: post-fetch ban match against
-            # call.not_include (R12). Stable hijacks like F1/Kimi for
-            # moonshot_kimi are listed in config.yaml's x_query_specs[*]
-            # .not_include. We match case-insensitively against the
-            # tweet's text and quoted_text. Drop counters surface in
-            # call_entry["not_include_drops"] for ops dashboards.
-            ni_terms = [t.lower() for t in (call.not_include or []) if t]
-            ni_drop_count = 0
-            if ni_terms:
-                pre_drop = len(kept)
-                self._record_backfill_exclusions([
-                    item for item in kept if _matches_any_term(
-                        item.get("text") or "", item.get("quoted_text") or "", ni_terms,
-                    )
-                ], "not_include")
-                kept = [
-                    it for it in kept
-                    if not _matches_any_term(
-                        it.get("text") or "", it.get("quoted_text") or "",
-                        ni_terms,
-                    )
-                ]
-                ni_drop_count = pre_drop - len(kept)
+            # Preserve flat historical filters and scope packed filters to their
+            # brands, so an unrelated brand is not lost in a combined query.
+            excluded = [it for it in kept if _excluded_by_call(it, call)]
+            ni_drop_count = len(excluded)
+            if excluded:
+                self._record_backfill_exclusions(excluded, "not_include")
+                excluded_ids = {id(it) for it in excluded}
+                kept = [it for it in kept if id(it) not in excluded_ids]
             call_entry["not_include_drops"] = ni_drop_count
             self._posts_attributed -= ni_drop_count  # adjust attributed count
 

@@ -192,9 +192,9 @@ services:
       - key: X_MONITOR_RARE_TYPES_QUERY_PACK
         value: special-events-v1
       - key: X_MONITOR_RARE_TYPES_ASSESSMENT_PATH
-        value: docs/analysis/harvester/2026-10-27-205000-special-events-query-assessment.json
+        value: docs/analysis/harvester/2026-11-06-145500-special-events-query-assessment.json
       - key: X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST
-        value: 1dd606ceb853b2679fc2064e34f4defd92b3f81f389d1751361652f6db2cef85
+        value: 9fe76b9489038126e5e7e1141d0a7a7271ed33b070a0c79095173d7170220e0c
       - key: X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED
         value: "True"
       - key: X_MONITOR_RARE_TYPES_HF_VERIFICATION_ENABLED

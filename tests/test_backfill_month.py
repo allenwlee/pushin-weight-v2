@@ -12,6 +12,18 @@ import pytest
 from scripts import backfill_month as month
 
 
+@pytest.fixture(autouse=True)
+def frozen_recipe_clock(monkeypatch):
+    """Keep frozen campaign fixtures before their deadline; expired fixtures still fail."""
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = datetime(2026, 10, 22, tzinfo=UTC)
+            return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+
+    monkeypatch.setattr(month, "datetime", FrozenDateTime)
+
+
 def recipe():
     units = [
         {
@@ -61,6 +73,28 @@ def recipe():
             ],
         },
     }
+
+
+@pytest.mark.parametrize("legacy_discovery", [False, True])
+def test_current_query_inventory_expands_without_rewriting_frozen_queries(legacy_discovery):
+    r = recipe()
+    routes = month.CURRENT_ROUTES | ({"RARE_EXTRA"} if legacy_discovery else set())
+    scope = r["template"]["windows"][0]["collection_definition"]["scope"]
+    original = scope["units"][0]
+    scope["units"] = []
+    for route in sorted(routes):
+        unit = copy.deepcopy(original)
+        unit["scope_key"] = route
+        unit["ownership"].update(call_id=route, query="frozen:" + route)
+        scope["units"].append(unit)
+    before = copy.deepcopy(r)
+    result = month.daily_manifest(r, 0)
+    assert r == before
+    for window in result["windows"]:
+        units = window["collection_definition"]["scope"]["units"]
+        assert len(units) == len(routes) * 72
+        assert {u["ownership"]["call_id"] for u in units} == routes
+        assert all(u["ownership"]["query"] == "frozen:" + u["ownership"]["call_id"] for u in units)
 
 
 def test_frozen_july_expansion_matches_original_private_fixtures():

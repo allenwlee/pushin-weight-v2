@@ -1,16 +1,15 @@
 excluded_authors:
-  - handle: xxyweb3
-    author_id: '1902753573395652608'
-    active: true
-    reason: Repeated unrelated B.AI campaign promotion in tracked-brand searches.
-    observed_on: '2026-09-28'
-    evidence_post_ids:
-      - '2104483144233853085'
-      - '2104489140083703850'
-      - '2104505996618109073'
-      - '2104511602477432878'
-    evidence_campaign: B.AI
-
+- handle: xxyweb3
+  author_id: '1902753573395652608'
+  active: true
+  reason: Repeated unrelated B.AI campaign promotion in tracked-brand searches.
+  observed_on: '2026-09-28'
+  evidence_post_ids:
+  - '2104483144233853085'
+  - '2104489140083703850'
+  - '2104505996618109073'
+  - '2104511602477432878'
+  evidence_campaign: B.AI
 brands:
   minimax:
     paths:
@@ -22,12 +21,20 @@ brands:
     - 海螺
     alias_context:
     - alias: 海螺
-      any_of: [AI, 模型, H3, 歌曲]
-    notes: B1 bare-keyword fan-out (live wire path).
+      any_of:
+      - AI
+      - 模型
+      - H3
+      - 歌曲
+    notes: Whole-brand keyword and handle block; query placement is derived.
     handles:
     - MiniMaxAgent
     - MiniMax_AI
     - hailuo_ai
+    url_roots: []
+    url_terms:
+    - Hailuo
+    - MiniMax
   qwen:
     paths:
     - bare
@@ -36,10 +43,14 @@ brands:
     - Qwen
     - Qwen3
     - 通义千问
-    notes: B1 bare-keyword fan-out (live wire path).
+    - 千问
+    notes: Whole-brand keyword and handle block; query placement is derived.
     handles:
     - Ali_TongyiLab
     - Alibaba_Qwen
+    url_roots: []
+    url_terms:
+    - Qwen3
   deepseek:
     paths:
     - bare
@@ -47,15 +58,25 @@ brands:
     tokens:
     - DeepSeek
     - 深度求索
-    notes: B1 bare-keyword fan-out (live wire path).
+    - V4.1F
+    notes: Whole-brand keyword and handle block; query placement is derived.
     handles:
     - deepseek_ai
+    url_roots: []
+    url_terms: []
+    alias_context:
+    - alias: V4.1F
+      any_of:
+      - DeepSeek
+      - 深度求索
+      - LLM
+      - model
+      - 模型
   glm:
     paths:
     - co
     tokens:
     - glm
-    - ChatGLM
     - Zhipu
     - 智谱
     - Z.ai
@@ -66,30 +87,57 @@ brands:
     - agentic
     - huggingface
     c_bare_aliases:
+    - ChatGLM
+    - GLM4
+    - GLM5
+    - GLM6
     - '"Ox Alpha"'
     - OxAlpha
-    - ox-alpha
-    version_family:
-      prefix: GLM-
-      current_major: 5
-      lookback: 1
-      lookahead: 1
-    notes: 'Owning pack: C3.'
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
+    url_roots: []
+    url_terms:
+    - ChatGLM
+    - Ox Alpha
+    - OxAlpha
+    alias_context:
+    - alias: glm
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - '4'
+      - '5'
+      - '6'
+      - '4.5'
+      - '4.6'
+      - '4.7'
+      - '5.0'
+      - '5.1'
+    - alias: Z.ai
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
   mimo:
     paths:
     - co
     - handle
     tokens:
     - MiMo
-    - Xiaomi MiMo
-    - 小米 MiMo
-    co:
-    - llm
-    - model
-    - api
-    - agentic
-    - huggingface
-    notes: 'Owning pack: C1.'
+    - Xiaomi
+    - 小米
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
+    handles:
+    - XiaomiMiMo
+    - XiaomiMiMoDevs
+    match_link_urls: true
+    match_handle_mentions: true
     not_include:
     - f1
     - antonelli
@@ -98,10 +146,58 @@ brands:
     - alonso
     - verstappen
     - formula 1
-    handles:
-    - XiaomiMiMo
-    - XiaomiMiMoDevs
-    handle_tier: other
+    url_roots:
+    - huggingface.co/XiaomiMiMo
+    - hf.co/XiaomiMiMo
+    - github.com/XiaomiMiMo
+    url_terms:
+    - xiaomimimo
+    - xiaomi-mimo
+    - mimo-v2
+    - mimo-7b
+    - mimo-vl
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    alias_context:
+    - alias: MiMo
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - tokens
+      - weights
+      - MoE
+      - inference
+      - 模型
+      - Xiaomi
+      - 小米
+      - v2.5
+      - 7B
+      - VL
+      - Code
+    - alias: Xiaomi
+      any_of:
+      - AI
+      - LLM
+      - 模型
+      - 大模型
+      - 人工智能
+      - 智能体
+    - alias: 小米
+      any_of:
+      - AI
+      - LLM
+      - 模型
+      - 大模型
+      - 人工智能
+      - 智能体
   moonshot_kimi:
     paths:
     - co
@@ -112,13 +208,51 @@ brands:
     - 月之暗面
     - 暗面
     - MoonshotAI
-    co:
-    - llm
-    - model
-    - api
-    - agentic
-    - huggingface
-    notes: 'Owning pack: C1.'
+    - Moonshot
+    - K2
+    - K3
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
+    handles:
+    - Kimi_Moonshot
+    match_link_urls: true
+    match_handle_mentions: true
+    attribution_context:
+    - alias: k2.5
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - tokens
+      - weights
+      - MoE
+      - inference
+      - 模型
+      - 参数
+      - compute
+      - GLM
+      - Kimi
+      - agent
+      - agents
+    - alias: kimi k
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - tokens
+      - weights
+      - MoE
+      - inference
+      - 模型
+      - 参数
+      - compute
+      - GLM
+      - agent
+      - agents
     not_include:
     - f1
     - antonelli
@@ -127,18 +261,164 @@ brands:
     - alonso
     - verstappen
     - formula 1
-    handles:
-    - Kimi_Moonshot
-    handle_tier: other
+    url_roots:
+    - huggingface.co/moonshotai
+    - hf.co/moonshotai
+    - github.com/MoonshotAI
+    - moonshotai.github.io
+    - kimi.com
+    - www.kimi.com
+    url_terms:
+    - moonshotai
+    - moonshot-ai
+    - kimi-k2
+    - kimi-k3
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    - tokens
+    - weights
+    - MoE
+    - inference
+    - 模型
+    - 参数
+    - compute
+    - GLM
+    - agent
+    - agents
+    c_bare_aliases:
+    - Kimi3
+    alias_context:
+    - alias: Kimi
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - tokens
+      - weights
+      - MoE
+      - inference
+      - 模型
+      - 参数
+      - compute
+      - GLM
+      - K2
+      - K2.5
+      - K3
+      - K3.1
+      - Code
+      - Thinker
+      - agent
+      - agents
+      - 智谱
+    - alias: K2
+      any_of:
+      - LLM
+      - inference
+      - weights
+      - MoE
+      - 模型
+      - Kimi
+    - alias: K3
+      any_of:
+      - LLM
+      - inference
+      - weights
+      - MoE
+      - 模型
+      - Kimi
   inclusionai:
     paths:
+    - bare
     - handle
-    notes: Not present in any current spec; explicit opt-out pending review.
+    notes: Company and product names; keep aliases here when expanding this portfolio.
     handles:
     - AntLingAGI
     - TheInclusionAI
     - ZhihuFrontier
     - robbyant_brain
+    tokens:
+    - InclusionAI
+    - Ling
+    - Ring
+    - Ming
+    match_link_urls: true
+    match_handle_mentions: true
+    alias_context:
+    - alias: Ling
+      any_of:
+      - LLM
+      - MoE
+      - weights
+      - parameters
+      - tokens
+      - 模型
+      - 参数
+      - 开源
+      - mini
+      - flash
+    - alias: Ring
+      any_of:
+      - LLM
+      - MoE
+      - weights
+      - parameters
+      - tokens
+      - 模型
+      - 参数
+      - 开源
+      - 1T
+      - '2.6'
+    - alias: Ming
+      any_of:
+      - LLM
+      - MoE
+      - weights
+      - parameters
+      - tokens
+      - 模型
+      - 参数
+      - 开源
+      - lite
+    attribution_context:
+    - alias: inclusion
+      any_of:
+      - AntLingAGI
+      - 蚂蚁
+      - MoE
+      - weights
+      - parameters
+    - alias: inclusion ai
+      any_of:
+      - AntLingAGI
+      - 蚂蚁
+      - MoE
+      - weights
+      - parameters
+    - alias: inclusion-ai
+      any_of:
+      - AntLingAGI
+      - 蚂蚁
+      - MoE
+      - weights
+      - parameters
+    url_roots:
+    - huggingface.co/inclusionAI
+    - hf.co/inclusionAI
+    - github.com/inclusionAI
+    - github.com/AntLingAGI
+    url_terms:
+    - InclusionAI
+    - ring-1t
+    - ling-flash
+    - ling-mini
+    - ming-lite
+    - ring-2.6
   mistral:
     paths:
     - co
@@ -146,13 +426,47 @@ brands:
     tokens:
     - Mistral
     - Mixtral
+    - Magistral
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
+    handles:
+    - MistralAI
+    match_link_urls: true
+    match_handle_mentions: true
+    url_roots:
+    - mistral.ai
+    - docs.mistral.ai
+    - huggingface.co/mistralai
+    - github.com/mistralai
+    url_terms:
+    - Codestral
+    - Devstral
+    - Voxtral
+    - Ministral
+    - Pixtral
+    - Mathstral
+    - Leanstral
+    - LIDstral
+    - Timestral
     co:
     - llm
     - model
     - api
     - agentic
     - huggingface
-    notes: 'Owning pack: C1.'
+    - AI
+    - 研究
+    - モデル
+    c_bare_aliases:
+    - Codestral
+    - Devstral
+    - Voxtral
+    - Ministral
+    - Pixtral
+    - Mathstral
+    - Leanstral
+    - LIDstral
+    - Timestral
     not_include:
     - f1
     - antonelli
@@ -161,19 +475,50 @@ brands:
     - alonso
     - verstappen
     - formula 1
-    handles:
-    - MistralAI
+    alias_context:
+    - alias: Magistral
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - 研究
+      - モデル
+      - Mistral
   stepfun:
     paths:
-    - bare
+    - co
     - handle
     tokens:
-    - StepFun
-    - 阶跃星辰
-    notes: B1 bare-keyword fan-out (live wire path).
+    - '"Step 5"'
+    - '"Step Audio"'
+    - '"Step Video"'
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
     handles:
     - StepFun_ai
     - stepfunai
+    match_link_urls: true
+    match_handle_mentions: true
+    url_roots: []
+    url_terms:
+    - StepFun
+    - StepAudio
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    c_bare_aliases:
+    - StepFun
+    - 阶跃星辰
+    - Step5
+    - StepAudio
+    - '"Step 3.5 Flash"'
+    - '"Step 3.7 Flash"'
   ernie:
     paths:
     - co
@@ -181,6 +526,17 @@ brands:
     tokens:
     - ERNIE
     - 文心一言
+    - 文心
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
+    handles:
+    - ErnieforDevs
+    - PaddlePaddle
+    match_link_urls: true
+    match_handle_mentions: true
+    url_roots: []
+    url_terms:
+    - PaddleOCR
     co:
     - llm
     - model
@@ -189,23 +545,36 @@ brands:
     - huggingface
     - baidu
     - 文心
-    notes: 'Owning pack: C2.'
-    handles:
-    - ErnieforDevs
-    - PaddlePaddle
-    handle_tier: other
+    c_bare_aliases:
+    - PaddleOCR
+    alias_context:
+    - alias: 文心
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - baidu
+      - AI
+      - 模型
   hunyuan:
     paths:
     - bare
     - handle
     tokens:
     - Hunyuan
+    - Hunyuan4
     - 混元
     - 腾讯混元
-    alias_context:
-    - alias: 混元
-      any_of: [AI, 模型, 3D, 腾讯]
-    notes: B1 bare-keyword fan-out (live wire path).
+    - Hunyuan3D
+    - HunyuanVideo
+    - HunyuanImage
+    - 混元3
+    - 混元4
+    - 混元5
+    - Hy
+    notes: Company and product names; keep aliases here when expanding this portfolio.
     handles:
     - TencentHunyuan
     version_family:
@@ -213,27 +582,83 @@ brands:
       current_major: 4
       lookback: 1
       lookahead: 1
+      extra_suffixes:
+      - -preview
+    match_link_urls: true
+    match_handle_mentions: true
+    alias_context:
+    - alias: 混元
+      any_of:
+      - AI
+      - 模型
+      - 3D
+      - 腾讯
+    - alias: Hy
+      any_of:
+      - MT2
+      - Memory
+      - World
+    url_roots: []
+    url_terms:
+    - Hunyuan
+    - Hunyuan4
+    - Hunyuan3D
+    - HunyuanVideo
+    - HunyuanImage
+    - Hy-MT2
+    - Hy-Memory
+    - HY-World
   dots:
     paths:
     - bare
+    - handle
+    handles:
+    - dotsstudioai
     tokens:
-    - dots studio
+    - '"dots studio"'
+    - '"dots-studio"'
     - '"dots 3 note"'
     - '"dots-3-note"'
     - '"dots.3-note"'
     - '"dots3 note"'
-    - '"dots-studio"'
     - dots.ocr
     - dots.tts
     - dots.llm1
     - dots.vlm
     - dots.mocr
-    notes: B1 bare-keyword fan-out (live wire path).
+    - DotsOCR
+    - '"dots OCR"'
+    - '"studio dots ai"'
+    - dots
+    notes: Company and product names; keep aliases here when expanding this portfolio.
     version_family:
       prefix: dots
       current_major: 3
       lookback: 0
       lookahead: 1
+    match_link_urls: true
+    match_handle_mentions: true
+    url_roots:
+    - github.com/studio-dots-ai
+    - huggingface.co/rednote-hilab
+    - huggingface.co/rednote-dots
+    url_terms:
+    - dots.ocr
+    - dots.mocr
+    - dots.llm1
+    - dots.tts
+    - dots.vlm
+    - DotsOCR
+    - dots3
+    - dots4
+    alias_context:
+    - alias: dots
+      any_of:
+      - Xiaohongshu
+      - RedNote
+      - red note
+      - 小红书
+      - 小紅書
   llama:
     paths:
     - co
@@ -248,9 +673,37 @@ brands:
     - Muse
     alias_context:
     - alias: Meta
-      any_of: [AI, model, models, agent, agents, code, Wonder, Spark, Glimmer, research, release, 模型, 智能体, トークン]
+      any_of:
+      - AI
+      - model
+      - models
+      - agent
+      - agents
+      - code
+      - Wonder
+      - Spark
+      - Glimmer
+      - research
+      - release
+      - 模型
+      - 智能体
+      - トークン
     - alias: Muse
-      any_of: [AI, model, models, agent, agents, code, Wonder, Spark, Glimmer, research, release, 模型, 智能体, トークン]
+      any_of:
+      - AI
+      - model
+      - models
+      - agent
+      - agents
+      - code
+      - Wonder
+      - Spark
+      - Glimmer
+      - research
+      - release
+      - 模型
+      - 智能体
+      - トークン
     c_bare_aliases:
     - '"Muse Wonder"'
     - '"Muse Code"'
@@ -265,7 +718,8 @@ brands:
     - api
     - agentic
     - huggingface
-    notes: 'Owning pack: C4; Llama, contextual Meta/Muse and strong Muse names.'
+    - pretraining
+    notes: Whole-brand block; preserve contextual Llama/Meta/Muse and strong Muse names.
     not_include:
     - f1
     - antonelli
@@ -280,13 +734,524 @@ brands:
     versioned_tokens:
     - Llama 4
     - Llama 3
+    url_roots: []
+    url_terms:
+    - Llama
+    - Llama 3
+    - Llama 4
+    - Meta Llama
+    - Code Llama
   nemo_megatron:
+    handle_group: company
     paths:
+    - co
     - handle
-    notes: Not present in any current spec; explicit opt-out pending review.
+    c_bare_alias_groups:
+      models:
+      - NeMo
+      - Megatron
+      - Nemotron
+      - Alpamayo
+      - BioNeMo
+      - NemoClaw
+      - GR00T
+      - TensorRT
+      - TRT-LLM
+      - Parakeet
+      - Canary
+      - Audio2Face
+      - DLSS
+      - NV-Embed
+      - NV-CLIP
+      - NemoGuard
+      - NVLM
+      - Cosmos world
+      - Cosmos Predict
+      - Cosmos Transfer
+      - Cosmos Reason
+      - Isaac Lab
+      - Isaac Sim
+      - Isaac ROS
+      software:
+      - CUDA
+      - cuDNN
+      - CUTLASS
+      - NCCL
+      - RAPIDS
+      - cuML
+      - cuDF
+      - cuVS
+      - DeepStream
+      - Holoscan
+      - Omniverse
+      - PhysicsNeMo
+      - CorrDiff
+      - FourCastNet
+      - MONAI
+      - Garak
+      - cuOpt
+      - cuGraph
+      - Jetson
+      - JetPack
+      company:
+      - NVIDIA
+      - 英伟达
+      - 輝達
+      - 英偉達
+      - エヌビディア
+      product-names:
+      - Cosmos
+      - Isaac
+      - NIM
+      - Riva
+      - Dynamo
+      - Triton
+      - Eagle
+      - TAO
+      - Morpheus
+      - Merlin
+      - Maxine
+      - Modulus
+      - Clara
+      - Ising
+      - ACE
+      - Tokkio
+      - Edify
+      - DRIVE
+      - Triton Inference Server
+      - NIM inference
+      - Riva speech
+      - Dynamo inference
+      - TAO Toolkit
+      - Clara imaging
+      - Merlin recommender
+      - Maxine video
+      - Earth-2
+      qualified-tools:
+      - Auto-Ontology
+      - AI-Q
+    match_link_urls: true
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    notes: Named product families are indivisible packing units. All aliases also remain available for
+      attribution.
     handles:
     - NVIDIAAI
     - NVIDIAAIDev
+    match_handle_mentions: true
+    alias_context:
+    - alias: NeMo
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+    - alias: Megatron
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+    - alias: Parakeet
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+    - alias: Canary
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+    - alias: CUDA
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+      - LMStudio
+      - llama.cpp
+      - cores
+      - shader
+    - alias: CUTLASS
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+    - alias: RAPIDS
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+    - alias: Garak
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+    - alias: Jetson
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+    - alias: JetPack
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+    - alias: Cosmos
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Isaac
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: NIM
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Riva
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Dynamo
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Triton
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Eagle
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: TAO
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Morpheus
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Merlin
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Maxine
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Modulus
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Clara
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Ising
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: ACE
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Tokkio
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Edify
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: DRIVE
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Earth-2
+      any_of:
+      - NVIDIA
+    - alias: NVIDIA
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - robotics
+      - 模型
+      - CUDA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+      - kernels
+      - DGX
+    - alias: 英伟达
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - robotics
+      - 模型
+      - CUDA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+      - kernels
+      - DGX
+    - alias: 輝達
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - robotics
+      - 模型
+      - CUDA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+      - kernels
+      - DGX
+    - alias: 英偉達
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - robotics
+      - 模型
+      - CUDA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+      - kernels
+      - DGX
+    - alias: エヌビディア
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - robotics
+      - 模型
+      - CUDA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+      - kernels
+      - DGX
+    - alias: Auto-Ontology
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: AI-Q
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
+    - alias: Alpamayo
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - inference
+      - ASR
+      - speech
+      - weights
+      - PyTorch
+      - GPU
+      - NVIDIA
+    - alias: Cosmos world
+      any_of:
+      - NVIDIA
+      - model
+    tokens: []
+    url_roots:
+    - developer.nvidia.com
+    - docs.nvidia.com
+    - huggingface.co/nvidia
+    - hf.co/nvidia
+    - github.com/NVIDIA
+    - github.com/NVIDIA-NeMo
+    url_terms:
+    - Nemotron
+    - TensorRT
+    - BioNeMo
+    - NemoClaw
+    - NV-Embed
+    - NV-CLIP
+    - PhysicsNeMo
+    - cuDNN
+    - Audio2Face
   doubao:
     paths:
     - co
@@ -294,18 +1259,43 @@ brands:
     tokens:
     - Doubao
     - ByteDance
+    - 豆包
+    - 字节跳动
+    - Coze
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
+    handles:
+    - BytePlusGlobal
+    - bytedanceoss
+    - doubaoai
+    match_link_urls: true
+    match_handle_mentions: true
+    url_roots: []
+    url_terms:
+    - Seedance
+    - Seedream
+    - Seed2.1
+    - SeedRealtime
+    - Seed Audio
+    - SeedAudio
+    - Seed Diffusion
+    - SeedDiffusion
     co:
     - llm
     - model
     - api
     - agentic
     - huggingface
-    notes: 'Owning pack: C3.'
-    handles:
-    - BytePlusGlobal
-    - bytedanceoss
-    - doubaoai
-    handle_tier: other
+    c_bare_aliases:
+    - Seedance
+    - Seedream
+    - Seed2.1
+    - SeedRealtime
+    - '"Seed Audio"'
+    - SeedAudio
+    - '"Seed Diffusion"'
+    - SeedDiffusion
+    - 字节扣子
   yi:
     paths:
     - co
@@ -314,16 +1304,14 @@ brands:
     - Yi
     - 01.AI
     - 零一万物
-    - Yi LLM
-    - Yi-VL
-    - Yi-Coder
-    co:
-    - llm
-    - model
-    - api
-    - agentic
-    - huggingface
-    notes: 'Owning pack: C1.'
+    - 万智
+    - Wanzhi
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
+    handles:
+    - 01AI_Yi
+    match_link_urls: true
+    match_handle_mentions: true
     not_include:
     - f1
     - antonelli
@@ -332,9 +1320,37 @@ brands:
     - alonso
     - verstappen
     - formula 1
-    handles:
-    - 01AI_Yi
-    handle_tier: other
+    url_roots:
+    - huggingface.co/01-ai
+    - hf.co/01-ai
+    - github.com/01-ai
+    url_terms:
+    - 01.AI
+    - 01-ai
+    - yi-large
+    - yi-coder
+    - yi-vl
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    alias_context:
+    - alias: Yi
+      any_of:
+      - llm
+      - api
+      - agentic
+      - huggingface
+      - language model
+      - inference
+      - tokens
+      - weights
+      - 模型
+      - VL
+      - Coder
+      - Large
   sensechat:
     paths:
     - co
@@ -342,42 +1358,154 @@ brands:
     tokens:
     - SenseChat
     - SenseTime
+    - 商汤
+    - 日日新
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
+    handles:
+    - SenseTime_AI
+    match_link_urls: true
+    match_handle_mentions: true
+    url_roots: []
+    url_terms:
+    - SenseNova
     co:
     - llm
     - model
     - api
     - agentic
     - huggingface
-    notes: 'Owning pack: C3.'
-    handles:
-    - Kling_ai
-    - SenseTime_AI
-    handle_tier: other
+    c_bare_aliases:
+    - SenseNova
   exaone:
     paths:
+    - bare
     - handle
-    notes: Not present in any current spec; explicit opt-out pending review.
+    notes: Company and product names; keep aliases here when expanding this portfolio.
     handles:
     - LG_AI_Research
+    tokens:
+    - EXAONE
+    - K-EXAONE
+    - '"LG AI"'
+    match_link_urls: true
+    match_handle_mentions: true
+    url_roots: []
+    url_terms:
+    - EXAONE
+    - K-EXAONE
+    - LG AI
   kuaishou:
     paths:
     - co
+    - handle
     tokens:
     - Kuaishou
     - KwaiYii
+    - Kling
+    - 可灵
+    - 可靈
+    - 快手
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
+    match_link_urls: true
+    match_handle_mentions: true
+    handles:
+    - Kling_ai
+    url_roots: []
+    url_terms: []
     co:
     - llm
     - model
     - api
     - agentic
     - huggingface
-    notes: 'Owning pack: C3.'
+    alias_context:
+    - alias: Kling
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - video
+      - generation
+    - alias: 可灵
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - 视频
+      - 模型
+    - alias: 可靈
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - 視頻
+      - 模型
+    - alias: 快手
+      any_of:
+      - llm
+      - model
+      - api
+      - agentic
+      - huggingface
+      - AI
+      - 模型
   sakana_ai:
     paths:
+    - co
     - handle
-    notes: Not present in any current spec; explicit opt-out pending review.
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
     handles:
     - SakanaAILabs
+    tokens:
+    - Sakana
+    - Namazu
+    - '"AI Scientist"'
+    match_link_urls: true
+    match_handle_mentions: true
+    url_roots:
+    - sakana.ai
+    - www.sakana.ai
+    - github.com/SakanaAI
+    - huggingface.co/SakanaAI
+    url_terms:
+    - SakanaAI
+    - SakanaAILabs
+    - ShinkaEvolve
+    - Darwin Gödel Machine
+    co:
+    - llm
+    - model
+    - api
+    - agentic
+    - huggingface
+    - AI
+    - 研究
+    - モデル
+    c_bare_aliases:
+    - SakanaAI
+    - SakanaAILabs
+    - サカナAI
+    - ShinkaEvolve
+    - '"Darwin Gödel Machine"'
+    alias_context:
+    - alias: AI Scientist
+      any_of:
+      - Sakana
+      - SakanaAI
+      - SakanaAILabs
+      - サカナAI
   upstage:
     paths:
     - co
@@ -387,6 +1515,16 @@ brands:
     - Solar Pro
     - Solar LLM
     - 업스테이지
+    - '"Solar Open"'
+    - '"Solar Mini"'
+    notes: Keep ambiguous aliases with their context; standalone alternatives are explicit product identities
+      or account mentions.
+    handles:
+    - upstageai
+    match_link_urls: true
+    match_handle_mentions: true
+    url_roots: []
+    url_terms: []
     co:
     - llm
     - model
@@ -395,19 +1533,76 @@ brands:
     - huggingface
     - baidu
     - 文心
-    notes: 'Owning pack: C2.'
-    handles:
-    - upstageai
-    handle_tier: other
-co_packs:
-- - mimo
-  - mistral
-  - moonshot_kimi
-  - yi
-- - ernie
-  - upstage
-- - doubao
-  - kuaishou
-  - sensechat
-  - glm
-- - llama
+query_pools:
+  tracked:
+    calls:
+      B1:
+        name: Meta and LG model research
+        blocks:
+        - llama
+        - exaone
+      C1:
+        name: NVIDIA named AI models
+        blocks:
+        - nemo_megatron/models
+      C2:
+        name: NVIDIA AI software
+        blocks:
+        - nemo_megatron/software
+      C3:
+        name: Zhipu and 01.AI language-model families
+        blocks:
+        - glm
+        - yi
+      C4:
+        name: Xiaohongshu Dots
+        blocks:
+        - dots
+      B2:
+        name: Independent European and Japanese model labs
+        blocks:
+        - mistral
+        - sakana_ai
+      B3:
+        name: Qwen, DeepSeek and Tencent model families
+        blocks:
+        - qwen
+        - deepseek
+        - hunyuan
+      B4:
+        name: MiniMax and Kuaishou generative-media portfolios
+        blocks:
+        - minimax
+        - kuaishou
+      C5:
+        name: NVIDIA qualified product names
+        blocks:
+        - nemo_megatron/product-names
+      B5:
+        name: InclusionAI open model families
+        blocks:
+        - inclusionai
+      B6:
+        name: Moonshot and Kimi models
+        blocks:
+        - moonshot_kimi
+      C6:
+        name: NVIDIA company context and qualified AI tools
+        blocks:
+        - nemo_megatron/company
+        - nemo_megatron/qualified-tools
+      B7:
+        name: Xiaomi MiMo models
+        blocks:
+        - mimo
+      B8:
+        name: Baidu, Upstage and SenseTime enterprise models
+        blocks:
+        - ernie
+        - upstage
+        - sensechat
+      B9:
+        name: ByteDance and StepFun multimodal models
+        blocks:
+        - doubao
+        - stepfun

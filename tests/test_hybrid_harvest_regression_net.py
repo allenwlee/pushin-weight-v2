@@ -30,6 +30,7 @@ import yaml
 from x_monitor.harvest_policy import load_policy
 from x_monitor.query_plan import plan_calls
 from x_monitor.specs_from_policy import primary_keywords_from_policy, specs_from_policy
+from tests.test_harvest_query_exhibit import CURRENT_QUERY_EXHIBIT, EXPECTED_PLANNER_CALL_ORDER
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "config.yaml"
@@ -82,8 +83,8 @@ def test_policy_c3_is_glm_pack_with_bare_ox_alpha():
         primary_keywords=primary_keywords_from_policy(policy),
     )
     c3 = next(call for call in calls if call.call_id == "C3")
-    assert c3.query_string == EXPECTED_C3_AFTER_POLICY
-    assert c3.query_length == 247
+    assert c3.query_string == CURRENT_QUERY_EXHIBIT["C3"]
+    assert c3.query_length == len(CURRENT_QUERY_EXHIBIT["C3"])
     assert "Zai_org" not in next(spec for spec in specs if spec.call_id == "B2").handles
 
 
@@ -94,7 +95,7 @@ def test_policy_after_state_includes_the_added_c4_logical_call():
         specs_from_policy(policy),
         primary_keywords=primary_keywords_from_policy(policy),
     )
-    assert {call.call_id for call in calls} == EXPECTED_CALL_IDS_AFTER_U3 | {"C4"}
+    assert {call.call_id for call in calls} == set(EXPECTED_PLANNER_CALL_ORDER)
 
 
 

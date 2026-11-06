@@ -50,6 +50,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from x_monitor.config import load_config
+from x_monitor.queries import query_size_bytes
 
 # Retained only as a validated compatibility option; never estimates volume.
 _SAFETY_MARGIN = 2.0
@@ -478,7 +479,7 @@ class Command(BaseCommand):
                 "since:", "until:", "since_time:", "until_time:", "since_id:", "max_id:",
             )):
                 raise CommandError("--query must omit time operators; fixed command bounds own the interval")
-            if len(f"{query_override} since_time:{since_epoch} until_time:{until_epoch}") > 512:
+            if query_size_bytes(f"{query_override} since_time:{since_epoch} until_time:{until_epoch}") > 512:
                 raise CommandError("--query exceeds the provider length cap after fixed time bounds")
         state_file = _state_path(since_epoch, until_epoch, _scope_key(brands=brands, call_ids=requested))
         if options["state_dir"] is not None:

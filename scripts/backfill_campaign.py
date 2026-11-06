@@ -43,6 +43,7 @@ from core.provider_batches import (
     set_enrichment_control,
 )
 from monitor.backfill_collection import (
+    CALL_IDS,
     POLICY_ADAPTER_VERSION,
     config_digest,
     execute_job,
@@ -61,6 +62,7 @@ from scripts.backfill_targeted import advance_targeted
 from scripts.backfill_verify import verify_collection_window, verify_window
 from x_monitor.deepinfra import DEEPINFRA_ON_DEMAND_KEY_ENV, resolve_api_key
 from x_monitor.provider_telemetry import normalize_usage
+from x_monitor.queries import query_size_bytes
 
 
 def emit(event, value):
@@ -125,7 +127,7 @@ def manifest(
     validate_concurrency(direct_concurrency)
     deadline = deadline or timezone.now() + timedelta(hours=72)
     planned = plan_calls_for_cycle(cfg, scheduled_exclusions=True)
-    admitted = {"A", "B1", "B2", "B3", "C1", "C2", "C3", "C4", "RARE_EXTRA"}
+    admitted = CALL_IDS | {"A", "RARE_EXTRA"}
     if not planned or not any(c.call_id == "A" for c in planned) or any(
         c.call_id not in admitted for c in planned
     ):
@@ -148,7 +150,7 @@ def manifest(
             call not in admitted
             or not isinstance(query, str)
             or not query.strip()
-            or len(f"{query} since_time:{lower} until_time:{upper}") > 512
+            or query_size_bytes(f"{query} since_time:{lower} until_time:{upper}") > 512
             for call, query in queries
         ):
             raise ValueError("invalid_frozen_query")

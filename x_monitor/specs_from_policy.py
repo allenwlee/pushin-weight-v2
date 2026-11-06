@@ -7,8 +7,14 @@ M7 DRY: this function BUILDS XQuerySpec objects; rendering stays in
 x_monitor.query_plan._build_query / plan_calls. No second renderer is
 added here.
 
-What this function does
+Current packed policies
 -----------------------
+Policies with query_pools use whole brand blocks and explicitly named family
+groups. Each pool has an independent call budget; the shared renderer measures
+its queries including scheduled author exclusions and time bounds.
+
+Legacy flat policies
+--------------------
 - B1: one wide-net spec covering every brand whose `paths` includes
   `bare` or `versioned_bare` (R8). Tokens come from policy (versioned_bare
   brands contribute tokens + versioned_tokens; bare brands contribute
@@ -55,6 +61,7 @@ from collections.abc import Iterable
 
 from .config import VALID_CALL_IDS
 from .harvest_policy import (
+    AliasContext,
     HANDLE_TIER_OTHER,
     HANDLE_TIER_TOP,
     BrandPolicy,
@@ -78,29 +85,49 @@ __all__ = [
 ]
 
 
-CURRENT_DERIVED_CALL_IDS: frozenset[str] = frozenset(VALID_CALL_IDS) - {"A"}
+# Frozen legacy policy shape. Packed policies validate against their own
+# explicit group IDs, not against every globally allowed historical call ID.
+CURRENT_DERIVED_CALL_IDS: frozenset[str] = frozenset({"B1", "B2", "B3", "C1", "C2", "C3", "C4"})
 
 
-def validate_derived_call_ids(specs: Iterable[XQuerySpec]) -> list[XQuerySpec]:
+def effective_alias_context(brand: BrandPolicy) -> tuple[AliasContext, ...]:
+    """The same per-alias conditions feed query rendering and attribution."""
+    contexts = {normalize_policy_token(r.alias): r.any_of for r in brand.alias_context}
+    if "co" in brand.paths:
+        bare = (
+            {normalize_policy_token(t) for t in _bare_token_list(brand)}
+            if brand.paths & {"bare", "versioned_bare"} else set()
+        )
+        bare.update(normalize_policy_token(t) for t in brand.all_c_bare_aliases)
+        for token in _expand_tokens(brand.tokens, brand.version_family):
+            if normalize_policy_token(token) not in bare:
+                contexts.setdefault(normalize_policy_token(token), brand.co)
+    return tuple(AliasContext(alias, terms) for alias, terms in contexts.items())
+
+
+def validate_derived_call_ids(specs: Iterable[XQuerySpec], *, policy: HarvestPolicy | None = None) -> list[XQuerySpec]:
     """Validate the live policy's B/C shape before provider planning.
 
     ``specs_from_policy`` remains useful for small fixture policies and thus
     intentionally stays generic. The Django scheduled path calls this gate
-    after deriving the production policy, where exactly six B/C specs plus
-    synthesized Call A are required.
+    after deriving the production policy. Packed policies may use a subset of
+    their budgeted IDs; legacy policies require the complete historical set.
     """
     resolved = list(specs)
     actual = [spec.call_id for spec in resolved]
-    expected = sorted(CURRENT_DERIVED_CALL_IDS)
+    budgeted = {c for pool in policy.query_pools for c in pool.call_ids} if policy and policy.query_pools else None
+    expected = sorted(budgeted if budgeted is not None else CURRENT_DERIVED_CALL_IDS)
     if len(actual) != len(set(actual)):
         raise ValueError(
             "derived harvest policy contains duplicate call IDs: "
             f"{actual}"
         )
-    if set(actual) != CURRENT_DERIVED_CALL_IDS:
+    valid = bool(actual) and set(actual) <= budgeted if budgeted is not None else set(actual) == CURRENT_DERIVED_CALL_IDS
+    if not valid:
         raise ValueError(
-            "derived harvest policy call IDs must be exactly "
-            f"{expected}; got {actual}"
+            "derived harvest policy call IDs must be "
+            + ("a nonempty subset of " if budgeted is not None else "exactly ")
+            + f"{expected}; got {actual}"
         )
     return resolved
 
@@ -176,7 +203,7 @@ def active_policy_tokens(
             tokens.extend(_bare_token_list(brand))
         if "co" in brand.paths:
             tokens.extend(_expand_tokens(brand.tokens, brand.version_family))
-            tokens.extend(brand.c_bare_aliases)
+            tokens.extend(brand.all_c_bare_aliases)
         normalized = set()
         for token in tokens:
             normalized_token = normalize_policy_token(token)
@@ -261,6 +288,9 @@ def specs_from_policy(
     """
     specs: list[XQuerySpec] = []
     selected = _selected_brand_nicknames(policy, brand_nicknames)
+    if policy.query_pools:
+        from .query_packing import packed_specs
+        return packed_specs(policy, selected)
     eligible_brands: list[BrandPolicy] = [
         b
         for b in policy.brands.values()
@@ -291,6 +321,15 @@ def specs_from_policy(
             if n in selected
         ]
         if not pack_brands:
+            continue
+        grouped = [b for b in pack_brands if b.c_bare_alias_groups]
+        if grouped:
+            if len(pack.brand_nicknames) != 1:
+                raise ValueError("grouped bare aliases require a dedicated co pack")
+            brand = grouped[0]
+            specs.append(XQuerySpec(call_id=f"C{idx}",
+                brands={brand.nickname: [f'"{t}"' if " " in t else t for t in brand.c_bare_alias_groups[0]]}, min_faves=0,
+                not_include=list(brand.not_include)))
             continue
         # Primary group: one paren per brand, OR-joined into the outer paren.
         # Tokens per brand = declared tokens plus any version-family expansion;
@@ -325,6 +364,24 @@ def specs_from_policy(
             not_include=not_include,
             c_bare_aliases=c_bare_aliases,
         ))
+
+    # Extra alias groups append after fixed C packs, preserving their identities.
+    # The first group occupies its brand's existing owning pack.
+    overflow_index = len(policy.co_packs) + 1
+    for pack in policy.co_packs:
+        grouped = [policy.brands[n] for n in pack.brand_nicknames
+                   if policy.brands[n].c_bare_alias_groups]
+        if not grouped:
+            continue
+        if len(pack.brand_nicknames) != 1:
+            raise ValueError("grouped bare aliases require a dedicated co pack")
+        brand = grouped[0]
+        for aliases in brand.c_bare_alias_groups[1:]:
+            if brand.nickname in selected:
+                specs.append(XQuerySpec(call_id=f"C{overflow_index}",
+                    brands={brand.nickname: [f'"{t}"' if " " in t else t for t in aliases]}, min_faves=0,
+                    not_include=list(brand.not_include)))
+            overflow_index += 1
 
     # --- Handle specs (one per tier) -----------------------------------------
     # 3/5 collapses to a single tier by default; multi-tier lands in 4/5.

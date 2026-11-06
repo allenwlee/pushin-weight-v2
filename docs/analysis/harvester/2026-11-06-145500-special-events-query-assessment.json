@@ -1,0 +1,663 @@
+{
+  "schema_version": "rare-type-quality-assessment-v2",
+  "assessment_mode": "fresh_query",
+  "identity": {
+    "query_version": "special-events-v1-2026-11-05",
+    "planner_query_sha256": "9d08d84961b23c97531104b4dc11b883a0f1162cefe69f21519e36f8c961ddc5",
+    "requested_model": "jev-1.13.0",
+    "attested_model": "jev-1.13.0",
+    "requested_provider": "TypeSafe",
+    "attested_provider": "TypeSafe",
+    "question_version": "rare-types-jev-questions-v1",
+    "question_content_sha256": "2fd756cd9548eb0521066aa31fccd186ccf4d5daaeafdd4b4739f288fcc003df",
+    "threshold_version": "rare-types-jev-routing-v3",
+    "threshold_values_sha256": "1c6dc92d61493569059ba2ea2de6a0a3dd2bf660080689b98617f3be40a808d8",
+    "yes_threshold": "0.80",
+    "no_threshold": "0.20",
+    "role_opening_threshold": "0.30",
+    "attendance_event_threshold": "0.50",
+    "fixture_sha256": "e7dc35afbdc38b15343789f54df67cf76c403acb3ef98967968b1d09016cd7fa",
+    "corpus_content_sha256": "f1ebabcf4b328567ab7c25827b8d0a4dc6d916125196ab094a0315182984fb22"
+  },
+  "status": "pass",
+  "quality_gate_passed": true,
+  "enablement_eligible": false,
+  "enablement_approved": false,
+  "reasons": [],
+  "fixture_metrics": {
+    "evidence_kind": "captured_real",
+    "case_count": 56,
+    "keeper_confusion": {
+      "true_positive": 28,
+      "false_positive": 0,
+      "true_negative": 28,
+      "false_negative": 0
+    },
+    "keeper_precision": 1.0,
+    "keeper_recall": 1.0,
+    "per_type": {
+      "personnel_changes": {
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "job_listings": {
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "events": {
+        "true_positive": 5,
+        "false_positive": 0,
+        "false_negative": 1,
+        "precision": 1.0,
+        "recall": 0.8333333333333334
+      },
+      "opportunities": {
+        "true_positive": 6,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "model_releases": {
+        "true_positive": 7,
+        "false_positive": 0,
+        "false_negative": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      }
+    },
+    "multilabel": {
+      "exact_matches": 55,
+      "exact_match_ratio": 0.9821428571428571
+    },
+    "hard_negative_false_keeps": [],
+    "captured_cost_usd": "0.004400760",
+    "rows": [
+      {
+        "case_id": "personnel_en_join",
+        "outcome": "kept",
+        "derived_types": [
+          "personnel_changes"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "personnel_changes"
+        ]
+      },
+      {
+        "case_id": "personnel_zh_join",
+        "outcome": "kept",
+        "derived_types": [
+          "personnel_changes"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "personnel_changes"
+        ]
+      },
+      {
+        "case_id": "personnel_ja_leave",
+        "outcome": "kept",
+        "derived_types": [
+          "personnel_changes"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "personnel_changes"
+        ]
+      },
+      {
+        "case_id": "personnel_bank_ml_join",
+        "outcome": "kept",
+        "derived_types": [
+          "personnel_changes"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "personnel_changes"
+        ]
+      },
+      {
+        "case_id": "personnel_quoted_departure",
+        "outcome": "kept",
+        "derived_types": [
+          "personnel_changes"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "personnel_changes"
+        ]
+      },
+      {
+        "case_id": "job_en_lm_engineer",
+        "outcome": "kept",
+        "derived_types": [
+          "job_listings"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "job_listings"
+        ]
+      },
+      {
+        "case_id": "job_zh_vision_robotics",
+        "outcome": "kept",
+        "derived_types": [
+          "job_listings"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "job_listings"
+        ]
+      },
+      {
+        "case_id": "job_ja_speech_fulltime",
+        "outcome": "kept",
+        "derived_types": [
+          "job_listings"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "job_listings"
+        ]
+      },
+      {
+        "case_id": "job_bank_ml_research",
+        "outcome": "kept",
+        "derived_types": [
+          "job_listings"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "job_listings"
+        ]
+      },
+      {
+        "case_id": "job_small_ai_inference",
+        "outcome": "kept",
+        "derived_types": [
+          "job_listings"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "job_listings"
+        ]
+      },
+      {
+        "case_id": "event_online_eval_seminar",
+        "outcome": "kept",
+        "derived_types": [
+          "events"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "events"
+        ]
+      },
+      {
+        "case_id": "event_ja_tokyo_workshop",
+        "outcome": "kept",
+        "derived_types": [
+          "events"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "events"
+        ]
+      },
+      {
+        "case_id": "event_zh_voice_livestream",
+        "outcome": "kept",
+        "derived_types": [
+          "events"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "events"
+        ]
+      },
+      {
+        "case_id": "event_org_conference_session",
+        "outcome": "kept",
+        "derived_types": [
+          "events"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "events"
+        ]
+      },
+      {
+        "case_id": "event_reading_workshop",
+        "outcome": "kept",
+        "derived_types": [
+          "events"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "events"
+        ]
+      },
+      {
+        "case_id": "opportunity_research_grant",
+        "outcome": "kept",
+        "derived_types": [
+          "opportunities"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "opportunities"
+        ]
+      },
+      {
+        "case_id": "opportunity_coding_challenge",
+        "outcome": "kept",
+        "derived_types": [
+          "opportunities"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "opportunities"
+        ]
+      },
+      {
+        "case_id": "opportunity_zh_gpu_credits",
+        "outcome": "kept",
+        "derived_types": [
+          "opportunities"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "opportunities"
+        ]
+      },
+      {
+        "case_id": "opportunity_ja_safety_fellowship",
+        "outcome": "kept",
+        "derived_types": [
+          "opportunities"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "opportunities"
+        ]
+      },
+      {
+        "case_id": "opportunity_beta_access",
+        "outcome": "kept",
+        "derived_types": [
+          "opportunities"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "opportunities"
+        ]
+      },
+      {
+        "case_id": "release_cedar_preview",
+        "outcome": "kept",
+        "derived_types": [
+          "model_releases"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "model_releases"
+        ]
+      },
+      {
+        "case_id": "release_zh_open_weights",
+        "outcome": "kept",
+        "derived_types": [
+          "model_releases"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "model_releases"
+        ]
+      },
+      {
+        "case_id": "release_ja_voice_preview",
+        "outcome": "kept",
+        "derived_types": [
+          "model_releases"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "model_releases"
+        ]
+      },
+      {
+        "case_id": "release_third_party_report",
+        "outcome": "kept",
+        "derived_types": [
+          "model_releases"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "model_releases"
+        ]
+      },
+      {
+        "case_id": "release_reseller_availability",
+        "outcome": "kept",
+        "derived_types": [
+          "model_releases"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "model_releases"
+        ]
+      },
+      {
+        "case_id": "event_opportunity_hackathon",
+        "outcome": "kept",
+        "derived_types": [
+          "opportunities"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "events",
+          "opportunities"
+        ]
+      },
+      {
+        "case_id": "neg_mill_india_whatsapp",
+        "outcome": "review_needed",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_mill_zh_piecework",
+        "outcome": "review_needed",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_mill_ja_sidejob",
+        "outcome": "review_needed",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_mill_aggregator",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_lineup_join",
+        "outcome": "review_needed",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_lineup_leave",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_price_comparison",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_credit_complaint",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_f1_kimi_join",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_f1_kimi_leave",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_joke_subscription",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_joke_toaster",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_static_bio_en",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_static_bio_zh",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_employee_spotlight",
+        "outcome": "review_needed",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_generic_ambassador",
+        "outcome": "review_needed",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_old_release_recap",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_release_anniversary_recap",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_anonymous_model_rumor",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_joined_no_referent",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_conference_brand_ad",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_conference_judge_someday",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_unbounded_grant_wish",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_researcher_bookclub",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_ai_handle_left_vague",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "neg_hostile_instruction",
+        "outcome": "junk",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "historical_2101974766110269572",
+        "outcome": "review_needed",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "historical_2101973880000667923",
+        "outcome": "kept",
+        "derived_types": [
+          "model_releases"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "model_releases"
+        ]
+      },
+      {
+        "case_id": "historical_2101972712901992561",
+        "outcome": "review_needed",
+        "derived_types": [],
+        "reference_keep": false,
+        "reference_types": []
+      },
+      {
+        "case_id": "historical_2101972709282361784",
+        "outcome": "kept",
+        "derived_types": [
+          "model_releases"
+        ],
+        "reference_keep": true,
+        "reference_types": [
+          "model_releases"
+        ]
+      }
+    ]
+  },
+  "live_metrics_by_window": [
+    {
+      "cohort_id": "SPECIALEVENTS1-20261105T133028Z-134528Z",
+      "raw_paid_result_count": 7,
+      "captured_assessable_count": 7,
+      "unique_post_count": 7,
+      "keeper_yield": 0.2857142857142857,
+      "overlap_rate": 0.42857142857142855,
+      "mill_rate": 0.0,
+      "recruiter_rate": 0.42857142857142855,
+      "estimated_credits": 105,
+      "keepers_per_estimated_credit": 0.01904761904761905
+    },
+    {
+      "cohort_id": "SPECIALEVENTS2-20261105T133028Z-134528Z",
+      "raw_paid_result_count": 20,
+      "captured_assessable_count": 20,
+      "unique_post_count": 20,
+      "keeper_yield": 0.25,
+      "overlap_rate": 0.05,
+      "mill_rate": 0.0,
+      "recruiter_rate": 0.0,
+      "estimated_credits": 300,
+      "keepers_per_estimated_credit": 0.016666666666666666
+    }
+  ],
+  "budget": {
+    "ceiling_usd": "0.25",
+    "reserved_usd": "0.017341758",
+    "confirmed_usd": null,
+    "estimated_usd_from_usage": "0.004400760",
+    "invoice_confirmed": false,
+    "usage_complete": true
+  },
+  "evidence_provenance": {
+    "search_capture": "Previously authorized November5 test; exact revised query strings, two saved one-page responses. No new dispatch for this release.",
+    "functional_fixture_capture": "September24 actual TypeSafe journals; all56 request hashes, model/provider, corpus, question and threshold identities revalidated. Reused functional evidence, not fresh inference.",
+    "functional_receipt_manifest_sha256": "b14e283267260e5dc646f075ba1dcc11054dfb9d7cb649da61aff964292bdb6f",
+    "independent_labels_path": "docs/analysis/harvester/2026-11-06-145500-special-events-query-labels.json",
+    "independent_labels_sha256": "96106572ec0154522ba07edf77433c4aff1e2b6a396b028550b318132b931553",
+    "new_provider_requests": 0,
+    "new_model_requests": 0,
+    "historical_query_requests": 2,
+    "historical_query_credits": 405,
+    "raw_count": 27,
+    "unique_post_count": 27,
+    "captures": [
+      {
+        "call_id": "SPECIALEVENTS1",
+        "request_id": "req-017",
+        "issued_at_utc": "2026-11-05T14:16:35.285564+00:00",
+        "query": "((\"I've joined\" OR \"I joined\" OR \"I left\" OR \"我加入\" OR \"我离开\" OR 出任 OR 换帅 OR に入社 OR を退職) (AI OR LLM OR OpenAI OR Anthropic) OR \"I've joined\" (@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai) OR (\"we're hiring\" OR \"currently hiring\" OR 招聘 OR 募集中) (engineer OR researcher) OR (\"we'll be at\" OR 登壇) (\"AI conference\" OR summit) OR (\"applications open\" OR \"apply by\" OR 申请) (hackathon OR fellowship) (AI OR LLM)) since_time:1793885428 until_time:1793886328",
+        "raw_response_sha256": "5fbf9d5589aa4c87b4397a79d96533c5aa7927c42a2bbe5afb6a43ff3bf50b29",
+        "continuation": true,
+        "raw_count": 7
+      },
+      {
+        "call_id": "SPECIALEVENTS2",
+        "request_id": "req-018",
+        "issued_at_utc": "2026-11-05T14:16:36.592848+00:00",
+        "query": "((introducing OR announce OR announcing OR announced OR release OR released OR releasing OR launch OR launched OR launching OR \"is here\" OR available OR arrived OR \"open weights\" OR 开源 OR 发布 OR 上线 OR 推出 OR 公開 OR リリース) (model OR models OR weights OR Preview OR LLM OR VLM OR checkpoint OR agent OR agents OR harness OR toolkit OR SDK OR \"AI tool\" OR \"AI assistant\" OR 模型 OR モデル OR 权重) OR url:huggingface.co OR url:hf.co) since_time:1793885428 until_time:1793886328",
+        "raw_response_sha256": "cb186cee4df04f80f77fac7403a949e615103d358094a6c242785f191a16c8bb",
+        "continuation": true,
+        "raw_count": 20
+      }
+    ],
+    "limits": [
+      "Both saved pages have continuation; capped evidence, not complete X recall.",
+      "Source judgments are machine review and do not certify claim truth; unresolved rows remain uncertain.",
+      "No numeric yield/precision threshold is configured; passing means complete identity/accounting and required functional controls.",
+      "Existing one-page limits, shared28800daily search credits, model and extraction caps remain unchanged."
+    ]
+  },
+  "assessment_digest": "9fe76b9489038126e5e7e1141d0a7a7271ed33b070a0c79095173d7170220e0c"
+}

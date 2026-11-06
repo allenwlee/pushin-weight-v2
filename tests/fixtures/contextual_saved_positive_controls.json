@@ -1,0 +1,32 @@
+[
+  {
+    "tweet_id": "2118230578654753022",
+    "brand_id": "moonshot_kimi",
+    "text": "十年前，滴滴合并快的，美团吞并点评，携程收编去哪儿，58联姻赶集。\n\n十年后，AI 赛道还在重复同一套烧钱剧本。别看今天各家晒跑分、卷投流掐得头破血流，等 VC 坐不住了，大结局八成也是智谱和 Kimi 抱团合并、千问和混元握手言和。\n\n毕竟在中国互联网，烧钱大战的终局向来只有一个：把死敌熬成枕边人，然后联手涨价收割用户。",
+    "quoted_text": null
+  },
+  {
+    "tweet_id": "2118230430252216469",
+    "brand_id": "nemo_megatron",
+    "text": "I was today years old when I discovered #LMStudio now has a #CUDA 13.2 llama.cpp in there to choose.\n\nI never use the problematic low-bit imatrix or IQ quants which output gibberish due to a bug, so I'm good to go.",
+    "quoted_text": null
+  },
+  {
+    "tweet_id": "2118230644211757121",
+    "brand_id": "nemo_megatron",
+    "text": "@VoxelPrismatic @steveabaker @casey_Payne23 @Nintendo Well, you corrected yourself on that. Let me add a bit more since I've implemented an FSR1 shader before. The fsr1 can be implemented as shader with less that 200 lines. Can run on Compute, thus freeing the graphics engine, in the switch case, the cuda cores.",
+    "quoted_text": null
+  },
+  {
+    "tweet_id": "2118231188171100389",
+    "brand_id": "nemo_megatron",
+    "text": "@VoxelPrismatic @steveabaker @casey_Payne23 @Nintendo CUDA cores are extremely efficient for calculations, compared to the normal shader cores, though they can't directly render to screen. I don't know how Nintendo implements theirs, but since FSR is MIT licensed, they don't need to release their version.",
+    "quoted_text": null
+  },
+  {
+    "tweet_id": "2118233224329437609",
+    "brand_id": "nemo_megatron",
+    "text": "@jundotkim Awesome ! I have a PR cooking with what you described when it comes to Nvidia Kernels we can share.  (some already in MLX-Serve main branch)\nThe secret is to leverage MMQ kernels also. (new, not pushed yet)\n\n@ivanfioravanti / @WescheNex1q / @u1tra_instinct  helped with a few DGX Kernels already.\n(I also don't have a DGX so 5060ti testing my side)",
+    "quoted_text": null
+  }
+]

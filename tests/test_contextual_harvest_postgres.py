@@ -51,7 +51,7 @@ def test_keyword_reconciliation_rejects_regex_collision_without_partial_writes(s
     assert set(BrandKeyword.objects.values_list("brand_id", "pattern", "is_regex")) == before
 
 
-def test_scheduled_cycle_persists_context_and_deduplicates_c1_c4(monkeypatch, seeded_policy_keywords):
+def test_scheduled_cycle_persists_context_and_deduplicates_packed_calls(monkeypatch, seeded_policy_keywords):
     seen, cohorts = [], []
     now = datetime.now(UTC)
     cfg = load_config(Path("config.yaml"))
@@ -59,17 +59,58 @@ def test_scheduled_cycle_persists_context_and_deduplicates_c1_c4(monkeypatch, se
     cfg.discovery.rare_types.targeted_extraction_enabled = False
     calls = cycle.plan_calls_for_cycle(cfg, scheduled_exclusions=True)
     by_query = {c.query_string: c.call_id for c in calls}
-    texts = {"B1": [("81001", "Qwen Code 海螺贝壳"), ("81002", "Qwen 混元太極拳"),
-                    ("81003", "海螺H3 视频"), ("81004", "腾讯混元")],
-             "C1": [("81005", "Kimi model and Muse Wonder invite code")],
-             "C4": [("81005", "Kimi model and Muse Wonder invite code"),
-                    ("2113940624651006275", "Meta Muse AIへの招待 code") ]}
+    texts = {"B3": [("81001", "Qwen Code 海螺贝壳"), ("81002", "Qwen 混元太極拳"),
+                    ("81003", "海螺H3 视频"), ("81004", "腾讯混元"),
+                    ("81006", "Qwen: NVIDIA shares are down"),
+                    ("81007", "Qwen: Ring the alarm for AI doom"),
+                    ("81008", "Qwen: Yi Qin studies the Dicke model"),
+                    ("81009", "Qwen: MiMo wszystko kupujemy dalej"),
+                    ("81010", "Qwen: Kimi won the F1 race")],
+             "B6": [("81005", "Kimi model and Muse Wonder invite code")],
+             "B1": [("81005", "Kimi model and Muse Wonder invite code"),
+                    ("2113940624651006275", "Meta Muse AIへの招待 code"),
+                    # Reduced from the saved wanted referral whose quote had
+                    # rdYf1ZLPQN in a t.co URL; that fragment is not Formula 1.
+                    ("81016", "Meta Muse AI invitation https://t.co/rdYf1ZLPQN")],
+             "B7": [("81011", "MiMo V2.5")],
+             "C3": [("81012", "GLM4")],
+             "C6": [("81013", "@NVIDIAAI announcement")],
+             "C4": [("81014", "dots Xiaohongshu")],
+             "B2": [("81015", "SakanaAI announcement")],
+             "C5": [("81018", "NVIDIA Earth-2")],
+             "B9": [("81019", "Step 3.5 Flash"), ("81020", "Step 3.7 Flash")],
+             }
+    texts['B3'].append(('81017', 'Qwen comparison: Earth-2 weather forecasting'))
+    # These unrelated meanings arrived in the saved provider sample. Fetching
+    # through another valid brand must not restore the false brand association.
+    texts['B3'].extend([
+        ('81021', 'Qwen: una actuación magistral'),
+        ('81022', 'Qwen: BIGBANG COSMOS WORLD TOUR'),
+        ('81023', 'Qwen: 快手视频涨粉'),
+    ])
+    texts['B2'].extend([
+        ('81024', 'Magistral model weights'),
+        ('81025', 'Magistral Mistral'),
+        ('81026', '@MistralAI announcement'),
+    ])
+    texts['C1'] = [('81027', 'NVIDIA Cosmos world')]
+    texts['B4'] = [
+        ('81028', '可灵视频'),
+        ('81029', '快手AI模型'),
+        ('81030', '@Kling_ai announcement'),
+    ]
 
     class Api:
         base_url = "https://api.twitterapi.io"
         timeout_s = 1
         max_retries = 0
         def run_search(self, query, **kwargs):
+            wire = cycle.XClient._effective_search_query(
+                query, since=kwargs.get("since"), since_time=kwargs.get("since_time"),
+                until_time=kwargs.get("until_time"),
+            )
+            assert len(wire.encode("utf-8")) <= 512
+            assert "since_time:" in wire and "until_time:" in wire
             cid = by_query[query]
             seen.append(cid)
             results = [{"id": tid, "text": text, "created_at": now.isoformat(),
@@ -90,13 +131,29 @@ def test_scheduled_cycle_persists_context_and_deduplicates_c1_c4(monkeypatch, se
     monkeypatch.setattr(cycle, "run_due_reconciliation", lambda **kwargs: SimpleNamespace(status="not_due", observed=0, activated=0, deactivated=0, snapshot_id=None, degraded=[]))
     monkeypatch.setattr(CycleRunner, "_request_synthesis_prewarm", lambda *args, **kwargs: None)
     result = CycleRunner(cfg=cfg, cycle_kind="scheduled").run()
-    assert seen == ["A", "B1", "C1", "C2", "C3", "C4", "B2", "B3"]
-    assert result["totals"]["n_calls_run"] == 8
+    assert seen == ["A", "B1", "C1", "C2", "C3", "C4", "B2", "B3", "B4", "C5", "B5", "B6", "C6", "B7", "B8", "B9"]
+    assert result["totals"]["n_calls_run"] == 16
     assert labels("81001") == labels("81002") == {"qwen"}
     assert labels("81003") == {"minimax"}
     assert labels("81004") == {"hunyuan"}
     assert labels("81005") == {"moonshot_kimi", "llama"}
     assert labels("2113940624651006275") == {"llama"}
+    assert labels("81016") == {"llama"}
+    assert labels("81017") == {"qwen"}
+    assert labels("81018") == {"nemo_megatron"}
+    assert labels("81019") == labels("81020") == {"stepfun"}
+    assert labels("81021") == labels("81022") == labels("81023") == {"qwen"}
+    assert labels("81024") == labels("81025") == labels("81026") == {"mistral"}
+    assert labels("81027") == {"nemo_megatron"}
+    assert labels("81028") == labels("81029") == labels("81030") == {"kuaishou"}
+    assert not PostBrandMention.objects.filter(
+        post_id__in=["81021", "81022", "81023"],
+        brand_id__in=["mistral", "nemo_megatron", "kuaishou"],
+    ).exists()
+    for post_id in ["81006", "81007", "81008", "81009", "81010"]:
+        assert labels(post_id) == {"qwen"}
+    for post_id, brand in [("81011", "mimo"), ("81012", "glm"), ("81013", "nemo_megatron"), ("81014", "dots"), ("81015", "sakana_ai")]:
+        assert labels(post_id) == {brand}
     assert Post.objects.filter(pk="81005").count() == 1
     assert {"81001", "81002", "81005", "2113940624651006275"} <= set(cohorts)
     assert not PostBrandMention.objects.filter(post_id__in=["81001", "81002"], brand_id__in=["minimax", "hunyuan"]).exists()
@@ -122,5 +179,6 @@ def test_staging_backfill_uses_same_policy_and_persists_memberships(http_pages, 
         result = execute_job(job.pk)
     assert result["collection_drained"]
     assert len(state["requests"]) == 1
+    assert len(state["requests"][0]["query"].encode("utf-8")) <= 512
     assert labels("82001") == {"qwen", "llama"}
     assert not PostBrandMention.objects.filter(post_id="82001", brand_id__in=["minimax", "hunyuan"]).exists()

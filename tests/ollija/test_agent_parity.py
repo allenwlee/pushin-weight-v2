@@ -30,16 +30,22 @@ def test_repository_does_not_shadow_the_installed_ollija_skill() -> None:
 
 
 def test_every_remaining_claude_skill_has_an_agent_alias() -> None:
-    canonical_names = {
-        path.name for path in CANONICAL_SKILLS.iterdir() if path.is_dir()
+    canonical_paths = {
+        path.name: path for path in CANONICAL_SKILLS.iterdir() if path.is_dir()
     }
+    # Query comparison belongs to the harvester; its public name is only a
+    # discovery alias. Pin its exact nested owner instead of permitting copies.
+    canonical_paths["harvest-query-diff"] = (
+        CANONICAL_SKILLS / "change-harvester" / "subskills" / "harvest-query-diff"
+    )
 
-    assert canonical_names
-    assert {path.name for path in AGENT_LINKS.iterdir()} == canonical_names
-    for name in canonical_names:
+    assert canonical_paths
+    assert {path.name for path in AGENT_LINKS.iterdir()} == set(canonical_paths)
+    for name, canonical in canonical_paths.items():
         alias = AGENT_LINKS / name
+        assert (canonical / "SKILL.md").is_file()
         assert alias.is_symlink()
-        assert alias.resolve() == (CANONICAL_SKILLS / name).resolve()
+        assert alias.resolve() == canonical.resolve()
 
 
 def test_lfg_and_goal_delivery_contract_is_shared_with_current_guidance() -> None:

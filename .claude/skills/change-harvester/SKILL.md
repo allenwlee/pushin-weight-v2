@@ -134,6 +134,13 @@ re-deriving call structure without reading `monitor/cycle.py` + policy.
 
 ## Mandatory query-byte gate in EVERY harvester plan and review
 
+For query refactors and coverage comparisons, use the named
+**`harvest-query-diff`** subskill:
+[`subskills/harvest-query-diff/SKILL.md`](subskills/harvest-query-diff/SKILL.md).
+Invoke **`$change-harvester harvest-query-diff`**. It expands every current and
+proposed OR/AND combination into a complete side-by-side table, including new,
+broader and narrower alternatives; keyword-presence summaries are insufficient.
+
 **DO NOT APPROVE A HARVESTER PLAN OR RELEASE WITHOUT THIS CHECK.** Query
 length means **UTF-8 bytes of the complete provider request**, never Python
 character count. Multilingual text can pass a 512-character check and still
@@ -307,3 +314,12 @@ not authorize a pause.
 | `docs/solutions/integration-issues/harvest-pipeline-missing-call-queries.md` | Query wiring gaps |
 | `docs/analysis/harvester/` | Canonical generated harvester health reports |
 | `tests/posts/*-cohort.md` | Historical post-cycle report style reference |
+
+
+## Search punctuation knowledge
+
+For dotted aliases, read [the measured Z.ai / Z AI comparison](references/2026-11-05-222224-dot-search.md).
+The tested dotted and spaced queries returned different results; **literal-dot
+matching remains unverified**. Never describe this as proof that every dot is
+a space or a literal character, and do not extrapolate it to numeric versions
+or hyphens. Preserve the saved evidence and its pagination limits.

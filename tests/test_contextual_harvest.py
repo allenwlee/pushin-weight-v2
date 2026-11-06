@@ -38,6 +38,16 @@ POLICY = Path(__file__).resolve().parents[1] / "config/harvest_policy.yaml"
     ("Muse Wonder", {"llama"}),
     ("Muse Voice", {"llama"}),
     ("Llama 4 model", {"llama"}),
+    ("Una actuación magistral", set()),
+    ("Magistral model weights", {"mistral"}),
+    ("Magistral Mistral", {"mistral"}),
+    ("Magistral モデル", {"mistral"}),
+    ("BIGBANG COSMOS WORLD TOUR", set()),
+    ("NVIDIA Cosmos world", {"nemo_megatron"}),
+    ("Cosmos world model", {"nemo_megatron"}),
+    ("快手视频涨粉", set()),
+    ("快手AI模型", {"kuaishou"}),
+    ("可灵视频", {"kuaishou"}),
 ])
 def test_policy_context_controls_shared_attribution(text, expected):
     policy = load_policy(POLICY)
@@ -52,14 +62,14 @@ def test_selected_layout_and_bound_lengths():
     policy = load_policy(POLICY)
     primary = primary_keywords_from_policy(policy)
     queries = {s.call_id: _build_query(s, primary_keywords=primary) for s in specs_from_policy(policy)}
-    assert set(queries) == {"B1", "B2", "B3", "C1", "C2", "C3", "C4"}
+    assert set(queries) == {"B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "C1", "C2", "C3", "C4", "C5", "C6"}
     assert "Llama" not in queries["C1"]
-    assert "Llama" in queries["C4"] and '"Muse Wonder"' in queries["C4"]
-    assert "(海螺 (AI OR 模型 OR H3 OR 歌曲))" in queries["B1"]
-    assert "(混元 (AI OR 模型 OR 3D OR 腾讯))" in queries["B1"]
+    assert "Llama" in queries["B1"] and "Wonder" in queries["B1"]
+    assert "海螺 (AI OR 模型 OR H3 OR 歌曲)" in queries["B4"]
+    assert "混元 (AI OR 模型 OR 3D OR 腾讯)" in queries["B3"]
     for call, query in queries.items():
         bounded = query + " -from:xxyweb3 since_time:1792807200 until_time:1792808100"
-        assert len(bounded) <= 512, (call, len(bounded), bounded)
+        assert len(bounded.encode("utf-8")) <= 512, (call, len(bounded.encode("utf-8")), bounded)
 
 
 @pytest.mark.parametrize("rule", [
@@ -98,11 +108,11 @@ def test_strong_alias_wins_over_shorter_contextual_alias():
     assert [(m.brand_id, m.raw_token) for m in mentions] == [("hunyuan", "腾讯混元")]
 
 
-def test_subset_keeps_c4_identity():
+def test_subset_keeps_declared_family_call_identity():
     policy = load_policy(POLICY)
     specs = specs_from_policy(policy, brand_nicknames=["llama"])
-    assert {s.call_id for s in specs} == {"C4", "B3"}
-    assert all(s.call_id != "C4" for s in specs_from_policy(policy, brand_nicknames=["qwen"]))
+    assert {s.call_id for s in specs} == {"B1"}
+    assert all(s.call_id != "B1" for s in specs_from_policy(policy, brand_nicknames=["qwen"]))
 
 
 @pytest.mark.parametrize("wide_net", [False, True])

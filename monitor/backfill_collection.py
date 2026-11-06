@@ -51,6 +51,7 @@ from monitor.backfill_resources import (
 )
 from monitor.run_lock import harvest_writer_lock
 from x_monitor.config import load_config
+from x_monitor.queries import query_size_bytes
 from x_monitor.twitterapi_credentials import (
     TwitterApiCredentialPurpose,
     require_twitterapi_api_key,
@@ -58,7 +59,7 @@ from x_monitor.twitterapi_credentials import (
 
 ADAPTER_VERSION = "x-backfill/v1"
 POLICY_ADAPTER_VERSION = "x-backfill/v2"
-CALL_IDS = frozenset({"B1", "B2", "B3", "C1", "C2", "C3", "C4"})
+CALL_IDS = frozenset({"B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"})
 BLOCKED_REASONS = frozenset({
     "invalid_primary_window", "invalid_continuation", "clipped_page", "nonprogressing_cursor",
 })
@@ -143,7 +144,7 @@ def validate_scope(job, cfg):
         require(not any(token in query.lower() for token in (
             "since:", "until:", "since_time:", "until_time:", "since_id:", "max_id:",
         )), "scope owns query bounds")
-        require(len(f"{query} since_time:{lower} until_time:{upper}") <= 512,
+        require(query_size_bytes(f"{query} since_time:{lower} until_time:{upper}") <= 512,
                 "provider query length exceeded")
     for key in ("prior_api_requests", "maximum_api_requests"):
         require(type(scope.get(key)) is int and scope[key] >= 0, "cumulative request allowance required")

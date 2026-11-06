@@ -21,9 +21,9 @@ from typing import TextIO
 import yaml
 
 from .harvest_policy import HarvestPolicy, load_policy
+from .queries import query_size_bytes
 from .query_plan import PlannedCall, XQuerySpec, plan_calls
 from .specs_from_policy import primary_keywords_from_policy, specs_from_policy
-
 
 DEFAULT_LENGTH_CAP = 512  # x.com advanced-search cap (queries.X_LENGTH_CAP)
 
@@ -87,6 +87,8 @@ def _build_brand_to_call_id(
         spec = spec_by_call_id.get(c.call_id)
         if spec is None:
             continue
+        for name in spec.component_names:
+            coverage.setdefault(name.split("/", 1)[0], set()).add(c.call_id)
         # Wide-net (B1)
         for nick in spec.wide_net_brands:
             coverage.setdefault(nick, set()).add(c.call_id)
@@ -178,8 +180,8 @@ def build_preview(
         CallPreview(
             call_id=c.call_id,
             call_kind=c.call_kind,
-            length=c.query_length,
-            headroom=DEFAULT_LENGTH_CAP - c.query_length,
+            length=query_size_bytes(c.query_string),
+            headroom=DEFAULT_LENGTH_CAP - query_size_bytes(c.query_string),
             query=c.query_string,
         )
         for c in calls
@@ -245,7 +247,7 @@ def render_preview(
               f"{len(report.coverage)} brands mapped)\n\n")
 
     out.write("## Calls\n\n")
-    out.write("| call_id | kind | length | headroom | query |\n")
+    out.write("| call_id | kind | UTF-8 bytes | byte headroom | query |\n")
     out.write("|---|---|---:|---:|---|\n")
     for c in report.calls:
         q = c.query if len(c.query) <= truncate_query_at else c.query[:truncate_query_at] + "…"

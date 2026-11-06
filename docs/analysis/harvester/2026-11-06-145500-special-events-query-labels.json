@@ -1,0 +1,280 @@
+{
+  "labeler": "Codex independent source review; no additional model call",
+  "human_gold": false,
+  "externally_fact_verified": false,
+  "blind_to_functional_provider_replay": true,
+  "scope": "Captured bodies and quotes; long finance bodies reviewed by bounded excerpts and marked uncertain. No external article fetches. Uncertain rows excluded from definite keepers.",
+  "overlap_observed_at": "2026-11-06T05:47:23.332761+00:00",
+  "rows": [
+    {
+      "tweet_id": "2118338166725980202",
+      "call_id": "SPECIALEVENTS1",
+      "label": "drop",
+      "reason": "CFO networking recap and finance summit; no AI work identified.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": true,
+      "source_row_sha256": "03e2fdd42a0f299670ea64b80e95684727830a4e933ba884898ce2005fe9763e"
+    },
+    {
+      "tweet_id": "2118337802450686416",
+      "call_id": "SPECIALEVENTS1",
+      "label": "keep",
+      "reason": "First-person joining announcement for AI computational chemistry work.",
+      "already_stored": true,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "ad80056ca37af43f269ebbeab8d83b04529d2afab9cc343c60384cef52357a27"
+    },
+    {
+      "tweet_id": "2118337646212927667",
+      "call_id": "SPECIALEVENTS1",
+      "label": "keep",
+      "reason": "Quotes a specific Anthropic departure and Claude Code work.",
+      "already_stored": true,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "21cae4fc17a2f49720d19039ce72294c7ffde4994f36995771988fd40c766e53"
+    },
+    {
+      "tweet_id": "2118337520442216886",
+      "call_id": "SPECIALEVENTS1",
+      "label": "drop",
+      "reason": "Trading and market recap; no qualifying personnel/job/event/release claim.",
+      "already_stored": true,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "85ab291d5be0f62c2af5474c399ed21af8a782a6f8831c461bfc202036c01d1a"
+    },
+    {
+      "tweet_id": "2118336381328240851",
+      "call_id": "SPECIALEVENTS1",
+      "label": "uncertain",
+      "reason": "URL-only body; captured text does not establish its subject.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "507184b68b48f1e81beb7385ce148d07c1e7fbb18fbbb197744ae1a60e7b5fcb"
+    },
+    {
+      "tweet_id": "2118335934051803380",
+      "call_id": "SPECIALEVENTS1",
+      "label": "drop",
+      "reason": "General TOEIC career advice, not a specific AI opening.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": true,
+      "source_row_sha256": "a1629d2068324533fb48f2e5d74887dd071e5e2feabaad7e028696287af11b20"
+    },
+    {
+      "tweet_id": "2118335904884400252",
+      "call_id": "SPECIALEVENTS1",
+      "label": "drop",
+      "reason": "Agricultural equipment sales role; no AI role evidence.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": true,
+      "source_row_sha256": "1fa91286c07c4499481e34e2d93697b8f890395e807dc39de70937d64ce9f11b"
+    },
+    {
+      "tweet_id": "2118338905212621077",
+      "call_id": "SPECIALEVENTS2",
+      "label": "uncertain",
+      "reason": "Long vaccine earnings report; prefix is unrelated, full claim inventory not reviewed.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "2cdcf6c119eda77ef64e8da8c83ee6c2bb3d4aedc9d7bc85b0ea83a29f0fe7c5"
+    },
+    {
+      "tweet_id": "2118338884232962363",
+      "call_id": "SPECIALEVENTS2",
+      "label": "uncertain",
+      "reason": "Preview publication reference without product identity.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "8f04d206fdde637a2923729b018ec65ed8ba483e2f5b20a55bf5f49b67dd755e"
+    },
+    {
+      "tweet_id": "2118338875990925332",
+      "call_id": "SPECIALEVENTS2",
+      "label": "uncertain",
+      "reason": "Long biofuel earnings report; prefix is unrelated, full claim inventory not reviewed.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "83c095e7f59b9e42fd180fee4340e89e6e3d18b47613be7aa7c6de4d9b3928c4"
+    },
+    {
+      "tweet_id": "2118338869750014445",
+      "call_id": "SPECIALEVENTS2",
+      "label": "drop",
+      "reason": "Retail delivery-agent complaint, not an AI agent release.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "073d81dd6dd642e4d3bac2d4edb8a6cf0f24c7a5a481253375ef4a1525e7545b"
+    },
+    {
+      "tweet_id": "2118338841954115652",
+      "call_id": "SPECIALEVENTS2",
+      "label": "drop",
+      "reason": "Diplomatic meeting prediction mentioning LLM reasoning.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "dcb29cf0fa18436d1f50adba5d32f71b74850907b68051ed9b95aca7021b21f5"
+    },
+    {
+      "tweet_id": "2118338832223633694",
+      "call_id": "SPECIALEVENTS2",
+      "label": "drop",
+      "reason": "Physical model-building hobby reply.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "976e6626714b4fe59f7ba049f350880777a5acf5083c0aa0b507d8059191e3be"
+    },
+    {
+      "tweet_id": "2118338827756421463",
+      "call_id": "SPECIALEVENTS2",
+      "label": "drop",
+      "reason": "Political and military history discussion, no AI product claim in reviewed text.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "334db7b2fc5f1c8ce64bbfd2d149fb4af3c9a7b4ce3ee4dade379279b321e586"
+    },
+    {
+      "tweet_id": "2118338802305614258",
+      "call_id": "SPECIALEVENTS2",
+      "label": "keep",
+      "reason": "Offers an available voice-AI application blueprint and workflows.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "be95364283161490a58430ecbeb513e65cafb5a215bbc084ff5a81d9d606193d"
+    },
+    {
+      "tweet_id": "2118338798958543171",
+      "call_id": "SPECIALEVENTS2",
+      "label": "uncertain",
+      "reason": "Truncated real-estate automation description; AI identity/availability unclear.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "b5e9b665f44fcfc7bb29d99fd1d0886f74b1a6ccacb08cf0c7a3437a87304f12"
+    },
+    {
+      "tweet_id": "2118338793673748502",
+      "call_id": "SPECIALEVENTS2",
+      "label": "keep",
+      "reason": "Reports publication of a named OpenAI autonomous vulnerability pipeline.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "fe9cf5250ce2c0d8d25f7a124ff2c73faf3017ed5db50d15b06f8a3a321b41fb"
+    },
+    {
+      "tweet_id": "2118338793627676944",
+      "call_id": "SPECIALEVENTS2",
+      "label": "uncertain",
+      "reason": "Tutorial roundup includes a newly published Mac app but unclear product identity.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "0ffefff1712304e46b6333ec1f53f9f7f101a3183d3eb167bca36345be6d8d07"
+    },
+    {
+      "tweet_id": "2118338776993013925",
+      "call_id": "SPECIALEVENTS2",
+      "label": "keep",
+      "reason": "Reports TwIL-8B open model availability; performance claims not fact-checked.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "4c8539628b96cbc3c9931297ccb6b290d174e020087a3220339f307b2da16669"
+    },
+    {
+      "tweet_id": "2118338750858109180",
+      "call_id": "SPECIALEVENTS2",
+      "label": "uncertain",
+      "reason": "Long automotive earnings report includes AI use and a product-chief appointment; AI-role relevance unresolved.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "f889cf2293cde5fb0ca8a47b51ad69e3d8ba61ef91aadabb1615089718afdf81"
+    },
+    {
+      "tweet_id": "2118338651734065649",
+      "call_id": "SPECIALEVENTS2",
+      "label": "drop",
+      "reason": "LEGO model announcement, not an AI model.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "32342218cec72994f0d1d41be4c8fab40ca339b35975677b0691319728cdcc39"
+    },
+    {
+      "tweet_id": "2118338617005216163",
+      "call_id": "SPECIALEVENTS2",
+      "label": "drop",
+      "reason": "Government-payment customer support, not an AI tool release.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "ad86ff69cb777450dc62c091d237cb618cabde8d2a8fe3ee4e9fda3294d3dfee"
+    },
+    {
+      "tweet_id": "2118338611997253827",
+      "call_id": "SPECIALEVENTS2",
+      "label": "keep",
+      "reason": "Specific SWE-2 Flash release with named product and access channels.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "79510dbe0489b46d2d0587722dabeec0ac6e1e2d96d3b836bcd6074b8f121ccc"
+    },
+    {
+      "tweet_id": "2118338597971771515",
+      "call_id": "SPECIALEVENTS2",
+      "label": "drop",
+      "reason": "Meta valuation report, no specific qualifying release.",
+      "already_stored": true,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "1e08d54baefee1e48c3730e097d7bedddf5d429263131fe49e47414a314b34d5"
+    },
+    {
+      "tweet_id": "2118338593173233996",
+      "call_id": "SPECIALEVENTS2",
+      "label": "drop",
+      "reason": "Trading outcome and agent-use anecdote, no product availability announcement.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "c012c8088b9fffe236d34cf07a00eea3054cbebcb1b225b7a766d7d06b60b639"
+    },
+    {
+      "tweet_id": "2118338579860520978",
+      "call_id": "SPECIALEVENTS2",
+      "label": "drop",
+      "reason": "General LLM training discussion, no specific release.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "0540d1a8f4cc4ab3adf515f4db6f6b1ff80a76ac8dd584462cf9f142b54539bd"
+    },
+    {
+      "tweet_id": "2118338559111512240",
+      "call_id": "SPECIALEVENTS2",
+      "label": "keep",
+      "reason": "Describes an available named open-source AI skill package and install route.",
+      "already_stored": false,
+      "mill": false,
+      "recruiter": false,
+      "source_row_sha256": "66960898cba53389d62acbc87356958dcf6037ffb0c848d2803533b94ed336da"
+    }
+  ]
+}

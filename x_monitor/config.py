@@ -55,10 +55,10 @@ VALID_REVIEW_REASONS: frozenset[str] = frozenset(
     }
 )
 
-# The v2 scheduler has eight logical calls. This is deliberately independent
+# Allowed base-call IDs for the policy-derived scheduler. This is independent
 # of KNOWN_MODELS: the latter is a frozen compatibility registry for legacy
 # consumers, while policy/config own the live call vocabulary.
-VALID_CALL_IDS: tuple[str, ...] = ("A", "B1", "B2", "B3", "C1", "C2", "C3", "C4")
+VALID_CALL_IDS: tuple[str, ...] = ("A", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "C1", "C2", "C3", "C4", "C5", "C6")
 # Keep this in lockstep with onboard_brand's existing natural-key contract.
 _NICKNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 
@@ -1006,11 +1006,10 @@ class Config(BaseModel):
     review_reasons: list[str] = Field(
         default_factory=lambda: list(VALID_REVIEW_REASONS)
     )
-    # C4 is first among the constrained calls because its new aliases have
-    # the broadest result-volume risk. Call A remains last: it has the best
-    # signal-per-tweet ratio.
-    degraded_skip_order: list[Literal["A", "B1", "B2", "B3", "C1", "C2", "C3", "C4"]] = Field(
-        default_factory=lambda: ["B3", "B2", "B1", "C4", "C3", "C2", "C1", "A"]
+    # Explicit degradation order mirrors config.yaml; list A stays last.
+    # Group IDs come from policy and never encode a brand permanently.
+    degraded_skip_order: list[Literal["A", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "C1", "C2", "C3", "C4", "C5", "C6"]] = Field(
+        default_factory=lambda: ["B9", "B8", "B7", "C6", "B6", "B5", "B4", "C5", "B3", "B2", "B1", "C4", "C3", "C2", "C1", "A"]
     )
 
     @model_validator(mode="after")

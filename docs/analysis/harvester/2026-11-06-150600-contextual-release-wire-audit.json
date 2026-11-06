@@ -1,0 +1,498 @@
+{
+  "at": "2026-11-06T15:02:56.937088+09:00",
+  "calls_per_sweep": 18,
+  "provider_requests": 0,
+  "source_hashes": {
+    "config.yaml": "177787157afaf4d0ce167f28286db7000ad15e7ee2be92ddb1547e409eb22a37",
+    "config/harvest_policy.yaml": "73e64f064d3207e6c0858e862002685444a996206358c1fddc3dfc1b5ba32c32",
+    "x_monitor/query_packing.py": "f31d00595cc6bb1cea649514a615af77abc525e084d4efebc821681a1a37b788",
+    "x_monitor/query_plan.py": "32f3ed28800083ea607e88fa00ab11fc914ed38408b58e81d2c695b5b2011906",
+    "x_monitor/special_events_search.py": "1bd66df502b05ac3bbbedd55be086d06d9c4335791726b33ab03e20a79e57d67",
+    "monitor/cycle.py": "442495678836593295b21664823a96faebe4c404b04d430c2a7e2bbf97dffdb7",
+    "monitor/backfill_collection.py": "2cbf7f4b13c1a17b6f789a47a5512c1ab7e33177c15887281de8a17c3ab5ebc2",
+    "scripts/backfill_campaign.py": "efb3eba4fb9c7ad2b6dcff2ff2c6555ac0fc171dda100b1a0d931913d1845959",
+    "scripts/backfill_month.py": "c5d9505d6ec81a1f978cb7cebf331ab26916d8109eb9e0fdd29ef491fbc7a526"
+  },
+  "rows": [
+    {
+      "mode": "scheduled",
+      "call_id": "A",
+      "timestamp_digits": 10,
+      "bytes": 96,
+      "headroom": 416,
+      "query": "(list:2067062923525275922) min_faves:0 -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "B1",
+      "timestamp_digits": 10,
+      "bytes": 390,
+      "headroom": 122,
+      "query": "(\"Muse Image\" OR \"Muse Video\" OR \"Muse Voice\" OR Llama (llm OR model OR api OR agentic OR huggingface OR pretraining) OR (Meta OR Muse) (AI OR model OR models OR agent OR agents OR code OR Wonder OR Spark OR Glimmer OR research OR release OR 模型 OR 智能体 OR トークン) OR @AIatMeta OR EXAONE OR \"LG AI\" OR @LG_AI_Research) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "C1",
+      "timestamp_digits": 10,
+      "bytes": 503,
+      "headroom": 9,
+      "query": "(Nemotron OR BioNeMo OR NemoClaw OR GR00T OR TensorRT OR TRT-LLM OR Audio2Face OR DLSS OR NV-Embed OR NV-CLIP OR NemoGuard OR NVLM OR \"Cosmos Predict\" OR \"Cosmos Transfer\" OR \"Cosmos Reason\" OR \"Isaac Lab\" OR \"Isaac Sim\" OR \"Isaac ROS\" OR (NeMo OR Megatron OR Alpamayo OR Parakeet OR Canary) (llm OR model OR api OR agentic OR huggingface OR inference OR ASR OR speech OR weights OR PyTorch OR GPU OR NVIDIA) OR \"Cosmos world\" (NVIDIA OR model)) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "C2",
+      "timestamp_digits": 10,
+      "bytes": 436,
+      "headroom": 76,
+      "query": "(cuDNN OR NCCL OR cuML OR cuDF OR cuVS OR DeepStream OR Holoscan OR Omniverse OR PhysicsNeMo OR CorrDiff OR FourCastNet OR MONAI OR cuOpt OR cuGraph OR (CUDA OR CUTLASS OR RAPIDS OR Garak OR Jetson OR JetPack) (llm OR model OR api OR agentic OR huggingface OR inference OR ASR OR speech OR weights OR PyTorch OR GPU OR NVIDIA) OR CUDA (LMStudio OR llama.cpp OR cores OR shader)) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "C3",
+      "timestamp_digits": 10,
+      "bytes": 488,
+      "headroom": 24,
+      "query": "(ChatGLM OR GLM4 OR GLM5 OR GLM6 OR \"Ox Alpha\" OR OxAlpha OR glm (llm OR model OR api OR agentic OR huggingface OR 4 OR 5 OR 6 OR 4.5 OR 4.6 OR 4.7 OR 5.0 OR 5.1) OR (Zhipu OR 智谱 OR Z.ai OR 01.AI OR 零一万物 OR 万智 OR Wanzhi) (llm OR model OR api OR agentic OR huggingface) OR Yi (llm OR api OR agentic OR huggingface OR \"language model\" OR inference OR tokens OR weights OR 模型 OR VL OR Coder OR Large) OR @01AI_Yi) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "C4",
+      "timestamp_digits": 10,
+      "bytes": 322,
+      "headroom": 190,
+      "query": "(\"dots studio\" OR \"dots 3 note\" OR \"dots.3-note\" OR dots.ocr OR dots.tts OR dots.llm1 OR dots.vlm OR dots.mocr OR DotsOCR OR \"dots OCR\" OR \"studio dots ai\" OR dots3 OR dots4 OR dots (Xiaohongshu OR RedNote OR \"red note\" OR 小红书 OR 小紅書) OR @dotsstudioai) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "B2",
+      "timestamp_digits": 10,
+      "bytes": 509,
+      "headroom": 3,
+      "query": "(Codestral OR Devstral OR Voxtral OR Ministral OR Pixtral OR Mathstral OR Leanstral OR LIDstral OR Timestral OR SakanaAI OR SakanaAILabs OR サカナAI OR ShinkaEvolve OR \"Darwin Gödel Machine\" OR (Mistral OR Mixtral OR Sakana OR Namazu OR Magistral) (llm OR model OR api OR agentic OR huggingface OR AI OR 研究 OR モデル) OR Magistral Mistral OR \"AI Scientist\" (Sakana OR SakanaAI OR SakanaAILabs OR サカナAI) OR @MistralAI OR @SakanaAILabs) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "B3",
+      "timestamp_digits": 10,
+      "bytes": 469,
+      "headroom": 43,
+      "query": "(Qwen OR Qwen3 OR 通义千问 OR 千问 OR @Ali_TongyiLab OR @Alibaba_Qwen OR DeepSeek OR 深度求索 OR V4.1F (DeepSeek OR 深度求索 OR LLM OR model OR 模型) OR @deepseek_ai OR Hunyuan OR Hunyuan4 OR 腾讯混元 OR Hunyuan3D OR HunyuanVideo OR HunyuanImage OR 混元3 OR 混元4 OR 混元5 OR Hy3 OR Hy4 OR Hy5 OR 混元 (AI OR 模型 OR 3D OR 腾讯) OR Hy (MT2 OR Memory OR World) OR @TencentHunyuan) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "B4",
+      "timestamp_digits": 10,
+      "bytes": 437,
+      "headroom": 75,
+      "query": "(Hailuo OR MiniMax OR 海螺 (AI OR 模型 OR H3 OR 歌曲) OR @MiniMaxAgent OR @MiniMax_AI OR @hailuo_ai OR (Kuaishou OR KwaiYii OR Kling OR 可灵 OR 可靈 OR 快手) (llm OR model OR api OR agentic OR huggingface) OR (Kling OR 可灵 OR 可靈 OR 快手) AI OR Kling (video OR generation) OR 可灵 视频 OR (可灵 OR 可靈 OR 快手) 模型 OR 可靈 視頻 OR @Kling_ai) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "C5",
+      "timestamp_digits": 10,
+      "bytes": 449,
+      "headroom": 63,
+      "query": "(\"Triton Inference Server\" OR \"NIM inference\" OR \"Riva speech\" OR \"Dynamo inference\" OR \"TAO Toolkit\" OR \"Clara imaging\" OR \"Merlin recommender\" OR \"Maxine video\" OR (Cosmos OR Isaac OR NIM OR Riva OR Dynamo OR Triton OR Eagle OR TAO OR Morpheus OR Merlin OR Maxine OR Modulus OR Clara OR Ising OR ACE OR Tokkio OR Edify OR DRIVE) (NVIDIA OR TensorRT OR Nemotron OR cuDNN) OR Earth-2 NVIDIA) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "B5",
+      "timestamp_digits": 10,
+      "bytes": 303,
+      "headroom": 209,
+      "query": "(InclusionAI OR (Ling OR Ring OR Ming) (LLM OR MoE OR weights OR parameters OR tokens OR 模型 OR 参数 OR 开源) OR Ling (mini OR flash) OR Ring (1T OR 2.6) OR Ming lite OR @AntLingAGI OR @TheInclusionAI OR @ZhihuFrontier OR @robbyant_brain) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "B6",
+      "timestamp_digits": 10,
+      "bytes": 456,
+      "headroom": 56,
+      "query": "(Kimi3 OR (Kimi OR 月之暗面 OR 暗面 OR MoonshotAI OR Moonshot) (llm OR model OR api OR agentic OR huggingface OR tokens OR 参数 OR compute OR GLM OR agent OR agents) OR (Kimi OR 月之暗面 OR 暗面 OR MoonshotAI OR Moonshot OR K2 OR K3) (weights OR MoE OR inference OR 模型) OR Kimi (K2 OR K2.5 OR K3 OR K3.1 OR Code OR Thinker OR 智谱) OR (K2 OR K3) (LLM OR Kimi) OR @Kimi_Moonshot) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "C6",
+      "timestamp_digits": 10,
+      "bytes": 411,
+      "headroom": 101,
+      "query": "((NVIDIA OR 英伟达 OR 輝達 OR 英偉達 OR エヌビディア) (llm OR model OR api OR agentic OR huggingface OR AI OR inference OR ASR OR speech OR weights OR PyTorch OR robotics OR 模型 OR CUDA OR TensorRT OR Nemotron OR cuDNN OR kernels OR DGX) OR @NVIDIAAI OR @NVIDIAAIDev OR (Auto-Ontology OR AI-Q) (NVIDIA OR TensorRT OR Nemotron OR cuDNN)) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "B7",
+      "timestamp_digits": 10,
+      "bytes": 337,
+      "headroom": 175,
+      "query": "(MiMo (llm OR model OR api OR agentic OR huggingface OR AI OR tokens OR weights OR MoE OR inference OR 模型 OR Xiaomi OR 小米 OR v2.5 OR 7B OR VL OR Code) OR (Xiaomi OR 小米) (AI OR LLM OR 模型 OR 大模型 OR 人工智能 OR 智能体) OR @XiaomiMiMo OR @XiaomiMiMoDevs) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "B8",
+      "timestamp_digits": 10,
+      "bytes": 511,
+      "headroom": 1,
+      "query": "(PaddleOCR OR SenseNova OR (ERNIE OR 文心一言 OR Upstage OR Solar Pro OR Solar LLM OR 업스테이지 OR \"Solar Open\" OR \"Solar Mini\") (llm OR model OR api OR agentic OR huggingface OR baidu OR 文心) OR 文心 (llm OR model OR api OR agentic OR huggingface OR baidu OR AI OR 模型) OR (SenseChat OR SenseTime OR 商汤 OR 日日新) (llm OR model OR api OR agentic OR huggingface) OR @ErnieforDevs OR @PaddlePaddle OR @upstageai OR @SenseTime_AI) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "B9",
+      "timestamp_digits": 10,
+      "bytes": 507,
+      "headroom": 5,
+      "query": "(Seedance OR Seedream OR Seed2.1 OR SeedRealtime OR \"Seed Audio\" OR SeedAudio OR \"Seed Diffusion\" OR SeedDiffusion OR 字节扣子 OR StepFun OR 阶跃星辰 OR Step5 OR StepAudio OR \"Step 3.5 Flash\" OR \"Step 3.7 Flash\" OR (Doubao OR ByteDance OR 豆包 OR 字节跳动 OR Coze OR \"Step 5\" OR \"Step Audio\" OR \"Step Video\") (llm OR model OR api OR agentic OR huggingface) OR @BytePlusGlobal OR @bytedanceoss OR @doubaoai OR @StepFun_ai OR @stepfunai) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "SPECIALEVENTS1",
+      "timestamp_digits": 10,
+      "bytes": 510,
+      "headroom": 2,
+      "query": "((\"I've joined\" OR \"I joined\" OR \"I left\" OR \"我加入\" OR \"我离开\" OR 出任 OR 换帅 OR に入社 OR を退職) (AI OR LLM OR OpenAI OR Anthropic) OR \"I've joined\" (@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai) OR (\"we're hiring\" OR \"currently hiring\" OR 招聘 OR 募集中) (engineer OR researcher) OR (\"we'll be at\" OR 登壇) (\"AI conference\" OR summit) OR (\"applications open\" OR \"apply by\" OR 申请) (hackathon OR fellowship) (AI OR LLM)) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "SPECIALEVENTS1",
+      "timestamp_digits": 11,
+      "bytes": 512,
+      "headroom": 0,
+      "query": "((\"I've joined\" OR \"I joined\" OR \"I left\" OR \"我加入\" OR \"我离开\" OR 出任 OR 换帅 OR に入社 OR を退職) (AI OR LLM OR OpenAI OR Anthropic) OR \"I've joined\" (@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai) OR (\"we're hiring\" OR \"currently hiring\" OR 招聘 OR 募集中) (engineer OR researcher) OR (\"we'll be at\" OR 登壇) (\"AI conference\" OR summit) OR (\"applications open\" OR \"apply by\" OR 申请) (hackathon OR fellowship) (AI OR LLM)) since_time:99999999998 until_time:99999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "SPECIALEVENTS2",
+      "timestamp_digits": 10,
+      "bytes": 505,
+      "headroom": 7,
+      "query": "((introducing OR announce OR announcing OR announced OR release OR released OR releasing OR launch OR launched OR launching OR \"is here\" OR available OR arrived OR \"open weights\" OR 开源 OR 发布 OR 上线 OR 推出 OR 公開 OR リリース) (model OR models OR weights OR Preview OR LLM OR VLM OR checkpoint OR agent OR agents OR harness OR toolkit OR SDK OR \"AI tool\" OR \"AI assistant\" OR 模型 OR モデル OR 权重) OR url:huggingface.co OR url:hf.co) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "scheduled",
+      "call_id": "SPECIALEVENTS2",
+      "timestamp_digits": 11,
+      "bytes": 507,
+      "headroom": 5,
+      "query": "((introducing OR announce OR announcing OR announced OR release OR released OR releasing OR launch OR launched OR launching OR \"is here\" OR available OR arrived OR \"open weights\" OR 开源 OR 发布 OR 上线 OR 推出 OR 公開 OR リリース) (model OR models OR weights OR Preview OR LLM OR VLM OR checkpoint OR agent OR agents OR harness OR toolkit OR SDK OR \"AI tool\" OR \"AI assistant\" OR 模型 OR モデル OR 权重) OR url:huggingface.co OR url:hf.co) since_time:99999999998 until_time:99999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "A",
+      "timestamp_digits": 10,
+      "bytes": 82,
+      "headroom": 430,
+      "query": "(list:2067062923525275922) min_faves:0 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "B1",
+      "timestamp_digits": 10,
+      "bytes": 376,
+      "headroom": 136,
+      "query": "(\"Muse Image\" OR \"Muse Video\" OR \"Muse Voice\" OR Llama (llm OR model OR api OR agentic OR huggingface OR pretraining) OR (Meta OR Muse) (AI OR model OR models OR agent OR agents OR code OR Wonder OR Spark OR Glimmer OR research OR release OR 模型 OR 智能体 OR トークン) OR @AIatMeta OR EXAONE OR \"LG AI\" OR @LG_AI_Research) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "C1",
+      "timestamp_digits": 10,
+      "bytes": 489,
+      "headroom": 23,
+      "query": "(Nemotron OR BioNeMo OR NemoClaw OR GR00T OR TensorRT OR TRT-LLM OR Audio2Face OR DLSS OR NV-Embed OR NV-CLIP OR NemoGuard OR NVLM OR \"Cosmos Predict\" OR \"Cosmos Transfer\" OR \"Cosmos Reason\" OR \"Isaac Lab\" OR \"Isaac Sim\" OR \"Isaac ROS\" OR (NeMo OR Megatron OR Alpamayo OR Parakeet OR Canary) (llm OR model OR api OR agentic OR huggingface OR inference OR ASR OR speech OR weights OR PyTorch OR GPU OR NVIDIA) OR \"Cosmos world\" (NVIDIA OR model)) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "C2",
+      "timestamp_digits": 10,
+      "bytes": 422,
+      "headroom": 90,
+      "query": "(cuDNN OR NCCL OR cuML OR cuDF OR cuVS OR DeepStream OR Holoscan OR Omniverse OR PhysicsNeMo OR CorrDiff OR FourCastNet OR MONAI OR cuOpt OR cuGraph OR (CUDA OR CUTLASS OR RAPIDS OR Garak OR Jetson OR JetPack) (llm OR model OR api OR agentic OR huggingface OR inference OR ASR OR speech OR weights OR PyTorch OR GPU OR NVIDIA) OR CUDA (LMStudio OR llama.cpp OR cores OR shader)) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "C3",
+      "timestamp_digits": 10,
+      "bytes": 474,
+      "headroom": 38,
+      "query": "(ChatGLM OR GLM4 OR GLM5 OR GLM6 OR \"Ox Alpha\" OR OxAlpha OR glm (llm OR model OR api OR agentic OR huggingface OR 4 OR 5 OR 6 OR 4.5 OR 4.6 OR 4.7 OR 5.0 OR 5.1) OR (Zhipu OR 智谱 OR Z.ai OR 01.AI OR 零一万物 OR 万智 OR Wanzhi) (llm OR model OR api OR agentic OR huggingface) OR Yi (llm OR api OR agentic OR huggingface OR \"language model\" OR inference OR tokens OR weights OR 模型 OR VL OR Coder OR Large) OR @01AI_Yi) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "C4",
+      "timestamp_digits": 10,
+      "bytes": 308,
+      "headroom": 204,
+      "query": "(\"dots studio\" OR \"dots 3 note\" OR \"dots.3-note\" OR dots.ocr OR dots.tts OR dots.llm1 OR dots.vlm OR dots.mocr OR DotsOCR OR \"dots OCR\" OR \"studio dots ai\" OR dots3 OR dots4 OR dots (Xiaohongshu OR RedNote OR \"red note\" OR 小红书 OR 小紅書) OR @dotsstudioai) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "B2",
+      "timestamp_digits": 10,
+      "bytes": 495,
+      "headroom": 17,
+      "query": "(Codestral OR Devstral OR Voxtral OR Ministral OR Pixtral OR Mathstral OR Leanstral OR LIDstral OR Timestral OR SakanaAI OR SakanaAILabs OR サカナAI OR ShinkaEvolve OR \"Darwin Gödel Machine\" OR (Mistral OR Mixtral OR Sakana OR Namazu OR Magistral) (llm OR model OR api OR agentic OR huggingface OR AI OR 研究 OR モデル) OR Magistral Mistral OR \"AI Scientist\" (Sakana OR SakanaAI OR SakanaAILabs OR サカナAI) OR @MistralAI OR @SakanaAILabs) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "B3",
+      "timestamp_digits": 10,
+      "bytes": 455,
+      "headroom": 57,
+      "query": "(Qwen OR Qwen3 OR 通义千问 OR 千问 OR @Ali_TongyiLab OR @Alibaba_Qwen OR DeepSeek OR 深度求索 OR V4.1F (DeepSeek OR 深度求索 OR LLM OR model OR 模型) OR @deepseek_ai OR Hunyuan OR Hunyuan4 OR 腾讯混元 OR Hunyuan3D OR HunyuanVideo OR HunyuanImage OR 混元3 OR 混元4 OR 混元5 OR Hy3 OR Hy4 OR Hy5 OR 混元 (AI OR 模型 OR 3D OR 腾讯) OR Hy (MT2 OR Memory OR World) OR @TencentHunyuan) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "B4",
+      "timestamp_digits": 10,
+      "bytes": 423,
+      "headroom": 89,
+      "query": "(Hailuo OR MiniMax OR 海螺 (AI OR 模型 OR H3 OR 歌曲) OR @MiniMaxAgent OR @MiniMax_AI OR @hailuo_ai OR (Kuaishou OR KwaiYii OR Kling OR 可灵 OR 可靈 OR 快手) (llm OR model OR api OR agentic OR huggingface) OR (Kling OR 可灵 OR 可靈 OR 快手) AI OR Kling (video OR generation) OR 可灵 视频 OR (可灵 OR 可靈 OR 快手) 模型 OR 可靈 視頻 OR @Kling_ai) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "C5",
+      "timestamp_digits": 10,
+      "bytes": 435,
+      "headroom": 77,
+      "query": "(\"Triton Inference Server\" OR \"NIM inference\" OR \"Riva speech\" OR \"Dynamo inference\" OR \"TAO Toolkit\" OR \"Clara imaging\" OR \"Merlin recommender\" OR \"Maxine video\" OR (Cosmos OR Isaac OR NIM OR Riva OR Dynamo OR Triton OR Eagle OR TAO OR Morpheus OR Merlin OR Maxine OR Modulus OR Clara OR Ising OR ACE OR Tokkio OR Edify OR DRIVE) (NVIDIA OR TensorRT OR Nemotron OR cuDNN) OR Earth-2 NVIDIA) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "B5",
+      "timestamp_digits": 10,
+      "bytes": 289,
+      "headroom": 223,
+      "query": "(InclusionAI OR (Ling OR Ring OR Ming) (LLM OR MoE OR weights OR parameters OR tokens OR 模型 OR 参数 OR 开源) OR Ling (mini OR flash) OR Ring (1T OR 2.6) OR Ming lite OR @AntLingAGI OR @TheInclusionAI OR @ZhihuFrontier OR @robbyant_brain) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "B6",
+      "timestamp_digits": 10,
+      "bytes": 442,
+      "headroom": 70,
+      "query": "(Kimi3 OR (Kimi OR 月之暗面 OR 暗面 OR MoonshotAI OR Moonshot) (llm OR model OR api OR agentic OR huggingface OR tokens OR 参数 OR compute OR GLM OR agent OR agents) OR (Kimi OR 月之暗面 OR 暗面 OR MoonshotAI OR Moonshot OR K2 OR K3) (weights OR MoE OR inference OR 模型) OR Kimi (K2 OR K2.5 OR K3 OR K3.1 OR Code OR Thinker OR 智谱) OR (K2 OR K3) (LLM OR Kimi) OR @Kimi_Moonshot) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "C6",
+      "timestamp_digits": 10,
+      "bytes": 397,
+      "headroom": 115,
+      "query": "((NVIDIA OR 英伟达 OR 輝達 OR 英偉達 OR エヌビディア) (llm OR model OR api OR agentic OR huggingface OR AI OR inference OR ASR OR speech OR weights OR PyTorch OR robotics OR 模型 OR CUDA OR TensorRT OR Nemotron OR cuDNN OR kernels OR DGX) OR @NVIDIAAI OR @NVIDIAAIDev OR (Auto-Ontology OR AI-Q) (NVIDIA OR TensorRT OR Nemotron OR cuDNN)) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "B7",
+      "timestamp_digits": 10,
+      "bytes": 323,
+      "headroom": 189,
+      "query": "(MiMo (llm OR model OR api OR agentic OR huggingface OR AI OR tokens OR weights OR MoE OR inference OR 模型 OR Xiaomi OR 小米 OR v2.5 OR 7B OR VL OR Code) OR (Xiaomi OR 小米) (AI OR LLM OR 模型 OR 大模型 OR 人工智能 OR 智能体) OR @XiaomiMiMo OR @XiaomiMiMoDevs) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "B8",
+      "timestamp_digits": 10,
+      "bytes": 497,
+      "headroom": 15,
+      "query": "(PaddleOCR OR SenseNova OR (ERNIE OR 文心一言 OR Upstage OR Solar Pro OR Solar LLM OR 업스테이지 OR \"Solar Open\" OR \"Solar Mini\") (llm OR model OR api OR agentic OR huggingface OR baidu OR 文心) OR 文心 (llm OR model OR api OR agentic OR huggingface OR baidu OR AI OR 模型) OR (SenseChat OR SenseTime OR 商汤 OR 日日新) (llm OR model OR api OR agentic OR huggingface) OR @ErnieforDevs OR @PaddlePaddle OR @upstageai OR @SenseTime_AI) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "B9",
+      "timestamp_digits": 10,
+      "bytes": 493,
+      "headroom": 19,
+      "query": "(Seedance OR Seedream OR Seed2.1 OR SeedRealtime OR \"Seed Audio\" OR SeedAudio OR \"Seed Diffusion\" OR SeedDiffusion OR 字节扣子 OR StepFun OR 阶跃星辰 OR Step5 OR StepAudio OR \"Step 3.5 Flash\" OR \"Step 3.7 Flash\" OR (Doubao OR ByteDance OR 豆包 OR 字节跳动 OR Coze OR \"Step 5\" OR \"Step Audio\" OR \"Step Video\") (llm OR model OR api OR agentic OR huggingface) OR @BytePlusGlobal OR @bytedanceoss OR @doubaoai OR @StepFun_ai OR @stepfunai) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "SPECIALEVENTS1",
+      "timestamp_digits": 10,
+      "bytes": 510,
+      "headroom": 2,
+      "query": "((\"I've joined\" OR \"I joined\" OR \"I left\" OR \"我加入\" OR \"我离开\" OR 出任 OR 换帅 OR に入社 OR を退職) (AI OR LLM OR OpenAI OR Anthropic) OR \"I've joined\" (@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai) OR (\"we're hiring\" OR \"currently hiring\" OR 招聘 OR 募集中) (engineer OR researcher) OR (\"we'll be at\" OR 登壇) (\"AI conference\" OR summit) OR (\"applications open\" OR \"apply by\" OR 申请) (hackathon OR fellowship) (AI OR LLM)) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "SPECIALEVENTS1",
+      "timestamp_digits": 11,
+      "bytes": 512,
+      "headroom": 0,
+      "query": "((\"I've joined\" OR \"I joined\" OR \"I left\" OR \"我加入\" OR \"我离开\" OR 出任 OR 换帅 OR に入社 OR を退職) (AI OR LLM OR OpenAI OR Anthropic) OR \"I've joined\" (@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai) OR (\"we're hiring\" OR \"currently hiring\" OR 招聘 OR 募集中) (engineer OR researcher) OR (\"we'll be at\" OR 登壇) (\"AI conference\" OR summit) OR (\"applications open\" OR \"apply by\" OR 申请) (hackathon OR fellowship) (AI OR LLM)) since_time:99999999998 until_time:99999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "SPECIALEVENTS2",
+      "timestamp_digits": 10,
+      "bytes": 505,
+      "headroom": 7,
+      "query": "((introducing OR announce OR announcing OR announced OR release OR released OR releasing OR launch OR launched OR launching OR \"is here\" OR available OR arrived OR \"open weights\" OR 开源 OR 发布 OR 上线 OR 推出 OR 公開 OR リリース) (model OR models OR weights OR Preview OR LLM OR VLM OR checkpoint OR agent OR agents OR harness OR toolkit OR SDK OR \"AI tool\" OR \"AI assistant\" OR 模型 OR モデル OR 权重) OR url:huggingface.co OR url:hf.co) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "manual",
+      "call_id": "SPECIALEVENTS2",
+      "timestamp_digits": 11,
+      "bytes": 507,
+      "headroom": 5,
+      "query": "((introducing OR announce OR announcing OR announced OR release OR released OR releasing OR launch OR launched OR launching OR \"is here\" OR available OR arrived OR \"open weights\" OR 开源 OR 发布 OR 上线 OR 推出 OR 公開 OR リリース) (model OR models OR weights OR Preview OR LLM OR VLM OR checkpoint OR agent OR agents OR harness OR toolkit OR SDK OR \"AI tool\" OR \"AI assistant\" OR 模型 OR モデル OR 权重) OR url:huggingface.co OR url:hf.co) since_time:99999999998 until_time:99999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "A",
+      "timestamp_digits": 10,
+      "bytes": 96,
+      "headroom": 416,
+      "query": "(list:2067062923525275922) min_faves:0 -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "B1",
+      "timestamp_digits": 10,
+      "bytes": 390,
+      "headroom": 122,
+      "query": "(\"Muse Image\" OR \"Muse Video\" OR \"Muse Voice\" OR Llama (llm OR model OR api OR agentic OR huggingface OR pretraining) OR (Meta OR Muse) (AI OR model OR models OR agent OR agents OR code OR Wonder OR Spark OR Glimmer OR research OR release OR 模型 OR 智能体 OR トークン) OR @AIatMeta OR EXAONE OR \"LG AI\" OR @LG_AI_Research) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "C1",
+      "timestamp_digits": 10,
+      "bytes": 503,
+      "headroom": 9,
+      "query": "(Nemotron OR BioNeMo OR NemoClaw OR GR00T OR TensorRT OR TRT-LLM OR Audio2Face OR DLSS OR NV-Embed OR NV-CLIP OR NemoGuard OR NVLM OR \"Cosmos Predict\" OR \"Cosmos Transfer\" OR \"Cosmos Reason\" OR \"Isaac Lab\" OR \"Isaac Sim\" OR \"Isaac ROS\" OR (NeMo OR Megatron OR Alpamayo OR Parakeet OR Canary) (llm OR model OR api OR agentic OR huggingface OR inference OR ASR OR speech OR weights OR PyTorch OR GPU OR NVIDIA) OR \"Cosmos world\" (NVIDIA OR model)) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "C2",
+      "timestamp_digits": 10,
+      "bytes": 436,
+      "headroom": 76,
+      "query": "(cuDNN OR NCCL OR cuML OR cuDF OR cuVS OR DeepStream OR Holoscan OR Omniverse OR PhysicsNeMo OR CorrDiff OR FourCastNet OR MONAI OR cuOpt OR cuGraph OR (CUDA OR CUTLASS OR RAPIDS OR Garak OR Jetson OR JetPack) (llm OR model OR api OR agentic OR huggingface OR inference OR ASR OR speech OR weights OR PyTorch OR GPU OR NVIDIA) OR CUDA (LMStudio OR llama.cpp OR cores OR shader)) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "C3",
+      "timestamp_digits": 10,
+      "bytes": 488,
+      "headroom": 24,
+      "query": "(ChatGLM OR GLM4 OR GLM5 OR GLM6 OR \"Ox Alpha\" OR OxAlpha OR glm (llm OR model OR api OR agentic OR huggingface OR 4 OR 5 OR 6 OR 4.5 OR 4.6 OR 4.7 OR 5.0 OR 5.1) OR (Zhipu OR 智谱 OR Z.ai OR 01.AI OR 零一万物 OR 万智 OR Wanzhi) (llm OR model OR api OR agentic OR huggingface) OR Yi (llm OR api OR agentic OR huggingface OR \"language model\" OR inference OR tokens OR weights OR 模型 OR VL OR Coder OR Large) OR @01AI_Yi) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "C4",
+      "timestamp_digits": 10,
+      "bytes": 322,
+      "headroom": 190,
+      "query": "(\"dots studio\" OR \"dots 3 note\" OR \"dots.3-note\" OR dots.ocr OR dots.tts OR dots.llm1 OR dots.vlm OR dots.mocr OR DotsOCR OR \"dots OCR\" OR \"studio dots ai\" OR dots3 OR dots4 OR dots (Xiaohongshu OR RedNote OR \"red note\" OR 小红书 OR 小紅書) OR @dotsstudioai) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "B2",
+      "timestamp_digits": 10,
+      "bytes": 509,
+      "headroom": 3,
+      "query": "(Codestral OR Devstral OR Voxtral OR Ministral OR Pixtral OR Mathstral OR Leanstral OR LIDstral OR Timestral OR SakanaAI OR SakanaAILabs OR サカナAI OR ShinkaEvolve OR \"Darwin Gödel Machine\" OR (Mistral OR Mixtral OR Sakana OR Namazu OR Magistral) (llm OR model OR api OR agentic OR huggingface OR AI OR 研究 OR モデル) OR Magistral Mistral OR \"AI Scientist\" (Sakana OR SakanaAI OR SakanaAILabs OR サカナAI) OR @MistralAI OR @SakanaAILabs) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "B3",
+      "timestamp_digits": 10,
+      "bytes": 469,
+      "headroom": 43,
+      "query": "(Qwen OR Qwen3 OR 通义千问 OR 千问 OR @Ali_TongyiLab OR @Alibaba_Qwen OR DeepSeek OR 深度求索 OR V4.1F (DeepSeek OR 深度求索 OR LLM OR model OR 模型) OR @deepseek_ai OR Hunyuan OR Hunyuan4 OR 腾讯混元 OR Hunyuan3D OR HunyuanVideo OR HunyuanImage OR 混元3 OR 混元4 OR 混元5 OR Hy3 OR Hy4 OR Hy5 OR 混元 (AI OR 模型 OR 3D OR 腾讯) OR Hy (MT2 OR Memory OR World) OR @TencentHunyuan) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "B4",
+      "timestamp_digits": 10,
+      "bytes": 437,
+      "headroom": 75,
+      "query": "(Hailuo OR MiniMax OR 海螺 (AI OR 模型 OR H3 OR 歌曲) OR @MiniMaxAgent OR @MiniMax_AI OR @hailuo_ai OR (Kuaishou OR KwaiYii OR Kling OR 可灵 OR 可靈 OR 快手) (llm OR model OR api OR agentic OR huggingface) OR (Kling OR 可灵 OR 可靈 OR 快手) AI OR Kling (video OR generation) OR 可灵 视频 OR (可灵 OR 可靈 OR 快手) 模型 OR 可靈 視頻 OR @Kling_ai) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "C5",
+      "timestamp_digits": 10,
+      "bytes": 449,
+      "headroom": 63,
+      "query": "(\"Triton Inference Server\" OR \"NIM inference\" OR \"Riva speech\" OR \"Dynamo inference\" OR \"TAO Toolkit\" OR \"Clara imaging\" OR \"Merlin recommender\" OR \"Maxine video\" OR (Cosmos OR Isaac OR NIM OR Riva OR Dynamo OR Triton OR Eagle OR TAO OR Morpheus OR Merlin OR Maxine OR Modulus OR Clara OR Ising OR ACE OR Tokkio OR Edify OR DRIVE) (NVIDIA OR TensorRT OR Nemotron OR cuDNN) OR Earth-2 NVIDIA) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "B5",
+      "timestamp_digits": 10,
+      "bytes": 303,
+      "headroom": 209,
+      "query": "(InclusionAI OR (Ling OR Ring OR Ming) (LLM OR MoE OR weights OR parameters OR tokens OR 模型 OR 参数 OR 开源) OR Ling (mini OR flash) OR Ring (1T OR 2.6) OR Ming lite OR @AntLingAGI OR @TheInclusionAI OR @ZhihuFrontier OR @robbyant_brain) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "B6",
+      "timestamp_digits": 10,
+      "bytes": 456,
+      "headroom": 56,
+      "query": "(Kimi3 OR (Kimi OR 月之暗面 OR 暗面 OR MoonshotAI OR Moonshot) (llm OR model OR api OR agentic OR huggingface OR tokens OR 参数 OR compute OR GLM OR agent OR agents) OR (Kimi OR 月之暗面 OR 暗面 OR MoonshotAI OR Moonshot OR K2 OR K3) (weights OR MoE OR inference OR 模型) OR Kimi (K2 OR K2.5 OR K3 OR K3.1 OR Code OR Thinker OR 智谱) OR (K2 OR K3) (LLM OR Kimi) OR @Kimi_Moonshot) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "C6",
+      "timestamp_digits": 10,
+      "bytes": 411,
+      "headroom": 101,
+      "query": "((NVIDIA OR 英伟达 OR 輝達 OR 英偉達 OR エヌビディア) (llm OR model OR api OR agentic OR huggingface OR AI OR inference OR ASR OR speech OR weights OR PyTorch OR robotics OR 模型 OR CUDA OR TensorRT OR Nemotron OR cuDNN OR kernels OR DGX) OR @NVIDIAAI OR @NVIDIAAIDev OR (Auto-Ontology OR AI-Q) (NVIDIA OR TensorRT OR Nemotron OR cuDNN)) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "B7",
+      "timestamp_digits": 10,
+      "bytes": 337,
+      "headroom": 175,
+      "query": "(MiMo (llm OR model OR api OR agentic OR huggingface OR AI OR tokens OR weights OR MoE OR inference OR 模型 OR Xiaomi OR 小米 OR v2.5 OR 7B OR VL OR Code) OR (Xiaomi OR 小米) (AI OR LLM OR 模型 OR 大模型 OR 人工智能 OR 智能体) OR @XiaomiMiMo OR @XiaomiMiMoDevs) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "B8",
+      "timestamp_digits": 10,
+      "bytes": 511,
+      "headroom": 1,
+      "query": "(PaddleOCR OR SenseNova OR (ERNIE OR 文心一言 OR Upstage OR Solar Pro OR Solar LLM OR 업스테이지 OR \"Solar Open\" OR \"Solar Mini\") (llm OR model OR api OR agentic OR huggingface OR baidu OR 文心) OR 文心 (llm OR model OR api OR agentic OR huggingface OR baidu OR AI OR 模型) OR (SenseChat OR SenseTime OR 商汤 OR 日日新) (llm OR model OR api OR agentic OR huggingface) OR @ErnieforDevs OR @PaddlePaddle OR @upstageai OR @SenseTime_AI) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "B9",
+      "timestamp_digits": 10,
+      "bytes": 507,
+      "headroom": 5,
+      "query": "(Seedance OR Seedream OR Seed2.1 OR SeedRealtime OR \"Seed Audio\" OR SeedAudio OR \"Seed Diffusion\" OR SeedDiffusion OR 字节扣子 OR StepFun OR 阶跃星辰 OR Step5 OR StepAudio OR \"Step 3.5 Flash\" OR \"Step 3.7 Flash\" OR (Doubao OR ByteDance OR 豆包 OR 字节跳动 OR Coze OR \"Step 5\" OR \"Step Audio\" OR \"Step Video\") (llm OR model OR api OR agentic OR huggingface) OR @BytePlusGlobal OR @bytedanceoss OR @doubaoai OR @StepFun_ai OR @stepfunai) -from:xxyweb3 since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "SPECIALEVENTS1",
+      "timestamp_digits": 10,
+      "bytes": 510,
+      "headroom": 2,
+      "query": "((\"I've joined\" OR \"I joined\" OR \"I left\" OR \"我加入\" OR \"我离开\" OR 出任 OR 换帅 OR に入社 OR を退職) (AI OR LLM OR OpenAI OR Anthropic) OR \"I've joined\" (@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai) OR (\"we're hiring\" OR \"currently hiring\" OR 招聘 OR 募集中) (engineer OR researcher) OR (\"we'll be at\" OR 登壇) (\"AI conference\" OR summit) OR (\"applications open\" OR \"apply by\" OR 申请) (hackathon OR fellowship) (AI OR LLM)) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "SPECIALEVENTS1",
+      "timestamp_digits": 11,
+      "bytes": 512,
+      "headroom": 0,
+      "query": "((\"I've joined\" OR \"I joined\" OR \"I left\" OR \"我加入\" OR \"我离开\" OR 出任 OR 换帅 OR に入社 OR を退職) (AI OR LLM OR OpenAI OR Anthropic) OR \"I've joined\" (@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai) OR (\"we're hiring\" OR \"currently hiring\" OR 招聘 OR 募集中) (engineer OR researcher) OR (\"we'll be at\" OR 登壇) (\"AI conference\" OR summit) OR (\"applications open\" OR \"apply by\" OR 申请) (hackathon OR fellowship) (AI OR LLM)) since_time:99999999998 until_time:99999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "SPECIALEVENTS2",
+      "timestamp_digits": 10,
+      "bytes": 505,
+      "headroom": 7,
+      "query": "((introducing OR announce OR announcing OR announced OR release OR released OR releasing OR launch OR launched OR launching OR \"is here\" OR available OR arrived OR \"open weights\" OR 开源 OR 发布 OR 上线 OR 推出 OR 公開 OR リリース) (model OR models OR weights OR Preview OR LLM OR VLM OR checkpoint OR agent OR agents OR harness OR toolkit OR SDK OR \"AI tool\" OR \"AI assistant\" OR 模型 OR モデル OR 权重) OR url:huggingface.co OR url:hf.co) since_time:9999999998 until_time:9999999999"
+    },
+    {
+      "mode": "current_policy_backfill",
+      "call_id": "SPECIALEVENTS2",
+      "timestamp_digits": 11,
+      "bytes": 507,
+      "headroom": 5,
+      "query": "((introducing OR announce OR announcing OR announced OR release OR released OR releasing OR launch OR launched OR launching OR \"is here\" OR available OR arrived OR \"open weights\" OR 开源 OR 发布 OR 上线 OR 推出 OR 公開 OR リリース) (model OR models OR weights OR Preview OR LLM OR VLM OR checkpoint OR agent OR agents OR harness OR toolkit OR SDK OR \"AI tool\" OR \"AI assistant\" OR 模型 OR モデル OR 权重) OR url:huggingface.co OR url:hf.co) since_time:99999999998 until_time:99999999999"
+    }
+  ]
+}

@@ -30,8 +30,10 @@ SMOKE_SUMMARY_PATH = REPO_ROOT / "tests" / "harvester_costs" / "_smoke" / "ae1.j
 # This is intentionally the planner's order, not the historical Appendix
 # presentation order.  Call order is stable because specs_from_policy emits
 # B1, C packs, then handle tiers.
-EXPECTED_PLANNER_CALL_ORDER = ("A", "B1", "C1", "C2", "C3", "C4", "B2", "B3")
+EXPECTED_PLANNER_CALL_ORDER = ("A", "B1", "C1", "C2", "C3", "C4", "B2", "B3", "B4", "C5", "B5", "B6", "C6", "B7", "B8", "B9")
 
+# The old exact strings remain available to legacy fixture tests. The current
+# candidate's reviewed exact strings are pinned separately below.
 EXPECTED_QUERY_EXHIBIT = {
     "A": "(list:2067062923525275922) min_faves:0",
     "B1": (
@@ -82,10 +84,12 @@ EXPECTED_QUERY_EXHIBIT = {
     ),
 }
 
+CURRENT_QUERY_EXHIBIT = json.loads((REPO_ROOT / "tests/fixtures/contextual_query_exhibit.json").read_text())
+
 
 def _planned_calls():
     policy = load_policy(POLICY_PATH)
-    specs = validate_derived_call_ids(specs_from_policy(policy))
+    specs = validate_derived_call_ids(specs_from_policy(policy), policy=policy)
     return plan_calls(
         2067062923525275922,
         specs,
@@ -100,24 +104,23 @@ def test_current_planner_order_and_exact_queries_match_exhibit() -> None:
     assert tuple(call.call_id for call in calls) == EXPECTED_PLANNER_CALL_ORDER
     assert {call.call_id: call.query_string for call in calls} == {
         call_id: f"{query} -from:xxyweb3"
-        for call_id, query in EXPECTED_QUERY_EXHIBIT.items()
+        for call_id, query in CURRENT_QUERY_EXHIBIT.items()
     }
     assert all(call.query_length == len(call.query_string) for call in calls)
     assert all(call.query_string.count("-from:xxyweb3") == 1 for call in calls)
 
 
-def test_dots_family_tokens_are_on_b1_and_in_onboard_csv() -> None:
-    """Call-chain pin: family product names ride B1; bare 'dots' does not."""
+def test_dots_family_tokens_are_on_c4_and_legacy_csv_is_preserved() -> None:
+    """Products remain; generic dots now requires its company context."""
     import csv
 
     calls = _planned_calls()
-    b1 = next(call.query_string for call in calls if call.call_id == "B1")
+    b1 = next(call.query_string for call in calls if call.call_id == "C4")
     for token in (
         '"dots 3 note"',
-        '"dots-3-note"',
         '"dots.3-note"',
-        '"dots3 note"',
-        '"dots-studio"',
+        '"dots studio"',
+        'dots3',
         "dots.ocr",
         "dots.tts",
         "dots.llm1",
@@ -126,7 +129,9 @@ def test_dots_family_tokens_are_on_b1_and_in_onboard_csv() -> None:
     ):
         assert token in b1
     policy = load_policy(POLICY_PATH)
-    assert "dots" not in policy.brands["dots"].tokens
+    assert next(r.any_of for r in policy.brands["dots"].alias_context if r.alias == "dots") == (
+        "Xiaohongshu", "RedNote", "red note", "小红书", "小紅書",
+    )
 
     csv_path = REPO_ROOT / "config/brands/2026-08-31-013447-harvester-quality-upgrade.csv"
     with csv_path.open(newline="", encoding="utf-8") as stream:
@@ -151,13 +156,11 @@ def test_dots_family_tokens_are_on_b1_and_in_onboard_csv() -> None:
     assert "dots" != dots_row["keyword_primary"]
 
 
-def test_exhibit_keeps_the_eight_logical_call_contract() -> None:
+def test_exhibit_pins_the_authorized_expanded_call_contract() -> None:
     calls = _planned_calls()
-    assert len(calls) == 8
-    assert {call.call_id for call in calls} == {
-        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4"
-    }
-    assert all(call.query_length < 512 for call in calls)
+    assert len(calls) == 16
+    assert {call.call_id for call in calls} == set(EXPECTED_PLANNER_CALL_ORDER)
+    assert all(len((call.query_string + " since_time:9999999099 until_time:9999999999").encode()) <= 512 for call in calls)
 
 
 def test_smoke_cost_sensitivity_is_offline_and_keeps_seven_calls() -> None:

@@ -103,12 +103,11 @@ def test_release_blueprints_pin_the_real_assessed_queries(blueprint, monkeypatch
 
 
 def test_exact_selected_pack_fits_provider_renderer_with_eleven_digit_epochs():
-    assert [len(QUERIES[key]) for key in CALL_IDS] == [382, 412]
     assert [
-        len(render_query(key, since_time=10000000000, until_time=10000000900))
+        len(render_query(key, since_time=10000000000, until_time=10000000900).encode('utf-8'))
         for key in CALL_IDS
-    ] == [428, 458]
-    assert RELEASE_QUERY.endswith(" OR url:huggingface.co OR url:hf.co) min_faves:0")
+    ] == [512, 507]
+    assert RELEASE_QUERY.endswith(" OR url:huggingface.co OR url:hf.co)")
     assert '"is here" OR available OR arrived' in RELEASE_QUERY
     assert all(
         term not in assessment_query_pack()
@@ -271,6 +270,8 @@ def test_real_planner_scheduled_runner_dispatches_two_once_then_one_decision_dra
         "slot_already_reserved"
     ] * 2
     assert [call[0] for call in api.calls] == [GENERAL_QUERY, RELEASE_QUERY]
+    assert '"I\'ve joined" (@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai)' in api.calls[0][0]
+    assert 'OR 模型 OR モデル OR 权重)' in api.calls[1][0]
     assert [call[2] for call in api.calls] == [0, 0]
     assert all(call[1]["max_pages"] == 1 for call in api.calls)
     assert purposes == ["scheduled", "scheduled"]

@@ -110,8 +110,8 @@ class PlannedCall:
         bucket: None for both v1.7 call kinds. Retained for schema
             stability with the v1.6 contract.
         query_string: the actual X advanced-search query.
-        query_length: len(query_string) in characters. Verified under
-            `X_LENGTH_CAP` (512) before being returned.
+        query_length: len(query_string) in characters, retained for historical
+            metrics. The separate provider guard measures UTF-8 bytes.
 
     U9 (migration 022): `expected_signal` was REMOVED. The legacy
         6-signal taxonomy is gone; per-tweet classification
@@ -131,6 +131,8 @@ class PlannedCall:
     query_string: str
     query_length: int
     not_include: list[str] = field(default_factory=list)
+    brand_not_include: dict[str, list[str]] = field(default_factory=dict)
+    unfiltered_handles: tuple[str, ...] = ()
     discovery_lane: str | None = None
     query_family: str | None = None
     language: str | None = None
@@ -222,6 +224,12 @@ class XQuerySpec:
     c_bare_aliases: list[str] = field(default_factory=list)
     not_include: list[str] = field(default_factory=list)
     alias_context: dict[str, tuple[AliasContext, ...]] = field(default_factory=dict)
+    # Packed calls retain independently rendered brand/family blocks. Historical
+    # flat specs use the same renderer and keep their original wire strings.
+    components: tuple[XQuerySpec, ...] = ()
+    component_names: tuple[str, ...] = ()
+    brand_not_include: dict[str, list[str]] = field(default_factory=dict)
+    unfiltered_handles: tuple[str, ...] = ()
 
 
 # Backwards-compat alias for any external imports still using the
@@ -235,6 +243,7 @@ def _build_query(
     *,
     x_monitor_list_id: int | str | None = None,
     primary_keywords: dict[str, list[str]] | None = None,
+    _compact: bool = False,
 ) -> str:
     """Compose one query from an XQuerySpec — the uniform renderer.
 
@@ -264,10 +273,44 @@ def _build_query(
     branch so the Call A path doesn't trigger when handles carry the
     spec identity.
     """
+    if spec.components:
+        if (spec.brands or spec.handles or spec.is_wide_net or spec.co_occurrence
+                or spec.c_bare_aliases or spec.alias_context or spec.min_faves != 0):
+            raise ValueError("packed calls contain only zero-floor components")
+        parts = []
+        combined = XQuerySpec()
+        can_combine = True
+        for component in spec.components:
+            if component.components or component.min_faves != 0:
+                raise ValueError("packed components must be flat zero-floor specs")
+            rendered = _build_query(component, primary_keywords=primary_keywords, _compact=True)
+            # min_faves:0 imposes no restriction. Keep Call A's existing floor and shape;
+            # omit the redundant zero floor once for the composed OR query.
+            parts.append(rendered.removesuffix(" min_faves:0"))
+            if component.co_occurrence or component.is_wide_net:
+                can_combine = False
+            for brand, tokens in component.brands.items():
+                combined.brands.setdefault(brand, []).extend(tokens)
+            for brand, rules in component.alias_context.items():
+                combined.alias_context[brand] = combined.alias_context.get(brand, ()) + rules
+            combined.c_bare_aliases.extend(component.c_bare_aliases)
+            combined.c_bare_aliases.extend(f"@{h}" for h in component.handles)
+        if can_combine and combined.brands:
+            # Packed blocks already express every co-occurrence on its alias.
+            # Sharing identical context clauses across brands preserves the OR
+            # of those blocks; brand-local post-fetch filters stay on the spec.
+            shared = _build_query(combined, primary_keywords=primary_keywords, _compact=True)
+            if len(shared.encode("utf-8")) < len(" OR ".join(parts).encode("utf-8")):
+                return f"({shared})"
+        return f"({' OR '.join(parts)})"
+
     # Handle-only spec (plan 2026-07-30-002 U2): checked BEFORE Call A
     # so a handles-only spec doesn't fall into the Call A degenerate.
     if spec.handles and not spec.brands and not spec.is_wide_net:
-        handle_group = f"({' OR '.join(f'@{h}' for h in spec.handles)})"
+        handle_terms = " OR ".join(f"@{h}" for h in spec.handles)
+        if _compact:
+            return handle_terms
+        handle_group = f"({handle_terms})"
         return f"{handle_group} min_faves:{spec.min_faves}"
 
     # Call A: list-based wide net (curated X-list). The
@@ -346,6 +389,47 @@ def _build_query(
     # Plan 2026-07-30-002 U2 (R17/KTD4): empty co_occurrence omits the
     # secondary paren entirely. The legacy renderer always emitted
     # `()` which is not a valid X advanced-search token.
+    if _compact:
+        # A component is placed inside the parent's outer OR group. Flatten
+        # only OR-only wrappers; keep the two sides of every AND/context
+        # branch grouped. Historical flat queries retain their exact spelling.
+        def grouped(terms):
+            return terms[0] if len(terms) == 1 and (
+                " " not in terms[0] or terms[0].startswith('"')
+            ) else f"({' OR '.join(terms)})"
+
+        alternatives = []
+        if parts:
+            if spec.co_occurrence:
+                alternatives.append(f"{primary} {grouped(spec.co_occurrence)}")
+            else:
+                alternatives.extend(part[1:-1] for part in parts)
+        direct_context = [
+            f"{grouped(tokens)} {grouped([context_group((term,)) for term in context])}"
+            for context, tokens in contextual.items()
+        ]
+        # The same alias/context pairs can be grouped from either side. For
+        # example Ling(base|mini) and Ring(base|1T) become (Ling|Ring)base,
+        # Ling mini, Ring 1T. Choose the shorter exact representation; never
+        # delete a required co-occurrence to fit a request.
+        by_term: dict[str, list[str]] = {}
+        for context, tokens in contextual.items():
+            for term in context:
+                by_term.setdefault(term, []).extend(tokens)
+        by_aliases: dict[tuple[str, ...], list[str]] = {}
+        for term, tokens in by_term.items():
+            by_aliases.setdefault(tuple(dict.fromkeys(tokens)), []).append(term)
+        factored_context = [
+            f"{grouped(list(tokens))} {grouped([context_group((term,)) for term in terms])}"
+            for tokens, terms in by_aliases.items()
+        ]
+        alternatives.extend(min(
+            (direct_context, factored_context),
+            key=lambda clauses: len(" OR ".join(clauses).encode("utf-8")),
+        ))
+        alternatives.extend(spec.c_bare_aliases)
+        return " OR ".join(alternatives)
+
     constrained = primary
     if spec.co_occurrence:
         secondary = f"({' OR '.join(spec.co_occurrence)})"
@@ -494,6 +578,8 @@ def plan_calls(
                 query_string=call_query,
                 query_length=len(call_query),
                 not_include=list(spec.not_include or []),
+                brand_not_include=spec.brand_not_include,
+                unfiltered_handles=spec.unfiltered_handles,
             )
         )
     return result

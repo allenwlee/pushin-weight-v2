@@ -17,6 +17,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+from x_monitor.config import VALID_CALL_IDS
+
 LEGACY_ROUTES = {"A", "B1", "B2", "B3", "C1", "C2", "C3", "RARE_EXTRA"}
 RUNTIME_MODULES = {
     "scripts/backfill_month.py",
@@ -28,7 +30,11 @@ RUNTIME_MODULES = {
 }
 
 
-ROUTES = LEGACY_ROUTES | {"C4"}
+META_ROUTES = LEGACY_ROUTES | {"C4"}
+NVIDIA_INITIAL_ROUTES = META_ROUTES | {"C5"}
+NVIDIA_TWO_PACK_ROUTES = NVIDIA_INITIAL_ROUTES | {"C6"}
+ROUTES = NVIDIA_TWO_PACK_ROUTES | {"C7", "C8"}
+CURRENT_ROUTES = frozenset(VALID_CALL_IDS)
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
@@ -62,7 +68,10 @@ def daily_manifest(recipe, index):
         u["ownership"]["call_id"]
         for u in base["collection_definition"]["scope"]["units"]
     }
-    if routes not in (LEGACY_ROUTES, ROUTES) or len(base["collection_definition"]["scope"]["units"]) != len(routes):
+    if routes not in (
+        LEGACY_ROUTES, META_ROUTES, NVIDIA_INITIAL_ROUTES, NVIDIA_TWO_PACK_ROUTES,
+        ROUTES, CURRENT_ROUTES, CURRENT_ROUTES | {"RARE_EXTRA"},
+    ) or len(base["collection_definition"]["scope"]["units"]) != len(routes):
         raise ValueError("month_route_inventory_changed")
     frozen["campaign"] = spec["campaign"] + "-" + lower.date().isoformat()
     frozen["month_instruction"] = {

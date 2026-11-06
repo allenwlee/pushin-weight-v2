@@ -171,9 +171,43 @@ class BrandPolicy:
     handle_tier: str = HANDLE_TIER_TOP
     version_family: VersionFamily | None = None
     alias_context: tuple[AliasContext, ...] = ()
+    attribution_context: tuple[AliasContext, ...] = ()
+    url_roots: tuple[str, ...] = ()
+    url_terms: tuple[str, ...] = ()
+    c_bare_alias_groups: tuple[tuple[str, ...], ...] = ()
+    alias_group_names: tuple[str, ...] = ()
+    match_link_urls: bool = False
+    match_handle_mentions: bool = False
+    query_pool: str = "tracked"
+    handle_group: str | None = None
+
+    @property
+    def all_c_bare_aliases(self) -> tuple[str, ...]:
+        return self.c_bare_aliases + tuple(t for group in self.c_bare_alias_groups for t in group)
 
     def __post_init__(self) -> None:
-        known = {normalize_policy_token(t) for t in (*self.tokens, *self.versioned_tokens)}
+        if type(self.match_handle_mentions) is not bool:
+            raise TypeError("match_handle_mentions must be a boolean")
+        if not re.fullmatch(r"[a-z][a-z0-9_-]*", self.query_pool):
+            raise ValueError("query_pool must be a lowercase pool name")
+        if self.alias_group_names and (
+            len(self.alias_group_names) != len(self.c_bare_alias_groups)
+            or len(set(self.alias_group_names)) != len(self.alias_group_names)
+        ):
+            raise ValueError("alias groups require distinct names")
+        if self.handle_group is not None and (
+            self.handle_group not in self.alias_group_names or "handle" not in self.paths
+        ):
+            raise ValueError("handle_group must name an alias group on a handle-enabled brand")
+        if type(self.match_link_urls) is not bool:
+            raise TypeError("match_link_urls must be a boolean")
+        if self.c_bare_alias_groups:
+            if "co" not in self.paths or self.tokens or self.c_bare_aliases or self.version_family:
+                raise ValueError("c_bare_alias_groups requires an exclusive co alias inventory")
+            flat = [normalize_policy_token(t) for group in self.c_bare_alias_groups for t in group]
+            if any(not group for group in self.c_bare_alias_groups) or len(flat) != len(set(flat)):
+                raise ValueError("c_bare_alias_groups must be nonempty and disjoint")
+        known = {normalize_policy_token(t) for t in (*self.tokens, *self.versioned_tokens, *self.all_c_bare_aliases)}
         seen = set()
         for rule in self.alias_context:
             if not isinstance(rule, AliasContext):
@@ -182,6 +216,19 @@ class BrandPolicy:
             if alias not in known or alias in seen:
                 raise ValueError(f"brand {self.nickname!r}: unknown or duplicate context alias {alias!r}")
             seen.add(alias)
+        for rule in self.attribution_context:
+            if not isinstance(rule, AliasContext):
+                raise TypeError("attribution_context entries must be AliasContext")
+            alias = normalize_policy_token(rule.alias)
+            if alias in seen:
+                raise ValueError(f"duplicate attribution context alias: {alias}")
+            seen.add(alias)
+        for root in self.url_roots:
+            if not re.fullmatch(r"[a-z0-9.-]+(?:/[a-zA-Z0-9_.-]+)*", root):
+                raise ValueError("url_roots require a literal hostname and optional owner path")
+        for term in self.url_terms:
+            if not term.strip() or term != term.strip() or '/' in term:
+                raise ValueError("url_terms require nonempty literal product identifiers")
         if self.version_family is not None and not isinstance(
             self.version_family, VersionFamily
         ):
@@ -281,16 +328,49 @@ class ExcludedAuthor:
 
 
 @dataclass(frozen=True)
+class QueryGroup:
+    """A named, stable call containing whole brand/family blocks."""
+    call_id: str
+    name: str
+    blocks: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("query group requires a descriptive name")
+        if not self.blocks or any(not isinstance(b, str) or not b for b in self.blocks):
+            raise ValueError("query group requires nonempty brand/family block names")
+
+
+@dataclass(frozen=True)
+class QueryPool:
+    """Independent query budget; future Giants can use a separate pool."""
+    name: str
+    groups: tuple[QueryGroup, ...]
+
+    @property
+    def call_ids(self) -> tuple[str, ...]:
+        return tuple(group.call_id for group in self.groups)
+
+    def __post_init__(self) -> None:
+        if not re.fullmatch(r"[a-z][a-z0-9_-]*", self.name):
+            raise ValueError("invalid query pool name")
+        if (not self.call_ids or len(set(self.call_ids)) != len(self.call_ids)
+                or any(not isinstance(c, str) or c == "A"
+                       or not re.fullmatch(r"[A-Z][A-Z0-9_]*", c) for c in self.call_ids)):
+            raise ValueError("query pool requires distinct call IDs excluding Call A")
+
+
+@dataclass(frozen=True)
 class HarvestPolicy:
     """The whole loaded policy document.
 
-    `co_packs` is the fixed-pack table for 3/5 (R7). 4/5 replaces it with
-    auto-pack_co_brands(max_len). Do not encode "brand forever on C1" as
-    a permanent field — packs are planner-internal.
+    Current query pools own explicit named groups. Legacy co_packs remain
+    supported for frozen flat policies and their compatibility tests.
     """
     brands: dict[str, BrandPolicy]
     co_packs: tuple[CoPack, ...] = ()
     excluded_authors: tuple[ExcludedAuthor, ...] = ()
+    query_pools: tuple[QueryPool, ...] = ()
 
     def brand(self, nickname: str) -> BrandPolicy:
         try:
@@ -367,7 +447,33 @@ def _load_brand_policy(nickname: str, raw: dict[str, Any]) -> BrandPolicy:
         handle_tier=str(raw.get("handle_tier", HANDLE_TIER_TOP) or HANDLE_TIER_TOP),
         version_family=version_family,
         alias_context=_load_alias_context(raw.get("alias_context", [])),
+        attribution_context=_load_alias_context(raw.get("attribution_context", [])),
+        url_roots=_coerce_str_list(raw.get("url_roots", []), "url_roots", nickname),
+        url_terms=_coerce_str_list(raw.get("url_terms", []), "url_terms", nickname),
+        c_bare_alias_groups=_load_bare_alias_groups(raw.get("c_bare_alias_groups", [])),
+        alias_group_names=tuple(raw["c_bare_alias_groups"]) if isinstance(raw.get("c_bare_alias_groups"), dict) else (),
+        match_link_urls=raw.get("match_link_urls", False),
+        match_handle_mentions=raw.get("match_handle_mentions", False),
+        query_pool=raw.get("query_pool", "tracked"),
+        handle_group=raw.get("handle_group"),
     )
+
+
+def _load_bare_alias_groups(raw: Any) -> tuple[tuple[str, ...], ...]:
+    if isinstance(raw, dict):
+        if not raw or any(not isinstance(n, str) or not re.fullmatch(r"[a-z][a-z0-9_-]*", n) for n in raw):
+            raise ValueError("alias group names must be nonempty lowercase names")
+        raw = list(raw.values())
+    if not isinstance(raw, list):
+        raise TypeError("c_bare_alias_groups must be a list")
+    groups = []
+    for group in raw:
+        if not isinstance(group, list) or not group:
+            raise ValueError("c_bare_alias_groups entries must be nonempty lists")
+        if any(not isinstance(t, str) or not t.strip() or any(c in t for c in ':()"') for t in group):
+            raise ValueError("c_bare_alias_groups requires nonempty literal aliases")
+        groups.append(tuple(group))
+    return tuple(groups)
 
 
 def _load_alias_context(raw: Any) -> tuple[AliasContext, ...]:
@@ -524,6 +630,31 @@ def load_policy(path: str | Path) -> HarvestPolicy:
 
     co_packs = _load_co_packs(raw.get("co_packs"))
     excluded_authors = _load_excluded_authors(raw.get("excluded_authors"))
+    pools_raw = raw.get("query_pools", {})
+    if not isinstance(pools_raw, dict):
+        raise TypeError("query_pools must be a mapping")
+    pools = []
+    for name, entry in pools_raw.items():
+        if not isinstance(entry, dict) or set(entry) != {"calls"} or not isinstance(entry["calls"], dict):
+            raise ValueError("each query pool requires exactly a calls mapping")
+        groups = []
+        for call_id, group in entry["calls"].items():
+            if not isinstance(group, dict) or set(group) != {"name", "blocks"} or not isinstance(group["blocks"], list):
+                raise ValueError("each call requires a name and blocks list")
+            groups.append(QueryGroup(call_id, group["name"], tuple(group["blocks"])))
+        pools.append(QueryPool(name, tuple(groups)))
+    ids = [c for pool in pools for c in pool.call_ids]
+    if len(ids) != len(set(ids)):
+        raise ValueError("query pools cannot share call IDs")
+    if pools:
+        names = {p.name for p in pools}
+        for brand in brands.values():
+            if brand.paths != frozenset({"none"}) and brand.query_pool not in names:
+                raise ValueError(f"brand {brand.nickname!r} references unknown query pool")
+            if brand.c_bare_alias_groups and not brand.alias_group_names:
+                raise ValueError("packed alias groups require explicit names")
+        if co_packs:
+            raise ValueError("query_pools replaces co_packs; declare only one layout")
 
     # Cross-check: every brand listed in a co_pack must exist in brands.
     for pack in co_packs:
@@ -544,7 +675,7 @@ def load_policy(path: str | Path) -> HarvestPolicy:
     for pack in co_packs:
         packed_brands.update(pack.brand_nicknames)
     unpacked = co_brand_nicknames - packed_brands
-    if unpacked:
+    if unpacked and not pools:
         raise ValueError(
             f"brands use 'co' path but are not in any co_pack: "
             f"{sorted(unpacked)}. Add to a co_pack, or change the path. "
@@ -555,4 +686,5 @@ def load_policy(path: str | Path) -> HarvestPolicy:
         brands=brands,
         co_packs=co_packs,
         excluded_authors=excluded_authors,
+        query_pools=tuple(pools),
     )

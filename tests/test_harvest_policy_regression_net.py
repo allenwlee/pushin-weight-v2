@@ -51,7 +51,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.test_harvest_query_exhibit import EXPECTED_QUERY_EXHIBIT
+from tests.test_harvest_query_exhibit import CURRENT_QUERY_EXHIBIT, EXPECTED_QUERY_EXHIBIT
 from x_monitor.config import load_config
 from x_monitor.harvest_policy import load_policy
 from x_monitor.query_plan import plan_calls
@@ -281,16 +281,13 @@ def test_glm_has_handle_only_path_before():
 # -------------------------------------------------------------------------
 
 EXPECTED_AFTER_BRAND_TO_CALL_IDS = {
-    "minimax": {"B1", "B2"}, "qwen": {"B1", "B2"},
-    "deepseek": {"B1", "B2"}, "stepfun": {"B1", "B2"},
-    "hunyuan": {"B1", "B2"}, "dots": {"B1"},
-    "mimo": {"B3", "C1"}, "mistral": {"B2", "C1"},
-    "moonshot_kimi": {"B3", "C1"}, "yi": {"B3", "C1"},
-    "llama": {"B3", "C4"}, "ernie": {"B3", "C2"},
-    "upstage": {"B3", "C2"}, "doubao": {"B3", "C3"},
-    "sensechat": {"B3", "C3"}, "kuaishou": {"C3"},
-    "glm": {"C3"}, "inclusionai": {"B2"}, "sakana_ai": {"B2"},
-    "nemo_megatron": {"B2"}, "exaone": {"B2"},
+    "minimax": {"B4"}, "qwen": {"B3"}, "deepseek": {"B3"},
+    "stepfun": {"B9"}, "hunyuan": {"B3"}, "dots": {"C4"},
+    "mimo": {"B7"}, "mistral": {"B2"}, "moonshot_kimi": {"B6"},
+    "yi": {"C3"}, "llama": {"B1"}, "ernie": {"B8"}, "upstage": {"B8"},
+    "doubao": {"B9"}, "sensechat": {"B8"}, "kuaishou": {"B4"}, "glm": {"C3"},
+    "inclusionai": {"B5"}, "sakana_ai": {"B2"}, "exaone": {"B1"},
+    "nemo_megatron": {"C1", "C2", "C5", "C6"},
 }
 
 EXPECTED_AFTER_CO_ALLOWLIST_SIZES = {
@@ -317,13 +314,11 @@ EXPECTED_AFTER_B3_HANDLES = (
 
 EXPECTED_AFTER_QUERIES = {
     call_id: query
-    for call_id, query in EXPECTED_QUERY_EXHIBIT.items()
+    for call_id, query in CURRENT_QUERY_EXHIBIT.items()
     if call_id != "A"
 }
 
-EXPECTED_AFTER_QUERY_LENGTHS = {
-    "B1": 388, "B2": 305, "B3": 214, "C1": 227, "C2": 140, "C3": 247, "C4": 380,
-}
+EXPECTED_AFTER_QUERY_LENGTHS = {'B1': 314, 'C1': 445, 'C2': 378, 'C3': 410, 'C4': 252, 'B2': 428, 'B3': 347, 'B4': 311, 'C5': 391, 'B5': 233, 'B6': 362, 'C6': 321, 'B7': 243, 'B8': 413, 'B9': 421}
 
 
 @pytest.fixture(scope="module")
@@ -348,6 +343,8 @@ def policy_calls(harvest_policy, policy_specs):
 def _policy_coverage(policy, specs):
     coverage: dict[str, set[str]] = {}
     for spec in specs:
+        for name in spec.component_names:
+            coverage.setdefault(name.split("/", 1)[0], set()).add(spec.call_id)
         for nickname in spec.wide_net_brands:
             coverage.setdefault(nickname, set()).add(spec.call_id)
         for nickname in spec.brands:
@@ -363,57 +360,51 @@ def test_policy_after_brand_coverage_matches(harvest_policy, policy_specs):
     assert _policy_coverage(harvest_policy, policy_specs) == EXPECTED_AFTER_BRAND_TO_CALL_IDS
 
 
-def test_policy_after_co_allowlist_sizes(policy_specs):
-    assert {
-        spec.call_id: len(spec.co_occurrence) for spec in policy_specs
-    } == EXPECTED_AFTER_CO_ALLOWLIST_SIZES
+def test_policy_after_co_occurrences_are_preserved_per_alias(harvest_policy):
+    from x_monitor.specs_from_policy import effective_alias_context
+    baseline = {"llm", "model", "api", "agentic", "huggingface"}
+    for nickname, aliases in {
+        "mistral": ["Mistral", "Mixtral"], "ernie": ["ERNIE", "文心一言"],
+        "upstage": ["Upstage", "Solar Pro", "Solar LLM", "업스테이지"],
+        "doubao": ["Doubao", "ByteDance"], "kuaishou": ["Kuaishou", "KwaiYii"],
+        "sensechat": ["SenseChat", "SenseTime"], "glm": ["glm", "Zhipu", "智谱", "Z.ai"],
+        "mimo": ["MiMo"], "moonshot_kimi": ["Kimi", "Moonshot AI", "月之暗面", "暗面", "MoonshotAI"],
+    }.items():
+        rules = {r.alias.casefold(): {t.casefold() for t in r.any_of} for r in effective_alias_context(harvest_policy.brands[nickname])}
+        for alias in aliases:
+            assert baseline <= rules[alias.casefold()], (nickname, alias)
+    yi = next(r for r in effective_alias_context(harvest_policy.brands["yi"]) if r.alias == "yi")
+    assert baseline - {"model"} <= {t.casefold() for t in yi.any_of}
+    assert "language model" in yi.any_of  # Observed physics-surname collision.
 
 
-def test_policy_after_b1_b2_b3_coverage(policy_specs):
-    by_id = {spec.call_id: spec for spec in policy_specs}
-    assert set(by_id["B1"].wide_net_brands) == EXPECTED_AFTER_B1_BRANDS
-    assert tuple(by_id["B2"].handles) == EXPECTED_AFTER_B2_HANDLES
-    assert tuple(by_id["B3"].handles) == EXPECTED_AFTER_B3_HANDLES
-    assert "Zai_org" not in by_id["B2"].handles
+def test_policy_after_all_account_mentions_keep_a_route(policy_specs):
+    from tests.test_harvest_query_diff import branches, diff
+    from x_monitor.query_plan import _build_query
+    actual = {atom[1:] for spec in policy_specs for branch in branches(_build_query(spec))
+              if len(diff.canonical(branch)) == 1 for atom in branch if atom.startswith("@")}
+    assert actual == set(EXPECTED_AFTER_B2_HANDLES + EXPECTED_AFTER_B3_HANDLES) | {"dotsstudioai"}
 
 
 def test_policy_after_hunyuan_glm_dots_declarations(harvest_policy):
     hunyuan = harvest_policy.brands["hunyuan"]
     assert hunyuan.paths == frozenset({"bare", "handle"})
-    assert hunyuan.tokens == ("Hunyuan", "混元", "腾讯混元")
+    assert {"Hunyuan", "混元", "腾讯混元"} <= set(hunyuan.tokens)
     assert hunyuan.handles == ("TencentHunyuan",)
-    assert hunyuan.version_family is not None
     assert (hunyuan.version_family.prefix, hunyuan.version_family.current_major) == ("Hy", 4)
     assert (hunyuan.version_family.lookback, hunyuan.version_family.lookahead) == (1, 1)
-    assert hunyuan.version_family.extra_suffixes == ()
-
     glm = harvest_policy.brands["glm"]
     assert glm.paths == frozenset({"co"})
-    assert not glm.handles
-    assert glm.tokens == ("glm", "ChatGLM", "Zhipu", "智谱", "Z.ai")
-    assert glm.c_bare_aliases == ('"Ox Alpha"', "OxAlpha", "ox-alpha")
-    assert glm.version_family is not None
-    assert (glm.version_family.prefix, glm.version_family.current_major) == ("GLM-", 5)
-    assert (glm.version_family.lookback, glm.version_family.lookahead) == (1, 1)
-
-    dots = harvest_policy.brands["dots"]
-    assert dots.paths == frozenset({"bare"})
-    assert not dots.handles
-    assert dots.tokens == (
-        "dots studio",
-        '"dots 3 note"',
-        '"dots-3-note"',
-        '"dots.3-note"',
-        '"dots3 note"',
-        '"dots-studio"',
-        "dots.ocr",
-        "dots.tts",
-        "dots.llm1",
-        "dots.vlm",
-        "dots.mocr",
+    assert glm.tokens == ("glm", "Zhipu", "智谱", "Z.ai")
+    assert glm.c_bare_aliases == ("ChatGLM", "GLM4", "GLM5", "GLM6", '\"Ox Alpha\"', "OxAlpha")
+    assert next(r.any_of for r in glm.alias_context if r.alias == "glm") == (
+        "llm", "model", "api", "agentic", "huggingface", "4", "5", "6", "4.5", "4.6", "4.7", "5.0", "5.1",
     )
-    assert "dots" not in dots.tokens
-    assert dots.version_family is not None
+    dots = harvest_policy.brands["dots"]
+    assert dots.paths == frozenset({"bare", "handle"})
+    assert dots.handles == ("dotsstudioai",)
+    assert '\"dots studio\"' in dots.tokens and "dots studio" not in dots.tokens
+    assert next(r.any_of for r in dots.alias_context if r.alias == "dots") == ("Xiaohongshu", "RedNote", "red note", "小红书", "小紅書")
     assert (dots.version_family.prefix, dots.version_family.current_major) == ("dots", 3)
     assert (dots.version_family.lookback, dots.version_family.lookahead) == (0, 1)
 
