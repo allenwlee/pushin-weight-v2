@@ -76,6 +76,11 @@ def test_observed_wrong_meanings_are_not_brand_evidence(brand, text):
     ('nemo_megatron', 'Parakeet ASR runs locally for speech recognition.'),
     ('nemo_megatron', 'NVIDIA DRIVE uses CUDA for autonomous vehicle inference.'),
     ('nemo_megatron', 'NVIDIA Omniverse simulation tools.'),
+    ('nemo_megatron', 'NVIDIAのAI半導体「H200」約60万個が香港で出荷待ちに。'),
+    ('nemo_megatron', 'NVIDIA OpenShellで権限を絞り、入力検査まで検証しました。'),
+    ('nemo_megatron', 'NVIDIA NVLink FusionでカスタムAIインフラを構築する。'),
+    ('nemo_megatron', 'Nvidia invested in Naver for their joint AI Factory.'),
+    ('nemo_megatron', '600 ألف شريحة "#إنفيديا" عالقة #Nvidia #AI'),
 ])
 def test_identified_model_and_product_controls_remain(brand, text):
     assert brand in detect_brand_mentions(text, index())

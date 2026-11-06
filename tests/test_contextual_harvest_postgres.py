@@ -108,6 +108,13 @@ def test_scheduled_cycle_persists_context_and_deduplicates_packed_calls(monkeypa
     ])
     texts['C5'].append(('81034', 'NVIDIA Omniverse simulation'))
     texts['C6'].append(('81035', '@NVIDIAAI thanks!'))
+    texts['C6'].extend([
+        ('81036', 'NVIDIAのAI半導体「H200」約60万個が香港で出荷待ちに。'),
+        ('81037', 'NVIDIA OpenShellで権限を絞り、入力検査まで検証しました。'),
+        ('81038', 'NVIDIA NVLink FusionでカスタムAIインフラを構築する。'),
+        ('81039', 'Nvidia invested in Naver for their joint AI Factory.'),
+        ('81040', '600 ألف شريحة "#إنفيديا" عالقة #Nvidia #AI'),
+    ])
     texts['B2'].extend([
         ('81024', 'Magistral model weights'),
         ('81025', 'Magistral Mistral'),
@@ -168,6 +175,7 @@ def test_scheduled_cycle_persists_context_and_deduplicates_packed_calls(monkeypa
     assert labels("81028") == labels("81029") == labels("81030") == {"kuaishou"}
     assert labels("81031") == labels("81032") == labels("81033") == {"qwen"}
     assert labels("81034") == labels("81035") == {"nemo_megatron"}
+    assert all(labels(str(post_id)) == {"nemo_megatron"} for post_id in range(81036, 81041))
     assert not PostBrandMention.objects.filter(
         post_id__in=["81021", "81022", "81023"],
         brand_id__in=["mistral", "nemo_megatron", "kuaishou"],

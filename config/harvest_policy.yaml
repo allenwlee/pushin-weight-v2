@@ -1126,6 +1126,11 @@ brands:
       - cuDNN
       - kernels
       - DGX
+      - H200
+      - OpenShell
+      - NVLink
+      - AI Factory
+      - شريحة
     - alias: 英伟达
       any_of:
       - llm
@@ -1146,6 +1151,11 @@ brands:
       - cuDNN
       - kernels
       - DGX
+      - H200
+      - OpenShell
+      - NVLink
+      - AI Factory
+      - شريحة
     - alias: 輝達
       any_of:
       - llm
@@ -1166,6 +1176,11 @@ brands:
       - cuDNN
       - kernels
       - DGX
+      - H200
+      - OpenShell
+      - NVLink
+      - AI Factory
+      - شريحة
     - alias: 英偉達
       any_of:
       - llm
@@ -1186,6 +1201,11 @@ brands:
       - cuDNN
       - kernels
       - DGX
+      - H200
+      - OpenShell
+      - NVLink
+      - AI Factory
+      - شريحة
     - alias: エヌビディア
       any_of:
       - llm
@@ -1206,6 +1226,11 @@ brands:
       - cuDNN
       - kernels
       - DGX
+      - H200
+      - OpenShell
+      - NVLink
+      - AI Factory
+      - شريحة
     - alias: Auto-Ontology
       any_of:
       - NVIDIA
