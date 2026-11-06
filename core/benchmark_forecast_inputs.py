@@ -88,6 +88,10 @@ def forecast_inputs(
     mode="operational",
     use="forecast_fitting",
     isolated_review=False,
+    chart_source_use_override=False,
+    chart_metric_key=None,
+    chart_window_start=None,
+    chart_window_end=None,
     limit=10000,
 ):
     cutoff = aware_instant(
@@ -108,6 +112,43 @@ def forecast_inputs(
             contract, mapping_ids, cutoff if mode == "operational" else None
         )
     )
+    if chart_metric_key is not None:
+        require(chart_source_use_override, "chart scope requires chart source override")
+        require(bool(chart_metric_key), "chart metric key required")
+        require(
+            chart_window_start is not None and chart_window_end is not None,
+            "chart window required",
+        )
+        start = aware_instant(chart_window_start.isoformat())
+        end = aware_instant(chart_window_end.isoformat())
+        require(start < end, "invalid chart window")
+        # Include previous-day inputs for adjacent-counter calculations while
+        # excluding unrelated metrics and unrelated historical measurements.
+        from datetime import timedelta
+
+        start -= timedelta(days=1)
+        values = values.filter(source_metric__metric_key=chart_metric_key).filter(
+            Q(period_label_date__gte=start.date(), period_label_date__lt=end.date())
+            | Q(as_of_date__gte=start.date(), as_of_date__lt=end.date())
+            | Q(as_of_at__gte=start, as_of_at__lt=end)
+            | Q(
+                observation__archive_snapshot_date__gte=start.date(),
+                observation__archive_snapshot_date__lt=end.date(),
+            )
+            | Q(
+                observation__reconstruction_date__gte=start.date(),
+                observation__reconstruction_date__lt=end.date(),
+            )
+            | Q(
+                period_label_date__isnull=True,
+                as_of_date__isnull=True,
+                as_of_at__isnull=True,
+                observation__archive_snapshot_date__isnull=True,
+                observation__reconstruction_date__isnull=True,
+                observation__observed_at__gte=start,
+                observation__observed_at__lt=end,
+            )
+        )
     if mode == "operational":
         # Observed/imported locally is a conservative availability boundary. Never
         # promote a date-only archive label into a precise availability instant.
@@ -138,12 +179,17 @@ def forecast_inputs(
             )
     selected = list(
         values.select_related(
-            "observation__run__job", "observation__mapping", "source_metric",
+            "observation__run__job",
+            "observation__mapping",
+            "source_metric",
             "observation__source_dataset",
         )
         .only(
-            *metric_value_read_fields(), "observation__mapping__subject_id",
-            "observation__mapping__reviewed_at", "observation__source_dataset__code",
+            *metric_value_read_fields(),
+            "observation__mapping__subject_id",
+            "observation__mapping__reviewed_at",
+            "observation__source_dataset__code",
+            "observation__revision_conflict",
         )
         .order_by("id")[: limit + 1]
     )
@@ -152,15 +198,21 @@ def forecast_inputs(
         "forecast input budget exceeded; select a smaller mapping cohort",
     )
     require(
-        all(value.observation.run.job.source_id in
-            {"arena", "openrouter", "opencode", "hf", "github"} for value in selected),
+        all(
+            value.observation.run.job.source_id
+            in {"arena", "openrouter", "opencode", "hf", "github"}
+            for value in selected
+        ),
         "unsupported forecast metric source",
     )
-    github_assets = github_asset_coordinates({
-        value.observation_id for value in selected
-        if value.observation.run.job.source_id == "github"
-        and github_asset_metric(value.source_metric)
-    })
+    github_assets = github_asset_coordinates(
+        {
+            value.observation_id
+            for value in selected
+            if value.observation.run.job.source_id == "github"
+            and github_asset_metric(value.source_metric)
+        }
+    )
     rows, datasets = [], set()
     for value in selected:
         observation, definition = value.observation, value.source_metric
@@ -186,6 +238,7 @@ def forecast_inputs(
                 "source_identifier": observation.source_identifier,
                 "metric": definition.metric_key,
                 "metric_definition_id": definition.pk,
+                "revision_conflict": observation.revision_conflict,
                 "value": str(value.integer_value)
                 if value.integer_value is not None
                 else value.float_value,
@@ -221,15 +274,16 @@ def forecast_inputs(
         from core.collection_datasets import observation_dataset_code
 
         datasets.add((run.job.source_id, observation_dataset_code(observation)))
-    enforce_use(
-        contract,
-        {
-            "lines": [{"source": s} for s, _ in datasets],
-            "attributions": [{"source": s, "dataset_id": d} for s, d in datasets],
-        },
-        use,
-        isolated_review=isolated_review,
-    )
+    if not chart_source_use_override:
+        enforce_use(
+            contract,
+            {
+                "lines": [{"source": s} for s, _ in datasets],
+                "attributions": [{"source": s, "dataset_id": d} for s, d in datasets],
+            },
+            use,
+            isolated_review=isolated_review,
+        )
     return {
         "schema_version": 1,
         "contract_id": str(contract.pk),

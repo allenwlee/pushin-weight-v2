@@ -82,7 +82,7 @@ class ResolvedMetric:
 
 
 def _resolve_metric(
-    selection: MetricSelection, product_keys: set[UUID]
+    selection: MetricSelection, product_keys: set[UUID], *, source_use_override=False
 ) -> ResolvedMetric:
     if not isinstance(selection, MetricSelection):
         raise TypeError("invalid metric selection")
@@ -124,14 +124,15 @@ def _resolve_metric(
         for row in configured.get("definitions", [])
     ):
         return ResolvedMetric(selection, None, "metric_not_in_contract")
-    try:
-        enforce_use(
-            mapping.contract,
-            {"lines": [{"source": mapping.source_id}]},
-            "internal_analysis",
-        )
-    except UseNotPermitted:
-        return ResolvedMetric(selection, None, "source_use_not_permitted")
+    if not source_use_override:
+        try:
+            enforce_use(
+                mapping.contract,
+                {"lines": [{"source": mapping.source_id}]},
+                "internal_analysis",
+            )
+        except UseNotPermitted:
+            return ResolvedMetric(selection, None, "source_use_not_permitted")
     return ResolvedMetric(selection, mapping)
 
 
@@ -217,7 +218,9 @@ def _resolve_anchor(
     return ResolvedRelease(product, anchor.date, anchor.source, True, claim.pk)
 
 
-def validate_request(request: ChartRequest) -> ResolvedRequest:
+def validate_request(
+    request: ChartRequest, *, source_use_override=False
+) -> ResolvedRequest:
     """Validate exact half-open bounds and resolve named Products without writes."""
     if not isinstance(request.comparable_collection_accounting, bool):
         raise TypeError("collection accounting declaration must be boolean")
@@ -294,7 +297,10 @@ def validate_request(request: ChartRequest) -> ResolvedRequest:
         )
     if len(selections) > 100:
         raise ValueError("too many metrics; select a smaller set")
-    metrics = tuple(_resolve_metric(metric, product_keys) for metric in selections)
+    metrics = tuple(
+        _resolve_metric(metric, product_keys, source_use_override=source_use_override)
+        for metric in selections
+    )
     for metric in metrics:
         expected = comparison if metric.selection.release == "comparison" else target
         if metric.selection.release is not None and (
@@ -408,7 +414,73 @@ def brand_discussion(resolved: ResolvedRequest, *, comparison: bool = False) -> 
     }
 
 
-def metric_series(resolved: ResolvedRequest, index: int) -> dict:
+def _single_chart_definition(mapping, key):
+    """Resolve the reviewed frozen definition, rejecting drift and wrong windows."""
+    from decimal import Decimal, InvalidOperation
+
+    from core.benchmark_metric_identity import definition_snapshot
+    from core.models import SourceMetric
+
+    definitions = [
+        d
+        for d in mapping.contract.source_configuration.get(mapping.source_id, {}).get(
+            "definitions", []
+        )
+        if d.get("metric_key") == key
+    ]
+    if len(definitions) != 1:
+        return None
+    frozen = definitions[0]
+    obj = SourceMetric.objects.filter(pk=frozen.get("id")).first()
+    if obj is None or definition_snapshot(obj) != frozen:
+        return None
+    try:
+        rolling_days = Decimal(str(frozen.get("window_amount")))
+    except (InvalidOperation, TypeError, ValueError):
+        rolling_days = None
+    if (
+        mapping.source_id == "hf"
+        and key == "downloads"
+        and not (
+            frozen.get("unit") == "downloads"
+            and frozen.get("window_mode") == "rolling"
+            and rolling_days == Decimal(30)
+            and frozen.get("window_unit") == "day"
+        )
+    ):
+        return None
+    return frozen
+
+
+def _exact_utc_day(value, day):
+    """Check a provider row's actual half-open UTC day, not its date label."""
+    try:
+        midnight = datetime.combine(
+            date.fromisoformat(day), datetime.min.time(), tzinfo=UTC
+        )
+        start = value["window_start_at"]
+        end = value["window_end_at"]
+        if isinstance(start, str):
+            start = datetime.fromisoformat(start)
+        if isinstance(end, str):
+            end = datetime.fromisoformat(end)
+        return (
+            value.get("temporal_status") == "exact"
+            and value.get("source_timezone") == "UTC"
+            and start == midnight
+            and end == midnight + timedelta(days=1)
+        )
+    except (KeyError, ValueError, TypeError):
+        return False
+
+
+def metric_series(
+    resolved: ResolvedRequest,
+    index: int,
+    *,
+    source_use_override=False,
+    single_template=False,
+) -> dict:
     """Read retained metric evidence with source rights and availability checks."""
     import json
     from collections import defaultdict
@@ -444,6 +516,21 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
         }
     start = request.comparison_start if release_is_comparison else request.start
     end = request.comparison_end if release_is_comparison else request.end
+    if single_template and start >= min(end, request.cutoff):
+        return {"status": "unavailable", "reason": "outside_cutoff", "points": []}
+    definition = (
+        _single_chart_definition(mapping, metric.selection.metric_key)
+        if single_template
+        else None
+    )
+    if single_template and definition is None:
+        return {
+            "status": "unavailable",
+            "reason": "definition_incompatible",
+            "source": mapping.source_id,
+            "metric": metric.selection.metric_key,
+            "points": [],
+        }
     try:
         packet = forecast_inputs(
             mapping.contract,
@@ -453,6 +540,16 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
             if request.history_mode == "strict"
             else "retrospective_research",
             use="internal_analysis",
+            chart_source_use_override=source_use_override,
+            **(
+                {
+                    "chart_metric_key": metric.selection.metric_key,
+                    "chart_window_start": start,
+                    "chart_window_end": min(end, request.cutoff),
+                }
+                if single_template and start < min(end, request.cutoff)
+                else {}
+            ),
         )
     except (UseNotPermitted, ValueError) as exc:
         return {
@@ -490,9 +587,27 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
     for value in packet["values"]:
         if value["metric"] != metric.selection.metric_key:
             continue
+        if single_template and str(value.get("metric_definition_id")) != str(
+            definition["id"]
+        ):
+            continue
+        if (
+            single_template
+            and mapping.source_id == "arena"
+            and (
+                value.get("dimensions", {}).get("config") != "text"
+                or value.get("dimensions", {}).get("category") != "overall"
+            )
+        ):
+            continue
         metadata = value["source_metadata"]
         day = (
-            metadata.get("archive_snapshot_date")
+            (
+                value["period_label_date"]
+                if single_template and mapping.source_id in {"opencode", "openrouter"}
+                else None
+            )
+            or metadata.get("archive_snapshot_date")
             or metadata.get("reconstruction_date")
             or value["period_label_date"]
             or value["as_of_date"]
@@ -504,6 +619,12 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
             )
         )
         if not day:
+            continue
+        if (
+            single_template
+            and mapping.source_id in {"openrouter", "opencode"}
+            and not _exact_utc_day(value, day)
+        ):
             continue
         if opencode_rows is not None:
             chosen = opencode_rows.get((mapping.external_identifier, day))
@@ -522,6 +643,17 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
     for day, values in sorted(candidates.items()):
         bucket_start = datetime.fromisoformat(day).replace(tzinfo=UTC)
         complete = bucket_start + timedelta(days=1) <= request.cutoff
+        if (
+            single_template
+            and mapping.source_id == "arena"
+            and any(row.get("revision_conflict") for row in values)
+        ):
+            selected[day] = {
+                "date": day,
+                "value": None,
+                "coverage": "ambiguous_observations",
+            }
+            continue
         dimensions = {json.dumps(row["dimensions"], sort_keys=True) for row in values}
         if len(dimensions) != 1:
             selected[day] = {
@@ -600,6 +732,386 @@ def metric_series(resolved: ResolvedRequest, index: int) -> dict:
         "warning": "Hindsight may include later-recovered evidence."
         if request.history_mode == "hindsight"
         else None,
+    }
+
+
+SINGLE_BRAND_METRICS = (
+    ("github", "stars", "GitHub stars", "stars"),
+    ("github", "forks", "GitHub forks", "forks"),
+    ("github", "open_issues", "GitHub open issues", "issues"),
+    ("github", "subscribers", "GitHub subscribers", "subscribers"),
+    ("github", "repository_size_kb", "GitHub repository size", "kilobytes"),
+    ("github", "asset_downloads", "GitHub release asset downloads", "downloads"),
+    ("github", "asset_size_bytes", "GitHub release asset size", "bytes"),
+    ("openrouter", "total_tokens", "OpenRouter tokens", "tokens / day"),
+    ("hf", "downloads", "Hugging Face rolling downloads", "rolling 30-day downloads"),
+    ("opencode", "tokens", "OpenCode tokens", "tokens / day"),
+    ("opencode", "unique_users", "OpenCode users", "users / day"),
+    ("opencode", "sessions", "OpenCode sessions", "sessions / day"),
+    ("arena", "rating", "Arena rating", "rating"),
+    ("arena", "rank", "Arena rank · last published", "rank · lower is better"),
+    ("arena", "rating_lower", "Arena rating lower bound", "rating"),
+    ("arena", "rating_upper", "Arena rating upper bound", "rating"),
+    ("arena", "variance", "Arena variance", "variance"),
+    ("arena", "vote_count", "Arena votes", "votes"),
+)
+
+
+def _unmapped_exact_values(mapping, key, start, end):
+    """Read pre-crosswalk evidence only through a reviewed, exact product mapping."""
+    from collections import defaultdict
+    from decimal import Decimal
+
+    from django.db.models import Q
+
+    from core.benchmark_metric_identity import definition_snapshot
+    from core.models import MetricValue, SourceSubjectMapping
+
+    source = mapping.source_id
+    if source not in {"hf", "openrouter", "opencode", "arena"}:
+        return {}
+    frozen = _single_chart_definition(mapping, key)
+    if frozen is None:
+        return {}
+    identity_ambiguous = (
+        SourceSubjectMapping.objects.filter(
+            source_id=source,
+            source_subject_kind=mapping.source_subject_kind,
+            normalized_identifier=mapping.normalized_identifier,
+        )
+        .exclude(subject_id=mapping.subject_id)
+        .exists()
+    )
+    rows = MetricValue.objects.filter(
+        source_metric__source_id=source,
+        source_metric__metric_key=key,
+        observation__source_identifier=mapping.external_identifier,
+        observation__source_subject_kind=mapping.source_subject_kind,
+        observation__run__job__source_id=source,
+        observation__mapping__isnull=True,
+        observation__status="ok",
+        observation__run__status__in=["success", "partial"],
+    ).filter(
+        Q(observation__product__isnull=True)
+        | Q(observation__product__product_key=mapping.subject.product_id)
+    )
+    if identity_ambiguous:
+        # An unscoped observation may still be attributed when the existing
+        # product relation independently identifies this exact product.
+        rows = rows.filter(observation__product__product_key=mapping.subject.product_id)
+    rows = rows.filter(
+        Q(period_label_date__gte=start.date(), period_label_date__lt=end.date())
+        | Q(as_of_date__gte=start.date(), as_of_date__lt=end.date())
+        | Q(as_of_at__gte=start, as_of_at__lt=end)
+        | Q(
+            observation__archive_snapshot_date__gte=start.date(),
+            observation__archive_snapshot_date__lt=end.date(),
+        )
+        | Q(
+            observation__reconstruction_date__gte=start.date(),
+            observation__reconstruction_date__lt=end.date(),
+        )
+    )
+    if source == "arena":
+        rows = rows.filter(
+            observation__config_key="text", observation__category_key="overall"
+        )
+    rows = list(
+        rows.select_related("source_metric", "observation__run__job").order_by("pk")[
+            :10001
+        ]
+    )
+    if len(rows) > 10000:
+        raise ValueError("source evidence exceeds the bounded read")
+    grouped = defaultdict(list)
+    invalid_days = set()
+    for row in rows:
+        obs = row.observation
+        day = (
+            row.period_label_date
+            or row.as_of_date
+            or obs.archive_snapshot_date
+            or obs.reconstruction_date
+            or (row.as_of_at.date() if row.as_of_at else None)
+        )
+        if day is None or not start.date() <= day < end.date():
+            continue
+        bucket_start = datetime.combine(day, datetime.min.time(), tzinfo=UTC)
+        if bucket_start < start or bucket_start + timedelta(days=1) > end:
+            continue
+        if obs.revision_conflict or obs.period_status == "partial":
+            if source == "arena":
+                invalid_days.add(day)
+            continue
+        if source in {"openrouter", "opencode"} and not _exact_utc_day(
+            {
+                "temporal_status": row.temporal_status,
+                "source_timezone": row.source_timezone_reference_id,
+                "window_start_at": row.window_start_at,
+                "window_end_at": row.window_end_at,
+            },
+            day.isoformat(),
+        ):
+            continue
+        definition = row.source_metric
+        if definition_snapshot(definition) != frozen:
+            if source == "arena":
+                invalid_days.add(day)
+            continue
+        grouped[day].append(row)
+    result = {}
+    epoch = datetime.min.replace(tzinfo=UTC)
+    for day, candidates in grouped.items():
+        def revision(row):
+            run = row.observation.run
+            return (
+                source == "hf" and bool(run.direct_ingestion),
+                run.source_as_of or run.completed_at or epoch,
+                run.completed_at or epoch,
+            )
+
+        newest = max(revision(row) for row in candidates)
+        latest = [row for row in candidates if revision(row) == newest]
+        numbers = {
+            Decimal(
+                str(
+                    row.integer_value
+                    if row.integer_value is not None
+                    else row.float_value
+                )
+            )
+            for row in latest
+        }
+        if len(numbers) != 1:
+            invalid_days.add(day)
+            continue
+        row = max(latest, key=lambda value: value.pk)
+        result[day.isoformat()] = {
+            "value": next(iter(numbers)),
+            "evidence": {
+                "value_id": row.pk,
+                "observation_id": row.observation_id,
+                "mapping_id": None,
+                "identity_mapping_id": str(mapping.pk),
+            },
+        }
+    for day in invalid_days:
+        result[day.isoformat()] = {
+            "value": None,
+            "coverage": "conflict",
+            "evidence": None,
+        }
+    return result
+
+
+def _complete_utc_window(start, end, cutoff):
+    start_day = datetime.combine(start.date(), datetime.min.time(), tzinfo=UTC)
+    if start_day < start:
+        start_day += timedelta(days=1)
+    end_boundary = min(end, cutoff)
+    end_day = datetime.combine(end_boundary.date(), datetime.min.time(), tzinfo=UTC)
+    return start_day, end_day
+
+
+def _single_brand_discussion(resolved):
+    """Aggregate an unfiltered chart without loading each post into Python."""
+    if resolved.request.history_mode != "hindsight":
+        return brand_discussion(resolved)
+    from django.db.models import Count
+    from django.db.models.functions import TruncDate
+
+    from core.models import Post
+
+    product = resolved.target.product
+    if not product.brand_id:
+        return {"status": "brand_unavailable", "daily": {}}
+    request = resolved.request
+    start, end = _complete_utc_window(request.start, request.end, request.cutoff)
+    if end <= start:
+        return {"status": "outside_cutoff", "daily": {}}
+    rows = (
+        Post.objects.filter(
+            brands__brand_id=product.brand_id,
+            created_at__gte=start,
+            created_at__lt=end,
+        )
+        .annotate(day=TruncDate("created_at", tzinfo=UTC))
+        .values("day")
+        .annotate(count=Count("pk", distinct=True))
+        .order_by("day")
+    )
+    counts = {row["day"].isoformat(): row["count"] for row in rows}
+    if request.classifications:
+        filtered = brand_discussion(resolved)
+        if filtered.get("status") != "stored_only":
+            return filtered
+        # A zero is observable only on a day with retained source posts.
+        selected = filtered.get("daily", {})
+        counts = {day: selected.get(day, 0) for day in counts}
+    return {"status": "stored_only", "daily": counts}
+
+
+def build_single_brand_chart(request: ChartRequest, *, start_day=-14, end_day=29):
+    """Build the public, read-only single-brand-comp result from stored evidence.
+
+    The owner's temporary source-use override is limited to this template. It
+    changes no source policy or review record, and does not authorize identity
+    guesses or affect existing ChartEngine callers.
+    """
+    from collections import defaultdict
+
+    from core.chart_engine_view import single_brand_line
+
+    if request.comparison is not None:
+        raise ValueError("single-brand-comp accepts one product")
+    if (
+        type(start_day) is not int
+        or type(end_day) is not int
+        or start_day >= end_day
+        or end_day - start_day > 366
+    ):
+        raise ValueError("invalid display range")
+    resolved = validate_request(request, source_use_override=True)
+    anchor = resolved.target.date
+    discussion = _single_brand_discussion(resolved)
+    discussion_values = {
+        (date.fromisoformat(day) - anchor).days: value
+        for day, value in discussion.get("daily", {}).items()
+        if value is not None
+    }
+    lines = []
+
+    def line(source, metric, label, unit, values, evidence, *, status, identifier=None):
+        output = single_brand_line(
+            source, metric, values, evidence, anchor, start_day, end_day
+        )
+        output.update(
+            key=f"{source}:{metric}",
+            source=source,
+            metric=metric,
+            label=label,
+            unit=unit,
+            identifier=identifier,
+            status=status,
+        )
+        return output
+
+    lines.append(
+        line(
+            "discussion",
+            "posts",
+            "Brand posts",
+            "posts",
+            discussion_values,
+            {},
+            status=discussion.get("status", "unavailable"),
+            identifier=resolved.target.product.brand_id,
+        )
+    )
+    candidates = defaultdict(list)
+    for index, metric in enumerate(resolved.metrics):
+        if metric.mapping is not None:
+            if metric.mapping.source_id == "github":
+                roles = {
+                    getattr(metric.mapping, "identity_snapshot", {}).get("role"),
+                    getattr(metric.mapping, "identifier_metadata", {}).get("role"),
+                } - {None, ""}
+                if not roles or not roles <= {"dedicated_model", "dedicated_product"}:
+                    continue
+            candidates[(metric.mapping.source_id, metric.selection.metric_key)].append(
+                (index, metric)
+            )
+    for source, key, label, unit in SINGLE_BRAND_METRICS:
+        choices = candidates[(source, key)]
+        if len(choices) != 1:
+            lines.append(
+                line(
+                    source,
+                    key,
+                    label,
+                    unit,
+                    {},
+                    {},
+                    status="mapping_ambiguous" if choices else "mapping_unavailable",
+                )
+            )
+            continue
+        index, metric = choices[0]
+        series = metric_series(
+            resolved, index, source_use_override=True, single_template=True
+        )
+        values = {}
+        evidence = {}
+        for point in series.get("points", []):
+            day = (date.fromisoformat(point["date"]) - anchor).days
+            if point.get("value") is not None:
+                values[day] = point["value"]
+                evidence[day] = point.get("evidence")
+            elif point.get("coverage") not in {None, "missing"}:
+                evidence[day] = {"coverage": point["coverage"]}
+        if (
+            request.history_mode == "hindsight"
+            and series.get("status") != "unavailable"
+        ):
+            try:
+                retained = _unmapped_exact_values(
+                    metric.mapping, key, request.start, min(request.end, request.cutoff)
+                )
+            except ValueError:
+                retained = {}
+                values = {}
+                evidence = {}
+                series["status"] = "unavailable"
+                series["reason"] = "source_evidence_limit_exceeded"
+            for day, item in retained.items():
+                offset = (date.fromisoformat(day) - anchor).days
+                # Conflicting independently sourced values are not silently pooled.
+                if item.get("coverage") == "conflict":
+                    values.pop(offset, None)
+                    evidence[offset] = {"coverage": "conflict"}
+                elif (evidence.get(offset) or {}).get("coverage") not in {
+                    None,
+                    "missing",
+                }:
+                    continue
+                elif offset in values and str(values[offset]) != str(item["value"]):
+                    values.pop(offset)
+                    evidence[offset] = {"coverage": "conflict"}
+                elif offset not in values:
+                    values[offset] = item["value"]
+                    evidence[offset] = item["evidence"]
+            if values:
+                series["status"] = "available"
+        lines.append(
+            line(
+                source,
+                key,
+                label,
+                unit,
+                values,
+                evidence,
+                status=series.get("reason", series.get("status", "unavailable")),
+                identifier=metric.mapping.external_identifier,
+            )
+        )
+    return {
+        "product": {
+            "key": str(resolved.target.product.product_key),
+            "label": resolved.target.product.display_name
+            or resolved.target.product.repo_id,
+            "release_date": anchor.isoformat(),
+            "anchor_source": resolved.target.anchor_source,
+            "anchor_reviewed": resolved.target.reviewed,
+        },
+        "as_of": request.cutoff.isoformat(),
+        "start_date": (anchor + timedelta(days=start_day)).isoformat(),
+        "end_date": (anchor + timedelta(days=end_day - 1)).isoformat(),
+        "lines": lines,
+        "notes": [
+            "Brand posts represent broader brand discussion; historical collection may be incomplete.",
+            "Arena rank carries the last published rank only between recorded snapshots.",
+            "Hugging Face downloads represent the source's rolling 30-day count.",
+        ],
     }
 
 

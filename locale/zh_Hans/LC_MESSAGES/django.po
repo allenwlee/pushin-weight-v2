@@ -764,3 +764,315 @@ msgstr "已发布报告"
 #: monitor/templates/monitor/general/_pulse_framework.html
 msgid "Earlier published reports are shown here; they are not forecasts."
 msgstr "此处展示此前发布的报告，内容并非预测。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Find product"
+msgstr "查找产品"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Search products"
+msgstr "搜索产品"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Product"
+msgstr "产品"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Choose a product"
+msgstr "选择产品"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Release date"
+msgstr "发布日期"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Date window"
+msgstr "日期范围"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "14 days before to 28 days after release"
+msgstr "发布前14天至发布后28天"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Release to 28 days after"
+msgstr "发布日至发布后28天"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "3-day average"
+msgstr "3日平均值"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Update data"
+msgstr "更新数据"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Loading chart…"
+msgstr "正在加载图表…"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Change from reference (%)"
+msgstr "相对于基准的变化（%）"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Product source metrics; missing dates are gaps"
+msgstr "产品数据源指标；缺失日期显示为空缺"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Metric visibility"
+msgstr "显示的指标"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Inspect"
+msgstr "查看日期"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "0% is each metric’s reference. Missing observations remain gaps."
+msgstr "0% 为各指标的基准值。缺失的观测值保留为空缺。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Sources, metric definitions and missing data"
+msgstr "数据来源、指标定义和缺失数据"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Enter two or more characters to search"
+msgstr "输入至少两个字符进行搜索"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "No products found"
+msgstr "未找到产品"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Choose a product and release date"
+msgstr "选择产品和发布日期"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Chart data is unavailable. Try updating again."
+msgstr "图表数据不可用。请重新更新。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "No observations in this window"
+msgstr "此时间范围内没有观测值"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "No usable reference for this metric"
+msgstr "此指标没有可用的基准值"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "First snapshot"
+msgstr "首个快照"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Week average"
+msgstr "周平均值"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Observed"
+msgstr "观测值"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Last published"
+msgstr "最近公布值"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "published"
+msgstr "公布于"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Release"
+msgstr "发布"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Daily values / recorded snapshots"
+msgstr "每日数值 / 已记录快照"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Daily series: 3-day averages · Arena: recorded snapshots"
+msgstr "每日序列：3日平均值 · Arena：已记录快照"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "no data"
+msgstr "无数据"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Arena rank carries the last published snapshot between observations; other missing dates remain gaps."
+msgstr "Arena 排名在观测点之间沿用最近公布值；其他缺失日期保留为空缺。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Date supplied by user"
+msgstr "用户提供的日期"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Confirmed example date"
+msgstr "已确认的示例日期"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Product identifier unavailable"
+msgstr "产品标识符不可用"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Product identifier ambiguous"
+msgstr "产品标识符存在歧义"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "No stored observations"
+msgstr "没有已保存的观测数据"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Unavailable"
+msgstr "不可用"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Data read at"
+msgstr "数据读取时间"
+
+#: core/chart_engine.py
+msgid "Brand posts"
+msgstr "品牌相关帖子"
+
+#: core/chart_engine.py
+msgid "posts"
+msgstr "帖子"
+
+#: core/chart_engine.py
+msgid "GitHub stars"
+msgstr "GitHub 星标数"
+
+#: core/chart_engine.py
+msgid "stars"
+msgstr "星标"
+
+#: core/chart_engine.py
+msgid "GitHub forks"
+msgstr "GitHub 分叉数"
+
+#: core/chart_engine.py
+msgid "forks"
+msgstr "分叉"
+
+#: core/chart_engine.py
+msgid "GitHub open issues"
+msgstr "GitHub 未关闭的问题"
+
+#: core/chart_engine.py
+msgid "issues"
+msgstr "问题"
+
+#: core/chart_engine.py
+msgid "GitHub subscribers"
+msgstr "GitHub 订阅者"
+
+#: core/chart_engine.py
+msgid "subscribers"
+msgstr "订阅者"
+
+#: core/chart_engine.py
+msgid "OpenRouter tokens"
+msgstr "OpenRouter 词元数"
+
+#: core/chart_engine.py
+msgid "tokens / day"
+msgstr "词元／天"
+
+#: core/chart_engine.py
+msgid "Hugging Face rolling downloads"
+msgstr "Hugging Face 过去30天下载量"
+
+#: core/chart_engine.py
+msgid "rolling 30-day downloads"
+msgstr "过去30天下载量"
+
+#: core/chart_engine.py
+msgid "OpenCode tokens"
+msgstr "OpenCode 词元数"
+
+#: core/chart_engine.py
+msgid "OpenCode users"
+msgstr "OpenCode 用户数"
+
+#: core/chart_engine.py
+msgid "users / day"
+msgstr "用户／天"
+
+#: core/chart_engine.py
+msgid "OpenCode sessions"
+msgstr "OpenCode 会话数"
+
+#: core/chart_engine.py
+msgid "sessions / day"
+msgstr "会话／天"
+
+#: core/chart_engine.py
+msgid "Arena rating"
+msgstr "Arena 评分"
+
+#: core/chart_engine.py
+msgid "rating"
+msgstr "评分"
+
+#: core/chart_engine.py
+msgid "Arena rank · last published"
+msgstr "Arena 排名 · 最近公布值"
+
+#: core/chart_engine.py
+msgid "rank · lower is better"
+msgstr "排名 · 数字越小排名越高"
+
+#: core/chart_engine.py
+msgid "Arena rating lower bound"
+msgstr "Arena 评分下限"
+
+#: core/chart_engine.py
+msgid "Arena rating upper bound"
+msgstr "Arena 评分上限"
+
+#: core/chart_engine.py
+msgid "Arena variance"
+msgstr "Arena 方差"
+
+#: core/chart_engine.py
+msgid "variance"
+msgstr "方差"
+
+#: core/chart_engine.py
+msgid "Arena votes"
+msgstr "Arena 投票数"
+
+#: core/chart_engine.py
+msgid "votes"
+msgstr "票"
+
+#: core/chart_engine.py
+msgid "Brand posts represent broader brand discussion; historical collection may be incomplete."
+msgstr "品牌帖子包含更广泛的品牌讨论；历史采集数据可能不完整。"
+
+#: core/chart_engine.py
+msgid "Arena rank carries the last published rank only between recorded snapshots."
+msgstr "Arena 排名仅在已记录的快照之间沿用最近公布的排名。"
+
+#: core/chart_engine.py
+msgid "Hugging Face downloads represent the source's rolling 30-day count."
+msgstr "Hugging Face 下载量表示来源统计的过去30天滚动下载量。"
+
+#: core/chart_engine.py
+msgid "GitHub repository size"
+msgstr "GitHub 仓库大小"
+
+#: core/chart_engine.py
+msgid "GitHub release asset downloads"
+msgstr "GitHub 发布资源下载量"
+
+#: core/chart_engine.py
+msgid "GitHub release asset size"
+msgstr "GitHub 发布资源大小"
+
+#: core/chart_engine.py
+msgid "kilobytes"
+msgstr "千字节"
+
+#: core/chart_engine.py
+msgid "bytes"
+msgstr "字节"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Chart is busy. Try again shortly."
+msgstr "图表繁忙，请稍后重试。"

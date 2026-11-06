@@ -837,3 +837,315 @@ msgstr "公開済みレポート"
 #: monitor/templates/monitor/general/_pulse_framework.html
 msgid "Earlier published reports are shown here; they are not forecasts."
 msgstr "これまでの公開済みレポートです。予測ではありません。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Find product"
+msgstr "製品を探す"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Search products"
+msgstr "製品を検索"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Product"
+msgstr "製品"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Choose a product"
+msgstr "製品を選択"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Release date"
+msgstr "リリース日"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Date window"
+msgstr "表示期間"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "14 days before to 28 days after release"
+msgstr "リリース14日前から28日後まで"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Release to 28 days after"
+msgstr "リリース日から28日後まで"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "3-day average"
+msgstr "3日平均"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Update data"
+msgstr "データを更新"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Loading chart…"
+msgstr "グラフを読み込んでいます…"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Change from reference (%)"
+msgstr "基準からの変化率（%）"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Product source metrics; missing dates are gaps"
+msgstr "製品のデータソース指標。データがない日は空白です"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Metric visibility"
+msgstr "表示する指標"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Inspect"
+msgstr "日付を確認"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "0% is each metric’s reference. Missing observations remain gaps."
+msgstr "0%は各指標の基準値です。観測値がない箇所は空白のままです。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Sources, metric definitions and missing data"
+msgstr "データソース、指標の定義、欠損データ"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Enter two or more characters to search"
+msgstr "2文字以上入力して検索"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "No products found"
+msgstr "製品が見つかりません"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Choose a product and release date"
+msgstr "製品とリリース日を選択"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Chart data is unavailable. Try updating again."
+msgstr "グラフのデータを取得できません。もう一度更新してください。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "No observations in this window"
+msgstr "この期間の観測値はありません"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "No usable reference for this metric"
+msgstr "この指標に使用できる基準値はありません"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "First snapshot"
+msgstr "最初のスナップショット"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Week average"
+msgstr "週間平均"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Observed"
+msgstr "観測値"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Last published"
+msgstr "直近の公開値"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "published"
+msgstr "公開日"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Release"
+msgstr "リリース"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Daily values / recorded snapshots"
+msgstr "日次値 / 記録済みスナップショット"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Daily series: 3-day averages · Arena: recorded snapshots"
+msgstr "日次系列：3日平均 · Arena：記録済みスナップショット"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "no data"
+msgstr "データなし"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Arena rank carries the last published snapshot between observations; other missing dates remain gaps."
+msgstr "Arenaの順位は観測点の間で直近の公開値を表示します。その他の欠損日は空白のままです。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Date supplied by user"
+msgstr "利用者が入力した日付"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Confirmed example date"
+msgstr "確認済みの例の日付"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Product identifier unavailable"
+msgstr "製品識別子がありません"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Product identifier ambiguous"
+msgstr "製品識別子を特定できません"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "No stored observations"
+msgstr "保存された観測値がありません"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Unavailable"
+msgstr "利用できません"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Data read at"
+msgstr "データ取得時刻"
+
+#: core/chart_engine.py
+msgid "Brand posts"
+msgstr "ブランド関連の投稿"
+
+#: core/chart_engine.py
+msgid "posts"
+msgstr "投稿"
+
+#: core/chart_engine.py
+msgid "GitHub stars"
+msgstr "GitHub スター"
+
+#: core/chart_engine.py
+msgid "stars"
+msgstr "スター"
+
+#: core/chart_engine.py
+msgid "GitHub forks"
+msgstr "GitHub フォーク"
+
+#: core/chart_engine.py
+msgid "forks"
+msgstr "フォーク"
+
+#: core/chart_engine.py
+msgid "GitHub open issues"
+msgstr "GitHub 未解決イシュー"
+
+#: core/chart_engine.py
+msgid "issues"
+msgstr "イシュー"
+
+#: core/chart_engine.py
+msgid "GitHub subscribers"
+msgstr "GitHub ウォッチ登録者"
+
+#: core/chart_engine.py
+msgid "subscribers"
+msgstr "登録者"
+
+#: core/chart_engine.py
+msgid "OpenRouter tokens"
+msgstr "OpenRouter トークン"
+
+#: core/chart_engine.py
+msgid "tokens / day"
+msgstr "トークン／日"
+
+#: core/chart_engine.py
+msgid "Hugging Face rolling downloads"
+msgstr "Hugging Face 直近30日間のダウンロード数"
+
+#: core/chart_engine.py
+msgid "rolling 30-day downloads"
+msgstr "直近30日間のダウンロード数"
+
+#: core/chart_engine.py
+msgid "OpenCode tokens"
+msgstr "OpenCode トークン"
+
+#: core/chart_engine.py
+msgid "OpenCode users"
+msgstr "OpenCode ユーザー"
+
+#: core/chart_engine.py
+msgid "users / day"
+msgstr "ユーザー／日"
+
+#: core/chart_engine.py
+msgid "OpenCode sessions"
+msgstr "OpenCode セッション"
+
+#: core/chart_engine.py
+msgid "sessions / day"
+msgstr "セッション／日"
+
+#: core/chart_engine.py
+msgid "Arena rating"
+msgstr "Arena レーティング"
+
+#: core/chart_engine.py
+msgid "rating"
+msgstr "レーティング"
+
+#: core/chart_engine.py
+msgid "Arena rank · last published"
+msgstr "Arena 順位 · 最終公開値"
+
+#: core/chart_engine.py
+msgid "rank · lower is better"
+msgstr "順位 · 数値が小さいほど上位"
+
+#: core/chart_engine.py
+msgid "Arena rating lower bound"
+msgstr "Arena レーティング下限"
+
+#: core/chart_engine.py
+msgid "Arena rating upper bound"
+msgstr "Arena レーティング上限"
+
+#: core/chart_engine.py
+msgid "Arena variance"
+msgstr "Arena 分散"
+
+#: core/chart_engine.py
+msgid "variance"
+msgstr "分散"
+
+#: core/chart_engine.py
+msgid "Arena votes"
+msgstr "Arena 投票数"
+
+#: core/chart_engine.py
+msgid "votes"
+msgstr "票"
+
+#: core/chart_engine.py
+msgid "Brand posts represent broader brand discussion; historical collection may be incomplete."
+msgstr "ブランド関連の投稿には広い話題が含まれます。過去の収集データは不完全な場合があります。"
+
+#: core/chart_engine.py
+msgid "Arena rank carries the last published rank only between recorded snapshots."
+msgstr "Arena の順位は、記録されたスナップショットの間に限り、最後に公開された値を表示します。"
+
+#: core/chart_engine.py
+msgid "Hugging Face downloads represent the source's rolling 30-day count."
+msgstr "Hugging Face のダウンロード数は、提供元による直近30日間の集計です。"
+
+#: core/chart_engine.py
+msgid "GitHub repository size"
+msgstr "GitHub リポジトリサイズ"
+
+#: core/chart_engine.py
+msgid "GitHub release asset downloads"
+msgstr "GitHub リリースアセットのダウンロード数"
+
+#: core/chart_engine.py
+msgid "GitHub release asset size"
+msgstr "GitHub リリースアセットのサイズ"
+
+#: core/chart_engine.py
+msgid "kilobytes"
+msgstr "キロバイト"
+
+#: core/chart_engine.py
+msgid "bytes"
+msgstr "バイト"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Chart is busy. Try again shortly."
+msgstr "チャートを読み込み中です。しばらくしてからお試しください。"
