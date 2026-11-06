@@ -2,7 +2,7 @@
 <html lang="{{ locale }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PUSHINWEIGHT</title><link rel="icon" href="{% static 'favicon.svg' %}">
 <link rel="stylesheet" href="{% static 'fonts/pw-fonts.css' %}">
-<link rel="stylesheet" href="{% static 'monitor/general.css' %}"><script src="{% static 'monitor/general.js' %}" defer></script>
+<link rel="stylesheet" href="{% static 'monitor/general.css' %}"><link rel="stylesheet" href="{% static 'monitor/single-brand-chart.css' %}"><script src="https://unpkg.com/chart.js@4.4.0" defer></script><script src="{% static 'monitor/general.js' %}" defer></script><script src="{% static 'monitor/single-brand-chart.js' %}" defer></script>
 </head><body class="general-page" data-audience="{{ state.audience }}" data-nav="rail" data-preferences-namespace="{{ preferences_namespace }}">
 {% include 'monitor/_cyber_quan_sprite.html' %}
 <a class="skip-link" href="#page-sections">{% translate "Skip to content" %}</a>

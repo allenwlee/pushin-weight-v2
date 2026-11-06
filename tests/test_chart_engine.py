@@ -475,6 +475,33 @@ def test_source_metric_preserves_historical_values_and_labels_hindsight():
     }
 
 
+def test_single_brand_reads_real_mapped_metrics_without_writing():
+    from core.chart_engine import ChartRequest, ReleaseAnchor, build_single_brand_chart
+    from core.models import MetricValue
+    from tests.test_benchmark_release_response import response_contract, seed
+
+    contract = response_contract()
+    seed(contract)
+    mapping = contract.mappings.get(source_id="hf")
+    before = MetricValue.objects.count()
+    request = ChartRequest(
+        target=ReleaseAnchor(mapping.subject.product_id, date(2026, 9, 10), "fixture"),
+        start=datetime(2026, 9, 10, tzinfo=UTC),
+        end=datetime(2026, 9, 20, tzinfo=UTC),
+        cutoff=datetime(2026, 9, 21, tzinfo=UTC),
+        history_mode="hindsight",
+    )
+    result = build_single_brand_chart(request, start_day=0, end_day=10)
+    hf = next(line for line in result["lines"] if line["key"] == "hf:downloads")
+    assert hf["status"] == "available"
+    assert hf["observed_dates"] > 0
+    assert (
+        next(point for point in hf["points"] if point["date"] == "2026-09-19")["raw"]
+        is None
+    )
+    assert MetricValue.objects.count() == before
+
+
 def test_partial_opencode_day_is_not_reported_as_complete():
     from core.benchmark_metric_store import persist_source
     from core.chart_engine import (

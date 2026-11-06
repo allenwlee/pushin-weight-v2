@@ -8,7 +8,29 @@
   <div class="pulse-chart-slots">
     <section class="pulse-chart-slot" aria-labelledby="pulse-history-title">
       <h4 id="pulse-history-title">{% translate "Observed history" %}</h4>
-      <p>{% translate "Historical charts are not available yet." %}</p>
+      <div id="ce-live-pulse" data-chart-url="{% url 'general_chart' %}" data-products-url="{% url 'general_chart_products' %}" data-locale="{{ locale }}">
+        <div class="ce-toolbar"><strong id="ce-title">{% translate "Observed history" %}</strong>
+          <label for="ce-search">{% translate "Find product" %}</label><input id="ce-search" type="search" autocomplete="off" placeholder="{% translate 'Search products' %}">
+          <label for="ce-product">{% translate "Product" %}</label><select id="ce-product"><option value="">{% translate "Choose a product" %}</option></select>
+          <label for="ce-release">{% translate "Release date" %}</label><input id="ce-release" type="date">
+          <label for="ce-window">{% translate "Date window" %}</label><select id="ce-window"><option value="full">{% translate "14 days before to 28 days after release" %}</option><option value="post">{% translate "Release to 28 days after" %}</option></select>
+          <label class="ce-smoothing"><input id="ce-smooth" type="checkbox" checked> {% translate "3-day average" %}</label>
+          <button id="ce-refresh" type="button">{% translate "Update data" %}</button>
+        </div>
+        <p id="ce-status" role="status">{% translate "Loading chart…" %}</p>
+        <div id="ce-content" hidden><div class="ce-chart-layout"><div class="ce-chart-column">
+          <div class="ce-reference"><strong>{% translate "Change from reference (%)" %}</strong><span id="ce-reference"></span></div>
+          <div class="ce-frame"><canvas id="ce-chart" role="img" aria-label="{% translate 'Product source metrics; missing dates are gaps' %}"></canvas></div>
+          <div id="ce-legend" aria-label="{% translate 'Metric visibility' %}"></div>
+          <label class="ce-day">{% translate "Inspect" %} <input id="ce-day" type="range" min="0" max="0" value="0"><output id="ce-day-label"></output></label>
+          <p class="ce-footnote">{% translate "0% is each metric’s reference. Missing observations remain gaps." %}</p>
+          <p id="ce-empty-note" class="ce-footnote"></p></div>
+          <aside class="ce-readouts"><strong id="ce-readout-date"></strong><p id="ce-mode-label"></p><div id="ce-readout"></div></aside></div>
+          <details class="ce-details"><summary>{% translate "Sources, metric definitions and missing data" %}</summary><p id="ce-loaded"></p><div id="ce-sources"></div></details>
+        </div>
+        <span id="ce-labels" hidden data-search-prompt="{% translate 'Enter two or more characters to search' %}" data-search-empty="{% translate 'No products found' %}" data-choose="{% translate 'Choose a product and release date' %}" data-loading="{% translate 'Loading chart…' %}" data-unavailable="{% translate 'Chart data is unavailable. Try updating again.' %}" data-empty="{% translate 'No observations in this window' %}" data-no-reference="{% translate 'No usable reference for this metric' %}" data-first="{% translate 'First snapshot' %}" data-week="{% translate 'Week average' %}" data-observed="{% translate 'Observed' %}" data-last="{% translate 'Last published' %}" data-published="{% translate 'published' %}" data-release="{% translate 'Release' %}" data-user-date="{% translate 'Date supplied by user' %}" data-owner-date="{% translate 'Confirmed example date' %}" data-daily="{% translate 'Daily values / recorded snapshots' %}" data-smoothed="{% translate 'Daily series: 3-day averages · Arena: recorded snapshots' %}" data-legend-empty="{% translate 'no data' %}" data-note="{% translate 'Arena rank carries the last published snapshot between observations; other missing dates remain gaps.' %}"></span>
+        <span id="ce-status-labels" hidden data-mapping-unavailable="{% translate 'Product identifier unavailable' %}" data-mapping-ambiguous="{% translate 'Product identifier ambiguous' %}" data-no-observations="{% translate 'No stored observations' %}" data-unavailable="{% translate 'Unavailable' %}" data-as-of="{% translate 'Data read at' %}" data-busy="{% translate 'Chart is busy. Try again shortly.' %}"></span>
+      </div>
     </section>
     <section class="pulse-chart-slot" aria-labelledby="pulse-projection-title">
       <h4 id="pulse-projection-title">{% translate "Forward projection" %}</h4>
