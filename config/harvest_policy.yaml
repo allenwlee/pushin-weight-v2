@@ -742,6 +742,8 @@ brands:
     - Meta Llama
     - Code Llama
   nemo_megatron:
+    ignored_attribution_tokens:
+    - DLSS
     handle_group: company
     paths:
     - co
@@ -760,7 +762,6 @@ brands:
       - Parakeet
       - Canary
       - Audio2Face
-      - DLSS
       - NV-Embed
       - NV-CLIP
       - NemoGuard
@@ -783,7 +784,6 @@ brands:
       - cuVS
       - DeepStream
       - Holoscan
-      - Omniverse
       - PhysicsNeMo
       - CorrDiff
       - FourCastNet
@@ -800,6 +800,7 @@ brands:
       - 英偉達
       - エヌビディア
       product-names:
+      - Omniverse
       - Cosmos
       - Isaac
       - NIM
@@ -900,6 +901,12 @@ brands:
       - PyTorch
       - GPU
       - NVIDIA
+    - alias: Omniverse
+      any_of:
+      - NVIDIA
+      - TensorRT
+      - Nemotron
+      - cuDNN
     - alias: CUDA
       any_of:
       - llm
@@ -1106,7 +1113,6 @@ brands:
       - api
       - agentic
       - huggingface
-      - AI
       - inference
       - ASR
       - speech
@@ -1127,7 +1133,6 @@ brands:
       - api
       - agentic
       - huggingface
-      - AI
       - inference
       - ASR
       - speech
@@ -1148,7 +1153,6 @@ brands:
       - api
       - agentic
       - huggingface
-      - AI
       - inference
       - ASR
       - speech
@@ -1169,7 +1173,6 @@ brands:
       - api
       - agentic
       - huggingface
-      - AI
       - inference
       - ASR
       - speech
@@ -1190,7 +1193,6 @@ brands:
       - api
       - agentic
       - huggingface
-      - AI
       - inference
       - ASR
       - speech

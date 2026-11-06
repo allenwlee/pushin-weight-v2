@@ -23,6 +23,20 @@ def labels(post_id):
     return set(PostBrand.objects.filter(post_id=post_id).values_list("brand_id", flat=True))
 
 
+def test_live_keyword_index_ignores_retired_dlss_and_requires_omniverse_context(seeded_policy_keywords):
+    from x_monitor.attribution import detect_brand_mentions
+
+    BrandKeyword.objects.get_or_create(
+        brand_id="nemo_megatron", pattern="DLSS",
+        defaults={"is_primary": False, "is_regex": False},
+    )
+    index = _build_brand_index(["nemo_megatron"])
+    assert "nemo_megatron" not in detect_brand_mentions("DLSS improves game rendering", index)
+    assert "nemo_megatron" not in detect_brand_mentions("I prefer Omniverse cartoons", index)
+    assert "nemo_megatron" not in detect_brand_mentions("NVIDIA AI stocks plunged", index)
+    assert "nemo_megatron" in detect_brand_mentions("NVIDIA Omniverse simulation", index)
+
+
 def test_keyword_reconciliation_is_scoped_idempotent_and_preflight_required(seeded_policy_keywords):
     BrandKeyword.objects.filter(brand_id="llama", pattern__in=["meta", "muse", "muse voice"]).delete()
     with pytest.raises(ValueError, match="coverage is incomplete"):
@@ -53,6 +67,7 @@ def test_keyword_reconciliation_rejects_regex_collision_without_partial_writes(s
 
 def test_scheduled_cycle_persists_context_and_deduplicates_packed_calls(monkeypatch, seeded_policy_keywords):
     seen, cohorts = [], []
+    BrandKeyword.objects.get_or_create(brand_id="nemo_megatron", pattern="DLSS", defaults={"is_primary": False, "is_regex": False})
     now = datetime.now(UTC)
     cfg = load_config(Path("config.yaml"))
     cfg.discovery.rare_types.enabled = False
@@ -87,7 +102,12 @@ def test_scheduled_cycle_persists_context_and_deduplicates_packed_calls(monkeypa
         ('81021', 'Qwen: una actuación magistral'),
         ('81022', 'Qwen: BIGBANG COSMOS WORLD TOUR'),
         ('81023', 'Qwen: 快手视频涨粉'),
+        ('81031', 'Qwen DLSS improves games'),
+        ('81032', 'Qwen Omniverse cartoon'),
+        ('81033', 'Qwen NVIDIA AI stocks plunged'),
     ])
+    texts['C5'].append(('81034', 'NVIDIA Omniverse simulation'))
+    texts['C6'].append(('81035', '@NVIDIAAI thanks!'))
     texts['B2'].extend([
         ('81024', 'Magistral model weights'),
         ('81025', 'Magistral Mistral'),
@@ -146,6 +166,8 @@ def test_scheduled_cycle_persists_context_and_deduplicates_packed_calls(monkeypa
     assert labels("81024") == labels("81025") == labels("81026") == {"mistral"}
     assert labels("81027") == {"nemo_megatron"}
     assert labels("81028") == labels("81029") == labels("81030") == {"kuaishou"}
+    assert labels("81031") == labels("81032") == labels("81033") == {"qwen"}
+    assert labels("81034") == labels("81035") == {"nemo_megatron"}
     assert not PostBrandMention.objects.filter(
         post_id__in=["81021", "81022", "81023"],
         brand_id__in=["mistral", "nemo_megatron", "kuaishou"],

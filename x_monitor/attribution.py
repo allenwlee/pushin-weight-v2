@@ -505,6 +505,11 @@ def compile_keyword_index(
     for brand_id, pattern, is_regex in brand_keywords:
         if not pattern:
             continue
+        brand_policy = policy.brands.get(brand_id) if policy is not None else None
+        if not is_regex and brand_policy and normalize_policy_token(pattern) in {
+            normalize_policy_token(token) for token in brand_policy.ignored_attribution_tokens
+        }:
+            continue
         if is_regex:
             try:
                 re.compile(f"({pattern})", re.IGNORECASE)

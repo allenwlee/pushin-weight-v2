@@ -27,7 +27,7 @@ LEGACY = {
     'yi': ['Yi', '01.AI', 'Yi LLM', 'Yi-Large', 'Yi-Coder'],
     'mimo': ['MiMo', 'Xiaomi MiMo', '小米', 'MiMo-V2.5'],
     'moonshot_kimi': ['Kimi', 'Moonshot', 'K2', 'K3', '暗面', 'Moonshot AI', 'Kimi Code'],
-    'nemo_megatron': ['NeMo', 'NVIDIA', 'Megatron', 'Canary', 'Drive', 'Clara', 'TAO', 'Nemotron', 'DLSS', 'Parakeet'],
+    'nemo_megatron': ['NeMo', 'NVIDIA', 'Megatron', 'Canary', 'Drive', 'Clara', 'TAO', 'Nemotron', 'DLSS', 'Omniverse', 'Parakeet'],
 }
 
 
@@ -54,6 +54,9 @@ def index():
     ('nemo_megatron', 'Canary Capital has launched a crypto ETF.'),
     ('nemo_megatron', 'The TAO token funds a decentralized AI network.'),
     ('nemo_megatron', 'Finding Nemo is a great animated film.'),
+    ('nemo_megatron', 'DLSS improves game rendering.'),
+    ('nemo_megatron', 'I prefer the Omniverse cartoon.'),
+    ('nemo_megatron', 'NVIDIA AI stocks plunged.'),
 ])
 def test_observed_wrong_meanings_are_not_brand_evidence(brand, text):
     assert brand not in detect_brand_mentions(text, index())
@@ -72,7 +75,7 @@ def test_observed_wrong_meanings_are_not_brand_evidence(brand, text):
     ('nemo_megatron', 'Nemotron open weights support long-context inference.'),
     ('nemo_megatron', 'Parakeet ASR runs locally for speech recognition.'),
     ('nemo_megatron', 'NVIDIA DRIVE uses CUDA for autonomous vehicle inference.'),
-    ('nemo_megatron', 'DLSS improves game rendering.'),
+    ('nemo_megatron', 'NVIDIA Omniverse simulation tools.'),
 ])
 def test_identified_model_and_product_controls_remain(brand, text):
     assert brand in detect_brand_mentions(text, index())

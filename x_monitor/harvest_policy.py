@@ -172,6 +172,7 @@ class BrandPolicy:
     version_family: VersionFamily | None = None
     alias_context: tuple[AliasContext, ...] = ()
     attribution_context: tuple[AliasContext, ...] = ()
+    ignored_attribution_tokens: tuple[str, ...] = ()
     url_roots: tuple[str, ...] = ()
     url_terms: tuple[str, ...] = ()
     c_bare_alias_groups: tuple[tuple[str, ...], ...] = ()
@@ -448,6 +449,7 @@ def _load_brand_policy(nickname: str, raw: dict[str, Any]) -> BrandPolicy:
         version_family=version_family,
         alias_context=_load_alias_context(raw.get("alias_context", [])),
         attribution_context=_load_alias_context(raw.get("attribution_context", [])),
+        ignored_attribution_tokens=_coerce_str_list(raw.get("ignored_attribution_tokens", []), "ignored_attribution_tokens", nickname),
         url_roots=_coerce_str_list(raw.get("url_roots", []), "url_roots", nickname),
         url_terms=_coerce_str_list(raw.get("url_terms", []), "url_terms", nickname),
         c_bare_alias_groups=_load_bare_alias_groups(raw.get("c_bare_alias_groups", [])),

@@ -318,7 +318,7 @@ EXPECTED_AFTER_QUERIES = {
     if call_id != "A"
 }
 
-EXPECTED_AFTER_QUERY_LENGTHS = {'B1': 314, 'C1': 445, 'C2': 378, 'C3': 410, 'C4': 252, 'B2': 428, 'B3': 347, 'B4': 311, 'C5': 391, 'B5': 233, 'B6': 362, 'C6': 321, 'B7': 243, 'B8': 413, 'B9': 421}
+EXPECTED_AFTER_QUERY_LENGTHS = {'B1': 314, 'C1': 437, 'C2': 365, 'C3': 410, 'C4': 252, 'B2': 428, 'B3': 347, 'B4': 311, 'C5': 404, 'B5': 233, 'B6': 362, 'C6': 315, 'B7': 243, 'B8': 413, 'B9': 421}
 
 
 @pytest.fixture(scope="module")
