@@ -292,7 +292,7 @@ def test_adapter_preserves_bounded_provider_reset_on_429():
     assert not error.value.auth
 
 
-def stored_client(monkeypatch, cfg, *, refusal_at="POST", status=403, payload=None):
+def stored_client(monkeypatch, cfg, *, refusal_at="POST", status=403, payload=None, refusal_page=None):
     """Keep credential persistence and HTTP error routing real; fake only transport."""
     from functools import partial
 
@@ -310,7 +310,10 @@ def stored_client(monkeypatch, cfg, *, refusal_at="POST", status=403, payload=No
     def transport(method, url, **kwargs):
         calls.append((method, url))
         response = Mock(status_code=200)
-        if (refusal_at == "POST" and method == "POST") or url.endswith(refusal_at):
+        refused = (refusal_at == "POST" and method == "POST") or url.endswith(refusal_at)
+        if refusal_page is not None:
+            refused = refused and kwargs.get("params", {}).get("pagination_token") == refusal_page
+        if refused:
             response.status_code = status
             response.json.return_value = payload or {
                 "type": "https://api.x.com/2/problems/client-forbidden",
@@ -320,6 +323,8 @@ def stored_client(monkeypatch, cfg, *, refusal_at="POST", status=403, payload=No
             response.json.return_value = {"data": {"id": cfg.owner_id}}
         elif url.endswith("/members"):
             response.json.return_value = {"data": []}
+            if refusal_page is not None:
+                response.json.return_value["meta"] = {"next_token": refusal_page}
         else:
             response.json.return_value = {
                 "data": {"owner_id": cfg.owner_id, "private": True}
@@ -331,7 +336,11 @@ def stored_client(monkeypatch, cfg, *, refusal_at="POST", status=403, payload=No
     return lists.build_owner_list_client(cfg), store, calls
 
 
-def test_real_add_refusal_preserves_credential_and_pauses_list_without_spending_unsent_attempts(monkeypatch):
+@pytest.mark.parametrize("reason, status", [
+    ("client-forbidden", "deferred_write_refused"),
+    ("spend-cap-reached", "deferred_billing"),
+])
+def test_real_add_refusal_preserves_credential_and_pauses_list_without_spending_unsent_attempts(monkeypatch, reason, status):
     from datetime import timedelta
 
     from django.utils import timezone
@@ -346,11 +355,11 @@ def test_real_add_refusal_preserves_credential_and_pauses_list_without_spending_
     second = OfficialCompanyListIntent.objects.create(
         account=account, state=state, evidence_hash=state.evidence_hash, list_id=first.list_id
     )
-    client, store, calls = stored_client(monkeypatch, cfg)
+    client, store, calls = stored_client(monkeypatch, cfg, payload={"reason": reason})
     before = timezone.now()
     result = sync_intents(cfg=cfg, client=client)
-    assert result["status"] == "deferred_write_refused"
-    assert result["error"] == "http_403:client-forbidden"
+    assert result["status"] == status
+    assert result["error"] == "http_403:" + reason
     assert result["writes"] == 1
     assert OfficialCompanyOwnerCredential.objects.get().status == "ready"
     assert store.load()["access_token"] == "private-access-token"
@@ -359,14 +368,14 @@ def test_real_add_refusal_preserves_credential_and_pauses_list_without_spending_
     assert first.attempts == 1 and second.attempts == 0
     for intent in (first, second):
         assert intent.status == "verify_needed"
-        assert intent.last_error == "http_403:client-forbidden"
+        assert intent.last_error == "http_403:" + reason
         assert before + timedelta(hours=2) <= intent.next_attempt_at <= timezone.now() + timedelta(hours=2)
         assert not intent.claim_token and intent.claim_expires_at is None
         assert intent.add_acknowledged_at is None
     assert first.add_requested_at and second.add_requested_at is None
     assert len([c for c in calls if c[0] == "POST"]) == 1
     calls.clear()
-    assert sync_intents(cfg=cfg, client=client)["status"] == "deferred_write_refused"
+    assert sync_intents(cfg=cfg, client=client)["status"] == status
     assert calls == []
     OfficialCompanyListIntent.objects.update(next_attempt_at=timezone.now() - timedelta(seconds=1))
     # A manual addition during cooldown is verified, never posted again.
@@ -376,7 +385,11 @@ def test_real_add_refusal_preserves_credential_and_pauses_list_without_spending_
     client.add.assert_not_called()
 
 
-def test_repeated_write_refusals_stop_at_review_and_keep_last_cooldown(monkeypatch):
+@pytest.mark.parametrize("reason, status", [
+    ("client-forbidden", "deferred_write_refused"),
+    ("spend-cap-reached", "deferred_billing"),
+])
+def test_repeated_write_refusals_stop_at_review_and_keep_last_cooldown(monkeypatch, reason, status):
     from datetime import timedelta
 
     from django.utils import timezone
@@ -384,16 +397,16 @@ def test_repeated_write_refusals_stop_at_review_and_keep_last_cooldown(monkeypat
     from core.models import OfficialCompanyOwnerCredential
 
     intent, cfg = setup_intent()
-    client, _, calls = stored_client(monkeypatch, cfg)
+    client, _, calls = stored_client(monkeypatch, cfg, payload={"reason": reason})
     for attempt in range(1, 6):
         before = timezone.now()
         result = sync_intents(cfg=cfg, client=client)
-        assert result["status"] == "deferred_write_refused"
+        assert result["status"] == status
         intent.refresh_from_db()
         assert intent.attempts == attempt
         assert intent.status == ("review_needed" if attempt == 5 else "verify_needed")
         assert before + timedelta(hours=min(24, 2 ** attempt)) <= intent.next_attempt_at
-        assert sync_intents(cfg=cfg, client=client)["status"] == "deferred_write_refused"
+        assert sync_intents(cfg=cfg, client=client)["status"] == status
         intent.next_attempt_at = timezone.now() - timedelta(seconds=1)
         intent.save(update_fields=["next_attempt_at"])
     assert sync_intents(cfg=cfg, client=client)["status"] == "idle"
@@ -427,6 +440,7 @@ def test_persistent_401_after_one_refresh_still_blocks_credential(monkeypatch, r
 
 @pytest.mark.parametrize("status, payload, error", [
     (403, {"reason": "client-not-enrolled"}, "http_403:client-not-enrolled"),
+    (403, {"detail": "spend-cap-reached"}, "http_403:unspecified"),
     (200, {"data": {"id": "wrong-owner"}}, "owner_mismatch"),
 ])
 def test_preflight_permission_and_owner_failures_still_block_credential(monkeypatch, status, payload, error):
@@ -459,37 +473,160 @@ def test_write_refusal_reason_is_structured_bounded_and_does_not_copy_tokens(mon
     assert "private-access-token" not in str(result)
 
 
-@pytest.mark.parametrize("refusal_at, status", [("POST", "deferred_write_refused"), ("/users/me", "blocked_auth")])
-def test_cycle_logs_list_refusal_and_keeps_block_visible_without_provider_retry(monkeypatch, caplog, refusal_at, status):
+@pytest.mark.parametrize("refusal_at", ["POST", "/users/me"])
+def test_cycle_logs_list_billing_and_keeps_cooldown_visible_without_provider_retry(monkeypatch, caplog, refusal_at):
     import json
     import logging
+    from datetime import timedelta
 
+    from django.utils import timezone
+
+    from core.models import OfficialCompanyOwnerCredential
+    from core.official_company_lists import build_owner_list_client
     from monitor.cycle import CycleRunner
     from x_monitor.config import Config
 
-    _, list_cfg = setup_intent()
+    intent, list_cfg = setup_intent()
     client, _, calls = stored_client(
         monkeypatch, list_cfg, refusal_at=refusal_at, payload={"reason": "spend-cap-reached"}
     )
+    credential = OfficialCompanyOwnerCredential.objects.get()
+    original_tokens, original_revision = bytes(credential.encrypted_tokens), credential.revision
     cfg = Config(enabled_models=["deepseek"], daily_ceiling=100, official_company=list_cfg)
-    runner = CycleRunner(
-        cfg=cfg, cycle_kind="scheduled", _official_list_client=client,
-        _official_company_call=Mock(side_effect=AssertionError("unexpected model call")),
-    )
+    before = timezone.now()
     with caplog.at_level(logging.INFO, logger="monitor.cycle"):
         for index in range(2):
+            # A new runner/client must honor persisted cooldowns without loading tokens.
+            runner = CycleRunner(
+                cfg=cfg, cycle_kind="scheduled",
+                _official_list_client=client if not index else build_owner_list_client(list_cfg),
+                _official_company_call=Mock(side_effect=AssertionError("unexpected model call")),
+            )
             result = runner._run_official_company_discovery(
                 run_id=f"list-refusal-{index}", deadline=cfg.harvest.start_deadline()
             )
-            assert result["list_sync"]["status"] == status
+            assert result["list_sync"]["status"] == "deferred_billing"
             assert result["list_sync"]["error"] == "http_403:spend-cap-reached"
+            intent.refresh_from_db()
+            credential.refresh_from_db()
+            assert credential.status == "ready"
+            assert bytes(credential.encrypted_tokens) == original_tokens
+            assert credential.revision == original_revision
+            assert intent.status == "verify_needed"
+            assert intent.attempts == (1 if refusal_at == "POST" else 0)
+            assert not intent.claim_token and intent.claim_expires_at is None
+            delay = timedelta(hours=2 if refusal_at == "POST" else 24)
+            assert before + delay <= intent.next_attempt_at <= timezone.now() + delay
+            assert result["list_sync"]["retry_at"] == intent.next_attempt_at.isoformat()
             if index:
-                assert not calls  # cooldown or a blocked credential never calls X
+                assert not calls
+            else:
+                assert bool(intent.add_requested_at) == (refusal_at == "POST")
+                assert result["list_sync"]["writes"] == (1 if refusal_at == "POST" else 0)
             calls.clear()
     records = [
         json.loads(record.message.removeprefix("OFFICIAL_COMPANY_LIST_SYNC "))
         for record in caplog.records if record.message.startswith("OFFICIAL_COMPANY_LIST_SYNC ")
     ]
     assert len(records) == 2
-    assert all(row["status"] == status and row["error"] == "http_403:spend-cap-reached" for row in records)
+    assert all(row["status"] == "deferred_billing" and row["error"] == "http_403:spend-cap-reached" for row in records)
     assert "private-access-token" not in caplog.text
+
+
+@pytest.mark.parametrize("refusal_at, refusal_page", [
+    ("/users/me", None),
+    ("/lists/2067062923525275922", None),
+    ("/members", "page-two"),
+])
+def test_billing_read_cooldown_preserves_all_attempts_and_recovers_when_due(
+    monkeypatch, refusal_at, refusal_page,
+):
+    from datetime import timedelta
+    from functools import partial
+
+    from django.utils import timezone
+
+    from core import official_company_lists as lists
+    from core.models import OfficialCompanyOwnerCredential
+
+    first, cfg = setup_intent()
+    first.attempts = 3
+    first.save(update_fields=["attempts"])
+    account = Account.objects.create(author_id="987655", handle="second_lab")
+    state = OfficialCompanyAccountState.objects.create(
+        account=account, status="registered", evidence_hash="b" * 64,
+    )
+    second = OfficialCompanyListIntent.objects.create(
+        account=account, state=state, evidence_hash=state.evidence_hash, list_id=first.list_id,
+    )
+    client, _, calls = stored_client(
+        monkeypatch, cfg, refusal_at=refusal_at, refusal_page=refusal_page,
+        payload={"type": "https://api.x.com/2/problems/spend-cap-reached"},
+    )
+    credential = OfficialCompanyOwnerCredential.objects.get()
+    original_tokens = bytes(credential.encrypted_tokens)
+    before = timezone.now()
+    result = sync_intents(cfg=cfg, client=client)
+    assert result["status"] == "deferred_billing"
+    assert result["writes"] == 0 and result["claimed"] == 2
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert (first.attempts, second.attempts) == (3, 0)
+    for intent in (first, second):
+        assert intent.status == "verify_needed"
+        assert intent.last_error == "http_403:spend-cap-reached"
+        assert not intent.claim_token and intent.claim_expires_at is None
+        assert before + timedelta(hours=24) <= intent.next_attempt_at <= timezone.now() + timedelta(hours=24)
+        assert intent.next_attempt_at.isoformat() == result["retry_at"]
+        assert intent.add_requested_at is None and intent.add_acknowledged_at is None
+    assert all(method == "GET" for method, _ in calls)
+    if refusal_page:
+        assert len([url for _, url in calls if url.endswith("/members")]) == 2
+    credential.refresh_from_db()
+    assert credential.status == "ready" and bytes(credential.encrypted_tokens) == original_tokens
+
+    # Even a newly queued account must wait for the whole-list billing cooldown.
+    third_account = Account.objects.create(author_id="987656", handle="third_lab")
+    third_state = OfficialCompanyAccountState.objects.create(
+        account=third_account, status="registered", evidence_hash="c" * 64,
+    )
+    third = OfficialCompanyListIntent.objects.create(
+        account=third_account, state=third_state, evidence_hash=third_state.evidence_hash,
+        list_id=first.list_id,
+    )
+    calls.clear()
+    assert sync_intents(cfg=cfg, client=lists.build_owner_list_client(cfg))["status"] == "deferred_billing"
+    assert calls == []
+    third.refresh_from_db()
+    assert third.status == "pending" and third.attempts == 0
+
+    # Once due, real owner/member reads confirm an independently added account
+    # and deliver the still-absent sibling once, through the same stored client.
+    recovered_calls = []
+
+    def recovered_transport(method, url, **kwargs):
+        recovered_calls.append((method, url))
+        response = Mock(status_code=200)
+        if method == "POST":
+            assert kwargs["json"] == {"user_id": second.account.author_id}
+            response.json.return_value = {"data": {"is_member": True}}
+        elif url.endswith("/users/me"):
+            response.json.return_value = {"data": {"id": cfg.owner_id}}
+        elif url.endswith("/members"):
+            response.json.return_value = {"data": [{"id": first.account.author_id}]}
+        else:
+            response.json.return_value = {"data": {"owner_id": cfg.owner_id, "private": True}}
+        return response
+
+    monkeypatch.setattr(lists, "XOwnerListClient", partial(XOwnerListClient, request=recovered_transport))
+    OfficialCompanyListIntent.objects.filter(pk__in=[first.pk, second.pk]).update(
+        next_attempt_at=timezone.now() - timedelta(seconds=1),
+    )
+    result = sync_intents(cfg=cfg, client=lists.build_owner_list_client(cfg))
+    assert result["confirmed"] == 2 and result["writes"] == 1
+    assert len([method for method, _ in recovered_calls if method == "POST"]) == 1
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.status == second.status == "confirmed"
+    assert first.add_requested_at is None
+    assert second.add_requested_at is not None and second.add_acknowledged_at is not None

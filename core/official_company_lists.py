@@ -19,13 +19,17 @@ from core.models import OfficialCompanyListIntent
 from core.official_company_accounts import x_account_identifier
 
 
+_BILLING_ERROR = "http_403:spend-cap-reached"
+
+
 class XListError(RuntimeError):
-    def __init__(self, code, *, auth=False, unknown=False, retry_at=None, write_refused=False):
+    def __init__(self, code, *, auth=False, unknown=False, retry_at=None, write_refused=False, billing=False):
         super().__init__(code)
         self.auth = auth
         self.unknown = unknown
         self.retry_at = retry_at
         self.write_refused = write_refused
+        self.billing = billing
 
 
 def _forbidden_reason(response, access_token):
@@ -109,10 +113,13 @@ class XOwnerListClient:
             raise XListError("owner_auth_denied", auth=True)
         if response.status_code == 403:
             refused = method == "POST" and path == f"/lists/{self.list_id}/members"
+            code = "http_403:" + _forbidden_reason(response, self.access_token)
+            billing = code == _BILLING_ERROR
             raise XListError(
-                "http_403:" + _forbidden_reason(response, self.access_token),
-                auth=not refused,
+                code,
+                auth=not (refused or billing),
                 write_refused=refused,
+                billing=billing,
             )
         if response.status_code == 429:
             raise XListError("http_429", retry_at=_rate_limit_retry_at(response))
@@ -286,7 +293,11 @@ def sync_intents(*, cfg, client, deadline=None):
     )
     if pause:
         result.update(
-            status="deferred_rate_limit" if pause["last_error"] == "http_429" else "deferred_write_refused",
+            status=(
+                "deferred_rate_limit" if pause["last_error"] == "http_429" else
+                "deferred_billing" if pause["last_error"] == _BILLING_ERROR else
+                "deferred_write_refused"
+            ),
             retry_at=pause["next_attempt_at"].isoformat(),
             error=pause["last_error"],
         )
@@ -342,19 +353,28 @@ def sync_intents(*, cfg, client, deadline=None):
         members, complete = client.members()
     except Exception as exc:  # noqa: BLE001 - preserve durable claims without logging credentials
         auth = isinstance(exc, XListError) and exc.auth
+        billing = isinstance(exc, XListError) and exc.billing
+        retry_at = (
+            timezone.now() + timedelta(hours=24) if billing else
+            exc.retry_at if isinstance(exc, XListError) else None
+        )
         for claim in claims:
             _complete(
                 claim,
                 "blocked_auth" if auth else "verify_needed",
                 str(exc) if isinstance(exc, XListError) else type(exc).__name__,
-                retry_at=exc.retry_at if isinstance(exc, XListError) else None,
+                retry_at=retry_at,
+                consume_attempt=not billing,
             )
         result["status"] = (
             "blocked_auth" if auth else
+            "deferred_billing" if billing else
             "deferred_rate_limit" if isinstance(exc, XListError) and str(exc) == "http_429"
             else "deferred"
         )
         result["error"] = str(exc) if isinstance(exc, XListError) else type(exc).__name__
+        if retry_at:
+            result["retry_at"] = retry_at.isoformat()
         return result
     for position, claim in enumerate(claims):
         try:
@@ -402,7 +422,8 @@ def sync_intents(*, cfg, client, deadline=None):
                         consume_attempt=False,
                     )
                 result.update(
-                    status="deferred_write_refused", error=str(exc),
+                    status="deferred_billing" if exc.billing else "deferred_write_refused",
+                    error=str(exc),
                     retry_at=retry_at.isoformat(),
                 )
                 return result

@@ -353,3 +353,14 @@ For later authorized production delivery/recovery:
 - `docs/solutions/workflow-issues/2026-09-25-203900-authorized-release-blocked-by-inherited-gates.md`: separate code delivery from cause-specific runtime recovery.
 
 Planning research used source reads and earlier verified incident evidence. It performed no provider calls, production mutations, implementation or tests.
+
+
+## Execution Record
+
+### 2026-11-07T06:04:52+09:00 — U1/U2 verified
+
+- Five baseline regressions failed for the expected incorrect statuses before product edits: GET billing became `blocked_auth`; POST billing reported `deferred_write_refused`. The real scheduled runner, encrypted credential store and fake HTTP transport remain in the regression chain.
+- Corrected only the observed sanitized `spend-cap-reached` classification. Unsent read-stage claims retain their attempts and share a 24-hour list cooldown. Actual refused adds keep existing retry pacing and the five-attempt limit.
+- Parent verification: `tests/test_official_company_list_sync.py` plus `tests/test_official_company_credentials.py`: **36 passed, 0 skipped, 0 errors**. `git diff --check` passed.
+- Local test environment has already-applied Chatter migrations beyond this production candidate. Tests used four byte-identical migration inventory files from staging `963ba4b6e1394b39ff7e6c22b177ed984f6eba98`, removed afterward. The existing database contains two applied migration branches. A private pytest-django `django_db_setup` adapter uses the already-prepared database and retains the wrapper's exclusive lock, exact database identity, complete migration inventory, consistent history and no-pending-migrations checks; normal per-test isolation remains active. No schema setup or fake migration ran. This verifies candidate runtime against the existing compatible schema, not a candidate-only schema creation. The adapter and inventory helper are in the authoritative root's `.local/2026-11-07-055502-x-list-billing-lfg/`.
+- Baseline query inventory rendered all 18 calls through the shared planner and request suffix code with explicit fixed windows and checked-in production query switches: maximum 511 UTF-8 bytes, no provider/database access. Final comparison remains pending.
