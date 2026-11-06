@@ -35,6 +35,8 @@ from core.classification_contract import (
     canonicalize_taxonomy_key,
     taxonomy_crosswalk_rows,
 )
+from monitor.post_enrichment import commentary_is_distinct, present_text
+from x_monitor.translator import normalize_lang_detected
 
 DATABASE_RESOURCE = "pushinweight-db-shadow"
 DEFAULT_LATEST = 20
@@ -45,7 +47,8 @@ LLM_BATCH_SIZE = 20
 _TWEET_ID_RE = re.compile(r"^[0-9]{1,32}$")
 _SAFE_ERROR_CODE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _VALID_STAGE_STATUSES = {"pending", "succeeded", "failed"}
-_CANONICAL_LANG_CODES = {"en", "zh-Hans", "zh-Hant", "ja", "ko", "other"}
+_CONTENT_LOCALES = {"en", "zh-cn", "ja"}
+_TRANSLATION_CONTRACTS = ("legacy", "literal-v2")
 _STAGE1_RELATIONS = (
     "posts_brands_classification_states",
     "posts_brands_product_labels",
@@ -77,6 +80,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     selector.add_argument("--tweet-id", action="append", dest="tweet_ids")
     parser.add_argument("--grace-hours", type=int)
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument(
+        "--translation-contract", choices=_TRANSLATION_CONTRACTS, default="legacy",
+        help="select literal-v2 for current normalized artifacts; legacy for historical evidence",
+    )
     parser.add_argument(
         "--report",
         action="store_true",
@@ -136,6 +143,7 @@ def _snapshot_select(
     selected_cte: str,
     detailed: bool,
     stage1: bool,
+    translation_contract: str = "legacy",
 ) -> str:
     def crosswalk_values(family: str) -> str:
         rows = taxonomy_crosswalk_rows(family)
@@ -270,6 +278,73 @@ def _snapshot_select(
               ON classification_state.post_id = p.tweet_id
              AND classification_state.brand_id = pb.brand_id"""
 
+    artifact_fields = ""
+    if translation_contract == "literal-v2":
+        # Text stays inside the bounded observation. Only --report renders it;
+        # evaluate_snapshot emits completeness flags and sanitized reason codes.
+        artifact_fields = """,
+        'artifact_source', jsonb_build_object(
+          'text', COALESCE(p.text, ''),
+          'text_en', p.text_en, 'text_zh_cn', p.text_zh_cn,
+          'stored_quote', COALESCE(p.quoted_text, ''),
+          'local_parent', COALESCE((
+            SELECT parent.text FROM posts parent
+            WHERE parent.tweet_id = p.in_reply_to_id
+          ), '')
+        ),
+        'literal_artifact', (
+          SELECT jsonb_build_object(
+            'id', a.id, 'state', a.state, 'is_current', a.is_current,
+            'source_content_fingerprint', a.source_content_fingerprint,
+            'source_language', a.source_language,
+            'texts', COALESCE((
+              SELECT jsonb_object_agg(t.locale, t.text)
+              FROM post_translation_texts t WHERE t.artifact_id = a.id
+            ), '{}'::jsonb)
+          ) FROM post_translation_artifacts a WHERE a.post_id = p.tweet_id
+          ORDER BY a.is_current DESC, a.created_at DESC, a.id DESC LIMIT 1
+        ),
+        'synthesis_demand', (
+          SELECT jsonb_build_object(
+            'id', d.id, 'state', d.state, 'artifact_id', d.artifact_id,
+            'input_context_fingerprint', d.input_context_fingerprint,
+            'prompt_version', d.prompt_version, 'model', d.model,
+            'output_schema_version', d.output_schema_version,
+            'age_seconds', GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+              (CURRENT_TIMESTAMP - d.created_at))))::bigint,
+            'expired', d.expires_at IS NOT NULL AND d.expires_at <= CURRENT_TIMESTAMP
+          ) FROM post_synthesis_demands d WHERE d.post_id = p.tweet_id
+          ORDER BY d.updated_at DESC, d.id DESC LIMIT 1
+        ),
+        'synthesis_artifact', (
+          SELECT jsonb_build_object(
+            'id', a.id, 'state', a.state, 'is_current', a.is_current,
+            'input_context_fingerprint', a.input_context_fingerprint,
+            'prompt_version', a.prompt_version, 'model', a.model,
+            'output_schema_version', a.output_schema_version,
+            'demand', (
+              SELECT jsonb_build_object(
+                'id', owner.id, 'state', owner.state, 'artifact_id', owner.artifact_id,
+                'input_context_fingerprint', owner.input_context_fingerprint,
+                'prompt_version', owner.prompt_version, 'model', owner.model,
+                'output_schema_version', owner.output_schema_version
+              ) FROM post_synthesis_demands owner
+              WHERE owner.post_id = a.post_id AND owner.artifact_id = a.id
+                AND owner.state = 'succeeded'
+                AND owner.input_context_fingerprint = a.input_context_fingerprint
+                AND owner.prompt_version = a.prompt_version AND owner.model = a.model
+                AND owner.output_schema_version = a.output_schema_version
+              ORDER BY owner.updated_at DESC, owner.id DESC LIMIT 1
+            ),
+            'texts', COALESCE((
+              SELECT jsonb_object_agg(t.locale, t.text)
+              FROM post_synthesis_texts t WHERE t.artifact_id = a.id
+            ), '{}'::jsonb)
+          ) FROM post_synthesis_artifacts a
+          WHERE a.post_id = p.tweet_id AND a.is_current
+          ORDER BY a.created_at DESC, a.id DESC LIMIT 1
+        )"""
+
     schema_profile = "stage1" if stage1 else "legacy"
     return f"""WITH
   post_type_crosswalk(source_key, canonical_key) AS (
@@ -294,9 +369,7 @@ def _snapshot_select(
         END,
         'has_text', NULLIF(BTRIM(p.text), '') IS NOT NULL,
         'lang_detected', NULLIF(BTRIM(p.lang_detected), ''),
-        'has_lang_detected', BTRIM(p.lang_detected) IN (
-          'en', 'zh-Hans', 'zh-Hant', 'ja', 'ko', 'other'
-        ),
+        'has_lang_detected', NULLIF(BTRIM(p.lang_detected), '') IS NOT NULL,
         'has_text_en', NULLIF(BTRIM(p.text_en), '') IS NOT NULL,
         'has_text_zh_cn', NULLIF(BTRIM(p.text_zh_cn), '') IS NOT NULL,
         'has_commentary_en', (
@@ -322,7 +395,7 @@ def _snapshot_select(
         'translation_status', es.translation_status,
         'translation_error_code', es.translation_error_code,
         'classification_status', es.classification_status,
-        'classification_error_code', es.classification_error_code,
+        'classification_error_code', es.classification_error_code{artifact_fields},
         'brands', COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -415,19 +488,24 @@ def build_query(
     latest: int | None,
     tweet_ids: Sequence[str] | None,
     detailed: bool = False,
+    translation_contract: str = "legacy",
 ) -> str:
     """Build one schema-aware, bounded, read-only PostgreSQL observation."""
 
+    if translation_contract not in _TRANSLATION_CONTRACTS:
+        raise HealthCheckError("invocation", "invalid_arguments")
     selected_cte = _selected_cte(latest=latest, tweet_ids=tweet_ids)
     legacy_select = _snapshot_select(
         selected_cte=selected_cte,
         detailed=detailed,
         stage1=False,
+        translation_contract=translation_contract,
     )
     stage1_select = _snapshot_select(
         selected_cte=selected_cte,
         detailed=detailed,
         stage1=True,
+        translation_contract=translation_contract,
     )
     relation_values = ", ".join(f"'{name}'" for name in _STAGE1_RELATIONS)
     relation_count = len(_STAGE1_RELATIONS)
@@ -442,7 +520,7 @@ SET LOCAL lock_timeout = '1s';
 SET LOCAL idle_in_transaction_session_timeout = '20s';
 WITH schema_state AS (
   SELECT COUNT(*) FILTER (
-    WHERE to_regclass('public.' || relation_name) IS NOT NULL
+    WHERE to_regclass(relation_name) IS NOT NULL
   ) AS stage1_relation_count
   FROM unnest(ARRAY[{relation_values}]) AS relation_name
 ), chosen_query AS (
@@ -781,7 +859,124 @@ def _stage1_brand_health(
     return summary, reasons
 
 
-def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
+def _canonical_language(value: Any) -> bool:
+    return isinstance(value, str) and normalize_lang_detected(value) == value.strip()
+
+
+def _content_fingerprint(value: dict[str, str]) -> str:
+    """Match post_artifacts' canonical identity without loading Django models.
+
+    The real-schema regression compares these identities with the production
+    source/context helpers, including Unicode and local-parent context.
+    """
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _synthesis_demand_matches(artifact: dict[str, Any], demand: dict[str, Any]) -> bool:
+    return (
+        demand.get("state") == "succeeded"
+        and demand.get("artifact_id") == artifact.get("id")
+        and all(artifact.get(key) == demand.get(key) for key in (
+            "input_context_fingerprint", "prompt_version", "model", "output_schema_version",
+        ))
+    )
+
+
+def _artifact_health(
+    row: dict[str, Any], *, grace_seconds: int
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    reasons: list[dict[str, str]] = []
+    source = row.get("artifact_source") or {}
+    literal = row.get("literal_artifact") or {}
+    literal_texts = literal.get("texts") or {}
+    literal_complete = (
+        bool(literal)
+        and literal.get("state") == "succeeded"
+        and literal.get("is_current") is True
+        and literal.get("source_content_fingerprint")
+        == _content_fingerprint({"text": str(source.get("text") or "")})
+        and _canonical_language(literal.get("source_language"))
+        and set(literal_texts) == _CONTENT_LOCALES
+        and all(isinstance(text, str) and text.strip() for text in literal_texts.values())
+    )
+    if row.get("translation_status") == "succeeded" and not literal_complete:
+        reasons.append(_reason("translation", "literal_artifact_incomplete"))
+
+    demand = row.get("synthesis_demand") or {}
+    artifact = row.get("synthesis_artifact") or {}
+    state = demand.get("state")
+    status = "not_requested" if not demand else state
+    required = bool(demand and state != "cancelled") or bool(artifact and not demand)
+    complete = False
+    published_complete = False
+    if demand or artifact:
+        fingerprint = _content_fingerprint({
+            "text": str(source.get("text") or ""),
+            "stored_quote": str(source.get("stored_quote") or ""),
+            "local_parent": str(source.get("local_parent") or ""),
+        })
+        if not demand:
+            reasons.append(_reason("synthesis", "missing_demand"))
+        elif state not in {"pending", "processing", "succeeded", "failed", "cancelled"}:
+            reasons.append(_reason("synthesis", "invalid_status"))
+        elif state != "cancelled":
+            if demand.get("input_context_fingerprint") != fingerprint:
+                reasons.append(_reason("synthesis", "stale_context"))
+            if state == "failed":
+                reasons.append(_reason("synthesis", "failed"))
+            if state in {"pending", "processing"}:
+                age = demand.get("age_seconds")
+                if not isinstance(age, (int, float)) or age < 0:
+                    reasons.append(_reason("synthesis", "missing_age"))
+                elif age > grace_seconds:
+                    reasons.append(_reason("synthesis", "overdue"))
+            if state == "succeeded" and not artifact:
+                reasons.append(_reason("synthesis", "missing_artifact"))
+
+        if artifact:
+            texts = artifact.get("texts") or {}
+            sources = [
+                source.get("text"), source.get("text_en"), source.get("text_zh_cn"),
+                *literal_texts.values(),
+            ]
+            valid_texts = (
+                set(texts) == _CONTENT_LOCALES
+                and all(commentary_is_distinct(text, *sources) for text in texts.values())
+                and len({present_text(text).casefold() for text in texts.values()}) == 3
+            )
+            published_complete = (
+                artifact.get("is_current") is True
+                and artifact.get("state") == "succeeded"
+                and artifact.get("input_context_fingerprint") == fingerprint
+                and _synthesis_demand_matches(artifact, artifact.get("demand") or {})
+                and valid_texts
+            )
+            if not published_complete:
+                reasons.append(_reason("synthesis", "artifact_incomplete"))
+            # A newer request can coexist with an earlier valid publication.
+            # Only its own successful artifact completes the newer demand.
+            latest_matches = _synthesis_demand_matches(artifact, demand)
+            if state == "succeeded" and not latest_matches:
+                reasons.append(_reason("synthesis", "demand_artifact_mismatch"))
+            complete = published_complete and latest_matches
+        if any(reason["stage"] == "synthesis" for reason in reasons):
+            status = "failed" if state == "failed" else "invalid"
+        elif complete:
+            status = "complete"
+    return {
+        "literal_artifact_complete": bool(literal_complete),
+        "synthesis_status": status,
+        "synthesis_required": required,
+        "synthesis_complete": complete,
+        "synthesis_published_complete": published_complete,
+        "synthesis_expired": bool(demand.get("expired")),
+    }, reasons
+
+
+def _evaluate_post(
+    row: dict[str, Any], *, grace_hours: int, translation_contract: str = "legacy"
+) -> dict[str, Any]:
     tweet_id = str(row.get("tweet_id") or "")
     translation_status = row.get("translation_status") or "missing"
     classification_status = row.get("classification_status") or "missing"
@@ -811,14 +1006,21 @@ def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
         _stage_reasons(row, stage="classification", grace_seconds=grace_seconds)
     )
 
+    artifact_health: dict[str, Any] = {}
+    if translation_contract == "literal-v2":
+        artifact_health, artifact_reasons = _artifact_health(row, grace_seconds=grace_seconds)
+        reasons.extend(artifact_reasons)
+
     if row.get("translation_status") == "succeeded":
-        for field, reason in (
-            ("has_lang_detected", "missing_lang_detected"),
+        if not row.get("has_lang_detected") or not _canonical_language(row.get("lang_detected")):
+            reasons.append(_reason("translation", "missing_lang_detected"))
+        legacy_fields = (
             ("has_text_en", "missing_text_en"),
             ("has_text_zh_cn", "missing_text_zh_cn"),
             ("has_commentary_en", "missing_commentary_en"),
             ("has_commentary_zh_cn", "missing_commentary_zh_cn"),
-        ):
+        ) if translation_contract == "legacy" else ()
+        for field, reason in legacy_fields:
             if not row.get(field):
                 reasons.append(_reason("translation", reason))
 
@@ -880,7 +1082,10 @@ def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
 
     if reasons:
         state = "unhealthy"
-    elif "pending" in {translation_status, classification_status}:
+    elif (
+        "pending" in {translation_status, classification_status}
+        or artifact_health.get("synthesis_status") in {"pending", "processing"}
+    ):
         state = "pending"
     else:
         state = "complete"
@@ -897,6 +1102,7 @@ def _evaluate_post(row: dict[str, Any], *, grace_hours: int) -> dict[str, Any]:
         "brand_count": len(brands),
         "brand_classifications": brand_classifications,
         "reasons": reasons,
+        **artifact_health,
     }
 
 
@@ -938,19 +1144,35 @@ def _rate_metric(
     }
 
 
-def _acceptance_metrics(posts: Sequence[dict[str, Any]]) -> dict[str, Any]:
+def _acceptance_metrics(
+    posts: Sequence[dict[str, Any]], *, translation_contract: str = "legacy"
+) -> dict[str, Any]:
     """Calculate the explicit latest-N enrichment completeness contract."""
     total = len(posts)
     with_language = [
         post
         for post in posts
-        if isinstance(post.get("lang_detected"), str)
-        and post["lang_detected"].strip() in _CANONICAL_LANG_CODES
+        if _canonical_language(post.get("lang_detected"))
     ]
     non_zh_hans = [
         post for post in with_language if post["lang_detected"].strip() != "zh-Hans"
     ]
     language = _rate_metric(len(with_language), total, threshold=1.0)
+    if translation_contract == "literal-v2":
+        requested = [post for post in posts if post.get("synthesis_required")]
+        metrics = {
+            "lang_detected_present": language,
+            "literal_artifact_complete": _rate_metric(
+                sum(bool(post.get("literal_artifact_complete")) for post in posts),
+                total, threshold=1.0,
+            ),
+            "requested_synthesis_complete": _rate_metric(
+                sum(bool(post.get("synthesis_complete")) for post in requested),
+                len(requested), threshold=1.0, empty_passes=True,
+            ),
+        }
+        metrics["passed"] = total > 0 and all(metric["passed"] for metric in metrics.values())
+        return metrics
     translation = _rate_metric(
         sum(bool(post.get("has_text_zh_cn")) for post in non_zh_hans),
         len(non_zh_hans),
@@ -985,7 +1207,10 @@ def evaluate_snapshot(
     latest: int | None,
     requested_ids: Sequence[str] | None,
     grace_hours: int,
+    translation_contract: str = "legacy",
 ) -> tuple[dict[str, Any], int]:
+    if translation_contract not in _TRANSLATION_CONTRACTS:
+        return _error_payload("invocation", "invalid_arguments"), 2
     if snapshot.get("transaction_read_only") != "on":
         return _error_payload("query", "transaction_not_read_only"), 2
     schema_profile = snapshot.get("schema_profile", "legacy")
@@ -1004,7 +1229,8 @@ def evaluate_snapshot(
         post["tweet_id"]: post
         for post in (
             _evaluate_post(
-                {**row, "schema_profile": schema_profile}, grace_hours=grace_hours
+                {**row, "schema_profile": schema_profile}, grace_hours=grace_hours,
+                translation_contract=translation_contract,
             )
             for row in rows
             if isinstance(row, dict)
@@ -1032,7 +1258,7 @@ def evaluate_snapshot(
         "pending": sum(post["state"] == "pending" for post in posts),
         "unhealthy": sum(post["state"] == "unhealthy" for post in posts),
     }
-    acceptance = _acceptance_metrics(posts)
+    acceptance = _acceptance_metrics(posts, translation_contract=translation_contract)
     acceptance_gate = "complete" if acceptance["passed"] else "failed"
     unhealthy = summary["total"] == 0 or summary["unhealthy"] > 0
     if unhealthy:
@@ -1056,6 +1282,7 @@ def evaluate_snapshot(
         "grace_hours": grace_hours,
         "transaction_read_only": True,
         "schema_profile": schema_profile,
+        "translation_contract": translation_contract,
         "summary": summary,
         "cohort_tweet_ids": cohort_tweet_ids,
         "returned_tweet_ids": returned_tweet_ids,
@@ -1075,6 +1302,7 @@ def _render_human(payload: dict[str, Any]) -> str:
             "harvester-health "
             f"status={payload['status']} "
             f"schema_profile={payload.get('schema_profile', 'legacy')} "
+            f"translation_contract={payload.get('translation_contract', 'legacy')} "
             f"regression_gate={payload['regression_gate']} "
             f"acceptance_gate={payload['acceptance_gate']} "
             f"mode={payload['mode']} "
@@ -1086,12 +1314,7 @@ def _render_human(payload: dict[str, Any]) -> str:
         )
     ]
     acceptance = payload["acceptance"]
-    metric_names = (
-        "lang_detected_present",
-        "non_zh_hans_text_zh_cn",
-        "commentary_en",
-        "commentary_zh_cn",
-    )
+    metric_names = [name for name in acceptance if name != "passed"]
     lines.append(
         "acceptance "
         + " ".join(
@@ -1130,7 +1353,8 @@ def _render_human(payload: dict[str, Any]) -> str:
             f"state={post['state']} "
             f"translation={post['translation_status']} "
             f"classification={post['classification_status']} "
-            f"brands={post['brand_count']} "
+            + (f"synthesis={post['synthesis_status']} " if "synthesis_status" in post else "")
+            + f"brands={post['brand_count']} "
             f"reasons={reason_text}"
         )
     return "\n".join(lines)
@@ -1419,6 +1643,28 @@ def _post_report_section(
         "### Per-brand findings",
         "",
     ]
+    if "artifact_source" in row:
+        parts[-2:-2] = [
+            "### Normalized literal-v2 and synthesis evidence",
+            "",
+            (
+                "Compatibility text columns above are historical mirrors. Current completion "
+                "uses the normalized artifacts, current source/context identity, and demand below."
+            ),
+            "",
+            _json_block({
+                "health": {key: health.get(key) for key in (
+                    "literal_artifact_complete", "synthesis_status", "synthesis_required",
+                    "synthesis_complete", "synthesis_expired",
+                    "synthesis_published_complete",
+                )},
+                "source_context": row.get("artifact_source"),
+                "literal_artifact": row.get("literal_artifact"),
+                "synthesis_demand": row.get("synthesis_demand"),
+                "synthesis_artifact": row.get("synthesis_artifact"),
+            }),
+            "",
+        ]
     brands = row.get("brands") if isinstance(row.get("brands"), list) else []
     if not brands:
         parts.append("No persisted brand rows.")
@@ -1557,6 +1803,7 @@ def render_detailed_report(
                 ("Regression gate", payload.get("regression_gate")),
                 ("Acceptance gate", payload.get("acceptance_gate")),
                 ("Schema profile", payload.get("schema_profile")),
+                ("Translation contract", payload.get("translation_contract", "legacy")),
                 ("Cohort mode", payload.get("mode")),
                 ("Total posts", summary.get("total")),
                 ("Complete", summary.get("complete")),
@@ -1624,6 +1871,17 @@ def render_detailed_report(
                     "",
                 ]
             )
+    elif payload.get("translation_contract") == "literal-v2":
+        parts.extend([
+            (
+                "Literal-v2 separates literal translation from demand-driven synthesis. "
+                "The legacy combined translation/commentary prompts do not apply. "
+                "This report does not reconstruct these requests: original batch membership, "
+                "chunk/retry inputs and historical provider requests are unavailable. "
+                "The normalized artifact and demand records below are persisted evidence."
+            ),
+            "",
+        ])
     else:
         parts.extend(
             [
@@ -1761,6 +2019,7 @@ def main(
             latest=args.latest,
             tweet_ids=args.tweet_ids,
             detailed=args.report,
+            translation_contract=args.translation_contract,
         )
         snapshot = execute_query(sql, runner=runner)
         payload, exit_code = evaluate_snapshot(
@@ -1768,6 +2027,7 @@ def main(
             latest=args.latest,
             requested_ids=args.tweet_ids,
             grace_hours=grace_hours,
+            translation_contract=args.translation_contract,
         )
         if args.report and exit_code in {0, 1}:
             try:
@@ -1775,8 +2035,9 @@ def main(
                 script_path = Path(__file__).resolve()
                 script_source = script_path.read_text()
                 generated_at = datetime.now().astimezone()
-                request_reconstructions = build_request_reconstructions(
-                    snapshot["posts"], repo_root=repo_root
+                request_reconstructions = (
+                    build_request_reconstructions(snapshot["posts"], repo_root=repo_root)
+                    if args.translation_contract == "legacy" else []
                 )
                 report = render_detailed_report(
                     snapshot,

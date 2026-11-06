@@ -1,5 +1,7 @@
 # Database schema reference
 
+The [owner credential section](#table-official_company_owner_credentials) is verified against migration `0225_official_company_credential_provenance` and source revision `265bfa1c` on November 7, 2026 (JST), including the permanent local test database. That section has eight columns and no foreign keys; this scoped verification does not establish production deployment or refresh the older inventory totals below.
+
 The four release-study tables below are verified against schema `0206_product_release_study` on the staging candidate. The remaining inventory retains the older verification scope stated below and has known RG7 omissions; its older table/column totals are not current totals. See the [release-study reference](2026-10-29-223000-product-release-detection.md) for the complete current feature contract.
 
 The repository and permanent local test database are at `0176_rg6_projection_contract_pin` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
@@ -253,7 +255,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The t
 | [official_company_attempts](#table-official_company_attempts) | [Official-company collection](#official-companies) | One official-company provider attempt with its budget charge and state. |
 | [official_company_budgets](#table-official_company_budgets) | [Official-company collection](#official-companies) | One period of reserved official-company collection spend. |
 | [official_company_list_intents](#table-official_company_list_intents) | [Official-company collection](#official-companies) | One desired official-company list membership action. |
-| [official_company_owner_credentials](#table-official_company_owner_credentials) | [Official-company collection](#official-companies) | One owner-scoped credential reference; secret material is not documented here. |
+| [official_company_owner_credentials](#table-official_company_owner_credentials) | [Official-company collection](#official-companies) | One encrypted owner token pair, its revision and the reason automatic use stopped. |
 | [official_company_provider_states](#table-official_company_provider_states) | [Official-company collection](#official-companies) | One provider lifecycle/control record for official-company collection. |
 | [official_company_scans](#table-official_company_scans) | [Official-company collection](#official-companies) | One official-company account scan and its outcome. |
 | [opportunities](#table-opportunities) | [Events and opportunities](#events) | One bounded offer in which an action can provide a benefit, optionally linked to an event. |
@@ -10513,19 +10515,24 @@ Model: [OfficialCompanyListIntent](../../core/models.py#L9811).
 
 ### `official_company_owner_credentials` — OfficialCompanyOwnerCredential
 
-One owner-scoped credential reference; secret material is not documented here.
+One owner-scoped encrypted OAuth token pair and its current availability. The encryption key and matching client credentials remain in managed service configuration. This table owns credential stops; individual delivery attempts and billing cooldowns belong to [`official_company_list_intents`](#table-official_company_list_intents). No foreign keys connect this record to another table.
 
-Model: [OfficialCompanyOwnerCredential](../../core/models.py#L9872).
+Model: [OfficialCompanyOwnerCredential](../../core/models.py#L10190). Migration: [credential provenance](../../core/migrations/0225_official_company_credential_provenance.py).
 
 **Primary key:** `key`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `key` | `varchar(64)` | No | PK component. |
-| `encrypted_tokens` | `bytea` | No | Stored value. |
-| `status` | `varchar(24)` | No | Django default: `'ready'` (not an assumed SQL default). |
-| `revision` | `integer` | No | Django default: `1` (not an assumed SQL default). |
-| `updated_at` | `timestamp with time zone` | No | Set by Django on model save. |
+| `key` | `varchar(64)` | No | Primary key identifying the owner/list credential scope. |
+| `encrypted_tokens` | `bytea` | No | Authenticated ciphertext containing the current access/refresh pair, matching client identity, expiry and scopes. Secret values are never diagnostic output. |
+| `status` | `varchar(24)` | No | `ready`, `refreshing` or `blocked`. Django default: `'ready'`; no SQL default. A persisted `refreshing` state prevents reuse of a refresh token whose rotation outcome is uncertain. |
+| `revision` | `integer` | No | Nonnegative token-pair revision; incremented on replacement or successful rotation. Failure writes compare this revision so an older response cannot block a newer pair. Django default: `1`; no SQL default. |
+| `blocked_reason` | `varchar(128)` | No | Sanitized machine code for the active stop. Empty when inactive; `unknown` when the original cause is unavailable. Django and SQL defaults: `''`. Shared writers validate supported codes. |
+| `blocked_origin` | `varchar(24)` | No | `provider`, `refresh`, `local_configuration`, `operator` or `legacy_unknown`; empty when inactive. Django and SQL defaults: `''`. The database checks the allowed values. |
+| `blocked_at` | `timestamp with time zone` | Yes | When the known active stop was recorded. Historical unknown causes retain NULL; a later local refusal does not invent a failure time. |
+| `updated_at` | `timestamp with time zone` | No | Last row save or explicit state-transition update. This is distinct from the original stop time. |
+
+The [shared credential store](../../core/official_company_credentials.py) preserves the first stop while later callers refuse locally. A transition to `ready` clears active stop metadata atomically with the token/state update. Readers treat incomplete historical provenance as unknown. The database deliberately has no status/provenance combination constraint, allowing older writers to operate during an additive rollout.
 
 **Named indexes:**
 
@@ -10534,6 +10541,8 @@ None declared beyond field/FK/constraint indexes.
 **Named constraints:**
 
 - `ck_official_co_credential`: `CONSTRAINT "ck_official_co_credential" CHECK ("status" IN ('ready', 'refreshing', 'blocked'))`.
+- `ck_official_co_block_origin`: permits only the five origins above or an empty string.
+- `official_company_owner_credentials_revision_check`: enforces `revision >= 0`, generated for the positive-integer field.
 
 [Back to table inventory](#table-inventory)
 

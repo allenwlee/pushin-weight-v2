@@ -108,7 +108,7 @@ def planned_queries():
 
 
 @pytest.mark.parametrize('text', [
-    'NVIDIA shares fell today', '英伟达股价今日下跌', '輝達股票', '英偉達股價', 'エヌビディアの株価',
+    'NVIDIA shares fell today', 'NVIDIA AI', '英伟达股价今日下跌', '輝達股票', '英偉達股價', 'エヌビディアの株価',
     'Mistral winds are strong', 'Ernie and Bert are puppets', 'Upstage the actors tonight',
     'Sakana is delicious fish', 'Namazu is a legendary catfish', 'Connect the dots',
     'I like the dots in my art studio', 'Xiaomi phone model launch',
@@ -125,7 +125,7 @@ def test_real_planner_does_not_reintroduce_unqualified_collision(text):
 @pytest.mark.parametrize('text', [
     'ChatGLM', 'GLM4', 'GLM5', 'GLM-4', 'GLM 5', 'MiMo-V2.5', 'MiMo 7B',
     'dots studio', 'dots Xiaohongshu', 'dots RedNote', 'dots 小红书',
-    'Sakana AI', 'SakanaAI', 'NVIDIA AI', '英伟达模型', 'Upstage API', 'ERNIE llm',
+    'Sakana AI', 'SakanaAI', 'NVIDIA AI Factory', 'NVIDIA H200', '英伟达模型', 'Upstage API', 'ERNIE llm',
     'Mistral huggingface', 'Yi Coder', 'Ring 1T', 'Ling flash', 'Ming lite',
     'NVIDIA Earth-2', 'Step 3.5 Flash', 'Step 3.7 Flash',
 ])

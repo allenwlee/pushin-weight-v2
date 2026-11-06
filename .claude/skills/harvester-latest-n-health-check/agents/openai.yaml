@@ -1,4 +1,4 @@
 interface:
   display_name: "Harvester Latest-N Health Check"
   short_description: "Audit post health and enrichment acceptance"
-  default_prompt: "Use $harvester-latest-n-health-check to inspect the literal latest production cohort, measure translation and bilingual commentary acceptance, optionally write the canonical detailed Markdown report, or verify an enrichment-relevant change without harvesting, provider calls, or production writes."
+  default_prompt: "Use $harvester-latest-n-health-check with explicit --translation-contract literal-v2 for current production to inspect normalized three-locale translations and separately requested synthesis; retain legacy mode for historical combined commentary evidence. Optionally write the detailed Markdown report, without harvesting, provider calls, or production writes."

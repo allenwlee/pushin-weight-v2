@@ -44,6 +44,13 @@ Keep these variables task-specific. Do not reuse system variables such as `HOME`
 
 Inspect the plan and final diff before running the check.
 
+Select the translation contract explicitly. Current production uses
+`--translation-contract literal-v2`: normalized EN/ZH-CN/JA literal translations
+and separately requested synthesis. Use `--translation-contract legacy` only
+for historical combined translation/commentary evidence. The CLI retains
+`legacy` as its compatibility default; it never infers the contract from the
+presence of artifacts, because missing current artifacts must fail.
+
 Use the enrichment-relevant route when behavior changed in any of these areas:
 
 - `monitor/cycle.py` post persistence or durable enrichment flow
@@ -61,19 +68,19 @@ Run the literal latest cohort once. The default is 20 and the accepted range is 
 Human report:
 
 ```bash
-"$HEALTH_PYTHON" "$HEALTH_SCRIPT" --latest 20
+"$HEALTH_PYTHON" "$HEALTH_SCRIPT" --latest 20 --translation-contract literal-v2
 ```
 
 Stable JSON report:
 
 ```bash
-"$HEALTH_PYTHON" "$HEALTH_SCRIPT" --latest 20 --json
+"$HEALTH_PYTHON" "$HEALTH_SCRIPT" --latest 20 --json --translation-contract literal-v2
 ```
 
 Detailed Markdown evidence report:
 
 ```bash
-"$HEALTH_PYTHON" "$HEALTH_SCRIPT" --latest 20 --report
+"$HEALTH_PYTHON" "$HEALTH_SCRIPT" --latest 20 --report --translation-contract literal-v2
 ```
 
 `--report` and `--json` are mutually exclusive. Detailed mode preserves the
@@ -90,8 +97,11 @@ The report contains:
   commentary, enrichment attempts/timestamps, per-brand facts, discourse,
   nationalism, mentions, and unsanctioned-flag evidence;
 - an empty ledger of LLM calls made by the checker—the checker makes none;
-- verbatim prompts and deterministically known request kwargs reconstructed by
-  the current pure translation and classification prompt builders;
+- normalized literal artifacts, source/context identity, synthesis demand and
+  all three locale texts in `literal-v2`; this mode does not reconstruct
+  unavailable original batch/chunk/retry requests or show obsolete combined prompts;
+- in `legacy`, verbatim prompts and deterministically known request kwargs
+  reconstructed by the pure combined translation and classification prompt builders;
 - an explicit provenance warning that current-code reconstructions are not
   historical wire calls, because historical prompts, responses, retry counts,
   runtime `thinking`, and original production batch membership are not stored;
@@ -107,7 +117,22 @@ Interpret `status`, `regression_gate`, and `acceptance_gate`:
 - `status=healthy` and `regression_gate=complete`: every selected row is complete.
 - `status=healthy_with_pending` and `regression_gate=inconclusive`: pending is fresh and neutral, but completion is not proven.
 - `status=unhealthy` and `regression_gate=failed`: one or more persisted facts are failed, missing, invalid, or overdue.
-- `acceptance_gate=complete`: all posts have a canonical `lang_detected`; at least 99% of
+- In `literal-v2`, `acceptance_gate=complete` requires all posts to have a canonical
+  `lang_detected` accepted by the production language validator, and a successful
+  current translation artifact matching the current source with nonblank EN/ZH-CN/JA
+  texts. Compatibility columns cannot substitute for an artifact.
+  `requested_synthesis_complete` counts only required synthesis: success needs the
+  current context and demand identity, the demand's exact published artifact, and
+  three nonblank, nonsentinel texts distinct from source, translations and one another.
+  `not_requested` and `cancelled` are neutral and never counted as complete synthesis.
+  Fresh `pending`/`processing` remains incomplete; failed, stale, invalid or overdue
+  work fails. Published artifacts are validated even if their demand is missing.
+  A newer pending/cancelled demand can coexist with a valid earlier publication:
+  `synthesis_published_complete` validates that output against its own successful
+  demand, while `synthesis_complete` measures only the latest requested work.
+  Earlier output never completes a newer pending or cancelled request.
+  Synthesis expiry is reported separately from its recorded state.
+- In `legacy`, `acceptance_gate=complete`: all posts have a canonical `lang_detected`; at least 99% of
   non-`zh-Hans` posts have `text_zh_cn`; and at least 99% of all posts have
   each of `commentary_en` and `commentary_zh_cn`. Commentary counts only when
   it is nonblank, not an `N/A` sentinel, and distinct from the source and both
@@ -126,7 +151,7 @@ is not confused with completion.
 
 ## Enrichment-relevant route
 
-1. Run `--latest 20 --json` and retain the ordered `cohort_tweet_ids` from that result as the immutable cohort.
+1. Run `--latest 20 --json --translation-contract literal-v2` and retain the ordered `cohort_tweet_ids` from that result as the immutable cohort. Retain the same explicit contract on the second observation.
 2. Wait 30 minutes through the caller or harness wait mechanism. Keep the user informed during the wait. Do not start one opaque blocking sleep process.
 3. Re-run the helper with one `--tweet-id` argument for every retained ID, in the original order:
 
@@ -134,6 +159,7 @@ is not confused with completion.
 "$HEALTH_PYTHON" "$HEALTH_SCRIPT" \
   --tweet-id 2090000000000000001 \
   --tweet-id 2090000000000000002 \
+  --translation-contract literal-v2 \
   --json
 ```
 
@@ -156,8 +182,11 @@ Include:
 - cohort size and exact tweet IDs
 - complete, pending, and unhealthy counts
 - overall `status`, `regression_gate`, and `acceptance_gate`
-- numerator, denominator, rate, and percentage for non-`zh-Hans` `text_zh_cn`,
-  `commentary_en`, and `commentary_zh_cn`
+- selected `translation_contract`; numerator, denominator, rate and percentage
+  for its language, translation and required-synthesis metrics (or the historical
+  `text_zh_cn`, `commentary_en` and `commentary_zh_cn` metrics in `legacy`)
+- per-post synthesis status in `literal-v2`, preserving unrequested, cancelled,
+  pending, processing, failed, invalid and complete distinctions
 - bounded per-post stage and reason details for unhealthy rows
 - any stable operational error code
 - the saved report path when `--report` was requested

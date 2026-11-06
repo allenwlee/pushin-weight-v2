@@ -72,6 +72,259 @@ def _snapshot(*posts, read_only="on", schema_profile=None):
     return snapshot
 
 
+def test_current_language_validator_accepts_vietnamese(checker):
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_post(lang_detected="vi")), latest=1,
+        requested_ids=None, grace_hours=24,
+    )
+    assert exit_code == 0
+    assert payload["acceptance"]["lang_detected_present"]["numerator"] == 1
+
+
+def test_literal_v2_requires_current_artifact_instead_of_eager_commentary(checker):
+    payload, exit_code = checker.evaluate_snapshot(
+        _snapshot(_literal_post()), latest=1, requested_ids=None, grace_hours=24,
+        translation_contract="literal-v2",
+    )
+    assert exit_code == 0
+    assert payload["posts"][0]["synthesis_status"] == "not_requested"
+    assert payload["acceptance"]["literal_artifact_complete"]["numerator"] == 1
+    assert payload["acceptance"]["requested_synthesis_complete"]["denominator"] == 0
+    assert payload["posts"][0]["synthesis_complete"] is False
+
+
+def _literal_post():
+    from monitor.post_artifacts import source_text_fingerprint
+
+    return _post(
+        has_commentary_en=False, has_commentary_zh_cn=False,
+        artifact_source={
+            "text": 'Source 中文 & <tag> "quote"\nline', "stored_quote": "引用",
+            "local_parent": "Parent context", "text_en": "English literal",
+            "text_zh_cn": "中文翻译",
+        },
+        literal_artifact={
+            "id": 1, "state": "succeeded", "is_current": True,
+            "source_content_fingerprint": source_text_fingerprint('Source 中文 & <tag> "quote"\nline'),
+            "source_language": "en",
+            "texts": {"en": "English literal", "zh-cn": "中文翻译", "ja": "日本語訳"},
+        },
+        synthesis_demand=None, synthesis_artifact=None,
+    )
+
+
+def _requested_synthesis_post(state="succeeded"):
+    from types import SimpleNamespace
+
+    from monitor.post_artifacts import synthesis_context_fingerprint
+
+    row = _literal_post()
+    source = row["artifact_source"]
+    fingerprint = synthesis_context_fingerprint(
+        SimpleNamespace(text=source["text"], quoted_text=source["stored_quote"]),
+        parent_text=source["local_parent"],
+    )
+    identity = {
+        "input_context_fingerprint": fingerprint, "prompt_version": "synthesis-v1",
+        "model": "test", "output_schema_version": "v1",
+    }
+    row["synthesis_demand"] = {
+        **identity, "id": 1, "state": state, "artifact_id": 2 if state == "succeeded" else None,
+        "age_seconds": 60, "expired": False,
+    }
+    if state == "succeeded":
+        row["synthesis_artifact"] = {
+            **identity, "id": 2, "state": "succeeded", "is_current": True,
+            "texts": {"en": "Useful context", "zh-cn": "有用的背景", "ja": "役立つ背景"},
+            "demand": dict(row["synthesis_demand"]),
+        }
+    return row
+
+
+@pytest.mark.parametrize("defect", [
+    "missing", "stale_source", "noncurrent", "failed", "missing_locale", "blank_locale",
+    "invalid_language",
+])
+def test_literal_v2_rejects_broken_artifact_despite_populated_compatibility_columns(checker, defect):
+    row = _literal_post()
+    row.update(has_commentary_en=True, has_commentary_zh_cn=True)
+    artifact = row["literal_artifact"]
+    if defect == "missing":
+        row["literal_artifact"] = None
+    elif defect == "stale_source":
+        row["artifact_source"]["text"] += " edited"
+    elif defect == "noncurrent":
+        artifact["is_current"] = False
+    elif defect == "failed":
+        artifact["state"] = "failed"
+    elif defect == "missing_locale":
+        artifact["texts"].pop("ja")
+    elif defect == "blank_locale":
+        artifact["texts"]["ja"] = " \n "
+    else:
+        artifact["source_language"] = "not-a-language"
+    payload, code = checker.evaluate_snapshot(
+        _snapshot(row), latest=1, requested_ids=None, grace_hours=24,
+        translation_contract="literal-v2",
+    )
+    assert code == 1
+    assert payload["posts"][0]["state"] == "unhealthy"
+    assert payload["acceptance"]["literal_artifact_complete"]["numerator"] == 0
+
+
+@pytest.mark.parametrize(("state", "status", "denominator", "complete", "code"), [
+    ("pending", "pending", 1, False, 1),
+    ("processing", "processing", 1, False, 1),
+    ("cancelled", "cancelled", 0, False, 0),
+    ("failed", "failed", 1, False, 1),
+    ("succeeded", "complete", 1, True, 0),
+])
+def test_literal_v2_synthesis_reports_actual_requested_work(checker, state, status, denominator, complete, code):
+    payload, observed_code = checker.evaluate_snapshot(
+        _snapshot(_requested_synthesis_post(state)), latest=1, requested_ids=None,
+        grace_hours=24, translation_contract="literal-v2",
+    )
+    assert observed_code == code
+    assert payload["posts"][0]["synthesis_status"] == status
+    assert payload["posts"][0]["synthesis_complete"] is complete
+    metric = payload["acceptance"]["requested_synthesis_complete"]
+    assert metric["denominator"] == denominator
+    assert metric["numerator"] == int(complete)
+    if state in {"pending", "processing"}:
+        assert payload["status"] == "healthy_with_pending"
+        assert payload["regression_gate"] == "inconclusive"
+
+
+@pytest.mark.parametrize("state", ["pending", "cancelled"])
+def test_literal_v2_previous_published_synthesis_does_not_fail_new_demand(checker, state):
+    row = _requested_synthesis_post()
+    row["synthesis_artifact"]["demand"] = dict(row["synthesis_demand"])
+    row["synthesis_demand"].update(
+        id=10, state=state, prompt_version="synthesis-v2", artifact_id=None,
+    )
+    payload, code = checker.evaluate_snapshot(
+        _snapshot(row), latest=1, requested_ids=None, grace_hours=24,
+        translation_contract="literal-v2",
+    )
+    assert code == (1 if state == "pending" else 0)
+    assert payload["posts"][0]["synthesis_status"] == state
+    assert payload["posts"][0]["reasons"] == []
+    assert payload["posts"][0]["synthesis_complete"] is False
+    assert payload["posts"][0]["synthesis_published_complete"] is True
+    metric = payload["acceptance"]["requested_synthesis_complete"]
+    assert metric["numerator"] == 0
+    assert metric["denominator"] == (1 if state == "pending" else 0)
+
+
+@pytest.mark.parametrize("defect", [
+    "missing", "noncurrent", "failed", "context", "demand_identity", "artifact_id",
+    "missing_locale", "sentinel", "source_copy", "literal_copy", "duplicate_locale",
+    "unrequested_artifact",
+    "missing_publication_demand", "wrong_publication_demand",
+])
+def test_literal_v2_rejects_invalid_requested_or_published_synthesis(checker, defect):
+    row = _requested_synthesis_post()
+    artifact = row["synthesis_artifact"]
+    if defect == "missing":
+        row["synthesis_artifact"] = None
+    elif defect == "noncurrent":
+        artifact["is_current"] = False
+    elif defect == "failed":
+        artifact["state"] = "failed"
+    elif defect == "context":
+        row["artifact_source"]["local_parent"] = "changed parent"
+    elif defect == "demand_identity":
+        row["synthesis_demand"]["model"] = "different model"
+    elif defect == "artifact_id":
+        row["synthesis_demand"]["artifact_id"] = 99
+    elif defect == "missing_locale":
+        artifact["texts"].pop("ja")
+    elif defect == "sentinel":
+        artifact["texts"]["en"] = " n/A "
+    elif defect == "source_copy":
+        artifact["texts"]["en"] = row["artifact_source"]["text"]
+    elif defect == "literal_copy":
+        artifact["texts"]["ja"] = row["literal_artifact"]["texts"]["ja"]
+    elif defect == "duplicate_locale":
+        artifact["texts"]["ja"] = artifact["texts"]["en"].upper()
+    elif defect == "unrequested_artifact":
+        row["synthesis_demand"] = None
+    elif defect == "missing_publication_demand":
+        artifact["demand"] = None
+    else:
+        artifact["demand"]["prompt_version"] = "unrelated"
+    payload, code = checker.evaluate_snapshot(
+        _snapshot(row), latest=1, requested_ids=None, grace_hours=24,
+        translation_contract="literal-v2",
+    )
+    assert code == 1
+    assert payload["posts"][0]["synthesis_complete"] is False
+    assert payload["posts"][0]["state"] == "unhealthy"
+
+
+def test_literal_v2_preserves_grace_exact_order_and_normal_output_redaction(checker):
+    row = _requested_synthesis_post("pending")
+    row["synthesis_demand"].update(age_seconds=24 * 3600 + 1, expired=True)
+    payload, code = checker.evaluate_snapshot(
+        _snapshot(row), latest=None, requested_ids=["200", "100"], grace_hours=24,
+        translation_contract="literal-v2",
+    )
+    assert code == 1
+    assert payload["cohort_tweet_ids"] == ["200", "100"]
+    assert payload["missing_tweet_ids"] == ["200"]
+    assert {reason["reason"] for reason in payload["posts"][1]["reasons"]} == {"overdue"}
+    assert payload["posts"][1]["synthesis_expired"] is True
+    output = json.dumps(payload) + checker._render_human(payload)
+    assert row["artifact_source"]["text"] not in output
+    assert "English literal" not in output
+    assert "input_context_fingerprint" not in output
+
+
+def test_literal_v2_requires_explicit_selection_and_reports_mode(checker):
+    assert checker.parse_args([]).translation_contract == "legacy"
+    assert checker.parse_args(["--translation-contract", "literal-v2"]).translation_contract == "literal-v2"
+    payload, code = checker.evaluate_snapshot(
+        _snapshot(_literal_post()), latest=1, requested_ids=None, grace_hours=24,
+    )
+    assert code == 1
+    assert "commentary_en" in payload["acceptance"]
+    assert "literal_artifact_complete" not in payload["acceptance"]
+
+
+def test_literal_v2_cli_uses_one_read_only_call_and_preserves_report_evidence(checker, tmp_path):
+    row = _requested_synthesis_post()
+    row.update(text=row["artifact_source"]["text"])
+    snapshot = _snapshot(row)
+    commands = []
+
+    def runner(command, **kwargs):
+        commands.append(command)
+        assert "BEGIN TRANSACTION READ ONLY" in command[command.index("--command") + 1]
+        assert "post_translation_artifacts" in command[command.index("--command") + 1]
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(snapshot), stderr="")
+
+    output = StringIO()
+    assert checker.main(
+        ["--translation-contract", "literal-v2", "--json"], runner=runner,
+        stdout=output, stderr=StringIO(),
+    ) == 0
+    assert len(commands) == 1
+    payload = json.loads(output.getvalue())
+    assert payload["translation_contract"] == "literal-v2"
+    assert row["artifact_source"]["text"] not in output.getvalue()
+    report = checker.render_detailed_report(
+        snapshot, payload, sql="READ ONLY SQL", invocation="health --translation-contract literal-v2",
+        generated_at=datetime(2026, 11, 7, tzinfo=UTC), repo_root=tmp_path,
+        request_reconstructions=[], script_source="checker source", script_sha256="abc",
+        repo_commit="abc", python_version="test",
+    )
+    assert "Normalized literal-v2 and synthesis evidence" in report
+    assert "legacy combined translation/commentary prompts do not apply" in report
+    assert "Useful context" in report
+    assert "日本語訳" in report
+    assert "input_context_fingerprint" in report
+
+
 def _current_state(**overrides):
     state = {
         "contract_version": "stage1-v1",
@@ -211,11 +464,12 @@ def test_query_is_bounded_before_joins_and_declares_read_only_mode(checker):
     assert "LIMIT 20" in sql
     assert "CURRENT_TIMESTAMP - es.created_at" in sql
     assert "CURRENT_TIMESTAMP - p.fetched_at" not in sql
-    assert "BTRIM(p.lang_detected) IN" in sql
+    assert "NULLIF(BTRIM(p.lang_detected), '') IS NOT NULL" in sql
+    assert "BTRIM(p.lang_detected) IN" not in sql
     assert "LOWER(BTRIM(p.commentary_en)) NOT IN ('n/a', 'na')" in sql
     assert "IS DISTINCT FROM LOWER(BTRIM(p.text_zh_cn))" in sql
     assert sql.index("LIMIT 20") < sql.index("FROM posts_brands")
-    assert "to_regclass('public.' || relation_name)" in sql
+    assert "to_regclass(relation_name)" in sql
     assert "WHEN stage1_relation_count = 0" in sql
     assert "WHEN stage1_relation_count = 4" in sql
     assert "query_to_xml(chosen_query.sql, false, true, '')" in sql
@@ -898,8 +1152,162 @@ def test_successful_notice_only_output_is_rejected(checker):
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
-def test_schema_aware_stdout_query_round_trips_real_schema_profiles(checker):
+def test_literal_v2_stdout_query_round_trips_current_schema_and_canonical_artifacts(checker, monkeypatch):
+    from django.db import connection
+    from django.utils import timezone
+
+    from core.models import (
+        Brand,
+        Post,
+        PostBrand,
+        PostEnrichmentState,
+        PostSynthesisDemand,
+        PostSynthesisText,
+        PostTranslationText,
+    )
+    from monitor.post_artifacts import (
+        literal_translation_artifact_complete,
+        publish_literal_translation,
+        publish_post_synthesis,
+        source_text_fingerprint,
+        synthesis_context_fingerprint,
+    )
+
+    # Only the optional queue boundary is inert; all storage and writers are real.
+    monkeypatch.setattr("monitor.editorial.dispatch.dispatch_picture", lambda *_args: None)
+    now = timezone.now()
+    parent = Post.objects.create(tweet_id="9100", text='Parent 日本語 & "quoted"\nline')
+    post = Post.objects.create(
+        tweet_id="9101", text='Nguồn tiếng Việt 中文 & <tag> "quote"\nline',
+        quoted_text="引用文", in_reply_to_id=parent.pk,
+    )
+    brand = Brand.objects.create(nickname="health-literal-v2")
+    PostBrand.objects.create(post=post, brand=brand)
+    PostEnrichmentState.objects.create(
+        post=post, translation_status="succeeded", classification_status="succeeded",
+    )
+    artifact = publish_literal_translation(
+        post=post, row={"lang_detected": "vi", "text_en": "English literal",
+                       "text_zh_cn": "中文翻译", "text_ja": "日本語訳"},
+        prompt_version="literal-v2", model="test",
+        expected_source_fingerprint=source_text_fingerprint(post.text),
+    )
+    assert artifact is not None
+    post.refresh_from_db()
+    assert literal_translation_artifact_complete(post)
+
+    def observe(*, detailed=False):
+        sql = checker.build_query(
+            latest=None, tweet_ids=[post.pk], translation_contract="literal-v2", detailed=detailed,
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            snapshots = []
+            while True:
+                if cursor.description is not None:
+                    snapshots.extend(cursor.fetchall())
+                if not cursor.nextset():
+                    break
+        assert len(snapshots) == 1
+        snapshot = checker.parse_snapshot(str(snapshots[0][0]))
+        assert snapshot["transaction_read_only"] == "on"
+        payload, code = checker.evaluate_snapshot(
+            snapshot, latest=None, requested_ids=[post.pk], grace_hours=24,
+            translation_contract="literal-v2",
+        )
+        return snapshot, payload, code
+
+    snapshot, payload, code = observe()
+    assert code == 0
+    observed = snapshot["posts"][0]
+    assert observed["literal_artifact"]["source_content_fingerprint"] == source_text_fingerprint(post.text)
+    assert observed["artifact_source"]["local_parent"] == parent.text
+    assert payload["posts"][0]["synthesis_status"] == "not_requested"
+    assert payload["acceptance"]["lang_detected_present"]["numerator"] == 1
+    detailed_snapshot, _, detailed_code = observe(detailed=True)
+    assert detailed_code == 0
+    assert detailed_snapshot["posts"][0]["text"] == post.text
+    assert detailed_snapshot["posts"][0]["literal_artifact"]["texts"]["ja"] == "日本語訳"
+
+    # A compatibility mirror cannot hide a missing normalized locale.
+    PostTranslationText.objects.filter(artifact=artifact, locale="ja").delete()
+    assert observe()[2] == 1
+    PostTranslationText.objects.create(artifact=artifact, locale="ja", text="日本語訳")
+    artifact.is_current = False
+    artifact.save(update_fields=["is_current"])
+    assert observe()[2] == 1
+    artifact.is_current = True
+    artifact.save(update_fields=["is_current"])
+    Post.objects.filter(pk=post.pk).update(text="Changed source")
+    assert observe()[2] == 1
+    Post.objects.filter(pk=post.pk).update(text=post.text)
+
+    context_fingerprint = synthesis_context_fingerprint(post, parent_text=parent.text)
+    demand = PostSynthesisDemand.objects.create(
+        post=post, input_context_fingerprint=context_fingerprint,
+        prompt_version="synthesis-v1", model="test", output_schema_version=1,
+        reason="operator", priority=100, first_requested_at=now,
+        last_requested_at=now, not_before=now,
+    )
+    snapshot, payload, code = observe()
+    assert code == 1
+    assert payload["status"] == "healthy_with_pending"
+    assert payload["posts"][0]["synthesis_status"] == "pending"
+    assert snapshot["posts"][0]["synthesis_demand"]["input_context_fingerprint"] == context_fingerprint
+    rich = publish_post_synthesis(
+        post=post, values={"en": "Useful context", "zh-cn": "有用的背景", "ja": "役立つ背景"},
+        context_fingerprint=context_fingerprint, prompt_version="synthesis-v1",
+        model="test", output_schema_version=1,
+    )
+    assert rich is not None
+    demand.state = "succeeded"
+    demand.artifact = rich
+    demand.save(update_fields=["state", "artifact", "updated_at"])
+    snapshot, payload, code = observe()
+    assert code == 0
+    assert payload["posts"][0]["synthesis_status"] == "complete"
+    Post.objects.filter(pk=parent.pk).update(text="Changed local parent")
+    assert observe()[2] == 1
+    Post.objects.filter(pk=parent.pk).update(text=parent.text)
+    demand.model = "wrong identity"
+    demand.save(update_fields=["model"])
+    assert observe()[2] == 1
+    demand.model = "test"
+    demand.save(update_fields=["model"])
+    PostSynthesisText.objects.filter(artifact=rich, locale="ja").update(text="日本語訳")
+    assert observe()[2] == 1
+    PostSynthesisText.objects.filter(artifact=rich, locale="ja").update(text="役立つ背景")
+    assert observe()[2] == 0
+
+    newer = PostSynthesisDemand.objects.create(
+        post=post, input_context_fingerprint=context_fingerprint,
+        prompt_version="synthesis-v2", model="test", output_schema_version=1,
+        reason="operator", priority=100, first_requested_at=now,
+        last_requested_at=now, not_before=now,
+    )
+    snapshot, payload, code = observe()
+    assert code == 1
+    assert payload["status"] == "healthy_with_pending"
+    assert payload["posts"][0]["synthesis_status"] == "pending"
+    assert payload["posts"][0]["synthesis_published_complete"] is True
+    assert payload["acceptance"]["requested_synthesis_complete"]["numerator"] == 0
+    assert snapshot["posts"][0]["synthesis_artifact"]["demand"]["id"] == demand.pk
+    newer.state = "cancelled"
+    newer.save(update_fields=["state", "updated_at"])
+    snapshot, payload, code = observe()
+    assert code == 0
+    assert payload["posts"][0]["synthesis_status"] == "cancelled"
+    assert payload["posts"][0]["synthesis_published_complete"] is True
+    assert payload["posts"][0]["synthesis_complete"] is False
+    assert payload["acceptance"]["requested_synthesis_complete"]["denominator"] == 0
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    "migration_rehearsal_schema", [("core", "0027_account_country_foreign_key")], indirect=True
+)
+def test_schema_aware_stdout_query_round_trips_real_schema_profiles(checker, migration_rehearsal_schema):
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor
 
@@ -923,147 +1331,136 @@ def test_schema_aware_stdout_query_round_trips_real_schema_profiles(checker):
         )
         return checker.parse_snapshot(rendered)
 
+    # The fixture owns only a temporary namespace; public history stays untouched.
     executor = MigrationExecutor(connection)
+    legacy_apps = executor.loader.project_state(before).apps
+    Post = legacy_apps.get_model("core", "Post")
+    Post.objects.create(
+        tweet_id="xml-carrier-100",
+        text='XML & <tag> > "quotes" 中文',
+        text_en="English & <translation>",
+        text_zh_cn="中文 & <翻译>",
+        commentary_en='Commentary & <context> "quoted"',
+        commentary_zh_cn="语境 & <说明>",
+        lang_detected="en",
+    )
+
+    legacy_snapshot = execute_snapshot(
+        checker.build_query(latest=1, tweet_ids=None, detailed=True)
+    )
+    assert legacy_snapshot["schema_profile"] == "legacy"
+    assert legacy_snapshot["transaction_read_only"] == "on"
+    assert legacy_snapshot["posts"][0]["tweet_id"] == "xml-carrier-100"
+    assert legacy_snapshot["posts"][0]["text"] == 'XML & <tag> > "quotes" 中文'
+    assert legacy_snapshot["posts"][0]["commentary_zh_cn"] == "语境 & <说明>"
+
+    executor = MigrationExecutor(connection)
+    executor.migrate(stage1)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "ALTER TABLE posts_brands_product_labels "
+            f"RENAME TO {renamed_table}"
+        )
     try:
-        # Migration 0030 is intentionally irreversible and data-only. Remove
-        # only its recorder row before exercising the older schema profiles.
-        executor.recorder.record_unapplied(
-            "core", "0030_ai_enrichment_stage1_taxonomy_v2_edges"
+        partial_snapshot = execute_snapshot(
+            checker.build_query(latest=1, tweet_ids=None)
         )
-        executor = MigrationExecutor(connection)
-        executor.migrate(before)
-        legacy_apps = executor.loader.project_state(before).apps
-        Post = legacy_apps.get_model("core", "Post")
-        Post.objects.create(
-            tweet_id="xml-carrier-100",
-            text='XML & <tag> > "quotes" 中文',
-            text_en="English & <translation>",
-            text_zh_cn="中文 & <翻译>",
-            commentary_en='Commentary & <context> "quoted"',
-            commentary_zh_cn="语境 & <说明>",
-            lang_detected="en",
-        )
-
-        legacy_snapshot = execute_snapshot(
-            checker.build_query(latest=1, tweet_ids=None, detailed=True)
-        )
-        assert legacy_snapshot["schema_profile"] == "legacy"
-        assert legacy_snapshot["transaction_read_only"] == "on"
-        assert legacy_snapshot["posts"][0]["tweet_id"] == "xml-carrier-100"
-        assert legacy_snapshot["posts"][0]["text"] == 'XML & <tag> > "quotes" 中文'
-        assert legacy_snapshot["posts"][0]["commentary_zh_cn"] == "语境 & <说明>"
-
-        executor = MigrationExecutor(connection)
-        executor.migrate(stage1)
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "ALTER TABLE posts_brands_product_labels "
-                f"RENAME TO {renamed_table}"
-            )
-        try:
-            partial_snapshot = execute_snapshot(
-                checker.build_query(latest=1, tweet_ids=None)
-            )
-            assert partial_snapshot == {
-                "transaction_read_only": "on",
-                "schema_profile": "partial",
-                "posts": [],
-            }
-        finally:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    f"ALTER TABLE {renamed_table} "
-                    "RENAME TO posts_brands_product_labels"
-                )
-
-        stage1_snapshot = execute_snapshot(
-            checker.build_query(latest=1, tweet_ids=None, detailed=True)
-        )
-        assert stage1_snapshot["schema_profile"] == "stage1"
-        assert stage1_snapshot["transaction_read_only"] == "on"
-        assert stage1_snapshot["posts"][0]["tweet_id"] == "xml-carrier-100"
-        assert stage1_snapshot["posts"][0]["text"] == 'XML & <tag> > "quotes" 中文'
-        assert stage1_snapshot["posts"][0]["commentary_zh_cn"] == "语境 & <说明>"
-
-        stage1_apps = executor.loader.project_state(stage1).apps
-        Brand = stage1_apps.get_model("core", "Brand")
-        Post = stage1_apps.get_model("core", "Post")
-        PostBrand = stage1_apps.get_model("core", "PostBrand")
-        PostTypeKey = stage1_apps.get_model("core", "PostTypeKey")
-        SentimentKey = stage1_apps.get_model("core", "SentimentKey")
-        ProductLabelKey = stage1_apps.get_model("core", "ProductLabelKey")
-        EnrichmentState = stage1_apps.get_model("core", "PostEnrichmentState")
-        Signal = stage1_apps.get_model("core", "PostBrandSignal")
-        ProductEdge = stage1_apps.get_model("core", "PostBrandProductLabel")
-        State = stage1_apps.get_model("core", "PostBrandClassificationState")
-        brand = Brand.objects.create(nickname="health-crosswalk")
-        post = Post.objects.create(
-            tweet_id="101",
-            text="health crosswalk",
-            text_en="health crosswalk en",
-            text_zh_cn="health crosswalk zh",
-            commentary_en="health commentary en",
-            commentary_zh_cn="health commentary zh",
-            lang_detected="en",
-        )
-        PostBrand.objects.create(post=post, brand=brand)
-        EnrichmentState.objects.create(
-            post=post,
-            translation_status="succeeded",
-            classification_status="succeeded",
-        )
-        SentimentKey.objects.get_or_create(key="positive")
-        for key in ("buzz_releases", "health_unknown_type"):
-            PostTypeKey.objects.get_or_create(key=key)
-            Signal.objects.create(
-                post=post, brand=brand, post_type_id=key, sentiment_id="positive"
-            )
-        for key in ("product_request", "health_unknown_product"):
-            ProductLabelKey.objects.get_or_create(key=key)
-            ProductEdge.objects.create(post=post, brand=brand, product_label_id=key)
-        State.objects.create(
-            post=post,
-            brand=brand,
-            contract_version="stage1-v1",
-            taxonomy_version="stage1-taxonomy-v1",
-            prompt_version="stage1-prompt-v2",
-            model="test",
-            input_context_fingerprint="b" * 64,
-            outcome="classified",
-            sentiment_id="positive",
-        )
-        crosswalk_snapshot = execute_snapshot(
-            checker.build_query(latest=None, tweet_ids=["101"], detailed=True)
-        )
-        observed = crosswalk_snapshot["posts"][0]["brands"][0]
-        assert observed["signals"] == [
-            {"post_type": "releases_updates", "sentiment": "positive"}
-        ]
-        assert observed["product_labels"] == ["ideas_requests"]
-        assert observed["stored_post_type_keys"] == [
-            "buzz_releases",
-            "health_unknown_type",
-        ]
-        assert observed["stored_product_label_keys"] == [
-            "health_unknown_product",
-            "product_request",
-        ]
-        evaluated, exit_code = checker.evaluate_snapshot(
-            crosswalk_snapshot,
-            latest=None,
-            requested_ids=["101"],
-            grace_hours=24,
-        )
-        assert exit_code == 1
-        reasons = evaluated["posts"][0]["reasons"]
-        assert {reason["reason"] for reason in reasons} >= {
-            "invalid_post_type",
-            "invalid_product_label",
+        assert partial_snapshot == {
+            "transaction_read_only": "on",
+            "schema_profile": "partial",
+            "posts": [],
         }
     finally:
-        MigrationExecutor(connection).migrate(
-            MigrationExecutor(connection).loader.graph.leaf_nodes()
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"ALTER TABLE {renamed_table} "
+                "RENAME TO posts_brands_product_labels"
+            )
+
+    stage1_snapshot = execute_snapshot(
+        checker.build_query(latest=1, tweet_ids=None, detailed=True)
+    )
+    assert stage1_snapshot["schema_profile"] == "stage1"
+    assert stage1_snapshot["transaction_read_only"] == "on"
+    assert stage1_snapshot["posts"][0]["tweet_id"] == "xml-carrier-100"
+    assert stage1_snapshot["posts"][0]["text"] == 'XML & <tag> > "quotes" 中文'
+    assert stage1_snapshot["posts"][0]["commentary_zh_cn"] == "语境 & <说明>"
+
+    stage1_apps = executor.loader.project_state(stage1).apps
+    Brand = stage1_apps.get_model("core", "Brand")
+    Post = stage1_apps.get_model("core", "Post")
+    PostBrand = stage1_apps.get_model("core", "PostBrand")
+    PostTypeKey = stage1_apps.get_model("core", "PostTypeKey")
+    SentimentKey = stage1_apps.get_model("core", "SentimentKey")
+    ProductLabelKey = stage1_apps.get_model("core", "ProductLabelKey")
+    EnrichmentState = stage1_apps.get_model("core", "PostEnrichmentState")
+    Signal = stage1_apps.get_model("core", "PostBrandSignal")
+    ProductEdge = stage1_apps.get_model("core", "PostBrandProductLabel")
+    State = stage1_apps.get_model("core", "PostBrandClassificationState")
+    brand = Brand.objects.create(nickname="health-crosswalk")
+    post = Post.objects.create(
+        tweet_id="101",
+        text="health crosswalk",
+        text_en="health crosswalk en",
+        text_zh_cn="health crosswalk zh",
+        commentary_en="health commentary en",
+        commentary_zh_cn="health commentary zh",
+        lang_detected="en",
+    )
+    PostBrand.objects.create(post=post, brand=brand)
+    EnrichmentState.objects.create(
+        post=post,
+        translation_status="succeeded",
+        classification_status="succeeded",
+    )
+    SentimentKey.objects.get_or_create(key="positive")
+    for key in ("buzz_releases", "health_unknown_type"):
+        PostTypeKey.objects.get_or_create(key=key)
+        Signal.objects.create(
+            post=post, brand=brand, post_type_id=key, sentiment_id="positive"
         )
+    for key in ("product_request", "health_unknown_product"):
+        ProductLabelKey.objects.get_or_create(key=key)
+        ProductEdge.objects.create(post=post, brand=brand, product_label_id=key)
+    State.objects.create(
+        post=post,
+        brand=brand,
+        contract_version="stage1-v1",
+        taxonomy_version="stage1-taxonomy-v1",
+        prompt_version="stage1-prompt-v2",
+        model="test",
+        input_context_fingerprint="b" * 64,
+        outcome="classified",
+        sentiment_id="positive",
+    )
+    crosswalk_snapshot = execute_snapshot(
+        checker.build_query(latest=None, tweet_ids=["101"], detailed=True)
+    )
+    observed = crosswalk_snapshot["posts"][0]["brands"][0]
+    assert observed["signals"] == [
+        {"post_type": "releases_updates", "sentiment": "positive"}
+    ]
+    assert observed["product_labels"] == ["ideas_requests"]
+    assert observed["stored_post_type_keys"] == [
+        "buzz_releases",
+        "health_unknown_type",
+    ]
+    assert observed["stored_product_label_keys"] == [
+        "health_unknown_product",
+        "product_request",
+    ]
+    evaluated, exit_code = checker.evaluate_snapshot(
+        crosswalk_snapshot,
+        latest=None,
+        requested_ids=["101"],
+        grace_hours=24,
+    )
+    assert exit_code == 1
+    reasons = evaluated["posts"][0]["reasons"]
+    assert {reason["reason"] for reason in reasons} >= {
+        "invalid_post_type",
+        "invalid_product_label",
+    }
 
 
 @pytest.mark.parametrize(
