@@ -30,11 +30,17 @@ _LOCAL_ERROR_CODES = frozenset({
     "missing_owner_tokens", "credential_already_provisioned", "owner_credential_not_provisioned",
     "credential_blocked", "credential_revision_changed", "refresh_failed",
     "refresh_in_progress", "refresh_transport_uncertain", "refresh_response_uncertain",
-    "refresh_save_uncertain", "recovery_validation_pending",
+    "refresh_save_uncertain", "recovery_validation_pending", "recovery_hold_changed",
+    "recovery_refresh_limit", "recovery_snapshot_required", "recovery_snapshot_invalid",
+    "recovery_snapshot_mismatch", "recovery_target_missing", "recovery_list_mismatch",
+    "recovery_not_billing", "recovery_operator_receipt_required", "recovery_operator_receipt_invalid",
+    "recovery_credential_state", "recovery_target_state", "recovery_attempt_limit",
+    "recovery_active_claim", "recovery_incomplete_membership", "recovery_disabled",
+    "recovery_target_changed",
 })
 LIST_DIAGNOSTIC_FIELDS = (
     "error", "error_origin", "error_observed_at", "provider_request_made",
-    "blocked_reason", "blocked_origin", "blocked_at", "credential_revision",
+    "blocked_reason", "blocked_origin", "blocked_at", "credential_revision", "credential_status",
     "retry_at", "queue_recorded_at",
 )
 
@@ -64,6 +70,7 @@ class XListError(RuntimeError):
         self.error_origin = error_origin
         self.provider_request_made = provider_request_made
         self.credential_revision = credential_revision
+        self.credential_status = None
         self.blocked_reason = None
         self.blocked_origin = None
         self.blocked_at = None
@@ -74,7 +81,7 @@ class XListError(RuntimeError):
             "error": str(self), "error_origin": self.error_origin,
             "provider_request_made": self.provider_request_made,
         }
-        for key in ("credential_revision", "blocked_reason", "blocked_origin"):
+        for key in ("credential_revision", "credential_status", "blocked_reason", "blocked_origin"):
             value = getattr(self, key)
             if value is not None:
                 result[key] = value
@@ -91,6 +98,7 @@ class XListError(RuntimeError):
 
         values = credential_diagnostics(row)
         self.credential_revision = values["credential_revision"]
+        self.credential_status = values["credential_status"]
         self.blocked_reason = values["blocked_reason"]
         self.blocked_origin = values["blocked_origin"]
         self.blocked_at = row.blocked_at if values["blocked_at"] else None
@@ -440,10 +448,11 @@ def _sync_intents(*, cfg, client, deadline=None):
         if blocked:
             from core.official_company_credentials import credential_diagnostics
 
+            diagnostic = credential_diagnostics()
             result.update(
                 status="blocked_auth", error=safe_error_code(blocked["last_error"]),
-                error_origin="local_credential_gate", queue_recorded_at=blocked["updated_at"].isoformat(),
-                **credential_diagnostics(),
+                error_origin="local_queue_gate" if diagnostic["credential_status"] == "ready" else "local_credential_gate",
+                queue_recorded_at=blocked["updated_at"].isoformat(), **diagnostic,
             )
         else:
             result["status"] = "idle"
@@ -557,7 +566,7 @@ def _sync_intents(*, cfg, client, deadline=None):
     return result
 
 
-def build_owner_list_client(cfg):
+def build_owner_list_client(cfg, *, token_store=None):
     from core.official_company_credentials import OwnerTokenStore
 
     # Lazy credential access: a saved queue stop never reads tokens or renews.
@@ -594,7 +603,7 @@ def build_owner_list_client(cfg):
                 raise
 
         def _preflight(self):
-            self._store = OwnerTokenStore.from_env()
+            self._store = token_store if token_store is not None else OwnerTokenStore.from_env()
             self._store.begin_invocation()
             self._client = XOwnerListClient(
                 access_token=self._store.access_token(),
@@ -603,6 +612,9 @@ def build_owner_list_client(cfg):
                 refresh=self._store.refresh,
                 redactions=self._store.redactions,
             )
+            if self._store.recovery_active and self._store.refresh_attempts:
+                # Expiry renewal already used this recovery's single exchange.
+                self._client._refreshed = True
             if self._deadline is not None:
                 self._client.deadline = self._deadline
             return self._client.preflight()

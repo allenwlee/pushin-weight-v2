@@ -47,6 +47,7 @@ class Command(BaseCommand):
                 "refresh-owner",
                 "resume-model",
                 "requalify",
+                "recover-list-billing",
             ],
         )
         parser.add_argument("--account-id", action="append", default=[])
@@ -58,6 +59,13 @@ class Command(BaseCommand):
         parser.add_argument("--config", default="config.yaml")
         parser.add_argument("--replace-owner-credential", action="store_true")
         parser.add_argument("--cohort-manifest")
+        parser.add_argument("--intent-id", type=int)
+        parser.add_argument("--list-id")
+        parser.add_argument("--apply", action="store_true")
+        parser.add_argument("--expected-snapshot")
+        parser.add_argument("--acknowledge-operator-hold", action="store_true")
+        parser.add_argument("--operator-hold-receipt")
+        parser.add_argument("--operator-hold-receipt-sha256")
 
     def handle(self, *args, **opts):
         action = opts["action"]
@@ -69,10 +77,44 @@ class Command(BaseCommand):
             raise CommandError("this action requires explicit --account-id bounds")
         if len(ids) > limit:
             raise CommandError("account set exceeds limit")
+        if action == "recover-list-billing":
+            from core.official_company_list_recovery import (
+                read_recovery_json,
+                recover_list_billing,
+            )
+            from core.official_company_lists import XListError
+
+            if opts["intent_id"] is None or not opts["list_id"]:
+                raise CommandError("recovery requires explicit --intent-id and --list-id")
+            if opts["apply"] and opts["dry_run"]:
+                raise CommandError("--apply and --dry-run cannot be combined")
+            try:
+                expected = read_recovery_json(opts["expected_snapshot"]) if opts["expected_snapshot"] else None
+                # A saved preview is directly reusable; a bare snapshot is also accepted.
+                if expected is not None:
+                    expected = expected.get("snapshot", expected)
+                result = recover_list_billing(
+                    cfg=load_config(Path(opts["config"])).official_company,
+                    intent_id=opts["intent_id"], list_id=opts["list_id"], apply=opts["apply"],
+                    expected_snapshot=expected,
+                    acknowledge_operator_hold=opts["acknowledge_operator_hold"],
+                    operator_hold_receipt=opts["operator_hold_receipt"],
+                    operator_hold_receipt_sha256=opts["operator_hold_receipt_sha256"],
+                    deadline=time.monotonic() + opts["seconds"],
+                )
+            except XListError as exc:
+                raise CommandError(json.dumps(exc.diagnostics())) from None
+            if opts["apply"] and result["status"] in {"blocked", "discovery_busy"}:
+                raise CommandError(json.dumps(result)) from None
+            self.stdout.write(json.dumps(result))
+            return
         if opts["dry_run"] or action == "inspect":
+            from core.official_company_credentials import credential_diagnostics
             from core.official_company_requalification import cohort_report
 
             result = coverage()
+            result["credential"] = credential_diagnostics()
+            result["provider_request_made"] = False
             result["requalification"] = cohort_report()
             result["all_outcomes"] = dict(
                 OfficialCompanyAccountState.objects.values("status")
@@ -138,7 +180,14 @@ class Command(BaseCommand):
                         store.refresh()
                     result = {"status": "ready", "action": action}
                 except XListError as exc:
-                    raise CommandError(str(exc)) from None
+                    from core.official_company_credentials import (
+                        credential_error_diagnostics,
+                    )
+
+                    raise CommandError(json.dumps({
+                        "status": "blocked", "action": action,
+                        **credential_error_diagnostics(exc),
+                    })) from None
             elif action == "requalify":
                 from core.official_company_requalification import (
                     initialize_cohort,

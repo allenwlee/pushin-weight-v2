@@ -77,6 +77,7 @@ def test_saved_credential_stop_reports_unknown_legacy_cause_without_network():
         "error": "credential_blocked", "error_origin": "local_credential_gate",
         "blocked_reason": "unknown", "blocked_origin": "legacy_unknown", "blocked_at": None,
         "credential_revision": row.revision, "provider_request_made": False,
+        "credential_status": "blocked",
     }
     row.refresh_from_db()
     assert (bytes(row.encrypted_tokens), row.revision, row.updated_at) == saved

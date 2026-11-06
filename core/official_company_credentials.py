@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from contextlib import contextmanager
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
@@ -27,6 +28,7 @@ def credential_diagnostics(row=None):
         ).filter(pk=CREDENTIAL_KEY).first()
     result = {
         "credential_revision": row.revision if row else None,
+        "credential_status": row.status if row else None,
         "blocked_reason": "", "blocked_origin": "", "blocked_at": None,
     }
     if row is not None and row.status != "ready":
@@ -38,6 +40,15 @@ def credential_diagnostics(row=None):
             blocked_at=row.blocked_at.isoformat() if known and reason != "unknown" and row.blocked_at else None,
         )
     return result
+
+
+def credential_error_diagnostics(error):
+    """Keep the attempted revision; distinguish any newer credential's state."""
+    current = credential_diagnostics()
+    attempted = error.diagnostics()
+    if error.credential_revision in {None, current["credential_revision"]}:
+        attempted.update(current)
+    return {**attempted, "credential": current}
 
 
 def credential_stop_fields(*, reason, origin, at=None):
@@ -69,6 +80,9 @@ class OwnerTokenStore:
         self.revision = None
         self.provider_request_made = False
         self.redactions = {client_secret}
+        self._recovery_revision = None
+        self._recovery_blocked_at = None
+        self.refresh_attempts = 0
 
     @classmethod
     def from_env(cls):
@@ -81,6 +95,33 @@ class OwnerTokenStore:
     def begin_invocation(self):
         self.provider_request_made = False
         self.revision = None
+        self.refresh_attempts = 0
+
+    @property
+    def recovery_active(self):
+        return self._recovery_revision is not None
+
+    @contextmanager
+    def recovery_hold(self, *, revision, blocked_at):
+        """Permit only this guarded, durable hold; never make it generally ready."""
+        if self.recovery_active or blocked_at is None:
+            raise XListError("recovery_hold_changed", auth=True, error_origin="local_credential_gate")
+        self._recovery_revision = revision
+        self._recovery_blocked_at = blocked_at
+        self.refresh_attempts = 0
+        try:
+            yield self
+        finally:
+            self._recovery_revision = None
+            self._recovery_blocked_at = None
+
+    def matches_recovery_hold(self, row):
+        return (
+            self.recovery_active and row.revision == self._recovery_revision
+            and row.status == "blocked" and row.blocked_origin == "operator"
+            and row.blocked_reason == "recovery_validation_pending"
+            and row.blocked_at == self._recovery_blocked_at
+        )
 
     def _row(self, *, for_update=False):
         query = OfficialCompanyOwnerCredential.objects
@@ -94,6 +135,13 @@ class OwnerTokenStore:
         return row
 
     def _require_ready(self, row):
+        if self.recovery_active:
+            if not self.matches_recovery_hold(row):
+                raise XListError(
+                    "recovery_hold_changed", auth=True, error_origin="local_credential_gate",
+                    provider_request_made=self.provider_request_made,
+                ).with_credential(row)
+            return
         if row.status != "ready":
             raise XListError(
                 "credential_blocked", auth=True, error_origin="local_credential_gate",
@@ -169,11 +217,22 @@ class OwnerTokenStore:
         fields = credential_stop_fields(reason=reason, origin=origin)
         if self.revision is None:
             return False
-        return bool(OfficialCompanyOwnerCredential.objects.filter(
-            pk=CREDENTIAL_KEY, revision=self.revision, status="ready",
-        ).update(status="blocked", updated_at=timezone.now(), **fields))
+        query = OfficialCompanyOwnerCredential.objects.filter(pk=CREDENTIAL_KEY, revision=self.revision)
+        if self.recovery_active:
+            query = query.filter(
+                revision=self._recovery_revision, status="blocked", blocked_origin="operator",
+                blocked_reason="recovery_validation_pending", blocked_at=self._recovery_blocked_at,
+            )
+        else:
+            query = query.filter(status="ready")
+        return bool(query.update(status="blocked", updated_at=timezone.now(), **fields))
 
     def refresh(self, *, request=requests.request):
+        if self.recovery_active and self.refresh_attempts >= 1:
+            raise XListError(
+                "recovery_refresh_limit", auth=True, error_origin="local_credential_gate",
+                provider_request_made=self.provider_request_made,
+            )
         # Persist before HTTP: a crash cannot silently reuse a rotated token.
         with transaction.atomic():
             row = self._row(for_update=True)
@@ -184,6 +243,7 @@ class OwnerTokenStore:
             for name, field_value in credential_stop_fields(reason="refresh_in_progress", origin="refresh").items():
                 setattr(row, name, field_value)
             row.save(update_fields=["status", "blocked_reason", "blocked_origin", "blocked_at", "updated_at"])
+        self.refresh_attempts += 1
         failure_reason = "refresh_transport_uncertain"
         error_origin = "provider"
         try:
@@ -223,10 +283,19 @@ class OwnerTokenStore:
                     raise XListError("credential_revision_changed", auth=True)
                 row.encrypted_tokens = self._encode(value)
                 row.revision += 1
-                row.status = "ready"
-                clear_credential_stop(row)
+                if self.recovery_active:
+                    row.status = "blocked"
+                    for name, field_value in credential_stop_fields(
+                        reason="recovery_validation_pending", origin="operator", at=self._recovery_blocked_at,
+                    ).items():
+                        setattr(row, name, field_value)
+                else:
+                    row.status = "ready"
+                    clear_credential_stop(row)
                 row.save()
                 self.revision = row.revision
+                if self.recovery_active:
+                    self._recovery_revision = row.revision
             return value["access_token"]
         except Exception as exc:  # noqa: BLE001 - never expose provider bodies or token-bearing exceptions
             OfficialCompanyOwnerCredential.objects.filter(
