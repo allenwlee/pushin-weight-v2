@@ -277,6 +277,9 @@ def test_real_scheduled_cycle_reaches_discovery_once_without_changing_queries(
     with override_settings(
         X_MONITOR_CYCLE_SKIP_FETCH=False, X_MONITOR_LLM_PAUSE_SECONDS=0
     ):
+        expected_queries = [
+            call.query_string for call in cycle_mod.plan_calls_for_cycle(cfg, scheduled_exclusions=True)
+        ]
         result = CycleRunner(
             cfg=cfg,
             cycle_kind="scheduled",
@@ -288,7 +291,9 @@ def test_real_scheduled_cycle_reaches_discovery_once_without_changing_queries(
         assert result["status"] != "aborted"
         assert [call["call_id"] for call in result["planned_calls"]] == [
             "A", "B1", "C1", "C2", "C3", "C4", "B2", "B3",
+            "B4", "C5", "B5", "B6", "C6", "B7", "B8", "B9",
         ]
+        assert api.queries == expected_queries
         if enabled:
             assert result["official_company_discovery"]["attempted"] == 1
 

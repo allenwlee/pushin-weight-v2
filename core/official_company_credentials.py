@@ -9,18 +9,51 @@ import time
 import requests
 from cryptography.fernet import Fernet, InvalidToken
 from django.db import transaction
+from django.utils import timezone
 
 from core.models import OfficialCompanyOwnerCredential
-from core.official_company_lists import XListError
+from core.official_company_lists import XListError, safe_error_code
 
 CREDENTIAL_KEY = "x-owner-17456158-list-2067062923525275922"
-REQUIRED_SCOPES = {
-    "tweet.read",
-    "users.read",
-    "list.read",
-    "list.write",
-    "offline.access",
-}
+BLOCK_ORIGINS = frozenset({"provider", "refresh", "local_configuration", "operator", "legacy_unknown"})
+REQUIRED_SCOPES = {"tweet.read", "users.read", "list.read", "list.write", "offline.access"}
+
+
+def credential_diagnostics(row=None):
+    """Read active stop facts without loading configuration or encrypted tokens."""
+    if row is None:
+        row = OfficialCompanyOwnerCredential.objects.only(
+            "status", "revision", "blocked_reason", "blocked_origin", "blocked_at",
+        ).filter(pk=CREDENTIAL_KEY).first()
+    result = {
+        "credential_revision": row.revision if row else None,
+        "blocked_reason": "", "blocked_origin": "", "blocked_at": None,
+    }
+    if row is not None and row.status != "ready":
+        known = row.blocked_origin in BLOCK_ORIGINS and row.blocked_origin != "legacy_unknown"
+        reason = safe_error_code(row.blocked_reason) if known else "unknown"
+        result.update(
+            blocked_reason=reason,
+            blocked_origin=row.blocked_origin if known else "legacy_unknown",
+            blocked_at=row.blocked_at.isoformat() if known and reason != "unknown" and row.blocked_at else None,
+        )
+    return result
+
+
+def credential_stop_fields(*, reason, origin, at=None):
+    """One validation boundary for row saves and compare-and-update writers."""
+    if origin not in BLOCK_ORIGINS or safe_error_code(reason) != reason:
+        raise ValueError("Invalid credential stop code or origin")
+    return {
+        "blocked_reason": reason, "blocked_origin": origin,
+        "blocked_at": None if origin == "legacy_unknown" else (at or timezone.now()),
+    }
+
+
+def clear_credential_stop(row):
+    row.blocked_reason = ""
+    row.blocked_origin = ""
+    row.blocked_at = None
 
 
 class OwnerTokenStore:
@@ -29,10 +62,13 @@ class OwnerTokenStore:
             raise XListError("missing_owner_client_configuration", auth=True)
         try:
             self._cipher = Fernet(key)
-        except (ValueError, TypeError) as exc:
-            raise XListError("invalid_credential_key", auth=True) from exc
+        except (ValueError, TypeError):
+            raise XListError("invalid_credential_key", auth=True) from None
         self._client_id = client_id
         self._client_secret = client_secret
+        self.revision = None
+        self.provider_request_made = False
+        self.redactions = {client_secret}
 
     @classmethod
     def from_env(cls):
@@ -42,13 +78,41 @@ class OwnerTokenStore:
             client_secret=os.environ.get("PUSHINWEIGHT_X_LIST_CLIENT_SECRET"),
         )
 
+    def begin_invocation(self):
+        self.provider_request_made = False
+        self.revision = None
+
+    def _row(self, *, for_update=False):
+        query = OfficialCompanyOwnerCredential.objects
+        if for_update:
+            query = query.select_for_update()
+        try:
+            row = query.get(pk=CREDENTIAL_KEY)
+        except OfficialCompanyOwnerCredential.DoesNotExist:
+            raise XListError("owner_credential_not_provisioned", auth=True) from None
+        self.revision = row.revision
+        return row
+
+    def _require_ready(self, row):
+        if row.status != "ready":
+            raise XListError(
+                "credential_blocked", auth=True, error_origin="local_credential_gate",
+                provider_request_made=self.provider_request_made,
+            ).with_credential(row)
+
     def _decode(self, row):
         try:
             value = json.loads(self._cipher.decrypt(bytes(row.encrypted_tokens)))
-        except (InvalidToken, ValueError, TypeError) as exc:
-            raise XListError("credential_decryption", auth=True) from exc
-        if value.get("client_id") != self._client_id:
-            raise XListError("credential_client_mismatch", auth=True)
+            if not isinstance(value, dict) or not all(
+                isinstance(value.get(key), str) and value[key]
+                for key in ("access_token", "refresh_token", "client_id")
+            ):
+                raise ValueError("Invalid token record")
+        except (InvalidToken, ValueError, TypeError):
+            raise XListError("credential_decryption", auth=True).with_credential(row) from None
+        if value["client_id"] != self._client_id:
+            raise XListError("credential_client_mismatch", auth=True).with_credential(row)
+        self.redactions.update((value["access_token"], value["refresh_token"]))
         return value
 
     def _encode(self, value):
@@ -58,34 +122,26 @@ class OwnerTokenStore:
         if not access_token or not refresh_token:
             raise XListError("missing_owner_tokens", auth=True)
         value = {
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "client_id": self._client_id,
-            "expires_at": None,
-            "scopes": [],
+            "access_token": access_token, "refresh_token": refresh_token,
+            "client_id": self._client_id, "expires_at": None, "scopes": [],
         }
         with transaction.atomic():
-            row, created = (
-                OfficialCompanyOwnerCredential.objects.select_for_update().get_or_create(
-                    key=CREDENTIAL_KEY,
-                    defaults={"encrypted_tokens": self._encode(value)},
-                )
+            row, created = OfficialCompanyOwnerCredential.objects.select_for_update().get_or_create(
+                key=CREDENTIAL_KEY, defaults={"encrypted_tokens": self._encode(value)},
             )
             if not created:
                 if not replace:
-                    raise XListError("credential_already_provisioned", auth=True)
+                    raise XListError("credential_already_provisioned", auth=True).with_credential(row)
                 row.encrypted_tokens = self._encode(value)
                 row.status = "ready"
                 row.revision += 1
+                clear_credential_stop(row)
                 row.save()
+            self.revision = row.revision
 
     def load(self):
-        try:
-            row = OfficialCompanyOwnerCredential.objects.get(pk=CREDENTIAL_KEY)
-        except OfficialCompanyOwnerCredential.DoesNotExist as exc:
-            raise XListError("owner_credential_not_provisioned", auth=True) from exc
-        if row.status != "ready":
-            raise XListError("credential_blocked", auth=True)
+        row = self._row()
+        self._require_ready(row)
         return self._decode(row)
 
     def access_token(self):
@@ -94,73 +150,93 @@ class OwnerTokenStore:
             return self.refresh()
         return value["access_token"]
 
-    def block(self):
-        OfficialCompanyOwnerCredential.objects.filter(
-            pk=CREDENTIAL_KEY, status="ready"
-        ).update(status="blocked")
+    def annotate_error(self, error):
+        # A late response retains its attempted revision, and cannot borrow a
+        # newer token pair's stop facts. This read never decrypts the payload.
+        row = OfficialCompanyOwnerCredential.objects.only(
+            "status", "revision", "blocked_reason", "blocked_origin", "blocked_at",
+        ).filter(pk=CREDENTIAL_KEY, revision=self.revision).first()
+        if row is not None:
+            error.with_credential(row)
+        elif self.revision is not None:
+            error.credential_revision = self.revision
+        error.provider_request_made |= self.provider_request_made
+        return error
+
+    def block(self, *, reason, origin):
+        if any(secret and secret in reason for secret in self.redactions):
+            reason = "http_403:unspecified" if reason.startswith("http_403:") else "unknown"
+        fields = credential_stop_fields(reason=reason, origin=origin)
+        if self.revision is None:
+            return False
+        return bool(OfficialCompanyOwnerCredential.objects.filter(
+            pk=CREDENTIAL_KEY, revision=self.revision, status="ready",
+        ).update(status="blocked", updated_at=timezone.now(), **fields))
 
     def refresh(self, *, request=requests.request):
-        # Persist the in-flight marker before HTTP. A process crash / uncertain
-        # response cannot silently reuse a possibly rotated single-use token.
+        # Persist before HTTP: a crash cannot silently reuse a rotated token.
         with transaction.atomic():
-            row = OfficialCompanyOwnerCredential.objects.select_for_update().get(
-                pk=CREDENTIAL_KEY
-            )
-            if row.status != "ready":
-                raise XListError("credential_blocked", auth=True)
+            row = self._row(for_update=True)
+            self._require_ready(row)
             value = self._decode(row)
             revision = row.revision
             row.status = "refreshing"
-            row.save(update_fields=["status", "updated_at"])
+            for name, field_value in credential_stop_fields(reason="refresh_in_progress", origin="refresh").items():
+                setattr(row, name, field_value)
+            row.save(update_fields=["status", "blocked_reason", "blocked_origin", "blocked_at", "updated_at"])
+        failure_reason = "refresh_transport_uncertain"
+        error_origin = "provider"
         try:
+            self.provider_request_made = True
             response = request(
-                "POST",
-                "https://api.x.com/2/oauth2/token",
+                "POST", "https://api.x.com/2/oauth2/token",
                 auth=(self._client_id, self._client_secret),
-                data={
-                    "grant_type": "refresh_token",
-                    "refresh_token": value["refresh_token"],
-                },
-                timeout=10,
-                allow_redirects=False,
+                data={"grant_type": "refresh_token", "refresh_token": value["refresh_token"]},
+                timeout=10, allow_redirects=False,
             )
             if response.status_code != 200:
-                raise XListError("refresh_http_" + str(response.status_code), auth=True)
+                failure_reason = "refresh_http_" + str(response.status_code)
+                raise ValueError("Refresh rejected")
+            failure_reason = "refresh_response_uncertain"
             payload = response.json()
-            if not all(
-                isinstance(payload.get(k), str) and payload[k]
-                for k in ["access_token", "refresh_token"]
+            if not isinstance(payload, dict) or not all(
+                isinstance(payload.get(key), str) and payload[key]
+                for key in ("access_token", "refresh_token", "scope")
             ):
-                raise ValueError("missing rotated tokens")
+                raise ValueError("Invalid rotated tokens")
             expires = payload.get("expires_in")
-            if (
-                not isinstance(expires, int)
-                or isinstance(expires, bool)
-                or expires <= 0
-            ):
-                raise ValueError("invalid expiry")
-            scopes = set(payload.get("scope", "").split())
+            if type(expires) is not int or expires <= 0:
+                raise ValueError("Invalid expiry")
+            scopes = set(payload["scope"].split())
             if not REQUIRED_SCOPES <= scopes:
-                raise ValueError("missing scopes")
+                raise ValueError("Missing scopes")
             value.update(
-                access_token=payload["access_token"],
-                refresh_token=payload["refresh_token"],
-                expires_at=time.time() + expires,
-                scopes=sorted(scopes),
+                access_token=payload["access_token"], refresh_token=payload["refresh_token"],
+                expires_at=time.time() + expires, scopes=sorted(scopes),
             )
+            self.redactions.update((value["access_token"], value["refresh_token"]))
+            failure_reason = "refresh_save_uncertain"
+            error_origin = "local_configuration"
             with transaction.atomic():
-                row = OfficialCompanyOwnerCredential.objects.select_for_update().get(
-                    pk=CREDENTIAL_KEY
-                )
+                row = OfficialCompanyOwnerCredential.objects.select_for_update().get(pk=CREDENTIAL_KEY)
                 if row.revision != revision or row.status != "refreshing":
                     raise XListError("credential_revision_changed", auth=True)
                 row.encrypted_tokens = self._encode(value)
                 row.revision += 1
                 row.status = "ready"
+                clear_credential_stop(row)
                 row.save()
+                self.revision = row.revision
             return value["access_token"]
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - never expose provider bodies or token-bearing exceptions
             OfficialCompanyOwnerCredential.objects.filter(
-                pk=CREDENTIAL_KEY, revision=revision, status="refreshing"
-            ).update(status="blocked")
-            raise XListError("refresh_failed", auth=True) from exc
+                pk=CREDENTIAL_KEY, revision=revision, status="refreshing",
+            ).update(
+                status="blocked", updated_at=timezone.now(),
+                **credential_stop_fields(reason=safe_error_code(failure_reason), origin="refresh"),
+            )
+            error = XListError(
+                "credential_revision_changed" if isinstance(exc, XListError) else "refresh_failed",
+                auth=True, error_origin=error_origin, provider_request_made=self.provider_request_made,
+            )
+            raise self.annotate_error(error) from None

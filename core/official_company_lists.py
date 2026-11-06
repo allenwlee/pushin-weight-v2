@@ -18,21 +18,86 @@ from django.utils import timezone
 from core.models import OfficialCompanyListIntent
 from core.official_company_accounts import x_account_identifier
 
-
 _BILLING_ERROR = "http_403:spend-cap-reached"
 
 
+# Only machine codes produced by this adapter can enter logs or saved stops.
+_LOCAL_ERROR_CODES = frozenset({
+    "unknown", "unexpected_error", "deadline", "transport", "owner_auth_denied",
+    "invalid_response", "missing_owner_token", "owner_mismatch", "preflight_required",
+    "invalid_members", "unconfirmed_add", "missing_owner_client_configuration",
+    "invalid_credential_key", "credential_decryption", "credential_client_mismatch",
+    "missing_owner_tokens", "credential_already_provisioned", "owner_credential_not_provisioned",
+    "credential_blocked", "credential_revision_changed", "refresh_failed",
+    "refresh_in_progress", "refresh_transport_uncertain", "refresh_response_uncertain",
+    "refresh_save_uncertain", "recovery_validation_pending",
+})
+LIST_DIAGNOSTIC_FIELDS = (
+    "error", "error_origin", "error_observed_at", "provider_request_made",
+    "blocked_reason", "blocked_origin", "blocked_at", "credential_revision",
+    "retry_at", "queue_recorded_at",
+)
+
+
+def safe_error_code(value):
+    if isinstance(value, str) and (
+        value in _LOCAL_ERROR_CODES
+        or re.fullmatch(r"(?:refresh_)?http_[1-5][0-9]{2}", value)
+        or re.fullmatch(r"http_403:[a-z][a-z0-9_-]{0,47}", value)
+    ):
+        return value
+    return "unknown"
+
+
 class XListError(RuntimeError):
-    def __init__(self, code, *, auth=False, unknown=False, retry_at=None, write_refused=False, billing=False):
-        super().__init__(code)
+    def __init__(
+        self, code, *, auth=False, unknown=False, retry_at=None,
+        write_refused=False, billing=False, error_origin="local_configuration",
+        provider_request_made=False, credential_revision=None,
+    ):
+        super().__init__(safe_error_code(code))
         self.auth = auth
         self.unknown = unknown
         self.retry_at = retry_at
         self.write_refused = write_refused
         self.billing = billing
+        self.error_origin = error_origin
+        self.provider_request_made = provider_request_made
+        self.credential_revision = credential_revision
+        self.blocked_reason = None
+        self.blocked_origin = None
+        self.blocked_at = None
+        self.error_observed_at = timezone.now() if error_origin == "provider" else None
+
+    def diagnostics(self):
+        result = {
+            "error": str(self), "error_origin": self.error_origin,
+            "provider_request_made": self.provider_request_made,
+        }
+        for key in ("credential_revision", "blocked_reason", "blocked_origin"):
+            value = getattr(self, key)
+            if value is not None:
+                result[key] = value
+        if self.blocked_reason is not None:
+            result["blocked_at"] = self.blocked_at.isoformat() if self.blocked_at else None
+        for key in ("retry_at", "error_observed_at"):
+            value = getattr(self, key)
+            if value is not None:
+                result[key] = value.isoformat()
+        return result
+
+    def with_credential(self, row):
+        from core.official_company_credentials import credential_diagnostics
+
+        values = credential_diagnostics(row)
+        self.credential_revision = values["credential_revision"]
+        self.blocked_reason = values["blocked_reason"]
+        self.blocked_origin = values["blocked_origin"]
+        self.blocked_at = row.blocked_at if values["blocked_at"] else None
+        return self
 
 
-def _forbidden_reason(response, access_token):
+def _forbidden_reason(response, access_token, *, redactions=()):
     """Keep a machine-readable reason, never a raw body, detail or echoed token."""
     try:
         payload = response.json()
@@ -51,7 +116,7 @@ def _forbidden_reason(response, access_token):
         if (
             isinstance(candidate, str)
             and re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", candidate)
-            and (not access_token or access_token not in candidate)
+            and not any(secret and secret in candidate for secret in (access_token, *redactions))
         ):
             return candidate
     errors = payload.get("errors")
@@ -81,6 +146,7 @@ class XOwnerListClient:
     list_id: str
     owner_id: str
     request: Callable = field(default=requests.request, repr=False)
+    redactions: set[str] = field(default_factory=set, repr=False)
     timeout: float = 10
     # X permits 5000 members per list, returned in pages of at most 100.
     # The elapsed-time deadline also bounds reads when the provider is slow.
@@ -89,12 +155,23 @@ class XOwnerListClient:
     refresh: Callable | None = field(default=None, repr=False)
     _ready: bool = field(default=False, init=False)
     _refreshed: bool = field(default=False, init=False)
+    provider_request_made: bool = field(default=False, init=False)
+
+    def begin_invocation(self):
+        self.provider_request_made = False
+
+    def _error(self, code, *, error_origin="provider", **kwargs):
+        return XListError(
+            code, error_origin=error_origin,
+            provider_request_made=self.provider_request_made, **kwargs,
+        )
 
     def _call(self, method, path, **kwargs):
         remaining = self.deadline - time.monotonic()
         if remaining < 1:
-            raise XListError("deadline")
+            raise self._error("deadline", error_origin="local_configuration")
         try:
+            self.provider_request_made = True
             response = self.request(
                 method,
                 "https://api.x.com/2" + path,
@@ -104,27 +181,27 @@ class XOwnerListClient:
                 **kwargs,
             )
         except requests.RequestException as exc:
-            raise XListError("transport", unknown=method == "POST") from exc
+            raise self._error("transport", unknown=method == "POST") from exc
         if response.status_code == 401 and self.refresh and not self._refreshed:
             self._refreshed = True
             self.access_token = self.refresh()
             return self._call(method, path, **kwargs)
         if response.status_code == 401:
-            raise XListError("owner_auth_denied", auth=True)
+            raise self._error("owner_auth_denied", auth=True)
         if response.status_code == 403:
             refused = method == "POST" and path == f"/lists/{self.list_id}/members"
-            code = "http_403:" + _forbidden_reason(response, self.access_token)
+            code = "http_403:" + _forbidden_reason(response, self.access_token, redactions=self.redactions)
             billing = code == _BILLING_ERROR
-            raise XListError(
+            raise self._error(
                 code,
                 auth=not (refused or billing),
                 write_refused=refused,
                 billing=billing,
             )
         if response.status_code == 429:
-            raise XListError("http_429", retry_at=_rate_limit_retry_at(response))
+            raise self._error("http_429", retry_at=_rate_limit_retry_at(response))
         if response.status_code >= 300:
-            raise XListError(
+            raise self._error(
                 "http_" + str(response.status_code),
                 unknown=method == "POST" and response.status_code >= 500,
             )
@@ -134,24 +211,24 @@ class XOwnerListClient:
                 raise ValueError("invalid payload")
             return payload
         except (ValueError, TypeError) as exc:
-            raise XListError("invalid_response", unknown=method == "POST") from exc
+            raise self._error("invalid_response", unknown=method == "POST") from exc
 
     def preflight(self):
         if not self.access_token:
-            raise XListError("missing_owner_token", auth=True)
+            raise self._error("missing_owner_token", auth=True, error_origin="local_configuration")
         user = self._call("GET", "/users/me").get("data", {})
         if user.get("id") != self.owner_id:
-            raise XListError("owner_mismatch", auth=True)
+            raise self._error("owner_mismatch", auth=True, error_origin="local_configuration")
         target = self._call(
             "GET", "/lists/" + self.list_id, params={"list.fields": "owner_id,private"}
         ).get("data", {})
         if target.get("owner_id") != self.owner_id or target.get("private") is not True:
-            raise XListError("owner_mismatch", auth=True)
+            raise self._error("owner_mismatch", auth=True, error_origin="local_configuration")
         self._ready = True
 
     def members(self):
         if not self._ready:
-            raise XListError("preflight_required", auth=True)
+            raise self._error("preflight_required", auth=True, error_origin="local_configuration")
         result = set()
         token = None
         seen = set()
@@ -165,7 +242,7 @@ class XOwnerListClient:
                 not isinstance(r, dict) or not str(r.get("id", "")).isdecimal()
                 for r in rows
             ):
-                raise XListError("invalid_members")
+                raise self._error("invalid_members")
             result.update(str(row["id"]) for row in rows)
             token = payload.get("meta", {}).get("next_token")
             if not token:
@@ -177,14 +254,14 @@ class XOwnerListClient:
 
     def add(self, identifier):
         if not self._ready:
-            raise XListError("preflight_required", auth=True)
+            raise self._error("preflight_required", auth=True, error_origin="local_configuration")
         if not str(identifier).isdecimal():
             raise ValueError("X native identifier required")
         payload = self._call(
             "POST", f"/lists/{self.list_id}/members", json={"user_id": str(identifier)}
         )
         if payload.get("data", {}).get("is_member") is not True:
-            raise XListError("unconfirmed_add", unknown=True)
+            raise self._error("unconfirmed_add", unknown=True)
 
 
 def _claim(intent_id):
@@ -269,6 +346,23 @@ def _complete(claim, status, error="", *, retry_at=None, consume_attempt=True):
 
 
 def sync_intents(*, cfg, client, deadline=None):
+    # Scope the request fact to this invocation, including a reused client.
+    begin = getattr(type(client), "begin_invocation", None)
+    if begin is not None:
+        begin(client)
+    result = _sync_intents(cfg=cfg, client=client, deadline=deadline)
+    result["provider_request_made"] = (
+        result.get("provider_request_made") is True
+        or getattr(client, "provider_request_made", False) is True
+    )
+    return result
+
+
+def _error_diagnostics(exc):
+    return (exc if isinstance(exc, XListError) else XListError("unexpected_error")).diagnostics()
+
+
+def _sync_intents(*, cfg, client, deadline=None):
     result = {"claimed": 0, "confirmed": 0, "writes": 0, "status": "disabled"}
     if not cfg.list_sync_enabled or cfg.max_list_writes == 0:
         return result
@@ -288,7 +382,7 @@ def sync_intents(*, cfg, client, deadline=None):
         )
         .filter(Q(last_error="http_429") | Q(last_error__startswith="http_403:"))
         .order_by("-next_attempt_at")
-        .values("next_attempt_at", "last_error")
+        .values("next_attempt_at", "last_error", "updated_at")
         .first()
     )
     if pause:
@@ -299,7 +393,8 @@ def sync_intents(*, cfg, client, deadline=None):
                 "deferred_write_refused"
             ),
             retry_at=pause["next_attempt_at"].isoformat(),
-            error=pause["last_error"],
+            error=safe_error_code(pause["last_error"]), error_origin="local_cooldown",
+            queue_recorded_at=pause["updated_at"].isoformat(),
         )
         return result
     removed_ids = list(
@@ -339,11 +434,17 @@ def sync_intents(*, cfg, client, deadline=None):
                 list_id=int(cfg.list_id), status="blocked_auth"
             )
             .order_by("updated_at", "pk")
-            .values("last_error")
+            .values("last_error", "updated_at")
             .first()
         )
         if blocked:
-            result.update(status="blocked_auth", error=blocked["last_error"])
+            from core.official_company_credentials import credential_diagnostics
+
+            result.update(
+                status="blocked_auth", error=safe_error_code(blocked["last_error"]),
+                error_origin="local_credential_gate", queue_recorded_at=blocked["updated_at"].isoformat(),
+                **credential_diagnostics(),
+            )
         else:
             result["status"] = "idle"
         return result
@@ -372,7 +473,7 @@ def sync_intents(*, cfg, client, deadline=None):
             "deferred_rate_limit" if isinstance(exc, XListError) and str(exc) == "http_429"
             else "deferred"
         )
-        result["error"] = str(exc) if isinstance(exc, XListError) else type(exc).__name__
+        result.update(_error_diagnostics(exc))
         if retry_at:
             result["retry_at"] = retry_at.isoformat()
         return result
@@ -409,6 +510,7 @@ def sync_intents(*, cfg, client, deadline=None):
             )
             result["confirmed"] += int(_complete(claim, "confirmed"))
         except Exception as exc:  # noqa: BLE001
+            result.update(_error_diagnostics(exc))
             if isinstance(exc, XListError) and exc.write_refused:
                 retry_at = timezone.now() + timedelta(hours=min(24, 2 ** claim.attempts))
                 _complete(
@@ -458,47 +560,60 @@ def sync_intents(*, cfg, client, deadline=None):
 def build_owner_list_client(cfg):
     from core.official_company_credentials import OwnerTokenStore
 
-    # Lazy credential access: sync claims no work => no secret reads or renewal.
+    # Lazy credential access: a saved queue stop never reads tokens or renews.
     class StoredClient:
         _client = None
         _deadline = None
         _store = None
 
+        def begin_invocation(self):
+            self._client = None
+            self._store = None
+
+        @property
+        def provider_request_made(self):
+            return bool(
+                (self._client and self._client.provider_request_made)
+                or (self._store and self._store.provider_request_made)
+            )
+
         def limit_deadline(self, deadline):
             self._deadline = deadline
 
-        def preflight(self):
-            store = OwnerTokenStore.from_env()
-            self._store = store
+        def _invoke(self, method, *args):
+            try:
+                return method(*args)
+            except XListError as exc:
+                if self._store is not None:
+                    if exc.auth and self._client is not None and exc.error_origin != "local_credential_gate":
+                        self._store.block(reason=str(exc), origin=(
+                            "provider" if exc.error_origin == "provider" else "local_configuration"
+                        ))
+                    self._store.annotate_error(exc)
+                exc.provider_request_made |= self.provider_request_made
+                raise
+
+        def _preflight(self):
+            self._store = OwnerTokenStore.from_env()
+            self._store.begin_invocation()
             self._client = XOwnerListClient(
-                access_token=store.access_token(),
+                access_token=self._store.access_token(),
                 list_id=cfg.list_id,
                 owner_id=cfg.owner_id,
-                refresh=store.refresh,
+                refresh=self._store.refresh,
+                redactions=self._store.redactions,
             )
             if self._deadline is not None:
                 self._client.deadline = self._deadline
-            try:
-                return self._client.preflight()
-            except XListError as exc:
-                if exc.auth:
-                    store.block()
-                raise
+            return self._client.preflight()
+
+        def preflight(self):
+            return self._invoke(self._preflight)
 
         def members(self):
-            try:
-                return self._client.members()
-            except XListError as exc:
-                if exc.auth:
-                    self._store.block()
-                raise
+            return self._invoke(self._client.members)
 
         def add(self, identifier):
-            try:
-                return self._client.add(identifier)
-            except XListError as exc:
-                if exc.auth:
-                    self._store.block()
-                raise
+            return self._invoke(self._client.add, identifier)
 
     return StoredClient()

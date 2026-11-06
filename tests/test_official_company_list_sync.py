@@ -506,6 +506,11 @@ def test_cycle_logs_list_billing_and_keeps_cooldown_visible_without_provider_ret
                 run_id=f"list-refusal-{index}", deadline=cfg.harvest.start_deadline()
             )
             assert result["list_sync"]["status"] == "deferred_billing"
+            assert result["list_sync"]["provider_request_made"] is (not index)
+            assert result["list_sync"]["error_origin"] == ("local_cooldown" if index else "provider")
+            if index:
+                assert "queue_recorded_at" in result["list_sync"]
+                assert "error_observed_at" not in result["list_sync"]
             assert result["list_sync"]["error"] == "http_403:spend-cap-reached"
             intent.refresh_from_db()
             credential.refresh_from_db()
@@ -630,3 +635,142 @@ def test_billing_read_cooldown_preserves_all_attempts_and_recovers_when_due(
     assert first.status == second.status == "confirmed"
     assert first.add_requested_at is None
     assert second.add_requested_at is not None and second.add_acknowledged_at is not None
+
+
+def test_cycle_preserves_fresh_credential_block_provenance_on_later_local_stop(monkeypatch, caplog):
+    import json
+    import logging
+
+    from core.models import OfficialCompanyOwnerCredential
+    from core.official_company_lists import build_owner_list_client
+    from monitor.cycle import CycleRunner
+    from x_monitor.config import Config
+
+    _, list_cfg = setup_intent()
+    client, _, calls = stored_client(
+        monkeypatch, list_cfg, refusal_at="/users/me", payload={"reason": "client-not-enrolled"},
+    )
+    cfg = Config(enabled_models=["deepseek"], daily_ceiling=100, official_company=list_cfg)
+    results = []
+    with caplog.at_level(logging.INFO, logger="monitor.cycle"):
+        for index in range(2):
+            runner = CycleRunner(
+                cfg=cfg, cycle_kind="scheduled",
+                _official_list_client=client if not index else build_owner_list_client(list_cfg),
+                _official_company_call=Mock(side_effect=AssertionError("unexpected model call")),
+            )
+            results.append(runner._run_official_company_discovery(
+                run_id=f"credential-stop-{index}", deadline=cfg.harvest.start_deadline(),
+            )["list_sync"])
+            if index:
+                assert not calls
+            calls.clear()
+    first, later = results
+    assert first["error_origin"] == "provider" and first["provider_request_made"] is True
+    assert later["error_origin"] == "local_credential_gate" and later["provider_request_made"] is False
+    row = OfficialCompanyOwnerCredential.objects.get()
+    assert row.blocked_reason == "http_403:client-not-enrolled"
+    assert row.blocked_origin == "provider" and row.blocked_at is not None
+    for result in results:
+        assert result["blocked_reason"] == row.blocked_reason
+        assert result["blocked_origin"] == row.blocked_origin
+        assert result["blocked_at"] == row.blocked_at.isoformat()
+        assert result["credential_revision"] == row.revision
+    records = [json.loads(record.message.removeprefix("OFFICIAL_COMPANY_LIST_SYNC "))
+               for record in caplog.records if record.message.startswith("OFFICIAL_COMPANY_LIST_SYNC ")]
+    for result, record in zip(results, records, strict=True):
+        assert record["error_origin"] == result["error_origin"]
+        assert record["provider_request_made"] == result["provider_request_made"]
+        assert record["blocked_at"] == result["blocked_at"]
+    assert "private-access-token" not in caplog.text
+
+
+def test_expiry_refresh_before_local_deadline_still_reports_provider_request(monkeypatch):
+    import time
+    from functools import partial
+
+    from core import official_company_lists as lists
+    from core.models import OfficialCompanyOwnerCredential
+
+    _, cfg = setup_intent()
+    client, store, calls = stored_client(monkeypatch, cfg)
+    row = OfficialCompanyOwnerCredential.objects.get()
+    tokens = store.load()
+    tokens["expires_at"] = 1
+    row.encrypted_tokens = store._encode(tokens)
+    row.save(update_fields=["encrypted_tokens"])
+    response = Mock(status_code=200)
+    response.json.return_value = {
+        "access_token": "rotated-access", "refresh_token": "rotated-refresh",
+        "expires_in": 7200, "scope": "tweet.read users.read list.read list.write offline.access",
+    }
+    original_refresh = store.refresh
+    refresh_request = Mock(return_value=response)
+    monkeypatch.setattr(store, "refresh", lambda: original_refresh(request=refresh_request))
+    monkeypatch.setattr(lists, "XOwnerListClient", partial(
+        XOwnerListClient, deadline=time.monotonic() - 1,
+        request=Mock(side_effect=AssertionError("deadline must prevent list HTTP")),
+    ))
+    result = sync_intents(cfg=cfg, client=client)
+    assert result["error"] == "deadline" and result["error_origin"] == "local_configuration"
+    assert result["provider_request_made"] is True and result["credential_revision"] == 2
+    assert not calls and refresh_request.call_count == 1
+    row.refresh_from_db()
+    assert row.status == "ready" and row.revision == 2
+    assert (row.blocked_reason, row.blocked_origin, row.blocked_at) == ("", "", None)
+
+
+@pytest.mark.parametrize("reason", ["private-refresh", "test-secret"])
+def test_structured_error_cannot_echo_other_credential_secrets(monkeypatch, reason):
+    from core.models import OfficialCompanyOwnerCredential
+
+    _, cfg = setup_intent()
+    client, _, _ = stored_client(monkeypatch, cfg, refusal_at="/users/me", payload={"reason": reason})
+    result = sync_intents(cfg=cfg, client=client)
+    row = OfficialCompanyOwnerCredential.objects.get()
+    assert result["error"] == row.blocked_reason == "http_403:unspecified"
+    assert reason not in str(result)
+
+
+def test_late_provider_failure_reports_attempted_revision_without_blocking_new_tokens(monkeypatch):
+    from functools import partial
+
+    from core import official_company_lists as lists
+    from core.models import OfficialCompanyOwnerCredential
+
+    _, cfg = setup_intent()
+    client, store, _ = stored_client(monkeypatch, cfg)
+
+    def transport(*args, **kwargs):
+        row = OfficialCompanyOwnerCredential.objects.get()
+        value = store.load()
+        value.update(access_token="newer-access", refresh_token="newer-refresh")
+        OfficialCompanyOwnerCredential.objects.filter(pk=row.pk).update(
+            encrypted_tokens=store._encode(value), revision=row.revision + 1,
+        )
+        response = Mock(status_code=403)
+        response.json.return_value = {"reason": "client-not-enrolled"}
+        return response
+
+    monkeypatch.setattr(lists, "XOwnerListClient", partial(XOwnerListClient, request=transport))
+    result = sync_intents(cfg=cfg, client=client)
+    row = OfficialCompanyOwnerCredential.objects.get()
+    assert row.status == "ready" and row.revision == 2
+    assert result["credential_revision"] == 1 and result["provider_request_made"] is True
+    assert "blocked_reason" not in result
+
+
+def test_missing_owner_configuration_is_local_and_makes_no_provider_request(monkeypatch):
+    from core.official_company_lists import build_owner_list_client
+
+    _, cfg = setup_intent()
+    for name in ("PUSHINWEIGHT_X_LIST_ENCRYPTION_KEY", "PUSHINWEIGHT_X_LIST_CLIENT_ID",
+                 "PUSHINWEIGHT_X_LIST_CLIENT_SECRET"):
+        monkeypatch.delenv(name, raising=False)
+    network = Mock(side_effect=AssertionError("configuration failure must stay offline"))
+    monkeypatch.setattr("requests.sessions.Session.send", network)
+    result = sync_intents(cfg=cfg, client=build_owner_list_client(cfg))
+    assert result["error"] == "missing_owner_client_configuration"
+    assert result["error_origin"] == "local_configuration" and result["provider_request_made"] is False
+    assert result["writes"] == 0
+    network.assert_not_called()

@@ -5897,10 +5897,12 @@ class CycleRunner:
             if "list_sync" in result:
                 # The canonical harvest summary omits this optional lane.
                 # Keep its bounded status/reason visible without provider payloads.
+                from core.official_company_lists import LIST_DIAGNOSTIC_FIELDS
+
                 list_status = result["list_sync"]
                 logger.info("OFFICIAL_COMPANY_LIST_SYNC %s", json.dumps({
                     key: list_status[key]
-                    for key in ("status", "error", "retry_at", "claimed", "confirmed", "writes")
+                    for key in ("status", "claimed", "confirmed", "writes", *LIST_DIAGNOSTIC_FIELDS)
                     if key in list_status
                 }, sort_keys=True))
             self._optional_calls_remaining -= result.get("attempted", 0)

@@ -10194,6 +10194,14 @@ class OfficialCompanyOwnerCredential(models.Model):
     encrypted_tokens = models.BinaryField()
     status = models.CharField(max_length=24, default="ready")
     revision = models.PositiveIntegerField(default=1)
+    blocked_reason = models.CharField(max_length=128, blank=True, default="", db_default="")
+    blocked_origin = models.CharField(
+        max_length=24, blank=True, default="", db_default="",
+        choices=[(value, value) for value in (
+            "provider", "refresh", "local_configuration", "operator", "legacy_unknown",
+        )],
+    )
+    blocked_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -10202,7 +10210,13 @@ class OfficialCompanyOwnerCredential(models.Model):
             models.CheckConstraint(
                 condition=models.Q(status__in=["ready", "refreshing", "blocked"]),
                 name="ck_official_co_credential",
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(blocked_origin__in=[
+                    "", "provider", "refresh", "local_configuration", "operator", "legacy_unknown",
+                ]),
+                name="ck_official_co_block_origin",
+            ),
         ]
 
 
