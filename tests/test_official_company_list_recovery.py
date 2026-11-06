@@ -325,6 +325,72 @@ def test_billing_failure_retains_hold_and_resume_requires_fresh_snapshot(monkeyp
     assert apply_recovery(intent, cfg)["status"] == "confirmed"
 
 
+@pytest.mark.parametrize("member", [True, False])
+@pytest.mark.parametrize("later_failure", [None, "transport", "rate_limit"])
+def test_resumed_recovery_preserves_whole_list_cooldown(monkeypatch, member, later_failure):
+    from core.official_company_lists import sync_intents
+
+    intent, cfg, store = recovery_fixture(monkeypatch)
+    sibling_account = Account.objects.create(author_id="987655", handle="another_lab")
+    sibling_state = OfficialCompanyAccountState.objects.create(
+        account=sibling_account, status="registered", evidence_hash="b" * 64,
+    )
+    sibling = OfficialCompanyListIntent.objects.create(
+        account=sibling_account, state=sibling_state,
+        evidence_hash=sibling_state.evidence_hash, list_id=intent.list_id,
+    )
+    wire_client(monkeypatch, cfg, store, response_hook=lambda *args: response_with(
+        {"reason": "spend-cap-reached"}, 403,
+    ))
+    assert apply_recovery(intent, cfg)["error"] == "http_403:spend-cap-reached"
+    intent.refresh_from_db()
+    until = intent.next_attempt_at
+    if later_failure:
+        code = 503 if later_failure == "transport" else 429
+        wire_client(monkeypatch, cfg, store, response_hook=lambda *args: response_with({}, code))
+        assert apply_recovery(intent, cfg)["error"] == f"http_{code}"
+    wire_client(monkeypatch, cfg, store, member=member)
+    assert apply_recovery(intent, cfg)["status"] == ("confirmed" if member else "verify_needed")
+    intent.refresh_from_db()
+    assert intent.attempts == 2
+    assert intent.next_attempt_at == until
+    assert intent.last_error == "http_403:spend-cap-reached"
+    client = Mock()
+    client.members.return_value = ({intent.native_account_id, sibling.native_account_id}, True)
+    result = sync_intents(cfg=cfg, client=client)
+    assert result["status"] == "deferred_billing"
+    client.preflight.assert_not_called()
+    client.members.assert_not_called()
+    client.add.assert_not_called()
+    sibling.refresh_from_db()
+    assert sibling.status == "pending" and sibling.attempts == 0
+    # Once the saved deadline expires, the same scheduler can verify both rows.
+    monkeypatch.setattr("core.official_company_lists.timezone.now", lambda: until + timedelta(seconds=1))
+    assert sync_intents(cfg=cfg, client=client)["confirmed"] == (1 if member else 2)
+    client.add.assert_not_called()
+
+
+@pytest.mark.parametrize("member", [True, False])
+def test_recovery_retains_rate_limit_without_refunding_a_delivery_attempt(monkeypatch, member):
+    from core.official_company_lists import sync_intents
+
+    intent, cfg, store = recovery_fixture(monkeypatch)
+    wire_client(monkeypatch, cfg, store, response_hook=lambda *args: response_with({}, 429))
+    assert apply_recovery(intent, cfg)["error"] == "http_429"
+    intent.refresh_from_db()
+    until = intent.next_attempt_at
+    wire_client(monkeypatch, cfg, store, member=member)
+    assert apply_recovery(intent, cfg)["status"] == ("confirmed" if member else "verify_needed")
+    intent.refresh_from_db()
+    assert intent.attempts == 2 and intent.last_error == "http_429"
+    assert intent.next_attempt_at == until
+    client = Mock()
+    assert sync_intents(cfg=cfg, client=client)["status"] == "deferred_rate_limit"
+    client.preflight.assert_not_called()
+    client.members.assert_not_called()
+    client.add.assert_not_called()
+
+
 @pytest.mark.parametrize("failure", ["permission", "owner", "decrypt", "client", "configuration"])
 def test_genuine_auth_or_configuration_failure_replaces_hold_with_actual_cause(monkeypatch, failure):
     from core.official_company_lists import XListError
@@ -607,7 +673,9 @@ def test_resumed_hold_preserves_longer_target_cooldown_after_nonbilling_error(mo
     wire_client(monkeypatch, cfg, store, incomplete=True)
     assert apply_recovery(intent, cfg)["error"] == "recovery_incomplete_membership"
     intent.refresh_from_db()
-    assert intent.last_error == "recovery_incomplete_membership" and intent.next_attempt_at == until
+    # The command reports the fresh read failure; persisted state keeps the
+    # reason governing the longer list-wide pause for the scheduler.
+    assert intent.last_error == "http_403:spend-cap-reached" and intent.next_attempt_at == until
     wire_client(monkeypatch, cfg, store, member=False)
     assert apply_recovery(intent, cfg)["status"] == "verify_needed"
     intent.refresh_from_db()

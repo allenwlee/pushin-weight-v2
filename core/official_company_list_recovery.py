@@ -9,13 +9,13 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.db import transaction
-from django.db.models import Max, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from core.models import OfficialCompanyListIntent, OfficialCompanyOwnerCredential
 from core.official_company_credentials import (
     CREDENTIAL_KEY,
+    RECOVERY_VALIDATION_PENDING,
     OwnerTokenStore,
     clear_credential_stop,
     credential_diagnostics,
@@ -27,11 +27,10 @@ from core.official_company_lists import (
     XListError,
     _complete,
     build_owner_list_client,
+    list_cooldown,
     safe_error_code,
 )
 from core.official_company_lock import official_company_writer_lock
-
-HOLD = "recovery_validation_pending"
 
 
 def read_recovery_json(path, *, error="recovery_snapshot_invalid", sha256=None):
@@ -103,7 +102,7 @@ def _claim_token(credential, intent):
 def _known_hold(credential):
     return (
         credential.status == "blocked" and credential.blocked_origin == "operator"
-        and credential.blocked_reason == HOLD and credential.blocked_at is not None
+        and credential.blocked_reason == RECOVERY_VALIDATION_PENDING and credential.blocked_at is not None
     )
 
 
@@ -182,14 +181,6 @@ def _validate(credential, intent, *, cfg, list_id, expected, apply, receipt):
     raise XListError("recovery_credential_state")
 
 
-def _list_cooldown(list_id):
-    return OfficialCompanyListIntent.objects.filter(
-        list_id=list_id, next_attempt_at__gt=timezone.now(),
-    ).filter(Q(last_error="http_429") | Q(last_error__startswith="http_403:")).aggregate(
-        until=Max("next_attempt_at"),
-    )["until"]
-
-
 def _record_failure(intent_id, target, error, *, revision, hold_at):
     with transaction.atomic():
         credential, intent = _rows(intent_id, lock=True)
@@ -207,10 +198,15 @@ def _record_failure(intent_id, target, error, *, revision, hold_at):
         retry_at = timezone.now() + timedelta(hours=24) if error.billing else (
             error.retry_at or timezone.now() + timedelta(minutes=15)
         )
+        pause = list_cooldown(intent.list_id)
         intent.next_attempt_at = max(
-            value for value in (retry_at, intent.next_attempt_at, _list_cooldown(intent.list_id)) if value
+            value for value in (retry_at, intent.next_attempt_at, pause["next_attempt_at"] if pause else None) if value
         )
-        intent.last_error = str(error)
+        # Report this fresh error in the command result, but retain the reason
+        # governing a longer provider pause across another recovery attempt.
+        intent.last_error = (
+            pause["last_error"] if pause and pause["next_attempt_at"] >= retry_at else str(error)
+        )
         intent.save(update_fields=["last_error", "next_attempt_at", "updated_at"])
 
 
@@ -258,13 +254,10 @@ def recover_list_billing(
                         credential, intent, cfg=cfg, list_id=list_id, expected=expected_snapshot,
                         apply=True, receipt=receipt,
                     )
-                    cooldown = max(
-                        (value for value in (intent.next_attempt_at, _list_cooldown(intent.list_id)) if value),
-                        default=None,
-                    )
+                    cooldown = intent.next_attempt_at
                     if not _known_hold(credential):
                         credential.status = "blocked"
-                        for name, value in credential_stop_fields(reason=HOLD, origin="operator").items():
+                        for name, value in credential_stop_fields(reason=RECOVERY_VALIDATION_PENDING, origin="operator").items():
                             setattr(credential, name, value)
                         credential.save(update_fields=["status", "blocked_reason", "blocked_origin", "blocked_at", "updated_at"])
                         intent.claim_token = _claim_token(credential, intent)
@@ -288,17 +281,24 @@ def recover_list_billing(
                             raise XListError("recovery_target_changed")
                         _validate_target(intent)
                         status = "confirmed" if intent.native_account_id in members else "verify_needed"
-                        due = max(value for value in (timezone.now(), cooldown, _list_cooldown(intent.list_id)) if value)
+                        pause = list_cooldown(intent.list_id)
+                        due = max(value for value in (
+                            timezone.now(), cooldown, pause["next_attempt_at"] if pause else None,
+                        ) if value)
                         credential.status = "ready"
                         clear_credential_stop(credential)
                         credential.save(update_fields=["status", "blocked_reason", "blocked_origin", "blocked_at", "updated_at"])
-                        if not _complete(intent, status, retry_at=due if status == "verify_needed" else None):
+                        if not _complete(
+                            intent, status, error=pause["last_error"] if pause else "",
+                            retry_at=due if pause or status == "verify_needed" else None,
+                            preserve_attempts=True,
+                        ):
                             raise XListError("recovery_target_changed")
                     return {
                         "status": status, "intent_id": intent_id, "list_id": str(list_id),
                         "provider_request_made": client.provider_request_made,
                         **credential_diagnostics(credential),
-                        "retry_at": _stamp(due) if status == "verify_needed" else None,
+                        "retry_at": _stamp(due) if pause or status == "verify_needed" else None,
                     }
             except Exception as exc:  # noqa: BLE001 - retain the hold under the writer lock
                 error = exc if isinstance(exc, XListError) else XListError("unexpected_error")

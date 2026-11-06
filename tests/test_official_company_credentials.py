@@ -51,6 +51,38 @@ def test_failed_or_ambiguous_refresh_blocks_repeated_refresh_attempts():
     assert request.call_count == 1
 
 
+def test_rotated_token_save_failure_blocks_old_pair_without_another_exchange(monkeypatch):
+    key = Fernet.generate_key()
+    store = OwnerTokenStore(key=key, client_id="client", client_secret="secret")
+    store.provision(access_token="old-access", refresh_token="old-refresh")
+    original = OfficialCompanyOwnerCredential.objects.get()
+    save = OfficialCompanyOwnerCredential.save
+
+    def fail_rotated_save(row, *args, **kwargs):
+        if row.revision > original.revision:
+            raise RuntimeError("private-save-error")
+        return save(row, *args, **kwargs)
+
+    monkeypatch.setattr(OfficialCompanyOwnerCredential, "save", fail_rotated_save)
+    response = Mock(status_code=200)
+    response.json.return_value = {
+        "access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 7200,
+        "scope": "tweet.read users.read list.read list.write offline.access",
+    }
+    request = Mock(return_value=response)
+    with pytest.raises(XListError, match="refresh_failed") as error:
+        store.refresh(request=request)
+    row = OfficialCompanyOwnerCredential.objects.get()
+    assert row.status == "blocked" and row.revision == original.revision
+    assert bytes(row.encrypted_tokens) == bytes(original.encrypted_tokens)
+    assert row.blocked_reason == "refresh_save_uncertain" and row.blocked_origin == "refresh"
+    assert error.value.diagnostics()["blocked_reason"] == "refresh_save_uncertain"
+    fresh = OwnerTokenStore(key=key, client_id="client", client_secret="secret")
+    with pytest.raises(XListError, match="credential_blocked"):
+        fresh.refresh(request=request)
+    assert request.call_count == 1
+
+
 def test_wrong_key_or_client_cannot_read_and_refresh_other_app_tokens():
     key = Fernet.generate_key()
     store = OwnerTokenStore(key=key, client_id="client", client_secret="secret")

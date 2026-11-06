@@ -17,6 +17,7 @@ from core.official_company_lists import XListError, safe_error_code
 
 CREDENTIAL_KEY = "x-owner-17456158-list-2067062923525275922"
 BLOCK_ORIGINS = frozenset({"provider", "refresh", "local_configuration", "operator", "legacy_unknown"})
+RECOVERY_VALIDATION_PENDING = "recovery_validation_pending"
 REQUIRED_SCOPES = {"tweet.read", "users.read", "list.read", "list.write", "offline.access"}
 
 
@@ -119,7 +120,7 @@ class OwnerTokenStore:
         return (
             self.recovery_active and row.revision == self._recovery_revision
             and row.status == "blocked" and row.blocked_origin == "operator"
-            and row.blocked_reason == "recovery_validation_pending"
+            and row.blocked_reason == RECOVERY_VALIDATION_PENDING
             and row.blocked_at == self._recovery_blocked_at
         )
 
@@ -221,7 +222,7 @@ class OwnerTokenStore:
         if self.recovery_active:
             query = query.filter(
                 revision=self._recovery_revision, status="blocked", blocked_origin="operator",
-                blocked_reason="recovery_validation_pending", blocked_at=self._recovery_blocked_at,
+                blocked_reason=RECOVERY_VALIDATION_PENDING, blocked_at=self._recovery_blocked_at,
             )
         else:
             query = query.filter(status="ready")
@@ -286,7 +287,7 @@ class OwnerTokenStore:
                 if self.recovery_active:
                     row.status = "blocked"
                     for name, field_value in credential_stop_fields(
-                        reason="recovery_validation_pending", origin="operator", at=self._recovery_blocked_at,
+                        reason=RECOVERY_VALIDATION_PENDING, origin="operator", at=self._recovery_blocked_at,
                     ).items():
                         setattr(row, name, field_value)
                 else:

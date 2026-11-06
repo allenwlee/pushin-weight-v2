@@ -311,7 +311,7 @@ def _claim(intent_id):
         return intent
 
 
-def _complete(claim, status, error="", *, retry_at=None, consume_attempt=True):
+def _complete(claim, status, error="", *, retry_at=None, consume_attempt=True, preserve_attempts=False):
     from monitor.list_membership import _upsert_membership
 
     with transaction.atomic():
@@ -336,7 +336,7 @@ def _complete(claim, status, error="", *, retry_at=None, consume_attempt=True):
             if status in {"retry_due", "verify_needed"}
             else None
         )
-        if error == "http_429" or not consume_attempt:
+        if not preserve_attempts and (error == "http_429" or not consume_attempt):
             # A provider cooldown is not an account-specific delivery failure.
             intent.attempts = max(0, intent.attempts - 1)
         if status == "confirmed":
@@ -370,6 +370,19 @@ def _error_diagnostics(exc):
     return (exc if isinstance(exc, XListError) else XListError("unexpected_error")).diagnostics()
 
 
+def list_cooldown(list_id):
+    """A provider pause survives recovery/confirmation of its carrier intent."""
+    return (
+        OfficialCompanyListIntent.objects.filter(
+            list_id=int(list_id), next_attempt_at__gt=timezone.now(),
+        )
+        .filter(Q(last_error="http_429") | Q(last_error__startswith="http_403:"))
+        .order_by("-next_attempt_at", "pk")
+        .values("next_attempt_at", "last_error", "updated_at")
+        .first()
+    )
+
+
 def _sync_intents(*, cfg, client, deadline=None):
     result = {"claimed": 0, "confirmed": 0, "writes": 0, "status": "disabled"}
     if not cfg.list_sync_enabled or cfg.max_list_writes == 0:
@@ -382,17 +395,7 @@ def _sync_intents(*, cfg, client, deadline=None):
     # Claims, reads and writes are bounded independently of queue size. An expired
     # claim is always read back before a new POST, including a crash after POST.
     now = timezone.now()
-    pause = (
-        OfficialCompanyListIntent.objects.filter(
-            list_id=int(cfg.list_id),
-            status__in=["retry_due", "verify_needed", "review_needed"],
-            next_attempt_at__gt=now,
-        )
-        .filter(Q(last_error="http_429") | Q(last_error__startswith="http_403:"))
-        .order_by("-next_attempt_at")
-        .values("next_attempt_at", "last_error", "updated_at")
-        .first()
-    )
+    pause = list_cooldown(cfg.list_id)
     if pause:
         result.update(
             status=(
