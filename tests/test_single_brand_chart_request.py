@@ -13,6 +13,10 @@ from monitor import single_brand_chart
 
 @pytest.fixture(autouse=True)
 def clear_chart_throttle(monkeypatch):
+    from django.core.cache.backends.locmem import LocMemCache
+
+    monkeypatch.setattr(single_brand_chart, "cache", LocMemCache(None, {}))
+    single_brand_chart.cache.clear()
     monkeypatch.setattr(single_brand_chart, "_LAST_BUILD_FINISHED", float("-inf"))
     monkeypatch.setattr(single_brand_chart, "_CHART_BUILD_INTERVAL_SECONDS", 0)
 
@@ -294,3 +298,44 @@ def test_failed_mapped_read_does_not_show_partial_fallback(monkeypatch):
     assert hf["status"] == "evidence_limit"
     assert hf["observed_dates"] == 0
     fallback.assert_not_called()
+
+
+def test_chart_cache_is_shared_across_processes_and_expires(tmp_path):
+    """Independent workers reuse a chart, and old charts expire after five minutes."""
+    import subprocess
+    import sys
+
+    from django.core.cache.backends.filebased import FileBasedCache
+
+    store = FileBasedCache(str(tmp_path), {"TIMEOUT": 300})
+    store.set("chart-example", {"points": [1, None, 0]}, timeout=300)
+    code = (
+        "import json,sys; from django.core.cache.backends.filebased import FileBasedCache; "
+        "print(json.dumps(FileBasedCache(sys.argv[1], {}).get('chart-example')))"
+    )
+    observed = subprocess.check_output(
+        [sys.executable, "-c", code, str(tmp_path)], text=True
+    )
+    import json
+
+    assert json.loads(observed) == {"points": [1, None, 0]}
+    store.set("expired-chart", {"points": [1]}, timeout=-1)
+    assert FileBasedCache(str(tmp_path), {}).get("expired-chart") is None
+    assert single_brand_chart._CHART_CACHE_SECONDS == 300
+
+
+def test_cache_io_failure_does_not_break_chart(monkeypatch):
+    product = SimpleNamespace(product_key=UUID("d42666c5-4ac1-4d7d-b818-51cb755191fd"))
+    monkeypatch.setattr(
+        single_brand_chart, "_public_products",
+        lambda: SimpleNamespace(filter=lambda **kwargs: SimpleNamespace(first=lambda: product)),
+    )
+    monkeypatch.setattr(single_brand_chart.cache, "get", Mock(side_effect=OSError("unavailable")))
+    monkeypatch.setattr(single_brand_chart.cache, "set", Mock(side_effect=OSError("unavailable")))
+    build = Mock(return_value={"product": {}, "lines": [], "notes": []})
+    monkeypatch.setattr(single_brand_chart, "_calculate_chart", build)
+    request = RequestFactory().get(
+        "/general/chart/", {"product": str(product.product_key), "release_date": "2026-08-13"}
+    )
+    assert single_brand_chart.chart(request).status_code == 200
+    assert build.call_count == 1

@@ -241,6 +241,21 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 SOCIALACCOUNT_LOGIN_ON_GET = True  # one-click sign-in flow
 
+# Chart results are shared by web workers on the same instance. The cache is
+# disposable, bounded, and separate from Celery's broker. Other Django callers
+# retain the framework's default in-memory cache.
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    "chartengine": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": env(
+            "CHARTENGINE_CACHE_DIR", default=str(BASE_DIR / ".cache" / "chartengine")
+        ),
+        "TIMEOUT": 300,
+        "OPTIONS": {"MAX_ENTRIES": 256},
+    },
+}
+
 # ============================================================================
 # Celery
 # ============================================================================

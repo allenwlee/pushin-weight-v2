@@ -1,12 +1,13 @@
 """Public, bounded read-only release chart requests for General."""
 
+import logging
 import re
 import time as clock
 from datetime import UTC, date, datetime, time, timedelta
 from threading import Lock
 from uuid import UUID
 
-from django.core.cache import cache
+from django.core.cache import caches
 from django.db import DatabaseError, connection, transaction
 from django.db.models import Q
 from django.db.models.functions import Collate
@@ -19,6 +20,13 @@ from core.chart_engine import ChartRequest, ReleaseAnchor, build_single_brand_ch
 from core.models import Product
 from monitor.content_views import content_locale, private_response
 
+logger = logging.getLogger(__name__)
+try:
+    cache = caches["chartengine"]
+except OSError:
+    logger.warning("Chart cache unavailable; using process-local cache", exc_info=True)
+    cache = caches["default"]
+_CHART_CACHE_SECONDS = 300
 _CHART_BUILD_LOCK = Lock()
 _CHART_BUILD_INTERVAL_SECONDS = 3
 _LAST_BUILD_FINISHED = float("-inf")
@@ -26,6 +34,14 @@ _LAST_BUILD_FINISHED = float("-inf")
 
 def _public_products():
     return Product.objects.all()
+
+
+def _cached_chart(key):
+    try:
+        return cache.get(key)
+    except OSError:
+        logger.warning("Chart cache read failed", exc_info=True)
+        return None
 
 
 def _busy():
@@ -115,13 +131,13 @@ def chart(request):
     )
     cache_key = f"single-brand-comp:v1:{product.product_key}:{anchor.isoformat()}:{anchor_source}"
     refresh = request.GET.get("refresh") == "1"
-    result = None if refresh else cache.get(cache_key)
+    result = None if refresh else _cached_chart(cache_key)
     if result is None:
         if not _CHART_BUILD_LOCK.acquire(blocking=False):
             return _busy()
         try:
             # Recheck after acquiring the process-local admission lock.
-            result = None if refresh else cache.get(cache_key)
+            result = None if refresh else _cached_chart(cache_key)
             if result is None:
                 if (
                     clock.monotonic() - _LAST_BUILD_FINISHED
@@ -138,7 +154,10 @@ def chart(request):
                     )
                 finally:
                     _LAST_BUILD_FINISHED = clock.monotonic()
-                cache.set(cache_key, result, timeout=60)
+                try:
+                    cache.set(cache_key, result, timeout=_CHART_CACHE_SECONDS)
+                except OSError:
+                    logger.warning("Chart cache write failed", exc_info=True)
         finally:
             _CHART_BUILD_LOCK.release()
     locale = content_locale(request)
