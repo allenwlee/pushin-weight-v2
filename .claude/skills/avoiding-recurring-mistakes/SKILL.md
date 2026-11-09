@@ -104,7 +104,7 @@ I will:
 1. `git fetch` and check `git log origin/main --oneline -10` and the current branch's divergence.
 2. `git worktree list` and check `git branch -a | grep -E 'feat/|fix/|hotfix/'`.
 3. Run `git status` — if there are uncommitted edits, surface them before proceeding.
-4. If a parallel branch touches the same files, **stop and tell the user** — don't silently merge or cherry-pick.
+4. If another branch touches the same files, check whether the work is active and whether the edits actually overlap. Coordinate disjoint work and preserve the other changes. Stop and tell the user only when ownership or integration cannot be resolved safely; do not silently merge or cherry-pick.
 
 From repo memory: `feedback_worktree_hygiene_x_monitoring.md` (worktrees at `repo/worktrees/name/`, symlink `.venv` + db).
 
@@ -140,7 +140,7 @@ Public templates/static assets contain product content only; put implementation 
 > "option a"
 > "go" (after agent asked permission to proceed)
 
-**Rule.** When there are two options and one is clearly better given the canonical decisions in `AGENTS.md`, recommend that one with one sentence of reasoning and **state you are doing it**, then stop. Don't ask the user to choose between A and B when A is the right answer. From `feedback_scoped_revert_specificity.md`: "user revert X = ONLY X, read literal scope, not inferred."
+**Rule.** When there are two options and one is clearly better given the canonical decisions in `AGENTS.md`, recommend that one with one sentence of reasoning and proceed when it is within the authorized scope. Don't ask the user to choose between A and B when A is the right answer. From `feedback_scoped_revert_specificity.md`: "user revert X = ONLY X, read literal scope, not inferred."
 
 ---
 
@@ -267,7 +267,7 @@ Never call `client.messages.create(model=...)` without an explicit model name. F
 
 From repo memory: `feedback_plan_filename_matches_repo.md`.
 
-**Rule.** Plan files in this repo go to `docs/plans/` and use `YYYY-MM-DD-NNN-kebab-slug.md` (date + serial). Do NOT use the generic `/plans/` directory or any other path. Do NOT use compound-engineering default filename conventions.
+**Rule.** Plan files in this repo go to `docs/plans/` and use `YYYY-MM-DD-HHMMSS-kebab-slug.md` (date and time in JST). Do NOT use the generic `/plans/` directory or any other path. Do NOT use compound-engineering default filename conventions.
 
 ---
 
@@ -486,7 +486,7 @@ authorize retiring tables or migrating business data without task scope.
 | M11 | Reference-doc remnants | Current state only; git is the archive |
 | M12 | Default-model assumption | Read the named model from scripts; pass explicitly |
 | M13 | Burying 500s | SSH to Render, read logs, then debug systematically |
-| M14 | Off-convention plan filename | `docs/plans/YYYY-MM-DD-NNN-slug.md` |
+| M14 | Off-convention plan filename | `docs/plans/YYYY-MM-DD-HHMMSS-slug.md` |
 | M15 | Unrelated-dir deletion | "Looks empty" ≠ authorization to `rm -rf` |
 | M16 | Inventing API surface | `context7` / WebSearch before guessing external APIs |
 | M17 | Inferring pause authority from an anomaly | Diagnose read-only; pause/resume only with current explicit owner authorization |

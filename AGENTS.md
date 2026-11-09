@@ -8,6 +8,13 @@ For reference-document work, read and follow
 The same canonical skill is exposed at `.agents/skills/updating-reference-docs`
 for agents using that discovery path.
 
+For Copy Editor or Graphics Editor work, follow the active task-specific prompts
+in the [editorial creative guide](docs/reference/2026-11-07-091933-editorial-creative-guide.md)
+and its [prompt pack](config/editorial_prompts/editorial-creative-roles-v1.json).
+Use the current workflow and prompt order recorded there; retired prompts are
+historical material, not instructions. Do not add editorial approval gates or
+creative retries to the accepted workflow.
+
 ## General-page launch coordination
 
 Before general-launch work, read the shared
@@ -155,8 +162,11 @@ python manage.py runserver 0.0.0.0:8000
 # Run one harvest cycle
 python manage.py run_cycle --dry-run --limit-per-call 20
 
-# Run tests (Django test runner)
-pytest
+# For PostgreSQL tests using the permanent shared test database
+~/.local/bin/pushinweight-test-db pytest <test arguments>
+
+# Other tests, including an explicitly configured branch-specific test database
+pytest <test arguments>
 
 # Run Django system checks
 python manage.py check --deploy
@@ -253,3 +263,25 @@ Topic files live under `~/.claude/projects/-Users-allenwlee/memory/` and are loa
 - `feedback_no_oversell.md` — test must exercise the differentiator; do not claim stacks-can-match wins
 - `feedback_artifact_arbiter.md` — for AI demos, artifact is final arbiter; skip pre-validation gates
 - `feedback_regression_net_in_every_plan.md` — every plan that modifies existing behavior must include a regression-net unit
+
+<!-- BEGIN SHARED LOCAL TEST DATABASE -->
+## Local PostgreSQL test databases
+
+Use a small, empty branch-specific test database for ordinary tests when useful,
+especially when branches have different migration histories. It may use the
+existing PostgreSQL server at `/Users/fuchitalee/.local/share/pushinweight/test-db/`
+on fuchitalee. Create its schema from that branch's migrations and populate it
+only with test fixtures; do not clone or restore production data. Give it a unique,
+identifiable name and connection configuration, verify the target before running
+tests, and remove only a database created for the task when no longer needed.
+Never run tests against production or another session's database.
+
+For tests that need the permanent shared test database and its existing data,
+read the [operating note](/Users/fuchitalee/infra/docs/reference/pushinweight-shared-test-database.md)
+and use `~/.local/bin/pushinweight-test-db pytest <test arguments>` or the
+wrapper's `run` mode. The wrapper supplies the connection and exclusive lock;
+respect its migration compatibility checks. If busy, wait or coordinate.
+Never reset, delete, or replace the permanent database as task cleanup. A fresh
+production restore or replacement requires a separate explicit request. Do not
+create or restore another full production-data copy without explicit authorization.
+<!-- END SHARED LOCAL TEST DATABASE -->

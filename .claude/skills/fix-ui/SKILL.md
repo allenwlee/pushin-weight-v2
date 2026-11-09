@@ -79,4 +79,4 @@ Do not put iteration labels, agent notes, planning text, or implementation comme
 - Report the affected/full assurance gate, declaration and control-model identity, obligation totals, and any replay IDs. Never infer obligation closure from a pytest count.
 - Report exact branch/SHA, environment, and commands/results inspected.
 
-Use an isolated worktree and disposable deterministic database for previews. Label preview URLs with their environment and SHA. Call something deployed only after the requested branch has been deployed successfully and the deployed URL has been checked; do not confuse local/staging evidence with production.
+Use an isolated worktree and deterministic preview data. When local PostgreSQL is needed, follow `AGENTS.md`: use a small empty branch-specific database with fixtures, or the shared database and wrapper when existing shared data is needed. Label preview URLs with their environment and SHA. Call something deployed only after the requested branch has been deployed successfully and the deployed URL has been checked; do not confuse local/staging evidence with production.
