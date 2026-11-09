@@ -64,7 +64,7 @@ def budget_totals(scope, day):
     calls = OriginalContentCall.objects.filter(budget_scope=scope, budget_day=day)
     result = calls.aggregate(
         reserved_usd=Sum("reserved_usd"),
-        calls=Count("pk"),
+        calls=Count("pk", filter=~Q(provider="exa", request_identity__regex=r"^graphics:[0-9]+:S[12]$")),
         media_calls=Count("pk", filter=Q(kind="media")),
     )
     result["reserved_usd"] = result["reserved_usd"] or Decimal(0)

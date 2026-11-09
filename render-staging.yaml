@@ -47,6 +47,21 @@ services:
         value: "True"
       - key: OLLIJA_STAGING_ALLOWED_EMAILS
         sync: false
+      # The web reader must use the same shared media stores as Graphics workers.
+      - key: STAFF_MEDIA_STORAGE_BACKEND
+        sync: false
+      - key: STAFF_MEDIA_STORAGE_OPTIONS
+        sync: false
+      - key: EDITORIAL_MEDIA_STORAGE_BACKEND
+        sync: false
+      - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
       - key: BENCHMARK_METRICS_ENABLED
         value: "True"
       - key: BENCHMARK_REVIEW_ENABLED
@@ -121,6 +136,279 @@ services:
         value: "False"
       - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
         value: "False"
+
+  - type: worker
+    name: pushinweight-staging-graphics-a
+    repo: https://github.com/allenwlee/pushin-weight-v2
+    branch: staging
+    autoDeployTrigger: commit
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -e '.[dev]'
+    startCommand: >-
+      celery -A project worker -l INFO -Q graphics-creation --concurrency=1
+      --prefetch-multiplier=1 --without-gossip --without-mingle
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-staging-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-staging-headlines-broker
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: pushinweight-staging-headlines-broker
+          property: connectionString
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: staging
+      - key: GRAPHICS_RECONCILER_ENABLED
+        value: "True"
+      - key: GRAPHICS_REQUIRE_SHARED_MEDIA
+        value: "True"
+      - key: STAFF_MEDIA_DURABLE
+        value: "True"
+      - key: EDITORIAL_MEDIA_DURABLE
+        value: "True"
+      - key: ORIGINAL_CONTENT_STORAGE
+        value: shared
+      - key: OPENROUTER_API_KEY
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: OPENROUTER_API_KEY
+      - key: XAI_API_KEY_PW
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: XAI_API_KEY_PW
+      - key: EXA_API_KEY
+        sync: false
+      - key: STAFF_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_BACKEND
+      - key: STAFF_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_OPTIONS
+      - key: EDITORIAL_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_BACKEND
+      - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_OPTIONS
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_SECRET_ACCESS_KEY
+
+  - type: worker
+    name: pushinweight-staging-graphics-b
+    repo: https://github.com/allenwlee/pushin-weight-v2
+    branch: staging
+    autoDeployTrigger: commit
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -e '.[dev]'
+    startCommand: >-
+      celery -A project worker -l INFO -Q graphics-creation --concurrency=1
+      --prefetch-multiplier=1 --without-gossip --without-mingle
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-staging-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-staging-headlines-broker
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: pushinweight-staging-headlines-broker
+          property: connectionString
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: staging
+      - key: GRAPHICS_RECONCILER_ENABLED
+        value: "True"
+      - key: GRAPHICS_REQUIRE_SHARED_MEDIA
+        value: "True"
+      - key: STAFF_MEDIA_DURABLE
+        value: "True"
+      - key: EDITORIAL_MEDIA_DURABLE
+        value: "True"
+      - key: ORIGINAL_CONTENT_STORAGE
+        value: shared
+      - key: OPENROUTER_API_KEY
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: OPENROUTER_API_KEY
+      - key: XAI_API_KEY_PW
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: XAI_API_KEY_PW
+      - key: EXA_API_KEY
+        sync: false
+      - key: STAFF_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_BACKEND
+      - key: STAFF_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_OPTIONS
+      - key: EDITORIAL_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_BACKEND
+      - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_OPTIONS
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_SECRET_ACCESS_KEY
+
+  - type: worker
+    name: pushinweight-staging-graphics-review
+    repo: https://github.com/allenwlee/pushin-weight-v2
+    branch: staging
+    autoDeployTrigger: commit
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -e '.[dev]'
+    startCommand: >-
+      celery -A project worker -l INFO -Q graphics-review --concurrency=1
+      --prefetch-multiplier=1 --without-gossip --without-mingle
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-staging-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-staging-headlines-broker
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: pushinweight-staging-headlines-broker
+          property: connectionString
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: staging
+      - key: GRAPHICS_RECONCILER_ENABLED
+        value: "False"
+      - key: GRAPHICS_REQUIRE_SHARED_MEDIA
+        value: "True"
+      - key: STAFF_MEDIA_DURABLE
+        value: "True"
+      - key: EDITORIAL_MEDIA_DURABLE
+        value: "True"
+      - key: ORIGINAL_CONTENT_STORAGE
+        value: shared
+      - key: OPENROUTER_API_KEY
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: OPENROUTER_API_KEY
+
+      - key: STAFF_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_BACKEND
+      - key: STAFF_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_OPTIONS
+      - key: EDITORIAL_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_BACKEND
+      - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_OPTIONS
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_SECRET_ACCESS_KEY
 
   - type: worker
     name: pushinweight-staging-synthesis

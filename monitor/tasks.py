@@ -71,7 +71,10 @@ def recover_due_product_releases() -> dict[str, object]:
         recover_release_registrations,
     )
     from core.product_release_detection_queue import drain_posts
-    from core.product_release_source_queue import drain_mapping_reconciliations, drain_observations
+    from core.product_release_source_queue import (
+        drain_mapping_reconciliations,
+        drain_observations,
+    )
     from core.source_metric_projection import recover_release_projection_followups
 
     try:
@@ -320,8 +323,8 @@ def refresh_editorial(envelope):
              soft_time_limit=600, time_limit=660)
 def chatter_stage(stage, *args):
     from monitor.editorial.chatter_chain import (
-        review_chatter,
         resume_chatter_discovery,
+        review_chatter,
         run_chatter,
         select_chatter,
         write_chatter,
@@ -353,3 +356,117 @@ def poll_editorial_picture(picture_id):
 def edit_content_picture(content_kind, content_id, source_platform="x"):
     from monitor.editorial.bindings import picture_for_content
     return picture_for_content(content_kind, content_id, source_platform=source_platform)
+
+
+@shared_task(name='monitor.tasks.advance_graphics_package', autoretry_for=(), max_retries=0,
+             ignore_result=True, acks_late=True, reject_on_worker_lost=True,
+             soft_time_limit=145, time_limit=150)
+def advance_graphics_package(run_id):
+    """Advance one persisted Graphics stage; no provider retry is implicit."""
+    from monitor.editorial.graphics_dispatch import (
+        dispatch_action,
+        dispatch_review,
+        require_shared_media,
+    )
+    from monitor.editorial.graphics_pipeline import advance_step, finalize_if_done
+
+    require_shared_media()
+    result = advance_step(run_id)
+    action = result.get('next_action')
+    if action:
+        dispatch_action(run_id, result)
+    # Review is independent of video generation and never gates publication.
+    if result.get('review_due') and action != 'review':
+        dispatch_review(run_id)
+    finalize_if_done(run_id)
+    return result
+
+
+@shared_task(name='monitor.tasks.submit_graphics_video', autoretry_for=(), max_retries=0,
+             ignore_result=True, acks_late=True, reject_on_worker_lost=True,
+             soft_time_limit=145, time_limit=150)
+def submit_graphics_video(run_id, text_id):
+    """Submit at most one video with a fenced run lease."""
+    from uuid import uuid4
+
+    from monitor.editorial.graphics_dispatch import (
+        dispatch_creation,
+        dispatch_video_poll,
+        require_shared_media,
+    )
+    from monitor.editorial.graphics_packages import claim_package, release_package
+    from monitor.editorial.graphics_pipeline import finalize_if_done
+    from monitor.editorial.graphics_video import submit_video_job
+
+    require_shared_media()
+    owner = f'graphics-video-{uuid4()}'
+    claim = claim_package(run_id, owner=owner, lease_seconds=180)
+    if claim is None:
+        return {'state': 'busy'}
+    try:
+        result = submit_video_job(run_id, text_id, owner=claim.owner, fence=claim.fence)
+    finally:
+        release_package(run_id, owner=claim.owner, fence=claim.fence)
+    if result.get('state') == 'pending' and result.get('job_id'):
+        dispatch_video_poll(result['job_id'], countdown=result.get('countdown', 5))
+    elif result.get('state') == 'failed':
+        dispatch_creation(run_id=run_id)
+    finalize_if_done(run_id)
+    return result
+
+
+@shared_task(name='monitor.tasks.poll_graphics_video', autoretry_for=(), max_retries=0,
+             ignore_result=True, acks_late=True, reject_on_worker_lost=True,
+             soft_time_limit=145, time_limit=150)
+def poll_graphics_video(picture_id):
+    """Poll one saved job ID; never re-submit its provider request."""
+    from monitor.editorial.graphics_dispatch import (
+        dispatch_creation,
+        dispatch_video_poll,
+        require_shared_media,
+    )
+    from monitor.editorial.graphics_pipeline import finalize_if_done
+    from monitor.editorial.graphics_video import poll_video_job
+
+    require_shared_media()
+    result = poll_video_job(picture_id)
+    if result.get('reschedule') and result.get('job_id'):
+        dispatch_video_poll(result['job_id'], countdown=result.get('countdown', 5))
+    elif result.get('state') in {'completed', 'failed'} and result.get('run_id'):
+        dispatch_creation(run_id=result['run_id'])
+    if result.get('run_id'):
+        finalize_if_done(result['run_id'])
+    return result
+
+
+@shared_task(name='monitor.tasks.review_graphics_package', autoretry_for=(), max_retries=0,
+             ignore_result=True, acks_late=True, reject_on_worker_lost=True,
+             soft_time_limit=145, time_limit=150)
+def review_graphics_package(run_id):
+    """Generate one nonblocking admin review on its isolated queue."""
+    from monitor.editorial.graphics_dispatch import require_shared_media
+    from monitor.editorial.graphics_pipeline import finalize_if_done, review_step
+
+    require_shared_media()
+    result = review_step(run_id)
+    finalize_if_done(run_id)
+    return result
+
+
+# Only explicitly configured Graphics workers start this recovery loop. It is
+# not Celery beat and does not alter harvesting or any existing scheduler.
+from celery.signals import worker_ready, worker_shutdown
+
+
+@worker_ready.connect(weak=False)
+def _start_graphics_reconciler(**kwargs):
+    from monitor.editorial.graphics_dispatch import start_reconciler
+
+    start_reconciler()
+
+
+@worker_shutdown.connect(weak=False)
+def _stop_graphics_reconciler(**kwargs):
+    from monitor.editorial.graphics_dispatch import stop_reconciler
+
+    stop_reconciler()

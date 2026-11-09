@@ -25,7 +25,7 @@ from monitor.trend_narrative_lifecycle import (
 
 from .chatter_history import WORKFLOW, locked_run
 from .contracts import ProviderReplyError
-from .persistence import BudgetHeld, completed_text_cost
+from .persistence import _GRAPHICS_PREFIX, BudgetHeld, completed_text_cost
 
 QUANTUM = Decimal("0.000001")
 
@@ -138,6 +138,10 @@ def call_once(run, stage, kind, ceiling, cfg, send, *, request_metadata=None):
         ).update(state="ambiguous", error_code="lease_expired")
         if (
             guarded.filter(state="sent").exists()
+            or guarded.filter(
+                request_identity__startswith=_GRAPHICS_PREFIX, state="reserved",
+                claim_expires_at__gt=now, run__lease_until__gt=now,
+            ).exists()
             or EditorialCall.objects.filter(state="sent").exists()
         ):
             raise BudgetHeld("editorial provider already in flight")

@@ -282,6 +282,54 @@ def test_dead_workers_do_not_block_other_intervals_forever():
     assert old.calls.get().state == "ambiguous"
 
 
+def test_graphics_reservation_blocks_legacy_provider_before_send(monkeypatch):
+    from tests.test_graphics_accounting import make_run, reserve
+
+    monkeypatch.setattr('monitor.editorial.persistence.mirror_storage', lambda: False)
+    monkeypatch.setattr('monitor.editorial.persistence.shared_storage', lambda: False)
+    call, claimed = reserve(make_run())
+    assert claimed and call.state == 'reserved'
+    row = claim_assessment(timezone.now(), 'legacy-after-graphics')
+    cfg = EditorialConfig(daily_usd=2, assessment_usd=1, daily_calls=10)
+    with pytest.raises(BudgetHeld, match='provider already in flight'):
+        call_once(row, 'editor', 'text', Decimal('0.1'), cfg,
+                  lambda: pytest.fail('must not overlap Graphics'))
+
+
+def test_live_legacy_provider_blocks_graphics_creation():
+    from monitor.editorial.persistence import CapacityHeld
+    from tests.test_graphics_accounting import make_run, reserve
+
+    now = timezone.now()
+    assessment = claim_assessment(now, 'legacy-active')
+    EditorialCall.objects.create(assessment=assessment, stage='editor', kind='text',
+                                 state='sent', reserved_usd='0.1', budget_day=now.date())
+    with pytest.raises(CapacityHeld, match='capacity'):
+        reserve(make_run())
+
+
+def test_expired_sent_graphics_does_not_block_legacy_and_keeps_charge(monkeypatch):
+    from core.models import OriginalContentCall
+    from monitor.trend_narrative_lifecycle import (
+        mark_trend_narrative_provider_call_sent,
+    )
+    from tests.test_graphics_accounting import make_run, reserve
+
+    monkeypatch.setattr('monitor.editorial.persistence.mirror_storage', lambda: False)
+    monkeypatch.setattr('monitor.editorial.persistence.shared_storage', lambda: False)
+    now = timezone.now()
+    call, claimed = reserve(make_run())
+    assert claimed and mark_trend_narrative_provider_call_sent(
+        call.pk, owner='worker', fence=call.claim_fence, now=now)
+    OriginalContentCall.objects.filter(pk=call.pk).update(
+        claimed_at=now - timedelta(seconds=3), claim_expires_at=now - timedelta(seconds=1))
+    row = claim_assessment(now, 'legacy-after-expired-graphics')
+    cfg = EditorialConfig(daily_usd=2, assessment_usd=1, daily_calls=10)
+    assert call_once(row, 'editor', 'text', Decimal('0.1'), cfg, lambda: {'ok': True}) == {'ok': True}
+    call.refresh_from_db()
+    assert call.state == 'ambiguous' and call.reserved_usd == Decimal('0.2')
+
+
 def test_media_receipt_survives_assessment_change_without_second_send():
     now = timezone.now()
     first = claim_assessment(now - timedelta(minutes=30), "first")

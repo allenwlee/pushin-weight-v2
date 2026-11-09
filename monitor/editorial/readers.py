@@ -16,6 +16,7 @@ from core.models import (
 )
 from monitor.original_content import shared_storage, source_payload
 
+from .graphics_reading import GraphicsAssets, graphics_assets, is_graphics_edition
 from .pictures import assignment_eligible
 
 LOCALES = {"en", "zh-cn", "ja"}
@@ -28,8 +29,11 @@ def picture_for_edition(edition, cfg):
 
 def pictures_for_editions(editions, cfg):
     enabled = [e for e in editions if cfg.picture_mode(e.track, "x") != "off"]
+    graphics = {e.pk: graphics_assets(e, verify_video_bytes=False, verify_still_bytes=False)
+                for e in enabled if is_graphics_edition(e)}
+    enabled = [e for e in enabled if not is_graphics_edition(e)]
     if not enabled:
-        return {}
+        return graphics
     rows = list(
         EditorialPicture.objects.filter(
             content_kind__in={e.track for e in enabled},
@@ -53,7 +57,7 @@ def pictures_for_editions(editions, cfg):
         for r in rows
         if assignment_eligible(r, cfg, affiliations=affiliations)
     }
-    return {e.pk: eligible.get((e.track, str(e.pk))) for e in enabled}
+    return {**graphics, **{e.pk: eligible.get((e.track, str(e.pk))) for e in enabled}}
 
 
 def asset_payload(edition, cfg, pictures=None):
@@ -64,6 +68,17 @@ def asset_payload(edition, cfg, pictures=None):
     )
     if picture is None:
         return None
+    if isinstance(picture, GraphicsAssets):
+        def graphics_url(asset):
+            return reverse("editorial_asset", kwargs={"story_id": edition.story_id, "picture_id": asset.pk, "variant": "generated"})
+        return {
+            "type": "video" if picture.video else "image",
+            "url": graphics_url(picture.video or picture.still),
+            "poster": graphics_url(picture.still),
+            "preload": "none",
+            "generated": True,
+            "caption": "Illustration",
+        }
     args = {"story_id": edition.story_id, "picture_id": picture.pk}
     photo_url = reverse("editorial_asset", kwargs={**args, "variant": "source"})
     generated = (
