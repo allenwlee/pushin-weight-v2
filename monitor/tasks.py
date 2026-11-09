@@ -328,8 +328,8 @@ def refresh_editorial(envelope):
              soft_time_limit=600, time_limit=660)
 def chatter_stage(stage, *args):
     from monitor.editorial.chatter_chain import (
-        review_chatter,
         resume_chatter_discovery,
+        review_chatter,
         run_chatter,
         select_chatter,
         write_chatter,

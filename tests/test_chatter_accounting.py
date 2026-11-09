@@ -65,6 +65,17 @@ def test_shared_call_is_replayed_without_a_second_transport_or_legacy_rows():
         )
 
 
+def test_live_graphics_reservation_blocks_chatter_before_provider_send():
+    from monitor.editorial.chatter_accounting import call_once
+    from tests.test_graphics_accounting import make_run, reserve
+
+    call, claimed = reserve(make_run())
+    assert claimed and call.state == 'reserved'
+    with pytest.raises(BudgetHeld, match='already in flight'):
+        call_once(consideration().run, 'discovery', 'text', 1, policy(),
+                  lambda: pytest.fail('must not overlap Graphics'), request_metadata=metadata())
+
+
 def test_trial_is_aggregate_across_runs_and_actual_cost_is_never_clipped():
     from monitor.editorial.chatter_accounting import call_once, spent
 

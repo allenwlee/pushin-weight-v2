@@ -156,6 +156,62 @@ def pool_controls(request, options):
                        if key not in {"source_lang", "group", "edition_lang", "cursor"} for value in values]}
 
 
+def graphics_snapshot_response(request, snapshot, size, digest, content_type, release):
+    """Serve the verified snapshot, including one bounded byte range for seeking."""
+    # WSGI may later replace snapshot.close with response.close. Retain the
+    # actual file closer now to avoid recursive response-close callbacks.
+    close_file = snapshot.close
+    def close_snapshot():
+        try:
+            close_file()
+        finally:
+            release()
+
+    etag = f'"{digest}"'
+    requested = request.headers.get('Range', '')
+    if request.headers.get('If-Range', etag) != etag:
+        requested = ''
+    if requested:
+        match = re.fullmatch(r'bytes=(\d*)-(\d*)', requested)
+        try:
+            if not match or not (match.group(1) or match.group(2)):
+                raise ValueError('invalid range')
+            start = int(match.group(1)) if match.group(1) else max(0, size - int(match.group(2)))
+            end = min(size - 1, int(match.group(2))) if match.group(1) and match.group(2) else size - 1
+            if start >= size or end < start or (not match.group(1) and int(match.group(2)) == 0):
+                raise ValueError('unsatisfiable range')
+        except ValueError:
+            close_snapshot()
+            response = HttpResponse(status=416)
+            response['Content-Range'] = f'bytes */{size}'
+        else:
+            snapshot.seek(start)
+            length = end - start + 1
+            def chunks():
+                remaining = length
+                try:
+                    while remaining:
+                        data = snapshot.read(min(65536, remaining))
+                        if not data:
+                            break
+                        remaining -= len(data)
+                        yield data
+                finally:
+                    close_snapshot()
+            response = StreamingHttpResponse(chunks(), status=206, content_type=content_type)
+            response['Content-Length'] = str(length)
+            response['Content-Range'] = f'bytes {start}-{end}/{size}'
+    else:
+        snapshot.seek(0)
+        response = FileResponse(snapshot, content_type=content_type)
+    response['Accept-Ranges'] = 'bytes'
+    response['ETag'] = etag
+    # Django closes this on normal completion and on a disconnected client,
+    # including when a streaming iterator has not started yet.
+    response._resource_closers.append(close_snapshot)
+    return private_cache(response)
+
+
 @require_GET
 def story(request, story_id):
     cfg = access(request)
