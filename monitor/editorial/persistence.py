@@ -239,7 +239,7 @@ def reserve_graphics_call(
                 Q(request_identity__startswith="legacy-editorial-call:")
                 | Q(request_identity__startswith=_GRAPHICS_PREFIX)
             ).filter(Q(state="sent") | Q(state="reserved", claim_expires_at__gt=now)).count()
-            if active.count() + legacy_active + other_direct >= 2:
+            if legacy_active or other_direct or active.count() >= 2:
                 raise CapacityHeld("graphics creation capacity exhausted")
         if previous:
             from monitor.trend_narrative_lifecycle import (
@@ -443,8 +443,6 @@ def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):
             run.workflow_version = request_metadata["workflow_version"]
             run.save(update_fields=["config_snapshot", "workflow_version"])
         if run is not None:
-            from core.models import OriginalContentCall
-
             attempts = OriginalContentCall.objects.filter(stage=stage, kind=kind)
             canonical = (
                 attempts if kind == "media" else attempts.filter(run=run)
@@ -479,16 +477,28 @@ def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):
         ).update(state="ambiguous", error_code="lease_expired")
         if EditorialCall.objects.filter(state="sent").exists():
             raise BudgetHeld("provider already in flight")
+        OriginalContentCall.objects.filter(
+            request_identity__startswith=_GRAPHICS_PREFIX, state="sent",
+            claim_expires_at__lte=timezone.now(),
+        ).update(state="ambiguous", error_code="lease_expired_after_send")
+        if run is None and OriginalContentCall.objects.filter(
+            request_identity__startswith=_GRAPHICS_PREFIX,
+        ).filter(
+            Q(state="sent") | Q(state="reserved", claim_expires_at__gt=timezone.now(),
+                                 run__lease_until__gt=timezone.now())
+        ).exclude(batch_key=_GRAPHICS_REVIEW).exists():
+            raise BudgetHeld("provider already in flight")
         if run is not None:
-            from core.models import OriginalContentCall
-
             OriginalContentCall.objects.filter(
                 budget_scope="editorial",
                 state="sent",
                 run__lease_until__lt=timezone.now(),
             ).exclude(request_identity__startswith=_GRAPHICS_PREFIX).update(state="ambiguous", error_code="lease_expired")
             if OriginalContentCall.objects.filter(
-                budget_scope="editorial", state="sent"
+                budget_scope="editorial"
+            ).filter(
+                Q(state="sent") | Q(state="reserved", request_identity__startswith=_GRAPHICS_PREFIX,
+                                     claim_expires_at__gt=timezone.now(), run__lease_until__gt=timezone.now())
             ).exclude(batch_key=_GRAPHICS_REVIEW).exists():
                 raise BudgetHeld("provider already in flight")
         call = EditorialCall.objects.create(

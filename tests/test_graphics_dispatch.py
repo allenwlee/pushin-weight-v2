@@ -146,6 +146,43 @@ def test_staging_workers_are_isolated_from_existing_queues():
             }
 
 
+def test_production_graphics_workers_use_production_resources_and_isolated_queues():
+    from pathlib import Path
+
+    import yaml
+
+    blueprint = yaml.safe_load((Path(__file__).resolve().parents[1] / 'render.yaml').read_text())
+    services = {service['name']: service for service in blueprint['services']}
+    media_keys = ('STAFF_MEDIA_STORAGE_BACKEND', 'STAFF_MEDIA_STORAGE_OPTIONS',
+                  'EDITORIAL_MEDIA_STORAGE_BACKEND', 'EDITORIAL_MEDIA_STORAGE_OPTIONS',
+                  'R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY')
+    for name in ('pushinweight-graphics-a', 'pushinweight-graphics-b', 'pushinweight-graphics-review'):
+        service = services[name]
+        env = {item['key']: item for item in service['envVars']}
+        assert service['branch'] == 'main' and service['type'] == 'worker'
+        assert env['DATABASE_URL']['fromDatabase']['name'] == 'pushinweight-db-shadow'
+        for key in ('CELERY_BROKER_URL', 'CELERY_RESULT_BACKEND'):
+            assert env[key]['fromService']['name'] == 'pushinweight-headlines-broker'
+        for key in media_keys:
+            assert env[key]['fromService'] == {
+                'type': 'worker', 'name': 'pushinweight-headlines', 'envVarKey': key,
+            }
+        assert env['GRAPHICS_REQUIRE_SHARED_MEDIA']['value'] == 'True'
+        assert env['ORIGINAL_CONTENT_STORAGE']['value'] == 'shared'
+        assert env['OPENROUTER_API_KEY']['sync'] is False
+        assert env['X_MONITOR_DEPLOYMENT_ENVIRONMENT']['value'] == 'production'
+        assert 'beat' not in service['startCommand'] and 'run_cycle' not in service['startCommand']
+        if name.endswith('-review'):
+            assert '-Q graphics-review --concurrency=1' in service['startCommand']
+            assert env['GRAPHICS_RECONCILER_ENABLED']['value'] == 'False'
+            assert 'XAI_API_KEY_PW' not in env and 'EXA_API_KEY' not in env
+        else:
+            assert '-Q graphics-creation --concurrency=1' in service['startCommand']
+            assert env['GRAPHICS_RECONCILER_ENABLED']['value'] == 'True'
+            assert env['XAI_API_KEY_PW']['sync'] is False and env['EXA_API_KEY']['sync'] is False
+    assert '-Q trend-narratives --concurrency=1' in services['pushinweight-headlines']['startCommand']
+
+
 def test_reconciler_is_disabled_by_default(settings):
     settings.GRAPHICS_RECONCILER_ENABLED = False
     assert not graphics_dispatch.start_reconciler()
