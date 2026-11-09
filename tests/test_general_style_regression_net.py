@@ -128,7 +128,15 @@ def _feed_pages(client, locale: str) -> list[dict]:
 
 @pytest.fixture
 def frozen_home(db, settings):
+    from core.models import AudienceTopicScheme, SentimentKey
+
     settings.SECURE_SSL_REDIRECT = False
+    # Recreate the current migration seeds after transaction-based tests flush
+    # them, so this fixed-input oracle sees the same vocabulary on every run.
+    SentimentKey.objects.get_or_create(key="neutral")
+    AudienceTopicScheme.objects.get_or_create(
+        key="ai_audience_topics/v1", defaults={"revision": 1, "manifest_hash": "0" * 64}
+    )
     with patch("django.utils.timezone.now", return_value=FIXED_NOW):
         seed_real_home_orm(fixture_from_oracle())
         record_harvest(FIXED_NOW, finished_at=FIXED_NOW, staggered=False)

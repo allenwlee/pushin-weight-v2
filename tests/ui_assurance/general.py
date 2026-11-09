@@ -14,6 +14,9 @@ DECLARATION_PATH = ROOT / "tests/fixtures/ui_assurance/general-declaration.json"
 def product_identity():
     paths = [
         ROOT / "core/models.py",
+        ROOT / "core/chart_engine.py",
+        ROOT / "core/chart_engine_view.py",
+        ROOT / "core/benchmark_forecast_inputs.py",
         ROOT / "core/classification_contract.py",
         ROOT / "core/intelligence_readers.py",
         ROOT / "core/job_vocabulary.py",
@@ -41,6 +44,10 @@ def product_identity():
         ROOT / "monitor/templates/monitor/general.html",
         *sorted((ROOT / "monitor/templates/monitor/general").glob("*.html")),
         *sorted((ROOT / "monitor/templates/monitor/content").glob("*.html")),
+        ROOT / "monitor/single_brand_chart.py",
+        ROOT / "monitor/static/monitor/single-brand-chart.css",
+        ROOT / "monitor/static/monitor/single-brand-chart.js",
+        ROOT / "monitor/static/vendor/chartjs/chart.umd-4.4.0.min.js",
         ROOT / "monitor/static/monitor/general.css",
         ROOT / "monitor/static/monitor/general.js",
         ROOT / "monitor/static/monitor/content.js",

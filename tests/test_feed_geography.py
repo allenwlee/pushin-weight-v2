@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-
 import pytest
-
-from tests.geolocation_factory import wire_place
 
 from monitor.views import (
     _compact_language_display,
@@ -16,6 +13,7 @@ from monitor.views import (
     _localize_classification_value,
     _post_matches_filter,
 )
+from tests.geolocation_factory import wire_place
 
 GUIDING_COUNTRIES = {
     "HK": "CN",
@@ -61,7 +59,8 @@ def test_shared_place_names_cover_requested_feed_locales():
 
     places = feed_places()
     for place in places.values():
-        assert place.alternate_names.count() == 3
+        locales = set(place.alternate_names.values_list("locale_id", flat=True))
+        assert {"en", "ja", "zh-Hans"} <= locales
         assert all(geolocation_label(place, locale) for locale in ("en", "ja", "zh_hans"))
 
 

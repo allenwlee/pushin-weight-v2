@@ -9171,6 +9171,14 @@ class CollectionObservation(models.Model):
         db_table = "collection_observations"
         indexes = [
             models.Index(
+                fields=["source_identifier", "source_subject_kind", "id"],
+                name="idx_obs_native_chart",
+                condition=models.Q(
+                    mapping__isnull=True,
+                    source_subject_kind__in=["model", "repository"],
+                ),
+            ),
+            models.Index(
                 fields=["source_identifier", "id"], name="idx_rel_repo_observation",
                 condition=models.Q(observation_kind="releases"),
             ),
