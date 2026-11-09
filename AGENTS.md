@@ -170,8 +170,8 @@ switch by rerunning `ollija annotate-plan <plan-path> --delivery-route direct --
 and adding a Delivery Exceptions line that cites this default. A staging-only target is
 outside this default.
 
-Current explicit owner instructions override local delivery defaults. Record exceptions and
-reflect route changes in metadata; never recreate a waived requirement in a manual checklist.
+Current explicit owner instructions override local delivery defaults, including a saved
+continuation. Record exceptions and reflect route changes in metadata; never recreate a waived requirement in a manual checklist.
 To opt out, retain `ollija: {enabled: false, branch: <branch>}` and remove the generated guide.
 Annotation/check and checkout discovery preserve that plan without creating a replacement.
 Disabled plans need no generated-guide gate. Re-enable only on explicit owner direction.
