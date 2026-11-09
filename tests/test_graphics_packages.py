@@ -85,12 +85,17 @@ def test_claims_expire_and_fence_stale_workers(selected):
     assert release_package(run.pk, owner='worker-b', fence=second.fence, now=now + timedelta(seconds=32))
 
 
-def test_unconfigured_or_failed_dispatch_never_claims_publication(selected):
+def test_failed_dispatch_never_claims_publication(selected, monkeypatch):
     from monitor.editorial.graphics_packages import advance_package
 
     request = _request(selected)
-    with pytest.raises(RuntimeError, match='dispatch'):
-        advance_package(request)
+    from monitor.editorial import graphics_dispatch
+
+    monkeypatch.setattr(graphics_dispatch, 'dispatch_creation', lambda **kwargs: False)
+    default_result = advance_package(request)
+    assert default_result['state'] == 'pending_dispatch'
+    assert not default_result['dispatched']
+    assert OriginalContentRun.objects.get(pk=default_result['run_id']).execution_state == 'pending'
     result = advance_package(request, dispatch=lambda **kwargs: False)
     assert result['state'] == 'pending_dispatch'
     assert not result['dispatched']

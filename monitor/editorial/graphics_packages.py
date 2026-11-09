@@ -139,10 +139,12 @@ def advance_package(request, *, dispatch=None):
     """Persist selected work, then ask an explicitly supplied dispatcher to run it.
 
     A broker error or rejected dispatch leaves the durable run pending for a
-    reconciler. No default dispatcher exists until the queue integration lands.
+    reconciler. The default dispatcher uses the dedicated Graphics queue.
     """
     if dispatch is None:
-        raise RuntimeError('Graphics package dispatcher is not available')
+        from .graphics_dispatch import dispatch_creation
+
+        dispatch = dispatch_creation
     run, content = materialize_package(request)
     try:
         sent = bool(dispatch(run_id=run.pk, content_id=content.pk))

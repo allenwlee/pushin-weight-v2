@@ -318,3 +318,32 @@ def test_recipe_is_snapshotted_before_external_loader_can_mutate_caller_packet()
     )
     assert claimed and call.request_packet == original
     assert packet != original
+
+
+@pytest.mark.parametrize('mode', ['legacy', 'shared'])
+def test_search_dollars_count_against_old_budget_without_counting_model_calls(monkeypatch, mode):
+    from monitor.editorial.config import EditorialConfig
+    from monitor.editorial.persistence import (
+        call_once,
+        claim_assessment,
+        reserve_graphics_call,
+    )
+    from monitor.original_content import budget_totals
+
+    monkeypatch.setenv('ORIGINAL_CONTENT_STORAGE', mode)
+    run = make_run()
+    call, _ = reserve_graphics_call(run=run, stage='S1', kind='text',
+        request_hash=sha256(b'{}').hexdigest(),
+        request_packet={'schema_version': 'graphics-request/v1', 'request_json': '{}'},
+        provider='exa', model='exa-auto', ceiling='0.02', owner='worker',
+        lease_seconds=120, workflow_key='social-brief')
+    budget = EditorialBudget.objects.get(day=call.budget_day)
+    assert budget.reserved_usd == Decimal('0.02') and budget.calls == budget.media_calls == 0
+    totals = budget_totals('editorial', call.budget_day)
+    assert totals['reserved_usd'] == Decimal('0.02') and totals['calls'] == totals['media_calls'] == 0
+    assessment = claim_assessment(timezone.now(), 'search-budget')
+    config = EditorialConfig(daily_usd=0.2, assessment_usd=1, daily_calls=10)
+    with pytest.raises(BudgetHeld, match='budget'):
+        call_once(assessment, 'editor', 'text', '.2', config,
+            lambda: pytest.fail('search reserve must count against the daily budget'),
+            request_metadata={'workflow_version': 'test/v1', 'request_hash': 'b' * 64})

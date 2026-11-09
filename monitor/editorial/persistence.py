@@ -149,7 +149,7 @@ def reserve_graphics_call(
     for a previously claimed/sent/finished identity. Callers must never send
     when False; a sent or ambiguous request remains reserved and unrepeated.
     """
-    if stage not in {"C1", "G0", "G1", "I-A", "I-B", "V1", "V-B", "E1"}:
+    if stage not in {"C1", "G0", "G1", "S1", "S2", "I-A", "I-B", "V1", "V-B", "E1"}:
         raise ValueError("unsupported graphics stage")
     if workflow_key not in {"social-brief", "development-report", "brand-window"}:
         raise ValueError("unsupported graphics output workflow")
@@ -196,6 +196,8 @@ def reserve_graphics_call(
         raise BudgetHeld("invalid reservation") from exc
     if not ceiling.is_finite() or ceiling <= 0:
         raise BudgetHeld("positive reservation required")
+    if stage in {"S1", "S2"} and (provider != "exa" or model != "exa-auto" or ceiling < Decimal("0.02")):
+        raise ValueError("invalid Graphics search reservation")
     run_cap = _finite_limit(per_run_limit, Decimal(4))
     daily_cap = min(_finite_limit(daily_limit, Decimal(40)), _finite_limit(configured_daily_limit, Decimal(40)))
     now = timezone.now()
@@ -269,7 +271,7 @@ def reserve_graphics_call(
         if call is None:
             raise BudgetHeld("graphics claim conflict")
         budget.reserved_usd += ceiling
-        budget.calls += 1
+        budget.calls += int(stage not in {"S1", "S2"})
         budget.media_calls += int(kind == "media")
         budget.save()
         return call, True

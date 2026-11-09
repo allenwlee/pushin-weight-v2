@@ -12,6 +12,7 @@ from jsonschema.exceptions import ValidationError
 
 from core.staff_assets.public_fetch import fetch_public_response
 from monitor.editorial.graphics_contracts import (
+    TERMINAL_MEDIA_FAILURES,
     build_messages,
     normalize_treatments,
     validate_stage_output,
@@ -27,7 +28,7 @@ VIDEO_MODEL = 'grok-imagine-video-1.5-lite'
 MAX_INPUT_BYTES = 12 * 1024 * 1024
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
 MIME_TYPES = frozenset({'image/jpeg', 'image/png', 'image/webp'})
-TERMINAL_FAILURES = frozenset({'failed', 'expired', 'canceled', 'cancelled', 'moderated'})
+TERMINAL_FAILURES = TERMINAL_MEDIA_FAILURES
 
 
 def _call(pack, stage):

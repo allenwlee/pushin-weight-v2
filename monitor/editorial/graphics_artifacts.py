@@ -8,6 +8,7 @@ from django.core.files.storage import storages
 from PIL import Image, UnidentifiedImageError
 
 from core.models import ContentPicture, OriginalContentCall
+from monitor.editorial.graphics_contracts import TERMINAL_MEDIA_FAILURES
 from monitor.original_content import WORKFLOWS, digest
 
 PROVENANCE_FIELDS = frozenset({'schema_version', 'role', 'candidate_id', 'mime', 'producer_call_id', 'content_id'})
@@ -17,7 +18,7 @@ VIDEO_JOB_FIELDS = frozenset({
     'schema_version', 'candidate_id', 'content_id', 'producer_call_id',
     'input_still_sha256', 'terminal_status',
 })
-VIDEO_TERMINAL_FAILURES = frozenset({'failed', 'expired', 'canceled', 'cancelled', 'moderated'})
+VIDEO_TERMINAL_FAILURES = TERMINAL_MEDIA_FAILURES
 
 
 def validate_still(picture, *, content, candidate, storage=None):

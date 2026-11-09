@@ -133,7 +133,7 @@ def asset(request, story_id, picture_id, variant):
     if is_graphics_edition(edition) or str(metadata.get("schema_version", "")).startswith("graphics-"):
         if not is_graphics_edition(edition) or cfg.picture_mode(edition.track, "x") == "off" or variant != "generated":
             raise Http404
-        selected = graphics_assets(edition)
+        selected = graphics_assets(edition, include_video=metadata.get('role') != 'still')
         if selected is None or picture.pk not in {selected.still.pk, selected.video.pk if selected.video else None}:
             raise Http404
         storage = storages["editorial_media"]

@@ -259,7 +259,13 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 15 * 60}
 CELERY_BEAT_SCHEDULE = {}
 # Event-driven release work is opt-in. It creates no schedule or beat entry.
 PRODUCT_RELEASE_BACKGROUND_ENABLED = env.bool("PRODUCT_RELEASE_BACKGROUND_ENABLED", default=False)
+GRAPHICS_RECONCILER_ENABLED = env.bool("GRAPHICS_RECONCILER_ENABLED", default=False)
+GRAPHICS_REQUIRE_SHARED_MEDIA = env.bool("GRAPHICS_REQUIRE_SHARED_MEDIA", default=False)
 CELERY_TASK_ROUTES = {
+    "monitor.tasks.advance_graphics_package": {"queue": "graphics-creation"},
+    "monitor.tasks.submit_graphics_video": {"queue": "graphics-creation"},
+    "monitor.tasks.poll_graphics_video": {"queue": "graphics-creation"},
+    "monitor.tasks.review_graphics_package": {"queue": "graphics-review"},
     "monitor.tasks.acquire_product_release": {"queue": "trend-narratives"},
     "monitor.tasks.recover_due_product_releases": {"queue": "trend-narratives"},
     "monitor.tasks.refresh_editorial": {"queue": "trend-narratives"},

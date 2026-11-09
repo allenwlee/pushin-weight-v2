@@ -23,7 +23,10 @@ def graphic_edition(publication_case, tmp_path, monkeypatch):  # noqa: F811
     from monitor.original_content_readers import saved_edition
 
     pack, content, c1 = publication_case
-    text = publish_primary(content=content, producer=c1, pack=pack, sources=[{'post_id': '123', 'url': 'https://x.com/i/status/123'}])
+    text = publish_primary(content=content, producer=c1, pack=pack, sources=[{
+        'id': '123', 'url': 'https://x.com/i/status/123',
+        'original_text': 'Saved source', 'author_handle': 'original',
+    }])
     now = timezone.now()
     producer = OriginalContentCall.objects.create(run=content.run, stage=f'gfx:{content.run_id}:I-A', workflow_key=content.workflow_key, kind='media', request_identity=f'graphics:{content.run_id}:I-A', request_hash='a'*64, response_hash='b'*64, state='completed', reserved_at=now, sent_at=now, completed_at=now)
     image = BytesIO()
@@ -101,6 +104,24 @@ def test_verified_video_uses_selected_still_as_poster(client, graphic_edition):
     assert str(still.pk) in item['asset']['poster']
     response = client.get(item['asset']['url'], secure=True)
     assert response.status_code == 200 and response['Content-Type'] == 'video/mp4'
+
+
+def test_still_request_does_not_read_the_video(client, graphic_edition, monkeypatch):
+    edition, still, storage, _ = graphic_edition
+    _video(graphic_edition)
+    opened = []
+    original_open = storage.open
+
+    def record_open(name, *args, **kwargs):
+        opened.append(name)
+        return original_open(name, *args, **kwargs)
+
+    monkeypatch.setattr(storage, 'open', record_open)
+    url = reverse('editorial_asset', kwargs={'story_id': edition.story_id, 'picture_id': still.pk, 'variant': 'generated'})
+    response = client.get(url, secure=True)
+    assert response.status_code == 200
+    assert 'selected.png' in opened
+    assert 'video.mp4' not in opened
 
 
 def test_wrong_video_lineage_or_corrupt_bytes_fall_back_to_still(client, graphic_edition):

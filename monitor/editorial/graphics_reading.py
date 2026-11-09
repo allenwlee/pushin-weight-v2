@@ -111,7 +111,7 @@ def _valid_video(picture, text, track, source, candidate, still, storage):
         return False
 
 
-def graphics_assets(edition):
+def graphics_assets(edition, *, include_video=True):
     """Return validated still and optional video, never a raw source or reserve."""
     text = getattr(edition, '_original_content_text', None)
     if (text is None or text.narrative.status != 'approved' or not text.public_id
@@ -144,6 +144,8 @@ def graphics_assets(edition):
     if len(stills) != 1:
         return None
     still = stills[0]
+    if not include_video:
+        return GraphicsAssets(still=still)
     videos = [picture for picture in rows if _valid_video(picture, text, edition.track, source, candidate, still, storage)]
     return GraphicsAssets(still=still, video=videos[0] if len(videos) == 1 else None)
 
