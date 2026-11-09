@@ -56,28 +56,42 @@ def _saved_c1(content, producer, pack):
 
 
 def _citations(sources, facts):
-    allowed = {
-        url
-        for fact in facts
-        if isinstance(fact, dict)
-        for url in fact.get('source_refs', [])
-        if isinstance(url, str)
-    }
+    allowed = {}
+    for fact in facts:
+        if not isinstance(fact, dict):
+            continue
+        post_id = fact.get('source_post_id')
+        snapshot_hash = fact.get('snapshot_hash')
+        for url in fact.get('source_refs', []):
+            if isinstance(url, str) and isinstance(post_id, str):
+                allowed.setdefault((post_id, url), set()).add(snapshot_hash)
     if not sources:
         raise ValueError('editorial output requires citations')
     out = []
     for source in sources:
         post_id = str(source.get('post_id') or source.get('id') or '').removeprefix('x:')
         url = source.get('url')
-        if not post_id or url not in allowed:
+        expected = allowed.get((post_id, url))
+        if not post_id or not expected:
             raise ValueError('citation is not in saved C1 handoff')
         parts = urlsplit(url)
         if parts.hostname in {'x.com', 'www.x.com', 'twitter.com', 'www.twitter.com'} and parts.path.rstrip('/').split('/')[-1] != post_id:
             raise ValueError('citation post identity mismatch')
-        post = Post.objects.filter(pk=post_id).first()
-        if post is None:
+        if not Post.objects.filter(pk=post_id).exists():
             raise ValueError('missing cited posts: ' + post_id)
-        out.append({'post_id': post_id, 'url': url, 'author_handle': post.author_handle or '', 'text': post.text or ''})
+        # The exact writing-time snapshot is signed by the C1 handoff.  The
+        # current Post is used only for identity, never to reconstruct evidence.
+        if len(expected) != 1 or digest(source) not in expected:
+            raise ValueError('citation source snapshot does not match C1 handoff')
+        if not isinstance(source.get('original_text'), str) or not source['original_text']:
+            raise ValueError('citation source snapshot lacks original text')
+        out.append({
+            'post_id': post_id,
+            'url': url,
+            'original_text': source['original_text'],
+            'author_handle': source.get('author_handle') or source.get('author_label') or '',
+            '_writing_projection': source,
+        })
     return out
 
 
@@ -99,7 +113,7 @@ def publish_primary(*, content, producer, pack, sources, selected_scope=None, fe
         return text
 
 
-def publish_fallback(*, primary_text, failure_call, reserve_picture, pack, sources, selected_scope=None, fence=None, storage=None):
+def publish_fallback(*, primary_text, failure_call, reserve_picture, pack, sources, selected_scope=None, fence=None, storage=None, video_job=None):
     """Save B once after a definite A failure, without displacing a newer pointer.
 
     A missing, invalid or mismatched reserve file retains the A edition. An
@@ -112,7 +126,7 @@ def publish_fallback(*, primary_text, failure_call, reserve_picture, pack, sourc
     )
     from monitor.original_content import advisory_lock
 
-    from .graphics_artifacts import validate_still
+    from .graphics_artifacts import validate_failed_video_job, validate_still
 
     with transaction.atomic():
         OriginalContentRun.objects.select_for_update().get(pk=primary_text.narrative.run_id)
@@ -133,11 +147,29 @@ def publish_fallback(*, primary_text, failure_call, reserve_picture, pack, sourc
         identities = {f'graphics:{primary.run_id}:I-A', f'graphics:{primary.run_id}:V1'}
         if (
             failure.run_id != primary.run_id or failure.workflow_key != primary.workflow_key
-            or failure.kind != 'media' or failure.state != 'failed'
+            or failure.kind != 'media'
             or failure.request_identity not in identities
             or failure.stage != 'gfx:' + failure.request_identity.removeprefix('graphics:')
         ):
             raise ValueError('fallback requires a definite same-run A media failure')
+        is_video_job_failure = failure.request_identity.endswith(':V1') and failure.state == 'completed'
+        if is_video_job_failure:
+            job = ContentPicture.objects.select_for_update().filter(pk=getattr(video_job, 'pk', None)).first()
+            if job is None:
+                raise ValueError('fallback requires a definite same-run A media failure')
+            try:
+                validate_failed_video_job(job, content=primary, primary_text=a_text, producer_call=failure, storage=storage)
+            except (ValueError, TypeError, KeyError) as exc:
+                raise ValueError('fallback requires a definite same-run A media failure') from exc
+        elif failure.state != 'failed':
+            raise ValueError('fallback requires a definite same-run A media failure')
+        fallback_provenance = {
+            'schema_version': 'graphics-fallback/v1',
+            'predecessor_id': primary.pk,
+            'failure_call_id': failure.pk,
+        }
+        if is_video_job_failure:
+            fallback_provenance['video_job_id'] = str(job.pk)
         if selected_scope is not None:
             if selected_scope != f'featured:{primary.workflow_key}:{a_text.locale}':
                 raise ValueError('invalid featured selection scope')
@@ -148,7 +180,7 @@ def publish_fallback(*, primary_text, failure_call, reserve_picture, pack, sourc
         key = f'graphics-fallback:{primary.pk}'
         prior = OriginalContent.objects.filter(run_id=primary.run_id, workflow_key=primary.workflow_key, output_key=key).first()
         if prior is not None:
-            if prior.provenance != {'schema_version': 'graphics-fallback/v1', 'predecessor_id': primary.pk, 'failure_call_id': failure.pk}:
+            if prior.provenance != fallback_provenance:
                 raise ValueError('existing fallback identity mismatch')
             existing = prior.localized_texts.filter(locale=a_text.locale, producing_call=producer).first()
             if existing is None:
@@ -173,7 +205,7 @@ def publish_fallback(*, primary_text, failure_call, reserve_picture, pack, sourc
             importance=primary.importance, fingerprint=primary.fingerprint,
             brand_id=primary.brand_id, brand_key_snapshot=primary.brand_key_snapshot,
             selection=primary.selection, status='prepared', attempted_at=primary.attempted_at,
-            provenance={'schema_version': 'graphics-fallback/v1', 'predecessor_id': primary.pk, 'failure_call_id': failure.pk},
+            provenance=fallback_provenance,
         )
         (text,) = publish_content(b, [{
             'locale': a_text.locale, 'headline': candidate['headline'], 'byline': candidate['byline'],
