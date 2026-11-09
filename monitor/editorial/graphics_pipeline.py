@@ -14,6 +14,7 @@ from django.core.files.storage import storages
 from django.db import transaction
 from django.utils import timezone
 from django.utils.module_loading import import_string
+from jsonschema.exceptions import ValidationError as SchemaValidationError
 
 from core.models import (
     ContentPicture,
@@ -303,6 +304,11 @@ def _skip_stage(run, claim, stage, reason):
         return True
 
 
+def _invalid_saved(run, claim, stage, reason):
+    _skip_stage(run, claim, 'attention', f'{stage}:{reason}')
+    return {'state': reason, 'stage': stage, 'next_action': None}
+
+
 def advance_step(run_id, *, owner=None, keys=None, transport=None,
                  configured_daily_limit=None, search=None):
     """Advance one persisted phase without retrying a sent provider request."""
@@ -340,9 +346,12 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
         if c1.state != 'completed':
             return {'state': c1.state, 'stage': 'C1', 'next_action': None}
         if c1.response_hash != digest(c1.response_payload):
-            return {'state': 'invalid_saved_response', 'stage': 'C1', 'next_action': None}
-        validate_stage_output(pack, 'C1', c1.response_payload)
-        validate_copy_fact_ids(c1.response_payload, saved['handoff']['fact_items'])
+            return _invalid_saved(run, claim, 'C1', 'invalid_saved_response')
+        try:
+            validate_stage_output(pack, 'C1', c1.response_payload)
+            validate_copy_fact_ids(c1.response_payload, saved['handoff']['fact_items'])
+        except (SchemaValidationError, ValueError, TypeError, KeyError):
+            return _invalid_saved(run, claim, 'C1', 'invalid_saved_response')
         g0 = _stage_call(run_id, 'G0')
         if g0 is None and 'G0' in run.decisions.get('graphics_skipped_stages', {}):
             g0 = SimpleNamespace(state='skipped', response_payload={})
@@ -375,8 +384,11 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             return {'state': g0.state, 'stage': 'G0', 'next_action': None}
         if g0.state == 'completed':
             if g0.response_hash != digest(g0.response_payload):
-                return {'state': 'invalid_saved_response', 'stage': 'G0', 'next_action': None}
-            validate_stage_output(pack, 'G0', g0.response_payload)
+                return _invalid_saved(run, claim, 'G0', 'invalid_saved_response')
+            try:
+                validate_stage_output(pack, 'G0', g0.response_payload)
+            except (SchemaValidationError, ValueError, TypeError, KeyError):
+                return _invalid_saved(run, claim, 'G0', 'invalid_saved_response')
         source_record = run.decisions.get('graphics_source_search')
         if source_record is None:
             discovery = g0.response_payload if g0.state == 'completed' else {'queries': []}
@@ -387,7 +399,7 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                 or source_record['schema_version'] != 'graphics-source-search/v1'
                 or source_record['state'] not in {'started', 'completed'}
                 or not isinstance(source_record['assets'], list) or not isinstance(source_record['evidence'], dict)):
-            return {'state': 'invalid_saved_sources', 'stage': 'source_lookup', 'next_action': None}
+            return _invalid_saved(run, claim, 'source_lookup', 'invalid_saved_sources')
         g1 = _stage_call(run_id, 'G1')
         if g1 is None and 'G1' in run.decisions.get('graphics_skipped_stages', {}):
             g1 = SimpleNamespace(state='skipped', response_payload={})
@@ -416,9 +428,12 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                     'next_action': 'advance' if outcome['state'] in {'completed', 'failed', 'ambiguous'} else None}
         if g1.state == 'completed':
             if g1.response_hash != digest(g1.response_payload):
-                return {'state': 'invalid_saved_response', 'stage': 'G1', 'next_action': None}
-            normalized, _ = normalize_treatments(pack, g1.response_payload)
-            validate_stage_output(pack, 'G1', normalized)
+                return _invalid_saved(run, claim, 'G1', 'invalid_saved_response')
+            try:
+                normalized, _ = normalize_treatments(pack, g1.response_payload)
+                validate_stage_output(pack, 'G1', normalized)
+            except (SchemaValidationError, ValueError, TypeError, KeyError):
+                return _invalid_saved(run, claim, 'G1', 'invalid_saved_response')
         picture = ContentPicture.objects.filter(run=run, provenance__role='still',
             provenance__candidate_id='A', provenance__content_id=str(content.pk), state='complete').first()
         image_call = _stage_call(run_id, 'I-A')
@@ -452,7 +467,7 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             fallback_due = bool(image_call and image_call.state == 'failed' and g1.state == 'completed')
             return {'state': 'published', 'stage': 'publication', 'text_id': text.pk,
                     'next_action': 'advance' if fallback_due else ('video' if picture else 'review'),
-                    'review_due': not fallback_due}
+                    'review_due': not fallback_due and not picture}
         failed_job = ContentPicture.objects.filter(run=run, provenance__schema_version='graphics-video-job/v1',
             provenance__candidate_id='A', state='failed').first()
         video_call = _stage_call(run_id, 'V1')
@@ -486,7 +501,8 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                     reserve_picture=reserve_picture, pack=pack, sources=saved['sources'],
                     selected_scope=scope, fence=claim.fence, video_job=failed_job if failure_call == video_call and failed_job else None)
                 return {'state': 'published', 'stage': 'fallback', 'text_id': text.pk,
-                        'next_action': 'video' if text.pk != primary_text.pk else 'review', 'review_due': True}
+                        'next_action': 'video' if text.pk != primary_text.pk else 'review',
+                        'review_due': text.pk == primary_text.pk}
         return {'state': 'published', 'stage': 'review', 'next_action': 'review', 'review_due': True}
     finally:
         release_package(run_id, owner=claim.owner, fence=claim.fence)
@@ -556,6 +572,8 @@ def review_step(run_id, *, owner=None, keys=None, transport=None, configured_dai
 def pending_action(run_id):
     """Classify saved work without contacting the broker or a provider."""
     run = OriginalContentRun.objects.get(pk=run_id)
+    if 'attention' in run.decisions.get('graphics_skipped_stages', {}):
+        return None
     content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
     selected = OriginalContentSelection.objects.filter(scope_key=f'featured:{content.workflow_key}:{run.snapshot["request"]["locale"]}', text__narrative__run=run).select_related('text').first()
     text = selected.text if selected else content.localized_texts.first()
@@ -582,11 +600,11 @@ def pending_action(run_id):
     video_stage = 'V-B' if text.provenance.get('candidate_id') == 'B' else 'V1'
     video = _stage_call(run_id, video_stage)
     if still and video is None and video_stage not in skipped:
-        return {'action': 'video', 'text_id': text.pk, 'review_due': review_due}
+        return {'action': 'video', 'text_id': text.pk, 'review_due': False}
     job = ContentPicture.objects.filter(run=run, text=text, provenance__schema_version='graphics-video-job/v1', state='pending').first()
-    if job and job.poll_count < 40:
-        countdown = max(0, int((job.next_poll_at - timezone.now()).total_seconds())) if job.next_poll_at else 0
-        return {'action': 'poll', 'picture_id': str(job.pk), 'countdown': countdown, 'review_due': review_due}
+    if job and job.next_poll_at is not None and job.poll_count < 40:
+        countdown = max(0, int((job.next_poll_at - timezone.now()).total_seconds()))
+        return {'action': 'poll', 'picture_id': str(job.pk), 'countdown': countdown, 'review_due': False}
     if review_due:
         return {'action': 'review', 'review_due': True}
     return None
@@ -596,15 +614,21 @@ def finalize_if_done(run_id):
     """Close a released run only when no saved stage needs dispatch."""
     with transaction.atomic():
         run = OriginalContentRun.objects.select_for_update().get(pk=run_id)
-        if run.execution_state not in {'pending', 'preparing'}:
+        expired = (run.execution_state == 'running' and run.lease_until is not None
+                   and run.lease_until <= timezone.now())
+        if run.execution_state not in {'pending', 'preparing'} and not expired:
             return False
         if pending_action(run_id) is not None:
             return False
         uncertain = OriginalContentCall.objects.filter(run=run, state__in=['reserved', 'sent', 'ambiguous']).exists()
         pending_video = ContentPicture.objects.filter(run=run, provenance__schema_version='graphics-video-job/v1', state='pending').exists()
         no_copy = not OriginalContent.objects.filter(run=run, output_key='graphics-primary/v1', status='approved').exists()
-        needs_attention = uncertain or pending_video or no_copy
+        needs_attention = uncertain or pending_video or no_copy or 'attention' in run.decisions.get('graphics_skipped_stages', {})
         run.execution_state = 'suspended' if needs_attention else 'complete'
         run.outcome = {**run.outcome, 'graphics_state': 'attention_required' if needs_attention else 'finished'}
-        run.save(update_fields=['execution_state', 'outcome', 'updated_at'])
+        if expired:
+            run.fence += 1
+            run.claim_owner = ''
+            run.lease_until = None
+        run.save(update_fields=['execution_state', 'outcome', 'fence', 'claim_owner', 'lease_until', 'updated_at'])
         return True

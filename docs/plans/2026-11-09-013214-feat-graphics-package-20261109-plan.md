@@ -253,6 +253,8 @@ Historical receipts and test details remain below. The current local trial reser
 
 The seven-story November9 trial is the accepted workflow baseline:49 calls,14 stills,7 five-second videos,$2.5279205 reported model cost, five artwork searches with unknown billing, zero generation retries/fallbacks. Video-ready time was188.789–336.813seconds including manual orchestration and test-mode reserve rendering; this does not establish production latency. No new paid generation batch is authorized in the current staging request. Preserve historical outputs and exact source/identity distinctions.
 
+**Accounting limitation discovered in implementation review:** the $4/$40 admission limits are enforced against reservations and known charges, but a provider can bill more than the estimated reservation for a request already sent. They are not a provider-enforced hard maximum on the final invoice. Unknown costs remain reserved. Do not describe the limits as a guaranteed maximum billed amount; a hard billing cap needs a verified provider-side limit or a conservative bound on every billable input and current provider rates.
+
 ## Implementation Units
 
 ### Accepted coding scope — November 9

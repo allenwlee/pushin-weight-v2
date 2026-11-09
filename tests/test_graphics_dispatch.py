@@ -45,6 +45,7 @@ def test_reconcile_recovers_after_broker_reconnect(monkeypatch):
 
     pipeline = ModuleType('monitor.editorial.graphics_pipeline')
     pipeline.pending_action = lambda run_id: {'action': 'advance', 'review_due': True}
+    pipeline.finalize_if_done = Mock()
     monkeypatch.setitem(sys.modules, pipeline.__name__, pipeline)
     monkeypatch.setattr(graphics_dispatch, '_recovery_candidates', lambda now, limit: ([71], ['picture-id']))
     # First scan's broker sends fail, second scan sees the same durable rows.
@@ -65,11 +66,25 @@ def test_busy_scan_does_not_dispatch(monkeypatch):
 
     pipeline = ModuleType('monitor.editorial.graphics_pipeline')
     pipeline.pending_action = Mock()
+    pipeline.finalize_if_done = Mock()
     monkeypatch.setitem(sys.modules, pipeline.__name__, pipeline)
     monkeypatch.setattr(graphics_dispatch, '_recovery_candidates', lambda now, limit: None)
     result = graphics_dispatch.reconcile_due()
     assert result == {'state': 'busy', 'runs': 0, 'jobs': 0, 'dispatched': 0}
     pipeline.pending_action.assert_not_called()
+
+
+def test_recovery_finalizes_runs_with_no_remaining_action(monkeypatch):
+    import sys
+    from types import ModuleType
+
+    pipeline = ModuleType('monitor.editorial.graphics_pipeline')
+    pipeline.pending_action = Mock(return_value=None)
+    pipeline.finalize_if_done = Mock()
+    monkeypatch.setitem(sys.modules, pipeline.__name__, pipeline)
+    monkeypatch.setattr(graphics_dispatch, '_recovery_candidates', lambda now, limit: ([71], []))
+    assert graphics_dispatch.reconcile_due()['dispatched'] == 0
+    pipeline.finalize_if_done.assert_called_once_with(71)
 
 
 def test_recovery_batch_is_bounded():
@@ -153,6 +168,7 @@ def test_recovery_selects_due_work_and_releases_db_lock_before_broker(monkeypatc
     exhausted = picture(pending, 40)
     pipeline = ModuleType('monitor.editorial.graphics_pipeline')
     pipeline.pending_action = lambda _run_id: {'action': 'advance'}
+    pipeline.finalize_if_done = Mock()
     monkeypatch.setitem(sys.modules, pipeline.__name__, pipeline)
     sent_runs, sent_jobs = [], []
     def send_run(*, run_id, content_id=None):

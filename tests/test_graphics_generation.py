@@ -115,7 +115,7 @@ def test_video_decode_receipt_requires_real_decodable_file(tmp_path):
     from monitor.editorial.graphics_generation import video_decode_receipt
 
     path = tmp_path / 'fixture.mp4'
-    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-f', 'lavfi', '-i', 'color=black:s=32x32:r=5', '-t', '1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(path)], check=True)
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-f', 'lavfi', '-i', 'color=black:s=32x32:r=5', '-t', '5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(path)], check=True)
     data = path.read_bytes()
     sent = {'image': {'url': 'data:image/jpeg;base64,' + base64.b64encode(b'still').decode()}}
     still_sha = hashlib.sha256(b'still').hexdigest()
@@ -125,7 +125,7 @@ def test_video_decode_receipt_requires_real_decodable_file(tmp_path):
     assert receipt['input_still_sha256'] == still_sha
     with pytest.raises(ValueError, match='still'):
         video_decode_receipt(data, run_id=42, producer_call_id=17, input_still_sha256='a' * 64, sent_request=sent)
-    assert 900 <= receipt['duration_ms'] <= 1100
+    assert 4500 <= receipt['duration_ms'] <= 5500
     with pytest.raises(ValueError, match='container|decode'):
         video_decode_receipt(b'not a video', run_id=42, producer_call_id=17, input_still_sha256=still_sha, sent_request=sent)
 

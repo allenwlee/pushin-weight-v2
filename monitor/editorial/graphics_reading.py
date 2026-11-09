@@ -12,6 +12,7 @@ from core.models import ContentPicture, OriginalContent, OriginalContentCall
 from monitor.original_content import WORKFLOWS
 
 from .graphics_artifacts import PROVENANCE_FIELDS, validate_still
+from .graphics_generation import MAX_VIDEO_DURATION_MS, MIN_VIDEO_DURATION_MS
 
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
@@ -90,7 +91,7 @@ def _valid_video(picture, text, track, source, candidate, still, storage):
         or type(receipt['producer_call_id']) is not int
         or receipt['producer_call_id'] != call.pk
         or type(receipt['duration_ms']) is not int
-        or not 1 <= receipt['duration_ms'] <= 15000
+        or not MIN_VIDEO_DURATION_MS <= receipt['duration_ms'] <= MAX_VIDEO_DURATION_MS
         or receipt['input_still_sha256'] != still.generated_sha256
     ):
         return False

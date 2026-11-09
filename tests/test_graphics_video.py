@@ -15,6 +15,14 @@ from tests.test_graphics_publication import (  # noqa: F401
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
+def test_missing_poll_key_stops_scheduled_poll_without_losing_job(publication_case, tmp_path):  # noqa: F811
+    _, _, _, storage, _, job = _video_job_case(publication_case, tmp_path, status='pending')
+    result = poll_video_job(job.pk, api_key='', storage=storage)
+    job.refresh_from_db()
+    assert result['state'] == 'unavailable' and result['run_id'] == job.run_id
+    assert job.state == 'pending' and job.next_poll_at is None
+
+
 def test_pending_poll_is_scheduled_and_repeated_early_poll_does_not_call(publication_case, tmp_path):  # noqa: F811
     _, _, _, storage, _, job = _video_job_case(publication_case, tmp_path, status='pending')
     calls = []

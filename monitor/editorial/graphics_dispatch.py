@@ -122,7 +122,7 @@ def reconcile_due(*, now=None, limit=MAX_RECOVERY_BATCH):
     """Redispatch a bounded set after worker start, broker recovery, or manually."""
     if type(limit) is not int or not 1 <= limit <= MAX_RECOVERY_BATCH:
         raise ValueError('invalid Graphics recovery limit')
-    from .graphics_pipeline import pending_action
+    from .graphics_pipeline import finalize_if_done, pending_action
 
     selected = _recovery_candidates(now or timezone.now(), limit)
     if selected is None:
@@ -132,6 +132,9 @@ def reconcile_due(*, now=None, limit=MAX_RECOVERY_BATCH):
     for run_id in runs:
         try:
             decision = pending_action(run_id)
+            if decision is None:
+                finalize_if_done(run_id)
+                continue
             count += bool(dispatch_action(run_id, decision))
             if decision and decision.get('review_due') and decision.get('action') != 'review':
                 count += bool(dispatch_review(run_id))

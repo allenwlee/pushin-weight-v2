@@ -233,7 +233,12 @@ def poll_video_job(picture_id, *, api_key=None, transport=https_request, fetch=N
     """Poll one saved job once. A poll never creates or resubmits a video job."""
     key = api_key if api_key is not None else os.environ.get('XAI_API_KEY_PW', '')
     if not key:
-        return {'state': 'unavailable', 'job_id': str(picture_id)}
+        with transaction.atomic():
+            job = ContentPicture.objects.select_for_update().get(pk=picture_id)
+            if job.state == 'pending' and not (job.poll_lease_until and job.poll_lease_until > timezone.now()):
+                job.next_poll_at = None
+                job.save(update_fields=['next_poll_at'])
+        return {'state': 'unavailable', 'job_id': str(job.pk), 'run_id': job.run_id, 'reschedule': False}
     storage = _store(storage)
     now = timezone.now()
     # Read and decode the still outside transaction locks; check its DB identity

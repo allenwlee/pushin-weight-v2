@@ -86,10 +86,10 @@ def _video(graphic_edition, *, selected_hash=None):
     now = timezone.now()
     call = OriginalContentCall.objects.create(run=text.narrative.run, stage=f'gfx:{text.narrative.run_id}:V1', workflow_key=text.narrative.workflow_key, kind='media', request_identity=f'graphics:{text.narrative.run_id}:V1', request_hash='c'*64, response_hash='d'*64, state='completed', reserved_at=now, sent_at=now, completed_at=now)
     output = Path(storage.path('video.mp4'))
-    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=32x32:r=5:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', str(output)], check=True, capture_output=True)
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=32x32:r=5:d=5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', str(output)], check=True, capture_output=True)
     data = output.read_bytes()
     checksum = hashlib.sha256(data).hexdigest()
-    receipt = {'schema_version':'graphics-video-decode/v1', 'sha256':checksum, 'mime':'video/mp4', 'run_id':str(text.narrative.run_id), 'producer_call_id':call.pk, 'duration_ms':1000, 'input_still_sha256':selected_hash or still.generated_sha256}
+    receipt = {'schema_version':'graphics-video-decode/v1', 'sha256':checksum, 'mime':'video/mp4', 'run_id':str(text.narrative.run_id), 'producer_call_id':call.pk, 'duration_ms':5000, 'input_still_sha256':selected_hash or still.generated_sha256}
     return ContentPicture.objects.create(run=text.narrative.run, text=text, content_kind='chatter', content_id=str(text.public_id), revision_hash='2'*64, mode='derive', state='complete', generated_storage_name='video.mp4', generated_sha256=checksum, provenance={'schema_version':'graphics-artifact/v1', 'role':'video', 'candidate_id':'A', 'mime':'video/mp4', 'producer_call_id':call.pk, 'content_id':str(text.narrative.pk), 'decode_receipt':receipt})
 
 

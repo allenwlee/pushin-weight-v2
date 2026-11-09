@@ -57,6 +57,45 @@ def test_c1_runs_once_and_recovery_moves_forward():
     assert result['stage'] == 'C1'
 
 
+def test_corrupt_saved_response_stops_recovery_without_another_call():
+    from monitor.editorial.graphics_pipeline import (
+        advance_step,
+        finalize_if_done,
+        pending_action,
+    )
+
+    run, _ = selected_run()
+    def transport(*args, **kwargs):
+        return 200, json.dumps({'model': 'openai/gpt-6-sol', 'usage': {'estimated_cost': '0.01'},
+            'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(c1())}}]}).encode()
+    advance_step(run.pk, owner='worker', keys={'OPENROUTER_API_KEY': 'fake'}, transport=transport)
+    OriginalContentCall.objects.filter(run=run, request_identity=f'graphics:{run.pk}:C1').update(response_payload={})
+    result = advance_step(run.pk, owner='worker', keys={'OPENROUTER_API_KEY': 'fake'}, transport=transport)
+    assert result['state'] == 'invalid_saved_response'
+    assert pending_action(run.pk) is None
+    assert finalize_if_done(run.pk)
+    run.refresh_from_db()
+    assert run.execution_state == 'suspended'
+    assert OriginalContentCall.objects.filter(run=run).count() == 1
+
+
+def test_recovery_finalizes_expired_claim_but_not_live_claim():
+    from monitor.editorial.graphics_pipeline import finalize_if_done
+
+    run, _ = selected_run()
+    run.decisions = {'graphics_skipped_stages': {'C1': 'credential_unavailable'}}
+    run.execution_state = 'running'
+    run.claim_owner = 'worker'
+    run.lease_until = timezone.now() + timedelta(minutes=1)
+    run.save(update_fields=['decisions', 'execution_state', 'claim_owner', 'lease_until'])
+    assert not finalize_if_done(run.pk)
+    run.lease_until = timezone.now() - timedelta(seconds=1)
+    run.save(update_fields=['lease_until'])
+    assert finalize_if_done(run.pk)
+    run.refresh_from_db()
+    assert run.execution_state == 'suspended' and not run.claim_owner and run.lease_until is None
+
+
 def test_missing_credential_does_not_reserve_or_claim_publication():
     from monitor.editorial.graphics_pipeline import advance_step
 
@@ -180,11 +219,11 @@ def test_real_image_result_is_saved_published_and_dispatchable(editorial_storage
                             transport=transport, configured_daily_limit=40) for _ in range(6)]
     assert [r['stage'] for r in results] == ['C1', 'G0', 'source_lookup', 'G1', 'I-A', 'publication']
     assert results[4]['state'] == 'completed', results
-    assert results[-1]['next_action'] == 'video' and results[-1]['review_due']
+    assert results[-1]['next_action'] == 'video' and not results[-1]['review_due']
     picture = ContentPicture.objects.get(run=run, provenance__role='still')
     content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
     validate_still(picture, content=content, candidate='A')
-    assert pending_action(run.pk) == {'action': 'video', 'text_id': results[-1]['text_id'], 'review_due': True}
+    assert pending_action(run.pk) == {'action': 'video', 'text_id': results[-1]['text_id'], 'review_due': False}
     assert len(calls) == 4
     from monitor.editorial.graphics_pipeline import review_step
     def review_transport(endpoint, key, body, **kwargs):

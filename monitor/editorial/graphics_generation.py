@@ -27,6 +27,8 @@ IMAGE_MODEL = 'grok-imagine-image-2.0'
 VIDEO_MODEL = 'grok-imagine-video-1.5-lite'
 MAX_INPUT_BYTES = 12 * 1024 * 1024
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
+MIN_VIDEO_DURATION_MS = 4500
+MAX_VIDEO_DURATION_MS = 5500
 MIME_TYPES = frozenset({'image/jpeg', 'image/png', 'image/webp'})
 TERMINAL_FAILURES = TERMINAL_MEDIA_FAILURES
 
@@ -308,7 +310,7 @@ def video_decode_receipt(data, *, run_id, producer_call_id, input_still_sha256, 
     if result.returncode != 0 or not match or not frames or int(frames[-1]) < 1:
         raise ValueError('Video decode failed')
     duration_ms = round((int(match.group(1)) * 3600 + int(match.group(2)) * 60 + float(match.group(3))) * 1000)
-    if not 1 <= duration_ms <= 15000:
+    if not MIN_VIDEO_DURATION_MS <= duration_ms <= MAX_VIDEO_DURATION_MS:
         raise ValueError('Video decode duration out of bounds')
     return {
         'schema_version': 'graphics-video-decode/v1',
