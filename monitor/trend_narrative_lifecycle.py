@@ -6,6 +6,7 @@ import re
 import uuid
 from collections.abc import Mapping, Sequence
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 
 from django.db import IntegrityError, connection, transaction
@@ -64,6 +65,21 @@ def reserve_trend_narrative_provider_call(
     """Durably reserve one immutable transport identity for a stage/batch."""
     if stage not in TrendNarrativeProviderCall.Stage.values:
         raise ValueError("unsupported trend narrative provider stage")
+    return reserve_original_content_call(
+        run=run, stage=stage, batch_key=batch_key, request_identity=request_identity,
+        request_hash=request_hash, request_packet=request_packet, now=now,
+        workflow_key="brand-window", workflow_version=run.workflow_version,
+        budget_scope="headlines", reserved_usd=Decimal(0),
+        provider=(request_packet.get("routing") or {}).get("provider", ""),
+        model=(request_packet.get("provider_request") or {}).get("model", ""),
+    )
+
+
+def reserve_original_content_call(
+    *, run, stage, batch_key, request_identity, request_hash, request_packet, now,
+    workflow_key, workflow_version, budget_scope, reserved_usd, provider, model,
+):
+    """One shared reservation primitive; each caller retains its stage/budget policy."""
     if not request_identity or not request_hash:
         raise ValueError("request identity and hash are required")
     try:
@@ -76,12 +92,13 @@ def reserve_trend_narrative_provider_call(
                 request_hash=request_hash,
                 request_packet=request_packet,
                 reserved_at=now,
-                workflow_key="brand-window",
-                workflow_version=run.workflow_version,
-                budget_scope="headlines",
+                workflow_key=workflow_key,
+                workflow_version=workflow_version,
+                budget_scope=budget_scope,
                 budget_day=now.date(),
-                provider=(request_packet.get("routing") or {}).get("provider", ""),
-                model=(request_packet.get("provider_request") or {}).get("model", ""),
+                reserved_usd=reserved_usd,
+                provider=provider,
+                model=model,
             )
     except IntegrityError:
         return None
