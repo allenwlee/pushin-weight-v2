@@ -326,6 +326,26 @@ def fail_graphics_presend_call(call_id, *, owner, fence, error_code, now=None):
         return True
 
 
+def _graphics_billing_receipt(provider, value):
+    """Keep the precise provider amount separately from the rounded budget debit."""
+    try:
+        exact = Decimal(str(value))
+        if not exact.is_finite() or not 0 <= exact <= Decimal('999999.999999'):
+            raise ValueError('invalid actual cost')
+        rounded = exact.quantize(Decimal('0.000001'), rounding=ROUND_CEILING)
+        if provider == 'xai':
+            ticks = exact * Decimal(10_000_000_000)
+            if ticks != ticks.to_integral_value():
+                raise ValueError('xAI cost is not whole billing ticks')
+            unit, amount = 'usd_ticks_1e-10', str(int(ticks))
+        else:
+            unit, amount = 'usd', str(exact)
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError('invalid actual cost') from exc
+    return rounded, {'schema_version': 'graphics-billing-receipt/v1',
+                     'provider': provider, 'unit': unit, 'amount': amount}
+
+
 def complete_graphics_call(
     call_id, *, owner, fence, response_hash, response_payload, actual_usd=None, now=None
 ):
@@ -335,22 +355,18 @@ def complete_graphics_call(
 
     if not isinstance(response_payload, dict) or response_hash != digest(response_payload):
         raise ValueError("graphics response hash mismatch")
-    if actual_usd is not None:
-        try:
-            actual_usd = Decimal(str(actual_usd)).quantize(Decimal("0.000001"), rounding=ROUND_CEILING)
-        except (InvalidOperation, ValueError, TypeError) as exc:
-            raise ValueError("invalid actual cost") from exc
-        if not actual_usd.is_finite() or not 0 <= actual_usd <= Decimal("999999.999999"):
-            raise ValueError("invalid actual cost")
     observed = OriginalContentCall.objects.get(pk=call_id)
     if not observed.request_identity.startswith(_GRAPHICS_PREFIX) or not observed.budget_day:
         raise ValueError("not a graphics call")
+    actual_usd, receipt = (_graphics_billing_receipt(observed.provider, actual_usd)
+                           if actual_usd is not None else (None, None))
     with transaction.atomic():
         advisory_lock(f"content-budget:editorial:{observed.budget_day}")
         call = OriginalContentCall.objects.select_for_update().get(pk=call_id)
         if call.state == "completed":
             return (call.claim_owner == owner and call.claim_fence == fence
-                    and call.response_hash == response_hash and call.actual_usd == actual_usd)
+                    and call.response_hash == response_hash and call.actual_usd == actual_usd
+                    and call.provenance.get('graphics_billing_receipt') == receipt)
         if call.state != "sent" or call.claim_owner != owner or call.claim_fence != fence:
             return False
         if not complete_trend_narrative_provider_call(
@@ -362,9 +378,39 @@ def complete_graphics_call(
             budget = EditorialBudget.objects.select_for_update().get(pk=call.budget_day)
             budget.reserved_usd += actual_usd - call.reserved_usd
             budget.save(update_fields=["reserved_usd"])
+            provenance = {**call.provenance, 'graphics_billing_receipt': receipt}
             OriginalContentCall.objects.filter(pk=call_id).update(
-                reserved_usd=actual_usd, actual_usd=actual_usd
-            )
+                reserved_usd=actual_usd, actual_usd=actual_usd, provenance=provenance)
+        return True
+
+
+def record_graphics_video_cost(call_id, *, request_id, actual_usd):
+    """Reconcile an accepted video call once when its saved job reports a cost."""
+    from monitor.original_content import digest
+
+    actual, receipt = _graphics_billing_receipt('xai', actual_usd)
+    observed = OriginalContentCall.objects.get(pk=call_id)
+    if not observed.budget_day:
+        raise ValueError('video call has no budget day')
+    with transaction.atomic():
+        advisory_lock(f'content-budget:editorial:{observed.budget_day}')
+        call = OriginalContentCall.objects.select_for_update().get(pk=call_id)
+        if (not call.request_identity.startswith(_GRAPHICS_PREFIX)
+                or not call.request_identity.endswith((':V1', ':V-B'))
+                or call.provider != 'xai' or call.kind != 'media' or call.state != 'completed'
+                or not isinstance(call.response_payload, dict)
+                or call.response_hash != digest(call.response_payload)
+                or call.response_payload.get('request_id') != request_id):
+            raise ValueError('video cost does not match completed request')
+        if call.actual_usd is not None:
+            return (call.actual_usd == actual
+                    and call.provenance.get('graphics_billing_receipt') == receipt)
+        budget = EditorialBudget.objects.select_for_update().get(pk=call.budget_day)
+        budget.reserved_usd += actual - call.reserved_usd
+        budget.save(update_fields=['reserved_usd'])
+        call.actual_usd = call.reserved_usd = actual
+        call.provenance = {**call.provenance, 'graphics_billing_receipt': receipt}
+        call.save(update_fields=['actual_usd', 'reserved_usd', 'provenance', 'updated_at'])
         return True
 
 def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):

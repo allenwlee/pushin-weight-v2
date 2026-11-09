@@ -7,6 +7,7 @@ import base64
 import hashlib
 import json
 import re
+from decimal import Decimal, InvalidOperation
 
 from jsonschema.exceptions import ValidationError
 
@@ -31,6 +32,30 @@ MIN_VIDEO_DURATION_MS = 4500
 MAX_VIDEO_DURATION_MS = 5500
 MIME_TYPES = frozenset({'image/jpeg', 'image/png', 'image/webp'})
 TERMINAL_FAILURES = TERMINAL_MEDIA_FAILURES
+
+
+def reported_cost_usd(provider, usage):
+    """Parse a provider's actual billed amount; never mistake estimates for receipts."""
+    if not isinstance(usage, dict):
+        return None
+    if provider == 'openrouter':
+        value = usage.get('cost')
+        if isinstance(value, bool) or not isinstance(value, (str, int, float, Decimal)):
+            return None
+    elif provider == 'xai':
+        ticks = usage.get('cost_in_usd_ticks')
+        if type(ticks) is not int or ticks < 0:
+            return None
+        value = Decimal(ticks) / Decimal(10_000_000_000)
+    else:
+        return None
+    try:
+        value = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+    if not value.is_finite() or not 0 <= value <= Decimal('999999.999999'):
+        return None
+    return value
 
 
 def _call(pack, stage):
@@ -67,6 +92,7 @@ def build_text_request(pack, stage, data, *, attachments=(), instruction=None):
             {'role': 'user', 'content': content if attachments else messages['task']},
         ],
         'max_tokens': 4096,
+        'usage': {'include': True},
         'response_format': {'type': 'json_object'},
         'reasoning': {'effort': 'medium'},
         'provider': {'allow_fallbacks': False, 'require_parameters': True,
@@ -394,6 +420,10 @@ def submit_once(stage, request, packet, request_hash, api_key, pack, *, reserve,
         decoded = json.loads(raw)
         if not isinstance(decoded, dict):
             raise TypeError('provider response must be an object')
+        # Parse the wire cost separately so JSON decimal digits are not rounded
+        # through a binary float before we store the billing receipt.
+        usage = (json.loads(raw, parse_float=Decimal).get('usage') or {}
+                 if stage in {'C1', 'G0', 'G1', 'E1'} else decoded.get('usage') or {})
         image_bytes = None
         if stage in {'C1', 'G0', 'G1', 'E1'}:
             if decoded.get('model') != TEXT_MODEL:
@@ -438,9 +468,9 @@ def submit_once(stage, request, packet, request_hash, api_key, pack, *, reserve,
         fail(call, 'provider_response_invalid')
         return {'state': 'failed', 'error': 'provider_response_invalid'}
     try:
-        if complete(call, payload, image_bytes, decoded.get('usage') or {}) is False:
+        if complete(call, payload, image_bytes, usage) is False:
             raise ValueError('result persistence rejected')
     except Exception:  # noqa: BLE001 -- provider accepted; preserve charge and never resubmit
         ambiguous(call, 'result_persistence_unknown')
         return {'state': 'ambiguous', 'error': 'result_persistence_unknown'}
-    return {'state': 'completed', 'call': call, 'payload': payload, 'usage': decoded.get('usage') or {}}
+    return {'state': 'completed', 'call': call, 'payload': payload, 'usage': usage}

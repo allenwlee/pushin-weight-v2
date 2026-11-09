@@ -124,8 +124,26 @@ def test_staging_workers_are_isolated_from_existing_queues():
     review = services['pushinweight-staging-graphics-review']
     assert '-Q graphics-review --concurrency=1' in review['startCommand']
     assert not any(item['key'] == 'EXA_API_KEY' for item in review['envVars'])
+    assert not any(item['key'] == 'XAI_API_KEY_PW' for item in review['envVars'])
     assert {'key': 'GRAPHICS_RECONCILER_ENABLED', 'value': 'False'} in review['envVars']
     assert '-Q trend-narratives --concurrency=1' in services['pushinweight-staging-headlines']['startCommand']
+    media_keys = ('STAFF_MEDIA_STORAGE_BACKEND', 'STAFF_MEDIA_STORAGE_OPTIONS',
+                  'EDITORIAL_MEDIA_STORAGE_BACKEND', 'EDITORIAL_MEDIA_STORAGE_OPTIONS',
+                  'R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY')
+    for name in ('pushinweight-staging-graphics-a', 'pushinweight-staging-graphics-b',
+                 'pushinweight-staging-graphics-review'):
+        variables = {item['key']: item for item in services[name]['envVars']}
+        for key in media_keys:
+            assert variables[key]['fromService'] == {
+                'type': 'web', 'name': 'pushinweight-staging-web', 'envVarKey': key,
+            }
+        assert variables['OPENROUTER_API_KEY']['fromService'] == {
+            'type': 'worker', 'name': 'pushinweight-staging-headlines', 'envVarKey': 'OPENROUTER_API_KEY',
+        }
+        if name != 'pushinweight-staging-graphics-review':
+            assert variables['XAI_API_KEY_PW']['fromService'] == {
+                'type': 'worker', 'name': 'pushinweight-staging-headlines', 'envVarKey': 'XAI_API_KEY_PW',
+            }
 
 
 def test_reconciler_is_disabled_by_default(settings):

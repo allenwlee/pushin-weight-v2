@@ -64,6 +64,72 @@ def test_two_creation_slots_and_expired_unknown_charge_retained():
     assert EditorialBudget.objects.get(day=now.date()).reserved_usd == Decimal('0.6')
 
 
+def test_video_completion_receipt_adjusts_original_budget_once():
+    from monitor.editorial.persistence import (
+        complete_graphics_call,
+        record_graphics_video_cost,
+        reserve_graphics_call,
+    )
+    from monitor.trend_narrative_lifecycle import (
+        mark_trend_narrative_provider_call_sent,
+    )
+
+    run = make_run()
+    now = timezone.now()
+    call, claimed = reserve_graphics_call(
+        run=run, stage='V1', kind='media', request_hash=sha256(b'{}').hexdigest(),
+        request_packet={'schema_version': 'graphics-request/v1', 'request_json': '{}'},
+        provider='xai', model='grok-imagine-video-1.5-lite', ceiling=Decimal('0.2'),
+        owner='worker', lease_seconds=120, workflow_key='social-brief',
+    )
+    assert claimed and mark_trend_narrative_provider_call_sent(call.pk, owner='worker', fence=call.claim_fence, now=now)
+    payload = {'request_id': 'job-123', 'usage': {}}
+    assert complete_graphics_call(call.pk, owner='worker', fence=call.claim_fence,
+                                  response_hash=digest(payload), response_payload=payload)
+    assert record_graphics_video_cost(call.pk, request_id='job-123', actual_usd='0.16')
+    assert record_graphics_video_cost(call.pk, request_id='job-123', actual_usd='0.16')
+    assert not record_graphics_video_cost(call.pk, request_id='job-123', actual_usd='0.17')
+    with pytest.raises(ValueError, match='does not match'):
+        record_graphics_video_cost(call.pk, request_id='different', actual_usd='0.16')
+    call.refresh_from_db()
+    assert call.actual_usd == call.reserved_usd == Decimal('0.16')
+    assert EditorialBudget.objects.get(day=call.budget_day).reserved_usd == Decimal('0.16')
+
+
+def test_video_receipt_keeps_exact_ticks_and_rejects_rounded_collision():
+    from monitor.editorial.persistence import (
+        complete_graphics_call,
+        record_graphics_video_cost,
+        reserve_graphics_call,
+    )
+    from monitor.trend_narrative_lifecycle import (
+        mark_trend_narrative_provider_call_sent,
+    )
+
+    run = make_run()
+    call, claimed = reserve_graphics_call(
+        run=run, stage='V1', kind='media', request_hash=sha256(b'{}').hexdigest(),
+        request_packet={'schema_version': 'graphics-request/v1', 'request_json': '{}'},
+        provider='xai', model='grok-imagine-video-1.5-lite', ceiling='0.2',
+        owner='worker', lease_seconds=120, workflow_key='social-brief',
+    )
+    assert claimed and mark_trend_narrative_provider_call_sent(call.pk, owner='worker', fence=call.claim_fence, now=timezone.now())
+    OriginalContentCall.objects.filter(pk=call.pk).update(provenance={'existing': 'retained'})
+    payload = {'request_id': 'job-ticks', 'usage': {}}
+    assert complete_graphics_call(call.pk, owner='worker', fence=call.claim_fence,
+                                  response_hash=digest(payload), response_payload=payload)
+    assert record_graphics_video_cost(call.pk, request_id='job-ticks', actual_usd=Decimal('0.1234567891'))
+    assert record_graphics_video_cost(call.pk, request_id='job-ticks', actual_usd=Decimal('0.1234567891'))
+    assert not record_graphics_video_cost(call.pk, request_id='job-ticks', actual_usd=Decimal('0.1234567892'))
+    call.refresh_from_db()
+    assert call.actual_usd == Decimal('0.123457')
+    assert call.provenance['existing'] == 'retained'
+    assert call.provenance['graphics_billing_receipt'] == {
+        'schema_version': 'graphics-billing-receipt/v1', 'provider': 'xai',
+        'unit': 'usd_ticks_1e-10', 'amount': '1234567891',
+    }
+
+
 def test_existing_legacy_budget_and_stricter_caller_limit_apply():
     today = timezone.now().date()
     EditorialBudget.objects.create(day=today, reserved_usd=Decimal('4.9'), calls=1)

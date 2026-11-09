@@ -21,7 +21,7 @@ VIDEO_JOB_FIELDS = frozenset({
 VIDEO_TERMINAL_FAILURES = TERMINAL_MEDIA_FAILURES
 
 
-def validate_still(picture, *, content, candidate, storage=None):
+def validate_still(picture, *, content, candidate, storage=None, verify_bytes=True):
     """Verify saved file, owning run/content and completed matching image call.
 
     The exact source inputs remain on the immutable producing call/source rows;
@@ -54,6 +54,8 @@ def validate_still(picture, *, content, candidate, storage=None):
         or call.stage != f'gfx:{content.run_id}:{stage}'
     ):
         raise ValueError('Graphics still producer mismatch')
+    if not verify_bytes:
+        return metadata
     storage = storage if storage is not None else storages['editorial_media']
     try:
         with storage.open(picture.generated_storage_name, 'rb') as stream:

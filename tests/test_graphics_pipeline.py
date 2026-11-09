@@ -57,6 +57,46 @@ def test_c1_runs_once_and_recovery_moves_forward():
     assert result['stage'] == 'C1'
 
 
+@pytest.mark.parametrize(('usage', 'expected_actual', 'expected_reserved'), [
+    ({'cost': '0.0123', 'estimated_cost': '0.001'}, '0.012300', '0.012300'),
+    ({'estimated_cost': '0.001'}, None, '0.250000'),
+    ({}, None, '0.250000'),
+])
+def test_openrouter_receipt_releases_only_confirmed_cost(usage, expected_actual, expected_reserved):
+    from decimal import Decimal
+
+    from monitor.editorial.graphics_pipeline import advance_step
+
+    run, _ = selected_run()
+    def transport(*args, **kwargs):
+        return 200, json.dumps({'model': 'openai/gpt-6-sol', 'usage': usage,
+            'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(c1())}}]}).encode()
+    result = advance_step(run.pk, owner='worker', keys={'OPENROUTER_API_KEY': 'fake'}, transport=transport)
+    assert result['state'] == 'completed'
+    call = OriginalContentCall.objects.get(request_identity=f'graphics:{run.pk}:C1')
+    assert call.actual_usd == (Decimal(expected_actual) if expected_actual is not None else None)
+    assert call.reserved_usd == Decimal(expected_reserved)
+
+
+def test_openrouter_wire_cost_retains_all_decimal_digits():
+    from decimal import Decimal
+
+    from monitor.editorial.graphics_pipeline import advance_step
+
+    run, _ = selected_run()
+    def transport(*args, **kwargs):
+        encoded = json.dumps({'model': 'openai/gpt-6-sol', 'usage': {'cost': 'COST_MARKER'},
+            'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(c1())}}]})
+        return 200, encoded.replace('"COST_MARKER"', '0.1234567890123456789').encode()
+    assert advance_step(run.pk, owner='worker', keys={'OPENROUTER_API_KEY': 'fake'}, transport=transport)['state'] == 'completed'
+    call = OriginalContentCall.objects.get(request_identity=f'graphics:{run.pk}:C1')
+    assert call.actual_usd == Decimal('0.123457')
+    assert call.provenance['graphics_billing_receipt'] == {
+        'schema_version': 'graphics-billing-receipt/v1', 'provider': 'openrouter',
+        'unit': 'usd', 'amount': '0.1234567890123456789',
+    }
+
+
 def test_corrupt_saved_response_stops_recovery_without_another_call():
     from monitor.editorial.graphics_pipeline import (
         advance_step,
@@ -227,13 +267,16 @@ def test_real_image_result_is_saved_published_and_dispatchable(editorial_storage
     def transport(endpoint, key, body, **kwargs):
         calls.append(endpoint)
         if '/images/' in endpoint:
-            return 200, json.dumps({'data': [{'b64_json': base64.b64encode(image.getvalue()).decode()}]}).encode()
+            return 200, json.dumps({'data': [{'b64_json': base64.b64encode(image.getvalue()).decode()}],
+                                    'usage': {'cost_in_usd_ticks': 600000000}}).encode()
         return 200, json.dumps({'model': 'openai/gpt-6-sol', 'usage': {'estimated_cost': '0.01'},
             'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(next(outputs))}}]}).encode()
     results = [advance_step(run.pk, owner='worker', keys={'OPENROUTER_API_KEY': 'fake', 'XAI_API_KEY_PW': 'fake'},
                             transport=transport, configured_daily_limit=40) for _ in range(6)]
     assert [r['stage'] for r in results] == ['C1', 'G0', 'source_lookup', 'G1', 'I-A', 'publication']
     assert results[4]['state'] == 'completed', results
+    image_call = OriginalContentCall.objects.get(request_identity=f'graphics:{run.pk}:I-A')
+    assert str(image_call.actual_usd) == '0.060000'
     assert results[-1]['next_action'] == 'video' and not results[-1]['review_due']
     picture = ContentPicture.objects.get(run=run, provenance__role='still')
     content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')

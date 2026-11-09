@@ -1,25 +1,35 @@
 """Permanent story and share surfaces; optional anonymous access is explicit."""
 
+import hashlib
+import re
+from tempfile import SpooledTemporaryFile
+from threading import BoundedSemaphore, Lock
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
+from botocore.exceptions import BotoCoreError, ClientError
 from django.core import signing
 from django.core.files.storage import FileSystemStorage, storages
 from django.http import (
     FileResponse,
     Http404,
+    HttpResponse,
     HttpResponseBadRequest,
     HttpResponseRedirect,
     JsonResponse,
+    StreamingHttpResponse,
 )
 from django.shortcuts import get_object_or_404, render
 from django.utils import translation
 from django.views.decorators.http import require_GET
+from PIL import Image, UnidentifiedImageError
 
 from core.models import EditorialPicture
 from core.staff_assets.media import media_storage
 
 from .config import load_editorial_config
+from .graphics_artifacts import MAX_STILL_BYTES, MIME_FORMATS
+from .graphics_generation import MAX_VIDEO_BYTES
 from .graphics_reading import graphics_assets, is_graphics_edition
 from .readers import (
     LOCALES,
@@ -29,6 +39,23 @@ from .readers import (
     find_saved_edition,
     picture_for_edition,
 )
+
+# A worker may hold at most two snapshots (100 MiB of video) at once.
+GRAPHICS_SNAPSHOT_SLOTS = 2
+_graphics_snapshot_slots = BoundedSemaphore(GRAPHICS_SNAPSHOT_SLOTS)
+
+
+def _snapshot_release(slots):
+    """Create an idempotent slot release for the response and error paths."""
+    lock = Lock()
+    released = False
+    def release():
+        nonlocal released
+        with lock:
+            if not released:
+                released = True
+                slots.release()
+    return release
 
 
 def access(request):
@@ -53,6 +80,62 @@ def private_cache(response):
     response["Cache-Control"] = "private, no-store"
     response["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+def graphics_snapshot_response(request, snapshot, size, digest, content_type, release):
+    """Serve the verified snapshot, including one bounded byte range for seeking."""
+    # WSGI may later replace snapshot.close with response.close. Retain the
+    # actual file closer now to avoid recursive response-close callbacks.
+    close_file = snapshot.close
+    def close_snapshot():
+        try:
+            close_file()
+        finally:
+            release()
+
+    etag = f'"{digest}"'
+    requested = request.headers.get('Range', '')
+    if request.headers.get('If-Range', etag) != etag:
+        requested = ''
+    if requested:
+        match = re.fullmatch(r'bytes=(\d*)-(\d*)', requested)
+        try:
+            if not match or not (match.group(1) or match.group(2)):
+                raise ValueError('invalid range')
+            start = int(match.group(1)) if match.group(1) else max(0, size - int(match.group(2)))
+            end = min(size - 1, int(match.group(2))) if match.group(1) and match.group(2) else size - 1
+            if start >= size or end < start or (not match.group(1) and int(match.group(2)) == 0):
+                raise ValueError('unsatisfiable range')
+        except ValueError:
+            close_snapshot()
+            response = HttpResponse(status=416)
+            response['Content-Range'] = f'bytes */{size}'
+        else:
+            snapshot.seek(start)
+            length = end - start + 1
+            def chunks():
+                remaining = length
+                try:
+                    while remaining:
+                        data = snapshot.read(min(65536, remaining))
+                        if not data:
+                            break
+                        remaining -= len(data)
+                        yield data
+                finally:
+                    close_snapshot()
+            response = StreamingHttpResponse(chunks(), status=206, content_type=content_type)
+            response['Content-Length'] = str(length)
+            response['Content-Range'] = f'bytes {start}-{end}/{size}'
+    else:
+        snapshot.seek(0)
+        response = FileResponse(snapshot, content_type=content_type)
+    response['Accept-Ranges'] = 'bytes'
+    response['ETag'] = etag
+    # Django closes this on normal completion and on a disconnected client,
+    # including when a streaming iterator has not started yet.
+    response._resource_closers.append(close_snapshot)
+    return private_cache(response)
 
 
 @require_GET
@@ -133,12 +216,55 @@ def asset(request, story_id, picture_id, variant):
     if is_graphics_edition(edition) or str(metadata.get("schema_version", "")).startswith("graphics-"):
         if not is_graphics_edition(edition) or cfg.picture_mode(edition.track, "x") == "off" or variant != "generated":
             raise Http404
-        selected = graphics_assets(edition, include_video=metadata.get('role') != 'still')
-        if selected is None or picture.pk not in {selected.still.pk, selected.video.pk if selected.video else None}:
-            raise Http404
-        storage = storages["editorial_media"]
-        name = picture.generated_storage_name
-        content_type = metadata["mime"]
+        slots = _graphics_snapshot_slots
+        if not slots.acquire(blocking=False):
+            response = HttpResponse('Media temporarily busy', status=503)
+            response['Retry-After'] = '2'
+            return private_cache(response)
+        release = _snapshot_release(slots)
+        snapshot = None
+        handed_off = False
+        try:
+            is_still = metadata.get('role') == 'still'
+            selected = graphics_assets(edition, include_video=not is_still,
+                                       verify_video_bytes=False, verify_still_bytes=not is_still)
+            if selected is None or picture.pk not in {selected.still.pk, selected.video.pk if selected.video else None}:
+                raise Http404
+            storage = storages["editorial_media"]
+            name = picture.generated_storage_name
+            content_type = metadata["mime"]
+            # The storage key is mutable. Serve the exact bounded snapshot whose
+            # digest we verified, never a later read or a redirect to that key.
+            limit = MAX_VIDEO_BYTES if metadata['role'] == 'video' else MAX_STILL_BYTES
+            snapshot = SpooledTemporaryFile(max_size=2 * 1024 * 1024, mode='w+b')  # noqa: SIM115 -- response owns its lifetime
+            checksum = hashlib.sha256()
+            size = 0
+            with storage.open(name, 'rb') as source:
+                while chunk := source.read(65536):
+                    size += len(chunk)
+                    if size > limit:
+                        raise ValueError('Graphics asset exceeds size limit')
+                    checksum.update(chunk)
+                    snapshot.write(chunk)
+            if not size or checksum.hexdigest() != picture.generated_sha256:
+                raise ValueError('Graphics asset bytes mismatch')
+            if is_still:
+                snapshot.seek(0)
+                with Image.open(snapshot) as img:
+                    if img.format != MIME_FORMATS[content_type]:
+                        raise ValueError('Graphics still MIME mismatch')
+                    img.verify()
+            response = graphics_snapshot_response(request, snapshot, size, picture.generated_sha256, content_type, release)
+            handed_off = True
+            return response
+        except (OSError, ValueError, KeyError, UnidentifiedImageError,
+                Image.DecompressionBombError, BotoCoreError, ClientError):
+            raise Http404 from None
+        finally:
+            if not handed_off:
+                if snapshot is not None:
+                    snapshot.close()
+                release()
     else:
         eligible = picture_for_edition(edition, cfg)
         if eligible is None or eligible.pk != picture.pk:

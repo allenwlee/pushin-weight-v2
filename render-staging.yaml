@@ -183,25 +183,52 @@ services:
       - key: ORIGINAL_CONTENT_STORAGE
         value: shared
       - key: OPENROUTER_API_KEY
-        sync: false
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: OPENROUTER_API_KEY
       - key: XAI_API_KEY_PW
-        sync: false
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: XAI_API_KEY_PW
       - key: EXA_API_KEY
         sync: false
       - key: STAFF_MEDIA_STORAGE_BACKEND
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_BACKEND
       - key: STAFF_MEDIA_STORAGE_OPTIONS
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_OPTIONS
       - key: EDITORIAL_MEDIA_STORAGE_BACKEND
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_BACKEND
       - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_OPTIONS
       - key: R2_ACCOUNT_ID
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCOUNT_ID
       - key: R2_ACCESS_KEY_ID
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCESS_KEY_ID
       - key: R2_SECRET_ACCESS_KEY
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_SECRET_ACCESS_KEY
 
   - type: worker
     name: pushinweight-staging-graphics-b
@@ -249,25 +276,52 @@ services:
       - key: ORIGINAL_CONTENT_STORAGE
         value: shared
       - key: OPENROUTER_API_KEY
-        sync: false
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: OPENROUTER_API_KEY
       - key: XAI_API_KEY_PW
-        sync: false
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: XAI_API_KEY_PW
       - key: EXA_API_KEY
         sync: false
       - key: STAFF_MEDIA_STORAGE_BACKEND
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_BACKEND
       - key: STAFF_MEDIA_STORAGE_OPTIONS
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_OPTIONS
       - key: EDITORIAL_MEDIA_STORAGE_BACKEND
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_BACKEND
       - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_OPTIONS
       - key: R2_ACCOUNT_ID
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCOUNT_ID
       - key: R2_ACCESS_KEY_ID
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCESS_KEY_ID
       - key: R2_SECRET_ACCESS_KEY
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_SECRET_ACCESS_KEY
 
   - type: worker
     name: pushinweight-staging-graphics-review
@@ -315,23 +369,46 @@ services:
       - key: ORIGINAL_CONTENT_STORAGE
         value: shared
       - key: OPENROUTER_API_KEY
-        sync: false
-      - key: XAI_API_KEY_PW
-        sync: false
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: OPENROUTER_API_KEY
+
       - key: STAFF_MEDIA_STORAGE_BACKEND
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_BACKEND
       - key: STAFF_MEDIA_STORAGE_OPTIONS
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: STAFF_MEDIA_STORAGE_OPTIONS
       - key: EDITORIAL_MEDIA_STORAGE_BACKEND
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_BACKEND
       - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: EDITORIAL_MEDIA_STORAGE_OPTIONS
       - key: R2_ACCOUNT_ID
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCOUNT_ID
       - key: R2_ACCESS_KEY_ID
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCESS_KEY_ID
       - key: R2_SECRET_ACCESS_KEY
-        sync: false
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_SECRET_ACCESS_KEY
 
   - type: worker
     name: pushinweight-staging-synthesis

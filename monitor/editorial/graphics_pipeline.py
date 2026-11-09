@@ -46,6 +46,7 @@ from .graphics_generation import (
     build_image_request,
     build_text_request,
     create_request_recipe,
+    reported_cost_usd,
     submit_once,
 )
 from .graphics_packages import claim_package, release_package
@@ -116,7 +117,7 @@ def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport
             current = OriginalContentRun.objects.select_for_update().get(pk=run.pk)
             if not _owned(current, claim.owner, claim.fence):
                 return False
-            cost = usage.get('estimated_cost') if isinstance(usage, dict) else None
+            cost = reported_cost_usd('xai' if is_image else 'openrouter', usage)
             completed = complete_graphics_call(call.pk, owner=claim.owner, fence=call.claim_fence,
                 response_hash=digest(payload), response_payload=payload, actual_usd=cost)
             if not completed:

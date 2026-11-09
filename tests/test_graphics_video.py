@@ -149,22 +149,31 @@ def test_rejected_completion_is_ambiguous_and_never_resubmits(publication_case, 
 
 
 def test_successful_poll_attaches_decoded_video_to_selected_text(publication_case, tmp_path, monkeypatch):  # noqa: F811
+    from decimal import Decimal
+
     from monitor.editorial import graphics_video
 
-    primary, _, _, storage, _, job = _video_job_case(publication_case, tmp_path, status='pending')
+    primary, call, _, storage, _, job = _video_job_case(publication_case, tmp_path, status='pending')
     data = b'fake decoded video bytes'
     import hashlib
     sha = hashlib.sha256(data).hexdigest()
     def transport(_url, _key, _body, **_kwargs):
-        return 200, json.dumps({'status': 'done', 'video': {'url': 'https://example.test/video'}}).encode()
+        return 200, json.dumps({'status': 'done', 'video': {'url': 'https://example.test/video'},
+                                'usage': {'cost_in_usd_ticks': 1600000000}}).encode()
     def fetch(_url, **_kwargs):
         return data, 'https://example.test/video', 'video/mp4'
     monkeypatch.setattr(graphics_video, 'reconstruct_request', lambda *_args, **_kwargs: {'model': 'fake'})
     monkeypatch.setattr(graphics_video, 'video_decode_receipt', lambda *_args, **_kwargs: {'sha256': sha})
+    recorded = []
+    def record(*args, **kwargs):
+        recorded.append((args, kwargs))
+        return True
+    monkeypatch.setattr(graphics_video, 'record_graphics_video_cost', record)
     result = poll_video_job(job.pk, api_key='fake', storage=storage, transport=transport, fetch=fetch)
     job.refresh_from_db()
     assert result['state'] == 'completed' and job.state == 'complete'
     assert job.text_id == primary.pk and job.generated_sha256 == sha
+    assert recorded == [((call.pk,), {'request_id': 'video-123', 'actual_usd': Decimal('0.16')})]
     assert storage.open(job.generated_storage_name, 'rb').read() == data
 
 

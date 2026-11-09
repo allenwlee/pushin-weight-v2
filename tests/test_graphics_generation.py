@@ -17,6 +17,22 @@ from monitor.editorial.graphics_generation import (
 PACK = load_pack(Path(__file__).resolve().parents[1] / 'config/editorial_prompts/editorial-creative-roles-v1.json')
 
 
+@pytest.mark.parametrize(('provider', 'usage', 'expected'), [
+    ('openrouter', {'cost': '0.0123456789', 'estimated_cost': '0.1'}, '0.0123456789'),
+    ('openrouter', {'estimated_cost': '0.1'}, None),
+    ('openrouter', {'cost': True}, None),
+    ('openrouter', {'cost': 'NaN'}, None),
+    ('xai', {'cost_in_usd_ticks': 1250000000}, '0.125'),
+    ('xai', {'cost_in_usd_ticks': '1250000000'}, None),
+    ('xai', {'cost_in_usd_ticks': -1}, None),
+])
+def test_provider_costs_are_actual_receipts_only(provider, usage, expected):
+    from decimal import Decimal
+
+    from monitor.editorial.graphics_generation import reported_cost_usd
+
+    assert reported_cost_usd(provider, usage) == (Decimal(expected) if expected is not None else None)
+
 def asset(data=b'source image'):
     return {'asset_ref': 'person:1', 'role': 'identity_reference', 'data': data,
             'sha256': hashlib.sha256(data).hexdigest(), 'mime': 'image/jpeg'}
@@ -24,6 +40,7 @@ def asset(data=b'source image'):
 
 def test_c1_uses_one_schema_and_explicit_provider_route():
     request = build_text_request(PACK, 'C1', {'fact_items': []})
+    assert request['body']['usage'] == {'include': True}
     assert request['endpoint'] == 'https://openrouter.ai/api/v1/chat/completions'
     assert request['body']['model'] == 'openai/gpt-6-sol'
     assert request['body']['provider']['allow_fallbacks'] is False

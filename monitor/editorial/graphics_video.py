@@ -39,6 +39,7 @@ from .graphics_generation import (
     create_request_recipe,
     poll_video,
     reconstruct_request,
+    reported_cost_usd,
     submit_once,
     video_decode_receipt,
 )
@@ -48,6 +49,7 @@ from .persistence import (
     CapacityHeld,
     complete_graphics_call,
     fail_graphics_presend_call,
+    record_graphics_video_cost,
     reserve_graphics_call,
 )
 
@@ -323,6 +325,9 @@ def poll_video_job(picture_id, *, api_key=None, transport=https_request, fetch=N
         outcome = poll_video(request_id, key, **kwargs)
     except Exception:  # noqa: BLE001 -- unknown polling results never cause another submission
         outcome = {'state': 'unknown', 'error': 'poll_unavailable'}
+    cost = reported_cost_usd('xai', outcome.get('usage')) if outcome.get('state') == 'completed' else None
+    if cost is not None and not record_graphics_video_cost(call_id, request_id=request_id, actual_usd=cost):
+        raise ValueError('conflicting video billing receipts')
     file_name = None
     receipt = None
     if outcome.get('state') == 'completed':

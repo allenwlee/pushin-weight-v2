@@ -29,7 +29,8 @@ def picture_for_edition(edition, cfg):
 
 def pictures_for_editions(editions, cfg):
     enabled = [e for e in editions if cfg.picture_mode(e.track, "x") != "off"]
-    graphics = {e.pk: graphics_assets(e) for e in enabled if is_graphics_edition(e)}
+    graphics = {e.pk: graphics_assets(e, verify_video_bytes=False, verify_still_bytes=False)
+                for e in enabled if is_graphics_edition(e)}
     enabled = [e for e in enabled if not is_graphics_edition(e)]
     if not enabled:
         return graphics
@@ -74,6 +75,7 @@ def asset_payload(edition, cfg, pictures=None):
             "type": "video" if picture.video else "image",
             "url": graphics_url(picture.video or picture.still),
             "poster": graphics_url(picture.still),
+            "preload": "none",
             "generated": True,
             "caption": "Illustration",
         }
