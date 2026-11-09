@@ -14,7 +14,7 @@ ollija:
   change_id: graphics-copyeditor-package-20261106
   branch: feat/graphics-package-20261109
   workflow: plan
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
   delivery_route: staged
   delivery_route_selected_by_user: false
@@ -46,7 +46,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
@@ -57,6 +57,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/graphics-package-20261109` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/graphics-package-20261109` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -83,13 +90,13 @@ The accepted normal production path uses **6 model calls**: C1, G0, G1, I-A, V1 
 
 Each selected story gets independent editorial work. The initial entry is a manual selection; future automated selection is outside this release. Two independently hosted creation workers and a separate review worker are the proposed redundancy; changing concurrency also requires replacing the current global single-flight restriction with bounded, per-run claims. Video polling releases the worker between polls. A failed run cannot reserve the whole newsroom indefinitely. No finite setup can guarantee on-time delivery during a shared database, broker or provider outage; durable pending work and reconciliation prevent silent loss.
 
-The accepted trial is not deployed behavior. Existing production editorial work remains separate; its current single-concurrency worker and senior-review behavior do not establish the new package behavior. Implement and verify this package through staging, preserving live collection.
+The accepted workflow is deployed and verified on staging. The owner now directs production deployment; integrate the staged Graphics behavior with current production, preserving live collection and existing editorial work.
 
 ## Goal Capsule
 
 - **Outcome:** reusable one-story creative/package service with nonblocking publication, one admin scorecard and independently recoverable runs.
 - **Entry:** caller-selected story, existing source evidence/person IDs, locale, source revision, initiating harvest time and supplied cost/deadline limits.
-- **Endpoint now:** implement U0–U7, verify the manually selected story workflow and deliver the verified revision through staging. Production deployment, Chatter selection and headline-quality work are separate.
+- **Endpoint now:** deliver the verified Graphics revision through production. Chatter selection and headline-quality work remain separate.
 - **Keep:** collector fixes, imported cast references, real source evidence, existing storage, Image2.0 stills, Lite video, source reuse and model-drawn lettering.
 - **Remove:** clearance-card dependency, quality approval states/thresholds, prepublication review, visual chooser and creative rerolls.
 - **Schema:** zero new/retired tables or columns. Flag a concrete storage mismatch for review.
@@ -342,11 +349,11 @@ Browser-check the admin read view and General exports at desktop/mobile sizes. V
 - A drives the initial video; B can drive one reserve video only after definite A failure. Both stills are inspectable in testing. All requests fit the eight-call ceiling with no hidden turns.
 - Two independently running intervals progress under one injected job failure; saved evidence survives recovery without duplicate generation.
 - The actual selected caller and scheduler boundaries are tested before production guarantees are claimed; no harvest gap is concealed.
-- Current docs/prompts agree; historical receipts remain unchanged. Headline-quality improvement is explicitly deferred and is not a coding-completion criterion. Delivery ends after the exact intended revision and available feature behavior are verified on staging; do not deploy production.
+- Current docs/prompts agree; historical receipts remain unchanged. Headline-quality improvement is explicitly deferred and is not a coding-completion criterion. Delivery ends after the exact intended revision and available feature behavior are verified in production.
 
 ## Delivery Exceptions
 
-The owner explicitly removed editorial approval and automatic quality-retry steps. Do not recreate them in a code validator, EIC verdict, clearance-card requirement, reviewer queue, deployment acceptance script or generated checklist. Technical ownership/decoding/spend controls remain and must fall back locally rather than hold the entire publication pipeline. The owner selected LFG through staging only, superseding the prior production endpoint. Implement and deliver this Graphics scope through staging; activate only resources required by this scope. This grants no schema additions, unrelated production data writes, harvest interruption, or new paid model batch. Headline-quality work is separate. Earlier import/release authorizations are historical scope.
+The owner explicitly removed editorial approval and automatic quality-retry steps. Do not recreate them in a code validator, EIC verdict, clearance-card requirement, reviewer queue, deployment acceptance script or generated checklist. Technical ownership/decoding/spend controls remain and must fall back locally rather than hold the entire publication pipeline. After staging verification, the owner explicitly directed production deployment. Activate only resources required by this scope. This grants no schema additions, unrelated production data writes, harvest interruption, or new paid model batch. Headline-quality work is separate. Earlier import/release authorizations are historical scope.
 
 ## Current primary/reserve trial — 2026-11-08T21:16:33+09:00
 
@@ -534,7 +541,7 @@ Extracted existing page-image selection into `monitor/editorial/graphics_sources
 - **Budget:** when no caller limit is supplied, use a USD 4 per-story ceiling and USD 40 aggregate daily ceiling. Apply any lower configured or caller-supplied limit, never increase an existing shared global cap, and reserve before sending. Keep uncertain charges reserved; record search costs where known and disclose unknown search billing. These ceilings do not authorize a new paid validation batch.
 - **Search:** reuse a configured application artwork-search provider; no available provider or credential produces a recorded empty-reference fallback, not an invented asset or publication gate.
 - **Exports:** preserve original still and video, prepare derivatives suitable for General and a future X posting integration, and verify real media bytes and the eventual API's requirements before claiming X upload compatibility. Automatic X posting is excluded.
-- **Delivery:** staging is the selected endpoint and production deployment is excluded. A manual selected-story entry point is sufficient for this release; Chatter selector construction and automatic activation remain separate. Never interrupt harvesting.
+- **Delivery:** the owner has selected production after staging verification. A manual selected-story entry point is sufficient for this release; Chatter selector construction and automatic activation remain separate. Never interrupt harvesting or initiate a new paid model-generation batch.
 
 ### Implementation checkpoint — 2026-11-09 13:18 JST
 
