@@ -1,6 +1,9 @@
 """Load and assemble the task-specific Graphics prompt contracts."""
 
+import copy
 import json
+import math
+import re
 from pathlib import Path
 
 from jsonschema import validate
@@ -129,3 +132,46 @@ def validate_copy_fact_ids(copy, fact_items):
         not set(candidate['used_fact_ids']) <= facts for candidate in copy['candidates']
     ):
         raise ValueError('Unknown fact reference')
+
+
+def normalize_treatments(pack, result):
+    """Repair only transport geometry; preserve the raw model output and exact copy."""
+    result = copy.deepcopy(result)
+    supported = pack["media_capabilities"]["image_aspect_ratios"]
+    adjustments = []
+    for treatment in result.get("treatments", []):
+        requested = treatment.get("aspect_ratio")
+        if requested in supported:
+            continue
+        match = re.fullmatch(r"(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)", str(requested))
+        if match and all(0 < float(value) < 1e100 for value in match.groups()):
+            ratio = float(match[1]) / float(match[2])
+
+            def distance(candidate, target=ratio):
+                w, h = map(float, candidate.split(":"))
+                return abs(math.log((w / h) / target))
+
+            resolved = min(
+                (value for value in supported if value != "auto"), key=distance
+            )
+        else:
+            resolved = "auto"
+        treatment["aspect_ratio"] = resolved
+        for field in ["still_prompt", "motion_prompt"]:
+            if isinstance(requested, str) and requested:
+                treatment[field] = re.sub(
+                    r"(?i)(\b(?:locked|fixed)\s+)"
+                    + re.escape(requested)
+                    + r"(\s+frame\b)",
+                    lambda match, value=resolved: match[1] + value + match[2],
+                    treatment.get(field, ""),
+                )
+        adjustments.append(
+            {
+                "candidate_id": treatment.get("candidate_id"),
+                "requested": requested,
+                "submitted": resolved,
+                "reason": "unsupported provider geometry; no regeneration",
+            }
+        )
+    return result, adjustments

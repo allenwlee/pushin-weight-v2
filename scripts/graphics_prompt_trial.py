@@ -6,12 +6,10 @@ Search is an injected tool adapter: no provider or credentials are guessed here.
 
 import argparse
 import base64
-import copy
 import fcntl
 import hashlib
 import io
 import json
-import math
 import os
 import re
 import shlex
@@ -35,6 +33,9 @@ from monitor.editorial.graphics_contracts import (
     load_pack,
     validate_copy_fact_ids,
     validate_stage_output,
+)
+from monitor.editorial.graphics_contracts import (
+    normalize_treatments as shared_normalize_treatments,
 )
 from scripts.graphics_reference_fetch import fetch_sources
 
@@ -217,45 +218,8 @@ def post(stage, url, key_name, body, reserve):
 
 
 def normalize_treatments(result):
-    """Repair only transport geometry; preserve the raw model output and exact copy."""
-    result = copy.deepcopy(result)
-    supported = PACK["media_capabilities"]["image_aspect_ratios"]
-    adjustments = []
-    for treatment in result.get("treatments", []):
-        requested = treatment.get("aspect_ratio")
-        if requested in supported:
-            continue
-        match = re.fullmatch(r"(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)", str(requested))
-        if match and all(0 < float(value) < 1e100 for value in match.groups()):
-            ratio = float(match[1]) / float(match[2])
-
-            def distance(candidate, target=ratio):
-                w, h = map(float, candidate.split(":"))
-                return abs(math.log((w / h) / target))
-
-            resolved = min(
-                (value for value in supported if value != "auto"), key=distance
-            )
-        else:
-            resolved = "auto"
-        treatment["aspect_ratio"] = resolved
-        for field in ["still_prompt", "motion_prompt"]:
-            if isinstance(requested, str) and requested:
-                treatment[field] = re.sub(
-                    r"(?i)(\b(?:locked|fixed)\s+)"
-                    + re.escape(requested)
-                    + r"(\s+frame\b)",
-                    lambda match, value=resolved: match[1] + value + match[2],
-                    treatment.get(field, ""),
-                )
-        adjustments.append(
-            {
-                "candidate_id": treatment.get("candidate_id"),
-                "requested": requested,
-                "submitted": resolved,
-                "reason": "unsupported provider geometry; no regeneration",
-            }
-        )
+    """Keep the local trial receipt while sharing production normalization."""
+    result, adjustments = shared_normalize_treatments(PACK, result)
     save("parameter-adjustments", adjustments)
     return result
 
