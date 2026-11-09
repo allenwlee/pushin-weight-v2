@@ -89,19 +89,10 @@ does not block Git; the hook prints an installation or recovery message.
 
 ## Delivery choices
 
-Ordinary planning uses `delivery_target: on-request`. LFG and goal preserve an existing
-owner selection and ask only when the endpoint is absent. Staging/production selections
-record `delivery_selected_by_user: true`. Commit-and-push alone authorizes neither.
-The default route is staged; an explicit owner choice can select direct production or
-exact-commit staging. See [operations](../operations/ollija.md#persist-routes-and-opt-outs).
-An opt-out retains `ollija: {enabled: false, branch: <branch>}` and removes the old guide.
-Discovery and check mode leave it untouched. Current owner exceptions override local
-defaults and must not reappear under another checklist.
-
-The parent workflow reads the selected target, generated guide, and Delivery
-Exceptions before acting. It owns tests, commits, feature-branch pushes,
-exact-SHA staging, production promotion, verification, and guarded final
-worktree cleanup.
+Delivery policy (targets, routes, the occupied-staging default, checks, and
+guarded worktree cleanup) lives in [`AGENTS.md`](../../AGENTS.md) under "Plans
+and delivery", and nowhere else. The commands that record a target, route, or
+opt-out are in [operations](../operations/ollija.md#persist-routes-and-opt-outs).
 
 ## Change ownership
 

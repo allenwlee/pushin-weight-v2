@@ -131,11 +131,17 @@ as evidence and must not be rerun unchanged.
 
 ## Plans and delivery
 
+This section is PushinWeight's single statement of delivery policy. The Ollija
+guide generated into each plan, `docs/operations/ollija.md`, and
+`docs/ollija/README.md` point here instead of restating it.
+
 Ollija's implementation lives in the standalone checkout at
-`/Users/fuchitalee/development/ollija`. Install or refresh its console command
-with `uv tool install --force /Users/fuchitalee/development/ollija`; this
-repository owns only its project-specific `.ollija/` contract and ignored
-state.
+`/Users/fuchitalee/development/ollija`. Keep that checkout's `main` current with
+`origin/main`, then install or refresh its console command with
+`uv tool install --force /Users/fuchitalee/development/ollija`. A tested branch
+may be installed from its worktree before it lands; once it lands, reinstall
+from the canonical checkout. This repository owns only its project-specific
+`.ollija/` contract and ignored state.
 
 Before selecting or creating a PushinWeight plan, run
 `ollija annotate-plan`. Use the exact `plan_path` it returns and enrich
@@ -153,8 +159,16 @@ For managed staging/production delivery, record `delivery_target` and
 `delivery_selected_by_user: true`. The default route is staged through the staging branch.
 Explicit owner selection can instead use `delivery_route: direct` for production, or staged
 `staging_transport: commit`, with `delivery_route_selected_by_user: true`. Direct delivery
-omits `staging_transport`. An occupied staging branch is not a dependency between independent
-changes. Exact-commit staging still requires checking the service/database is available.
+omits `staging_transport`, and owner-selected direct production does not require staging.
+An occupied staging branch is not a dependency between independent changes. Exact-commit
+staging still requires checking the service/database is available.
+
+**Occupied staging (owner default, 2026-11-09).** When production is authorized and a
+staged route finds the shared `staging` branch, or its service or database, in use by an
+unrelated release, go direct to production. Do not wait for staging or ask again. Record the
+switch by rerunning `ollija annotate-plan <plan-path> --delivery-route direct --delivery-route-selected-by-user`
+and adding a Delivery Exceptions line that cites this default. A staging-only target is
+outside this default.
 
 Current explicit owner instructions override local delivery defaults. Record exceptions and
 reflect route changes in metadata; never recreate a waived requirement in a manual checklist.
@@ -164,7 +178,8 @@ Disabled plans need no generated-guide gate. Re-enable only on explicit owner di
 
 Before following a managed guide for a Git or deployment mutation, read the selected scope,
 route, and Delivery Exceptions, then run `ollija annotate-plan <plan-path> --check`.
-Repair stale guidance within the authorized scope. An annotation result supplies no new
+Repair stale guidance within the authorized scope; after a template change, rerunning
+`ollija annotate-plan <plan-path>` refreshes the guide. An annotation result supplies no new
 permission and cannot cancel existing permission. Ollija does not execute delivery.
 
 Project delivery owns the endpoint after implementation. For an explicitly authorized
@@ -175,14 +190,22 @@ this documented project continuation after its implementation/review result; do 
 PR or ask for the same authorization. Missing credentials and occupied environments require
 cause-specific repair, not empty commits. Waived checks remain waived, never passed.
 
+**Checks and failures.** Complete the applicable, unwaived checks for the selected route.
+Product defects return to the parent implementation workflow; after a fix, repeat only the
+checks it invalidated. Environment failures require repairing the environment, not a new
+source commit. Retry only after a relevant fact changes; never run an endless retry loop or
+start a persistent Ollija process. SSH, shell, environment, or multi-machine failures use the
+repository infra/multi-machine skill first. The change ledger in `docs/ollija/CHANGES.md` is
+advisory; do not validate or enforce it.
+
 After exact-SHA production verification, the generated guide directs the
 parent workflow to run guarded `git worktree remove` cleanup only for the
 canonical linked worktree. Require it to remain registered, clean, unlocked,
 and at the verified candidate SHA; run from the authoritative root without
 `--force` and preserve feature branches. Make removal the final filesystem
-action. Retain staging-only, failed, unauthorized, dirty, locked,
-noncanonical, or candidate-mismatched worktrees. Ollija provides guidance and
-does not remove the worktree itself.
+action. Never force-remove a worktree. Retain staging-only, failed,
+unauthorized, dirty, locked, noncanonical, or candidate-mismatched worktrees.
+Ollija provides guidance and does not remove the worktree itself.
 
 ## file names
 'YYYY-MM-DD-HHMMSS-description' should overrule compound-engineering file naming rules
