@@ -78,6 +78,23 @@ def test_changed_source_snapshot_is_rejected(publication_case):
         }])
 
 
+def test_citations_follow_the_facts_used_by_each_edition():
+    from monitor.editorial.graphics_publication import _used_citations
+    from monitor.original_content import digest
+
+    sources = [
+        {'id': value, 'url': f'https://x.com/i/status/{value}', 'original_text': f'Source {value}'}
+        for value in ('111', '222', '333')
+    ]
+    for source in sources:
+        Post.objects.create(tweet_id=source['id'], text=source['original_text'])
+    facts = [{'fact_id': f'F{index:02}', 'source_post_id': source['id'],
+              'source_refs': [source['url']], 'snapshot_hash': digest(source)}
+             for index, source in enumerate(sources, 1)]
+    assert [item['post_id'] for item in _used_citations(sources, facts, ['F01', 'F02'])] == ['111', '222']
+    assert [item['post_id'] for item in _used_citations(sources, facts, ['F01', 'F03'])] == ['111', '333']
+
+
 def _fallback_case(publication_case, tmp_path):
     import io
 

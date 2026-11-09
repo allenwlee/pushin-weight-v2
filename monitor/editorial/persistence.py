@@ -33,6 +33,10 @@ class BudgetHeld(ValueError):
     pass
 
 
+class CapacityHeld(BudgetHeld):
+    """A temporary in-flight limit, rather than exhausted spending."""
+
+
 def claim_assessment(cutoff, cycle_id, *, scope="editorial"):
     now = timezone.now()
     if cutoff > now + timedelta(minutes=1) or cutoff < now - timedelta(days=8):
@@ -225,10 +229,10 @@ def reserve_graphics_call(
             request_identity__startswith=_GRAPHICS_PREFIX, batch_key=lane
         ).filter(Q(state="sent") | Q(state="reserved", claim_expires_at__gt=now))
         if active.filter(run=run).exists():
-            raise BudgetHeld("graphics run already in flight")
+            raise CapacityHeld("graphics run already in flight")
         if review:
             if active.count() >= 1:
-                raise BudgetHeld("graphics review capacity exhausted")
+                raise CapacityHeld("graphics review capacity exhausted")
         else:
             legacy_active = EditorialCall.objects.filter(state="sent", assessment__lease_until__gt=now).count()
             other_direct = OriginalContentCall.objects.filter(budget_scope="editorial").exclude(
@@ -236,7 +240,7 @@ def reserve_graphics_call(
                 | Q(request_identity__startswith=_GRAPHICS_PREFIX)
             ).filter(Q(state="sent") | Q(state="reserved", claim_expires_at__gt=now)).count()
             if active.count() + legacy_active + other_direct >= 2:
-                raise BudgetHeld("graphics creation capacity exhausted")
+                raise CapacityHeld("graphics creation capacity exhausted")
         if previous:
             from monitor.trend_narrative_lifecycle import (
                 claim_trend_narrative_provider_call,

@@ -95,6 +95,17 @@ def _citations(sources, facts):
     return out
 
 
+def _used_citations(sources, facts, used_fact_ids):
+    citations = _citations(sources, facts)
+    used = set(used_fact_ids)
+    post_ids = {str(fact['source_post_id']).removeprefix('x:') for fact in facts
+                if fact.get('fact_id') in used and fact.get('source_post_id')}
+    selected = [source for source in citations if source['post_id'] in post_ids]
+    if not selected or {source['post_id'] for source in selected} != post_ids:
+        raise ValueError('used facts require saved source citations')
+    return selected
+
+
 def publish_primary(*, content, producer, pack, sources, selected_scope=None, fence=None):
     """Publish saved A copy and source snapshots, without a review gate."""
     with transaction.atomic():
@@ -103,7 +114,7 @@ def publish_primary(*, content, producer, pack, sources, selected_scope=None, fe
         if row.run_id != content.run_id or row.workflow_key not in WORKFLOWS.values():
             raise ValueError('invalid Graphics content identity')
         call, copy, facts = _saved_c1(row, producer, pack)
-        citations = _citations(sources, facts)
+        citations = _used_citations(sources, facts, copy['used_fact_ids'])
         (text,) = publish_content(row, [{
             'locale': copy['locale'], 'headline': copy['headline'],
             'byline': copy['byline'], 'body': copy['article'],
@@ -142,7 +153,9 @@ def publish_fallback(*, primary_text, failure_call, reserve_picture, pack, sourc
         ):
             raise ValueError('invalid Graphics primary edition')
         producer, _, facts = _saved_c1(primary, a_text.producing_call, pack)
-        citations = _citations(sources, facts)
+        b_candidate = next(item for item in producer.response_payload['candidates'] if item['id'] == 'B')
+        used_b = producer.response_payload['used_fact_ids'] + b_candidate['used_fact_ids']
+        citations = _used_citations(sources, facts, used_b)
         failure = OriginalContentCall.objects.select_for_update().get(pk=failure_call.pk)
         identities = {f'graphics:{primary.run_id}:I-A', f'graphics:{primary.run_id}:V1'}
         if (
@@ -197,7 +210,7 @@ def publish_fallback(*, primary_text, failure_call, reserve_picture, pack, sourc
             validate_still(picture, content=primary, candidate='B', storage=storage)
         except ValueError:
             return a_text
-        candidate = next(item for item in producer.response_payload['candidates'] if item['id'] == 'B')
+        candidate = b_candidate
         b = OriginalContent.objects.create(
             run_id=primary.run_id, workflow_key=primary.workflow_key, output_key=key,
             subject_key=primary.subject_key, story_id=primary.story_id,
@@ -212,19 +225,6 @@ def publish_fallback(*, primary_text, failure_call, reserve_picture, pack, sourc
             'body': producer.response_payload['article'], 'producing_call': producer, 'sources': citations,
             'provenance': {'schema_version': 'graphics-copy/v1', 'candidate_id': 'B', 'c1_request_hash': producer.request_hash, 'c1_response_hash': producer.response_hash},
         }], selected_scope=selected_scope, fence=fence)
-        # Preserve A's writing-time source snapshots even if the Post has since changed.
-        originals = {source.post_id: source for source in a_text.sources.all()}
-        for source in text.sources.all():
-            old = originals.get(source.post_id)
-            if old is None:
-                raise ValueError('fallback citations differ from primary edition')
-            source.url_snapshot = old.url_snapshot
-            source.author_label_snapshot = old.author_label_snapshot
-            source.source_hash = old.source_hash
-            source.hash_basis = old.hash_basis
-            source.save(update_fields=['url_snapshot', 'author_label_snapshot', 'source_hash', 'hash_basis'])
-        if set(originals) != set(text.sources.values_list('post_id', flat=True)):
-            raise ValueError('fallback citations differ from primary edition')
         picture.text = text
         picture.content_id = str(text.public_id)
         picture.content_kind = next(track for track, workflow in WORKFLOWS.items() if workflow == primary.workflow_key)

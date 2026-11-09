@@ -87,6 +87,21 @@ def test_recovery_finalizes_runs_with_no_remaining_action(monkeypatch):
     pipeline.finalize_if_done.assert_called_once_with(71)
 
 
+def test_recovery_dispatches_each_due_video_only_once(monkeypatch):
+    import sys
+    from types import ModuleType
+
+    pipeline = ModuleType('monitor.editorial.graphics_pipeline')
+    pipeline.pending_action = lambda _: {'action': 'poll', 'picture_id': 'picture-id'}
+    pipeline.finalize_if_done = Mock()
+    monkeypatch.setitem(sys.modules, pipeline.__name__, pipeline)
+    monkeypatch.setattr(graphics_dispatch, '_recovery_candidates', lambda now, limit: ([71], ['picture-id']))
+    poll = Mock(return_value=True)
+    monkeypatch.setattr(graphics_dispatch, 'dispatch_video_poll', poll)
+    assert graphics_dispatch.reconcile_due()['dispatched'] == 1
+    poll.assert_called_once_with('picture-id', countdown=0)
+
+
 def test_recovery_batch_is_bounded():
     import pytest
 
@@ -118,12 +133,12 @@ def test_reconciler_is_disabled_by_default(settings):
     assert not graphics_dispatch.start_reconciler()
 
 
-def test_creation_task_sends_review_without_waiting_for_video(monkeypatch):
+def test_creation_task_schedules_video_without_early_review(monkeypatch):
     import sys
     from types import ModuleType
 
     pipeline = ModuleType('monitor.editorial.graphics_pipeline')
-    pipeline.advance_step = lambda run_id: {'state': 'published', 'next_action': 'video', 'text_id': 41, 'review_due': True}
+    pipeline.advance_step = lambda run_id: {'state': 'published', 'next_action': 'video', 'text_id': 41, 'review_due': False}
     pipeline.finalize_if_done = Mock()
     monkeypatch.setitem(sys.modules, pipeline.__name__, pipeline)
     next_action, review = Mock(), Mock()
@@ -132,7 +147,7 @@ def test_creation_task_sends_review_without_waiting_for_video(monkeypatch):
     result = tasks.advance_graphics_package.run(71)
     assert result['state'] == 'published'
     next_action.assert_called_once_with(71, result)
-    review.assert_called_once_with(71)
+    review.assert_not_called()
 
 
 @pytest.mark.django_db(transaction=True)

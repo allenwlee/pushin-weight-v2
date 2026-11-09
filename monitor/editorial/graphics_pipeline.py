@@ -54,6 +54,7 @@ from .graphics_search import exa_request_json, search_exa_query
 from .graphics_sources import collect_sources
 from .persistence import (
     BudgetHeld,
+    CapacityHeld,
     complete_graphics_call,
     fail_graphics_presend_call,
     reserve_graphics_call,
@@ -338,6 +339,8 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             try:
                 outcome = _run_text_stage(run, content, claim, 'C1', request, key, pack,
                                           transport=transport, configured_daily_limit=configured_daily_limit)
+            except CapacityHeld:
+                return {'state': 'capacity_unavailable', 'stage': 'C1', 'next_action': None}
             except BudgetHeld:
                 _skip_stage(run, claim, 'C1', 'budget_or_capacity_unavailable')
                 return {'state': 'budget_or_capacity_unavailable', 'stage': 'C1', 'next_action': None}
@@ -375,6 +378,8 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             try:
                 outcome = _run_text_stage(run, content, claim, 'G0', request, key, pack,
                     transport=transport, configured_daily_limit=configured_daily_limit)
+            except CapacityHeld:
+                return {'state': 'capacity_unavailable', 'stage': 'G0', 'next_action': None}
             except BudgetHeld:
                 ok = _skip_stage(run, claim, 'G0', 'budget_or_capacity_unavailable')
                 return {'state': 'skipped' if ok else 'claim_lost', 'stage': 'G0', 'next_action': 'advance' if ok else None}
@@ -421,6 +426,8 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             try:
                 outcome = _run_text_stage(run, content, claim, 'G1', request, key, pack,
                     transport=transport, configured_daily_limit=configured_daily_limit, references=refs)
+            except CapacityHeld:
+                return {'state': 'capacity_unavailable', 'stage': 'G1', 'next_action': None}
             except BudgetHeld:
                 ok = _skip_stage(run, claim, 'G1', 'budget_or_capacity_unavailable')
                 return {'state': 'skipped' if ok else 'claim_lost', 'stage': 'G1', 'next_action': 'advance' if ok else None}
@@ -448,6 +455,8 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                 try:
                     outcome = _run_text_stage(run, content, claim, 'I-A', request, key, pack,
                         transport=transport, configured_daily_limit=configured_daily_limit, references=refs)
+                except CapacityHeld:
+                    return {'state': 'capacity_unavailable', 'stage': 'I-A', 'next_action': None}
                 except BudgetHeld:
                     outcome = {'state': 'budget_or_capacity_unavailable'}
                 if outcome['state'] in {'completed', 'failed', 'ambiguous'}:
@@ -455,15 +464,20 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             # No credential or budget: publish the already saved copy below.
         if content.status == 'prepared':
             scope = f'featured:{content.workflow_key}:{saved["locale"]}'
-            with transaction.atomic():
-                text = publish_primary(content=content, producer=c1, pack=pack, sources=saved['sources'],
-                                       selected_scope=scope, fence=claim.fence)
-                if picture:
-                    track = next(name for name, workflow in WORKFLOWS.items() if workflow == content.workflow_key)
-                    picture.text = text
-                    picture.content_kind = track
-                    picture.content_id = str(text.public_id)
-                    picture.save(update_fields=['text', 'content_kind', 'content_id'])
+            try:
+                with transaction.atomic():
+                    text = publish_primary(content=content, producer=c1, pack=pack, sources=saved['sources'],
+                                           selected_scope=scope, fence=claim.fence)
+                    if picture:
+                        track = next(name for name, workflow in WORKFLOWS.items() if workflow == content.workflow_key)
+                        picture.text = text
+                        picture.content_kind = track
+                        picture.content_id = str(text.public_id)
+                        picture.save(update_fields=['text', 'content_kind', 'content_id'])
+            except ValueError as exc:
+                if str(exc) != 'stale featured publication':
+                    raise
+                return _invalid_saved(run, claim, 'publication', 'superseded')
             fallback_due = bool(image_call and image_call.state == 'failed' and g1.state == 'completed')
             return {'state': 'published', 'stage': 'publication', 'text_id': text.pk,
                     'next_action': 'advance' if fallback_due else ('video' if picture else 'review'),
@@ -488,6 +502,8 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                 try:
                     outcome = _run_text_stage(run, content, claim, 'I-B', request, key, pack,
                         transport=transport, configured_daily_limit=configured_daily_limit, references=refs)
+                except CapacityHeld:
+                    return {'state': 'capacity_unavailable', 'stage': 'I-B', 'next_action': None}
                 except BudgetHeld:
                     _skip_stage(run, claim, 'I-B', 'budget_or_capacity_unavailable')
                     return {'state': 'skipped', 'stage': 'I-B', 'next_action': 'review'}
@@ -503,7 +519,10 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                 return {'state': 'published', 'stage': 'fallback', 'text_id': text.pk,
                         'next_action': 'video' if text.pk != primary_text.pk else 'review',
                         'review_due': text.pk == primary_text.pk}
-        return {'state': 'published', 'stage': 'review', 'next_action': 'review', 'review_due': True}
+        decision = pending_action(run_id)
+        return {'state': 'published', 'stage': 'waiting', **(
+            {'next_action': decision['action'], **{key: value for key, value in decision.items() if key != 'action'}}
+            if decision else {'next_action': None})}
     finally:
         release_package(run_id, owner=claim.owner, fence=claim.fence)
 
@@ -515,6 +534,9 @@ def review_step(run_id, *, owner=None, keys=None, transport=None, configured_dai
     if claim is None:
         return {'state': 'busy'}
     try:
+        decision = pending_action(run_id)
+        if decision and decision.get('action') != 'review':
+            return {'state': 'waiting_for_media'}
         run = OriginalContentRun.objects.get(pk=run_id)
         content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
         selected = OriginalContentSelection.objects.filter(scope_key=f'featured:{content.workflow_key}:{run.snapshot["request"]["locale"]}', text__narrative__run=run).select_related('text').first()
@@ -561,6 +583,8 @@ def review_step(run_id, *, owner=None, keys=None, transport=None, configured_dai
             outcome = _run_text_stage(run, content, claim, 'E1', request, key, pack, transport=transport,
                 configured_daily_limit=configured_daily_limit, references=refs,
                 expected_review=(text.pk, revision))
+        except CapacityHeld:
+            return {'state': 'capacity_unavailable'}
         except BudgetHeld:
             _skip_stage(run, claim, 'E1', 'budget_or_capacity_unavailable')
             return {'state': 'budget_or_capacity_unavailable'}

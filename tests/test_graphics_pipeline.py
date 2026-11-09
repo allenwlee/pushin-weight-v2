@@ -105,6 +105,21 @@ def test_missing_credential_does_not_reserve_or_claim_publication():
     assert not OriginalContentCall.objects.filter(run=run).exists()
 
 
+def test_capacity_contention_leaves_unsent_copy_ready_for_recovery(monkeypatch):
+    from monitor.editorial.graphics_pipeline import advance_step, pending_action
+    from monitor.editorial.persistence import CapacityHeld
+
+    run, _ = selected_run()
+    def busy(*args, **kwargs):
+        raise CapacityHeld('graphics creation capacity exhausted')
+    monkeypatch.setattr('monitor.editorial.graphics_pipeline._run_text_stage', busy)
+    result = advance_step(run.pk, owner='worker', keys={'OPENROUTER_API_KEY': 'fake'})
+    run.refresh_from_db()
+    assert result['state'] == 'capacity_unavailable'
+    assert 'C1' not in run.decisions.get('graphics_skipped_stages', {})
+    assert pending_action(run.pk) == {'action': 'advance'}
+
+
 def test_g0_carries_saved_copy_and_facts_forward_without_extra_c1_call():
     from monitor.editorial.graphics_pipeline import advance_step
 
@@ -225,7 +240,15 @@ def test_real_image_result_is_saved_published_and_dispatchable(editorial_storage
     validate_still(picture, content=content, candidate='A')
     assert pending_action(run.pk) == {'action': 'video', 'text_id': results[-1]['text_id'], 'review_due': False}
     assert len(calls) == 4
+    from monitor.editorial.graphics_packages import claim_package, release_package
     from monitor.editorial.graphics_pipeline import review_step
+    from monitor.editorial.graphics_video import submit_video_job
+    assert advance_step(run.pk, owner='duplicate', keys={})['next_action'] == 'video'
+    assert review_step(run.pk, owner='early-review', keys={})['state'] == 'waiting_for_media'
+    claim = claim_package(run.pk, owner='video')
+    assert submit_video_job(run.pk, results[-1]['text_id'], owner='video', fence=claim.fence,
+                            api_key='')['state'] == 'unavailable'
+    assert release_package(run.pk, owner='video', fence=claim.fence)
     def review_transport(endpoint, key, body, **kwargs):
         content = body['messages'][1]['content']
         prompt = content[0]['text'] if isinstance(content, list) else content
@@ -241,7 +264,7 @@ def test_real_image_result_is_saved_published_and_dispatchable(editorial_storage
     reviewed = review_step(run.pk, owner='reviewer', keys={'OPENROUTER_API_KEY': 'fake'},
                            transport=review_transport, configured_daily_limit=40)
     assert reviewed['state'] == 'completed'
-    assert pending_action(run.pk) == {'action': 'video', 'text_id': results[-1]['text_id'], 'review_due': False}
+    assert pending_action(run.pk) is None
     assert review_step(run.pk, owner='reviewer', keys={}, configured_daily_limit=40)['state'] == 'completed'
 
 

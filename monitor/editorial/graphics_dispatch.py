@@ -129,19 +129,23 @@ def reconcile_due(*, now=None, limit=MAX_RECOVERY_BATCH):
         return {'state': 'busy', 'runs': 0, 'jobs': 0, 'dispatched': 0}
     runs, jobs = selected
     count = 0
+    dispatched_polls = set()
     for run_id in runs:
         try:
             decision = pending_action(run_id)
             if decision is None:
                 finalize_if_done(run_id)
                 continue
+            if decision.get('action') == 'poll':
+                dispatched_polls.add(str(decision['picture_id']))
             count += bool(dispatch_action(run_id, decision))
             if decision and decision.get('review_due') and decision.get('action') != 'review':
                 count += bool(dispatch_review(run_id))
         except Exception:
             logger.exception('Graphics run reconciliation failed')
     for picture_id in jobs:
-        count += bool(dispatch_video_poll(picture_id))
+        if str(picture_id) not in dispatched_polls:
+            count += bool(dispatch_video_poll(picture_id))
     return {'state': 'scanned', 'runs': len(runs), 'jobs': len(jobs), 'dispatched': count}
 
 

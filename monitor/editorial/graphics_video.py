@@ -15,6 +15,7 @@ from django.utils import timezone
 from core.models import (
     ContentPicture,
     OriginalContentCall,
+    OriginalContentRun,
     OriginalContentSelection,
     OriginalContentText,
 )
@@ -44,6 +45,7 @@ from .graphics_generation import (
 from .graphics_reading import _source_content
 from .persistence import (
     BudgetHeld,
+    CapacityHeld,
     complete_graphics_call,
     fail_graphics_presend_call,
     reserve_graphics_call,
@@ -145,7 +147,14 @@ def submit_video_job(run_id, text_id, *, owner, fence, pack=None, api_key=None,
                      transport=https_request, storage=None, configured_daily_limit=None):
     """Submit the selected still once and durably save the accepted provider ID."""
     storage = _store(storage)
-    text, source, candidate, track, still = _selected(run_id, text_id, storage)
+    try:
+        text, source, candidate, track, still = _selected(run_id, text_id, storage)
+    except (ValueError, TypeError, KeyError, OSError, OriginalContentText.DoesNotExist):
+        run = OriginalContentRun.objects.get(pk=run_id)
+        skipped_a = _skip_video(run, 'V1', owner, fence, 'selected_still_unavailable')
+        skipped_b = _skip_video(run, 'V-B', owner, fence, 'selected_still_unavailable')
+        return {'state': 'unavailable' if skipped_a and skipped_b else 'stale',
+                'run_id': run_id, 'error': 'selected_still_unavailable'}
     run = text.narrative.run
     now = timezone.now()
     if not _live_claim(run, owner, fence, now):
@@ -213,6 +222,8 @@ def submit_video_job(run_id, text_id, *, owner, fence, pack=None, api_key=None,
     try:
         result = submit_once(stage, request, packet, request_hash, key, pack, reserve=reserve, mark_sent=mark,
                              complete=complete, ambiguous=ambiguous, fail=fail, transport=transport, load_bytes=loader)
+    except CapacityHeld:
+        return {'state': 'capacity_unavailable', 'run_id': run_id}
     except BudgetHeld:
         skipped = _skip_video(run, stage, owner, fence, 'budget_or_capacity_unavailable')
         return {'state': 'unavailable' if skipped else 'stale', 'run_id': run_id,
@@ -259,7 +270,7 @@ def poll_video_job(picture_id, *, api_key=None, transport=https_request, fetch=N
                 return {'state': current.state, 'job_id': str(current.pk), 'run_id': current.run_id, 'reschedule': False}
             if current.poll_lease_until and current.poll_lease_until > timezone.now():
                 return {'state': 'pending', 'job_id': str(current.pk), 'run_id': current.run_id,
-                        'reschedule': True, 'countdown': 5}
+                        'reschedule': False}
             current.next_poll_at = None
             current.poll_lease_until = None
             current.save(update_fields=['next_poll_at', 'poll_lease_until'])
@@ -275,7 +286,9 @@ def poll_video_job(picture_id, *, api_key=None, transport=https_request, fetch=N
                 or metadata.get('schema_version') != 'graphics-video-job/v1'
                 or metadata.get('terminal_status') is not None or not job.text_id or not job.provider_task_id):
             raise ValueError('invalid pending video job')
-        if (job.next_poll_at and job.next_poll_at > now) or (job.poll_lease_until and job.poll_lease_until > now):
+        if job.poll_lease_until and job.poll_lease_until > now:
+            return {'state': 'pending', 'job_id': str(job.pk), 'run_id': job.run_id, 'reschedule': False}
+        if job.next_poll_at and job.next_poll_at > now:
             return {'state': 'pending', 'job_id': str(job.pk), 'run_id': job.run_id, 'reschedule': True, 'countdown': 5}
         if job.poll_count >= MAX_POLLS:
             job.next_poll_at = None

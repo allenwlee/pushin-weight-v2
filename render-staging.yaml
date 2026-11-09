@@ -47,6 +47,21 @@ services:
         value: "True"
       - key: OLLIJA_STAGING_ALLOWED_EMAILS
         sync: false
+      # The web reader must use the same shared media stores as Graphics workers.
+      - key: STAFF_MEDIA_STORAGE_BACKEND
+        sync: false
+      - key: STAFF_MEDIA_STORAGE_OPTIONS
+        sync: false
+      - key: EDITORIAL_MEDIA_STORAGE_BACKEND
+        sync: false
+      - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
       - key: BENCHMARK_METRICS_ENABLED
         value: "True"
       - key: BENCHMARK_REVIEW_ENABLED

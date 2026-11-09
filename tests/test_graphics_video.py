@@ -169,7 +169,6 @@ def test_successful_poll_attaches_decoded_video_to_selected_text(publication_cas
 
 
 def test_missing_video_key_is_recorded_without_creating_a_call(publication_case, tmp_path):  # noqa: F811
-    from core.models import OriginalContentCall
     from monitor.editorial.graphics_video import submit_video_job
 
     primary, run, storage = _submission_case(publication_case, tmp_path)
@@ -178,6 +177,22 @@ def test_missing_video_key_is_recorded_without_creating_a_call(publication_case,
     run.refresh_from_db()
     assert result['state'] == 'unavailable'
     assert run.decisions['graphics_skipped_stages']['V1'] == 'credential_unavailable'
+
+
+def test_unavailable_selected_still_stops_video_submission(publication_case, tmp_path, monkeypatch):  # noqa: F811
+    from core.models import OriginalContentCall
+    from monitor.editorial import graphics_video
+
+    primary, run, storage = _submission_case(publication_case, tmp_path)
+    def missing(*args, **kwargs):
+        raise ValueError('video text is not the current selection')
+    monkeypatch.setattr(graphics_video, '_selected', missing)
+    result = graphics_video.submit_video_job(run.pk, primary.pk, owner='test-worker', fence=1,
+                                             api_key='fake', storage=storage)
+    run.refresh_from_db()
+    assert result['state'] == 'unavailable'
+    assert run.decisions['graphics_skipped_stages']['V1'] == 'selected_still_unavailable'
+    assert not OriginalContentCall.objects.filter(request_identity=f'graphics:{run.pk}:V1').exists()
     assert not OriginalContentCall.objects.filter(request_identity=f'graphics:{run.pk}:V1').exists()
 
 

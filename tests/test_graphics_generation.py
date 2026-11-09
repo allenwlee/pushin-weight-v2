@@ -128,6 +128,12 @@ def test_video_decode_receipt_requires_real_decodable_file(tmp_path):
     assert 4500 <= receipt['duration_ms'] <= 5500
     with pytest.raises(ValueError, match='container|decode'):
         video_decode_receipt(b'not a video', run_id=42, producer_call_id=17, input_still_sha256=still_sha, sent_request=sent)
+    short = tmp_path / 'short.mp4'
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-f', 'lavfi', '-i',
+                    'color=black:s=32x32:r=5', '-t', '1', '-c:v', 'libx264', str(short)], check=True)
+    with pytest.raises(ValueError, match='duration'):
+        video_decode_receipt(short.read_bytes(), run_id=42, producer_call_id=17,
+                             input_still_sha256=still_sha, sent_request=sent)
 
 
 def test_submit_once_reserves_marks_sent_and_never_resubmits_after_timeout():
