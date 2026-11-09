@@ -20,6 +20,7 @@ from core.models import EditorialPicture
 from core.staff_assets.media import media_storage
 
 from .config import load_editorial_config
+from .graphics_reading import graphics_assets, is_graphics_edition
 from .readers import (
     LOCALES,
     TRACKS,
@@ -120,28 +121,42 @@ def asset(request, story_id, picture_id, variant):
     picture = get_object_or_404(
         EditorialPicture, pk=picture_id, content_kind__in=["chatter", "pulse"]
     )
-    edition = find_saved_edition(
-        story_id, picture.content_kind, pinned=UUID(picture.content_id)
-    )
+    try:
+        edition = find_saved_edition(
+            story_id, picture.content_kind, pinned=UUID(picture.content_id)
+        )
+    except (ValueError, TypeError):
+        raise Http404 from None
     if edition is None:
         raise Http404
-    eligible = picture_for_edition(edition, cfg)
-    if eligible is None or eligible.pk != picture.pk:
-        raise Http404
-    if variant == "source":
-        storage = media_storage()
-        name = picture.source_media.storage_name
-        content_type = picture.source_media.media_type
-    elif (
-        variant == "generated"
-        and picture.state == "complete"
-        and cfg.picture_mode(edition.track, "x") == "derive"
-    ):
+    metadata = picture.provenance if isinstance(picture.provenance, dict) else {}
+    if is_graphics_edition(edition) or str(metadata.get("schema_version", "")).startswith("graphics-"):
+        if not is_graphics_edition(edition) or cfg.picture_mode(edition.track, "x") == "off" or variant != "generated":
+            raise Http404
+        selected = graphics_assets(edition)
+        if selected is None or picture.pk not in {selected.still.pk, selected.video.pk if selected.video else None}:
+            raise Http404
         storage = storages["editorial_media"]
         name = picture.generated_storage_name
-        content_type = "video/mp4"
+        content_type = metadata["mime"]
     else:
-        raise Http404
+        eligible = picture_for_edition(edition, cfg)
+        if eligible is None or eligible.pk != picture.pk:
+            raise Http404
+        if variant == "source":
+            storage = media_storage()
+            name = picture.source_media.storage_name
+            content_type = picture.source_media.media_type
+        elif (
+            variant == "generated"
+            and picture.state == "complete"
+            and cfg.picture_mode(edition.track, "x") == "derive"
+        ):
+            storage = storages["editorial_media"]
+            name = picture.generated_storage_name
+            content_type = "video/mp4"
+        else:
+            raise Http404
     try:
         if not isinstance(storage, FileSystemStorage):
             if not storage.exists(name):
