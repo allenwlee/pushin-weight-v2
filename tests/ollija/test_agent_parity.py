@@ -48,34 +48,121 @@ def test_every_remaining_claude_skill_has_an_agent_alias() -> None:
         assert alias.resolve() == canonical.resolve()
 
 
-def test_lfg_and_goal_delivery_contract_is_shared_with_current_guidance() -> None:
-    agent_rules = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    operations = (REPO_ROOT / "docs" / "operations" / "ollija.md").read_text(
-        encoding="utf-8"
-    )
+AGENT_RULES = REPO_ROOT / "AGENTS.md"
+DELIVERY_TEMPLATE = REPO_ROOT / ".ollija" / "templates" / "delivery-guide.md"
+OLLIJA_OPERATIONS = REPO_ROOT / "docs" / "operations" / "ollija.md"
+OLLIJA_README = REPO_ROOT / "docs" / "ollija" / "README.md"
+POLICY_POINTER = "AGENTS.md"
+POLICY_SECTION = "Plans and delivery"
 
-    for text in (agent_rules, operations):
-        assert "LFG and goal" in text
-        assert "existing" in text
-        assert "enabled: false" in text
-        assert "direct" in text
-        assert "staging" in text and "production" in text
-        assert "delivery_selected_by_user" in text
-        assert "on-request" in text
-        assert "annotate-plan" in text
+
+def _read(path: Path) -> str:
+    """Return the document with whitespace collapsed so re-wrapping cannot hide a rule."""
+
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def test_lfg_and_goal_delivery_contract_lives_in_agent_rules() -> None:
+    agent_rules = _read(AGENT_RULES)
+
+    assert "LFG and goal" in agent_rules
+    assert "existing" in agent_rules
+    assert "enabled: false" in agent_rules
+    assert "direct" in agent_rules
+    assert "staging" in agent_rules and "production" in agent_rules
+    assert "delivery_selected_by_user" in agent_rules
+    assert "on-request" in agent_rules
+    assert "annotate-plan" in agent_rules
+
+
+def test_other_current_ollija_guidance_points_to_agent_rules() -> None:
+    operations = _read(OLLIJA_OPERATIONS)
+    readme = _read(OLLIJA_README)
+
+    for text in (operations, readme):
+        assert POLICY_POINTER in text
+        assert POLICY_SECTION in text
+    # The operations guide keeps its procedures and commands.
+    assert "annotate-plan" in operations
+    assert "enabled: false" in operations
+    assert "--delivery-route direct" in operations
+    # Policy is stated once in AGENTS.md, not restated in the operations guide.
+    assert "A production guide defaults to staged delivery" not in operations
+    assert "Commit-and-push alone does not select staging or production" not in (
+        operations
+    )
+    assert "Commit-and-push alone authorizes neither" not in readme
 
 
 def test_production_worktree_cleanup_contract_remains_in_consumer_policy() -> None:
-    agent_rules = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    template = (REPO_ROOT / ".ollija" / "templates" / "delivery-guide.md").read_text(
-        encoding="utf-8"
-    )
+    agent_rules = _read(AGENT_RULES)
+    template = _read(DELIVERY_TEMPLATE)
 
     assert "exact-SHA production verification" in agent_rules
     assert "git worktree remove" in agent_rules
     assert "without" in agent_rules and "`--force`" in agent_rules
     assert "does not remove the worktree itself" in agent_rules
+    assert "Never force-remove a worktree" in agent_rules
+    assert "staging-only" in agent_rules
+    assert "candidate-mismatched" in agent_rules
     assert "${delivery_actions}" in template
-    assert "Never force-remove a worktree" in template
-    assert "staging-only" in template
-    assert "candidate-mismatched" in template
+    assert POLICY_POINTER in template
+
+
+def test_agent_rules_state_the_occupied_staging_default() -> None:
+    agent_rules = _read(AGENT_RULES)
+
+    assert "Occupied staging" in agent_rules
+    assert "unrelated release" in agent_rules
+    assert "go direct to production" in agent_rules
+    assert "--delivery-route direct --delivery-route-selected-by-user" in agent_rules
+    assert "staging-only target is outside this default" in agent_rules
+
+
+def test_agent_rules_absorb_the_former_guide_failure_rules() -> None:
+    agent_rules = _read(AGENT_RULES)
+
+    for rule in (
+        "Complete the applicable, unwaived checks for the selected route",
+        "owner-selected direct production does not require staging",
+        "repeat only the checks it invalidated",
+        "Retry only after a relevant fact changes",
+        "persistent Ollija process",
+        "infra/multi-machine skill",
+        "change ledger",
+    ):
+        assert rule in agent_rules, rule
+
+
+def test_delivery_guide_template_carries_only_per_plan_facts() -> None:
+    template = _read(DELIVERY_TEMPLATE)
+
+    for placeholder in (
+        "${plan_path}",
+        "${branch}",
+        "${change_id}",
+        "${active_worktree}",
+        "${workflow}",
+        "${delivery_target}",
+        "${delivery_route}",
+        "${delivery_selected_by_user}",
+        "${placement}",
+        "${delivery_actions}",
+    ):
+        assert placeholder in template, placeholder
+    for project_constant in (
+        "${canonical_host}",
+        "${repository_root}",
+        "${release_worktree_area}",
+        "${staging_blueprint}",
+        "${production_blueprint}",
+        "${staging_url}",
+        "${production_url}",
+    ):
+        assert project_constant not in template, project_constant
+    assert "Failure handling" not in template
+    assert "annotate-plan" in template
+    assert ".ollija/project.yaml" in template
+    assert POLICY_SECTION in template
+    actions = template.index("${delivery_actions}")
+    assert template.index("Occupied staging", actions) > actions

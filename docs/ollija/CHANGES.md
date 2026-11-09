@@ -27,6 +27,29 @@ Release impact: Application, database, production-data, staging, or approval eff
 Related: Optional issue, plan, or solution link.
 ```
 
+## 2026-11-09 — One home for delivery policy; go direct when staging is occupied
+
+Type: Rule
+
+Problem: the same delivery rules were restated in `AGENTS.md`, every plan's generated
+guide, `docs/operations/ollija.md`, and this directory's README, so copies drifted. The
+occupied-staging route was the costliest recurring LFG stop, with no standing owner default.
+
+New behavior: `AGENTS.md` "Plans and delivery" is the only full statement of delivery
+policy. It now carries the owner's default: when production is authorized and a staged
+route finds `staging` in use by an unrelated release, go direct to production and record
+the route change. The generated guide lists only per-plan facts, placement, Ollija's
+delivery steps, and pointers. The other Ollija docs keep their commands and link to
+`AGENTS.md`.
+
+Proof: `tests/ollija`, including new assertions for the occupied-staging default, the
+absorbed failure rules, the shortened template, and the pointers.
+
+Release impact: documentation, template, and tests only; no application deployment.
+Open plans report a stale guide once and refresh with `ollija annotate-plan <plan-path>`.
+
+Related: `docs/plans/2026-11-09-043157-docs-ollija-guidance-cleanup-20261109-plan.md`.
+
 ## 2026-09-25 — Preserve owner-selected delivery routes
 
 Type: Fix

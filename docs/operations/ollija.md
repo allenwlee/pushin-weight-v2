@@ -59,12 +59,12 @@ nothing.
 
 ## Set delivery authority once
 
-Ordinary plans remain `delivery_target: on-request` and require a later
-explicit delivery request. LFG and goal use the owner’s existing endpoint selection; ask only when it is genuinely absent.
-Commit-and-push alone does not select staging or production.
-They persist `delivery_target: staging|production` and
-`delivery_selected_by_user: true` in the plan, then annotate it. No later
-Ollija authorization or browser code exists.
+Delivery policy (who selects a target, which route applies, what to do when
+staging is occupied, and how cleanup works) lives in `AGENTS.md` under "Plans
+and delivery". This guide covers the commands only. Record an owner selection
+in the plan with `ollija annotate-plan <plan-path>` and the target, route, and
+opt-out flags under [Persist routes and opt-outs](#persist-routes-and-opt-outs).
+No later Ollija authorization or browser code exists.
 
 ## Deliver from the plan
 
@@ -75,21 +75,13 @@ target, guide, and Delivery Exceptions, then confirms freshness:
 ollija annotate-plan <plan-path> --check
 ```
 
-The parent workflow owns implementation, verification, commits,
-feature-branch pushes, exact-candidate staging, and production promotion. A
-production guide defaults to staged delivery. An explicit owner-selected direct route
-reaches production without staging; exact-commit staging does not move the shared branch.
-A staging guide stops after its applicable checks. The deployed service revision is the
-completion evidence; ancestry alone cannot establish preserved behavior or deployment.
+A stale result after a template or contract change is repaired by rerunning
+`ollija annotate-plan <plan-path>`. The generated guide lists the delivery
+steps for the plan's route; follow them under the policy in `AGENTS.md`.
 
 Worktrees intended for delivery belong under
 `<authoritative-repo>/.worktrees/<branch>`. Outside worktrees receive
 relocation guidance only; annotation never moves or blocks them.
-
-After exact-SHA production verification, follow the generated guide's guarded
-`git worktree remove` step as the final filesystem action. Never use
-`--force`; retain staging-only, failed, unauthorized, dirty, locked,
-noncanonical, or candidate-mismatched worktrees.
 
 ## Correct errors
 
@@ -111,10 +103,12 @@ For staging without a branch update, use `--delivery-route staged
 
 An opted-out plan retains only `ollija: {enabled: false, branch: <branch>}`; remove its old
 guide. Discovery, normal annotation and `--check` return disabled without rewriting the file
-or creating a replacement. Current owner exceptions supersede local defaults, including a
-saved continuation. Record them in the existing plan, not another approval ledger.
+or creating a replacement. Record owner exceptions in the existing plan's Delivery
+Exceptions, not another approval ledger.
 
 When installing a tested Ollija branch before it lands on main, install from its authoritative
 fuchitalee worktree with `uv tool install --force <ollija-worktree>`, record the source commit,
 and run `ollija init` to refresh the managed skill. Do not overwrite unrelated local skill
-edits if initialization reports a conflict. Once landed, refresh from the canonical checkout.
+edits if initialization reports a conflict. Once it lands, fast-forward the canonical
+checkout's `main` and reinstall from the canonical checkout; an install left pointing at the
+worktree drifts from released code when that worktree is later removed or reused.
