@@ -1,6 +1,7 @@
 """Short PostgreSQL claims and pessimistic spend reservations; no network in locks."""
 
 import json
+from copy import deepcopy
 from datetime import timedelta
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from hashlib import sha256
@@ -140,7 +141,7 @@ def _graphics_daily_total(day, budget):
 def reserve_graphics_call(
     *, run, stage, kind, request_hash, request_packet, provider, model, ceiling,
     owner, lease_seconds, workflow_key, per_run_limit=None, daily_limit=None,
-    configured_daily_limit=None, review=False,
+    configured_daily_limit=None, review=False, load_bytes=None,
 ):
     """Reserve and claim one immutable provider request without sending it.
 
@@ -158,16 +159,35 @@ def reserve_graphics_call(
         raise ValueError("invalid graphics stage kind")
     if not owner or len(owner) > 128 or type(lease_seconds) is not int or not 1 <= lease_seconds <= 3600:
         raise ValueError("invalid graphics claim")
-    if not isinstance(request_packet, dict) or set(request_packet) != {"schema_version", "request_json"} or request_packet["schema_version"] != "graphics-request/v1":
+    if not isinstance(request_packet, dict):
+        raise TypeError("invalid graphics request packet")
+    # Persist exactly the snapshot validated here, even if the caller later
+    # mutates its dictionary while this transaction waits for a budget lock.
+    request_packet = deepcopy(request_packet)
+    if request_packet.get("schema_version") == "graphics-request/v2":
+        # Read and verify all referenced bytes before acquiring any DB lock.
+        # submit_once reconstructs and checks again immediately before send.
+        from .graphics_generation import reconstruct_request
+
+        reconstruct_request(request_packet, request_hash, load_bytes=load_bytes)
+    elif request_packet.get("schema_version") == "graphics-request/v1":
+        if set(request_packet) != {"schema_version", "request_json"}:
+            raise ValueError("invalid graphics request packet")
+        raw = request_packet["request_json"]
+        if not isinstance(raw, str) or len(raw.encode()) > 300000 or sha256(raw.encode()).hexdigest() != request_hash:
+            raise ValueError("invalid graphics request hash")
+        try:
+            decoded = json.loads(raw)
+            if not isinstance(decoded, dict):
+                raise TypeError("request must be an object")
+            from .graphics_generation import _transform
+
+            # Binary media must use versioned references, never embedded data URLs.
+            _transform(decoded, {}, {}, reject_data=True)
+        except (ValueError, TypeError) as exc:
+            raise ValueError("invalid graphics request JSON or embedded asset") from exc
+    else:
         raise ValueError("invalid graphics request packet")
-    raw = request_packet["request_json"]
-    if not isinstance(raw, str) or len(raw.encode()) > 300000 or sha256(raw.encode()).hexdigest() != request_hash:
-        raise ValueError("invalid graphics request hash")
-    try:
-        if not isinstance(json.loads(raw), dict):
-            raise TypeError("request must be an object")
-    except (ValueError, TypeError) as exc:
-        raise ValueError("invalid graphics request JSON") from exc
     if not isinstance(provider, str) or not provider or len(provider) > 80 or not isinstance(model, str) or not model or len(model) > 160:
         raise ValueError("invalid graphics model route")
     try:
@@ -254,6 +274,50 @@ def reserve_graphics_call(
         budget.save()
         return call, True
 
+
+
+def fail_graphics_presend_call(call_id, *, owner, fence, error_code, now=None):
+    """Fence a failed unsent reconstruction and release its unused reservation.
+
+    Only a live owner of a never-sent call can prove there was no provider charge.
+    A terminal call cannot be reclaimed or submitted again.
+    """
+    if error_code != "pre_send:request_reconstruction":
+        raise ValueError("invalid pre-send failure code")
+    now = now or timezone.now()
+    observed = OriginalContentCall.objects.get(pk=call_id)
+    if not observed.budget_day:
+        raise ValueError("graphics call has no budget day")
+    with transaction.atomic():
+        advisory_lock(f"content-budget:editorial:{observed.budget_day}")
+        call = OriginalContentCall.objects.select_for_update().get(pk=call_id)
+        if not call.request_identity.startswith(_GRAPHICS_PREFIX):
+            raise ValueError("not a graphics call")
+        if call.state == "failed":
+            return (
+                call.sent_at is None
+                and call.claim_owner == owner
+                and call.claim_fence == fence
+                and call.error_code == error_code
+            )
+        if (
+            call.state != "reserved"
+            or call.sent_at is not None
+            or call.claim_owner != owner
+            or call.claim_fence != fence
+            or call.claim_expires_at is None
+            or call.claim_expires_at <= now
+        ):
+            return False
+        budget = EditorialBudget.objects.select_for_update().get(pk=call.budget_day)
+        budget.reserved_usd -= call.reserved_usd
+        budget.save(update_fields=["reserved_usd"])
+        call.state = "failed"
+        call.error_code = error_code
+        call.actual_usd = Decimal(0)
+        call.reserved_usd = Decimal(0)
+        call.save(update_fields=["state", "error_code", "actual_usd", "reserved_usd", "updated_at"])
+        return True
 
 
 def complete_graphics_call(

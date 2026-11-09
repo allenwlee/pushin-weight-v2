@@ -161,3 +161,160 @@ def test_unknown_completion_cost_keeps_full_budget_reservation():
     call.refresh_from_db()
     assert call.actual_usd is None and call.reserved_usd == Decimal('0.2')
     assert EditorialBudget.objects.get(day=call.budget_day).reserved_usd == Decimal('0.2')
+
+
+def test_v2_recipe_validated_before_reservation_and_without_embedded_images():
+    import base64
+    import json
+
+    from monitor.editorial.graphics_generation import create_request_recipe
+    from monitor.editorial.persistence import reserve_graphics_call
+
+    data = b'a' * 240000
+    body = {'model': 'fake', 'image': {'url': 'data:image/jpeg;base64,' + base64.b64encode(data).decode()}}
+    reference = {'storage_alias': 'staff_media', 'storage_name': 'images/fixture.jpg', 'mime': 'image/jpeg', 'sha256': sha256(data).hexdigest()}
+    loader = lambda alias, name: data
+    packet, request_hash = create_request_recipe(body, [reference], load_bytes=loader)
+    assert len(json.dumps(body).encode()) > 300000
+    assert 'data:image/' not in json.dumps(packet)
+    run = make_run()
+    kwargs = {'run': run, 'stage': 'I-A', 'kind': 'media', 'request_hash': request_hash,
+              'request_packet': packet, 'provider': 'fake', 'model': 'fake', 'ceiling': '.2',
+              'owner': 'worker', 'lease_seconds': 120, 'workflow_key': 'social-brief'}
+    with pytest.raises(ValueError, match='hash'):
+        reserve_graphics_call(**kwargs, load_bytes=lambda _alias, _name: b'tampered')
+    assert not OriginalContentCall.objects.filter(run=run).exists()
+    call, claimed = reserve_graphics_call(**kwargs, load_bytes=loader)
+    assert claimed and call.request_packet == packet and call.request_hash == request_hash
+
+
+def test_pre_send_failure_is_fenced_terminal_and_refunds_reservation():
+    from monitor.editorial.persistence import fail_graphics_presend_call
+    from monitor.trend_narrative_lifecycle import (
+        mark_trend_narrative_provider_call_sent,
+    )
+
+    call, _ = reserve(make_run())
+    now = timezone.now()
+    assert not fail_graphics_presend_call(call.pk, owner='other', fence=call.claim_fence,
+                                         error_code='pre_send:request_reconstruction', now=now)
+    assert not fail_graphics_presend_call(call.pk, owner='worker', fence=call.claim_fence + 1,
+                                         error_code='pre_send:request_reconstruction', now=now)
+    assert fail_graphics_presend_call(call.pk, owner='worker', fence=call.claim_fence,
+                                     error_code='pre_send:request_reconstruction', now=now)
+    assert fail_graphics_presend_call(call.pk, owner='worker', fence=call.claim_fence,
+                                     error_code='pre_send:request_reconstruction', now=now)
+    call.refresh_from_db()
+    assert call.state == 'failed' and call.sent_at is None
+    assert call.reserved_usd == Decimal(0)
+    assert EditorialBudget.objects.get(day=call.budget_day).reserved_usd == Decimal(0)
+    assert not mark_trend_narrative_provider_call_sent(call.pk, owner='worker', fence=call.claim_fence, now=now)
+    _, should_send = reserve(call.run)
+    assert not should_send
+
+
+def test_pre_send_failure_rejects_expired_claim_and_sent_call():
+    from monitor.editorial.persistence import fail_graphics_presend_call
+    from monitor.trend_narrative_lifecycle import (
+        mark_trend_narrative_provider_call_sent,
+    )
+
+    call, _ = reserve(make_run())
+    now = timezone.now()
+    assert not fail_graphics_presend_call(call.pk, owner='worker', fence=call.claim_fence,
+                                         error_code='pre_send:request_reconstruction',
+                                         now=call.claim_expires_at)
+    assert mark_trend_narrative_provider_call_sent(call.pk, owner='worker', fence=call.claim_fence, now=now)
+    assert not fail_graphics_presend_call(call.pk, owner='worker', fence=call.claim_fence,
+                                         error_code='pre_send:request_reconstruction', now=now)
+    call.refresh_from_db()
+    assert call.state == 'sent' and call.sent_at is not None
+
+
+def test_v1_packet_rejects_embedded_image_data_at_reservation_boundary():
+    import json
+
+    from monitor.editorial.persistence import reserve_graphics_call
+
+    run = make_run()
+    raw = json.dumps({'image': {'url': 'data:image/jpeg;base64,YQ=='}})
+    with pytest.raises(ValueError, match='asset|data|packet'):
+        reserve_graphics_call(run=run, stage='I-A', kind='media', request_hash=sha256(raw.encode()).hexdigest(),
+            request_packet={'schema_version': 'graphics-request/v1', 'request_json': raw},
+            provider='fake', model='fake', ceiling='.2', owner='worker', lease_seconds=120,
+            workflow_key='social-brief')
+    assert not OriginalContentCall.objects.filter(run=run).exists()
+
+
+def test_changed_asset_after_reservation_never_sends_and_is_terminal():
+    from pathlib import Path
+
+    from monitor.editorial.graphics_contracts import load_pack
+    from monitor.editorial.graphics_generation import (
+        build_image_request,
+        create_request_recipe,
+        submit_once,
+    )
+    from monitor.editorial.persistence import (
+        fail_graphics_presend_call,
+        reserve_graphics_call,
+    )
+    from monitor.trend_narrative_lifecycle import (
+        mark_trend_narrative_provider_call_sent,
+    )
+
+    pack = load_pack(Path(__file__).resolve().parents[1] / 'config/editorial_prompts/editorial-creative-roles-v1.json')
+    data = b'fixture image'
+    sha = sha256(data).hexdigest()
+    asset = {'asset_ref': 'person:1', 'role': 'identity_reference', 'data': data, 'sha256': sha, 'mime': 'image/jpeg'}
+    treatment = {'candidate_id': 'A', 'still_prompt': 'Draw headline.', 'aspect_ratio': '3:4',
+                 'input_asset_refs': [{'asset_ref': 'person:1', 'role': 'identity_reference'}]}
+    request = build_image_request(pack, 'I-A', treatment, [asset])
+    reference = {'storage_alias': 'staff_media', 'storage_name': 'images/fixture.jpg', 'mime': 'image/jpeg', 'sha256': sha}
+    packet, request_hash = create_request_recipe(request['body'], [reference], load_bytes=lambda *_: data)
+    reads = []
+    def load_bytes(*_):
+        reads.append('read')
+        return data if len(reads) <= 2 else b'changed'
+    run = make_run()
+    def reserve_call(saved_packet, saved_hash):
+        return reserve_graphics_call(run=run, stage='I-A', kind='media', request_hash=saved_hash,
+             request_packet=saved_packet, provider='fake', model='fake', ceiling='.2', owner='worker',
+             lease_seconds=120, workflow_key='social-brief', load_bytes=load_bytes)
+    def mark_sent(call):
+        return mark_trend_narrative_provider_call_sent(call.pk, owner='worker', fence=call.claim_fence, now=timezone.now())
+    def fail(call, error_code):
+        return fail_graphics_presend_call(call.pk, owner='worker', fence=call.claim_fence, error_code=error_code)
+    def forbidden(*_args, **_kwargs):
+        pytest.fail('provider must not be called or response recorded')
+    result = submit_once('I-A', request, packet, request_hash, 'fake', pack, reserve=reserve_call,
+                         mark_sent=mark_sent, complete=forbidden, ambiguous=forbidden, fail=fail,
+                         transport=forbidden, load_bytes=load_bytes)
+    call = OriginalContentCall.objects.get(run=run)
+    assert result['state'] == call.state == 'failed'
+    assert call.error_code == 'pre_send:request_reconstruction' and call.sent_at is None
+    assert call.reserved_usd == Decimal(0) and len(reads) == 3
+
+
+def test_recipe_is_snapshotted_before_external_loader_can_mutate_caller_packet():
+    import base64
+    from copy import deepcopy
+
+    from monitor.editorial.graphics_generation import create_request_recipe
+    from monitor.editorial.persistence import reserve_graphics_call
+
+    data = b'image'
+    body = {'image': {'url': 'data:image/jpeg;base64,' + base64.b64encode(data).decode()}}
+    reference = {'storage_alias': 'staff_media', 'storage_name': 'images/a.jpg', 'mime': 'image/jpeg', 'sha256': sha256(data).hexdigest()}
+    packet, request_hash = create_request_recipe(body, [reference], load_bytes=lambda *_: data)
+    original = deepcopy(packet)
+    def mutate_original(*_):
+        packet['assets'][0]['storage_name'] = 'images/changed.jpg'
+        return data
+    call, claimed = reserve_graphics_call(
+        run=make_run(), stage='I-A', kind='media', request_hash=request_hash,
+        request_packet=packet, provider='fake', model='fake', ceiling='.2',
+        owner='worker', lease_seconds=120, workflow_key='social-brief', load_bytes=mutate_original,
+    )
+    assert claimed and call.request_packet == original
+    assert packet != original
