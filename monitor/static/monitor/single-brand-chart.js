@@ -104,7 +104,8 @@
     const seq = ++generation;
     controller?.abort();
     controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 85000);
+    const currentController = controller;
+    const timer = setTimeout(() => currentController.abort(), 85000);
     el('ce-status').hidden = false; el('ce-status').textContent = words.loading;
     el('ce-content').hidden = true; el('ce-refresh').disabled = true;
     try {
@@ -120,7 +121,23 @@
         const page = new URL(window.location.href);
         for (const key of ['product', 'release_date']) if (page.searchParams.has(key)) url.searchParams.set(key, page.searchParams.get(key));
       }
-      const response = await fetch(url, {cache: 'no-store', signal: controller.signal});
+      let response;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (seq !== generation) return;
+        response = await fetch(url, {cache: 'no-store', signal: currentController.signal});
+        if (response.status !== 429 || attempt === 4) break;
+        const header = response.headers.get('Retry-After');
+        const seconds = header === null ? 3 : Number(header);
+        const delay = Number.isFinite(seconds) ? Math.min(5, Math.max(0, seconds)) : 3;
+        const signal = currentController.signal;
+        await new Promise((resolve, reject) => {
+          if (signal.aborted) { reject(new Error('aborted')); return; }
+          const done = () => { signal.removeEventListener('abort', cancel); resolve(); };
+          const timeout = setTimeout(done, delay * 1000);
+          const cancel = () => { clearTimeout(timeout); reject(new Error('aborted')); };
+          signal.addEventListener('abort', cancel, {once: true});
+        });
+      }
       if (response.status === 429) throw new Error(statusWords.busy);
       if (!response.ok) throw new Error('Chart request failed');
       const next = await response.json();

@@ -1,9 +1,13 @@
 """Public, bounded read-only release chart requests for General."""
 
+import fcntl
+import hashlib
 import logging
+import os
 import re
 import time as clock
 from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
 from threading import Lock
 from uuid import UUID
 
@@ -42,6 +46,14 @@ def _cached_chart(key):
     except OSError:
         logger.warning("Chart cache read failed", exc_info=True)
         return None
+
+
+def _build_lock_name(product_key, anchor):
+    # A fixed set of stripes bounds lock files while allowing different charts
+    # to build concurrently. Both provenance variants share a stripe.
+    token = f"{product_key}:{anchor.isoformat()}".encode()
+    stripe = int.from_bytes(hashlib.sha256(token).digest()[:2], "big") % 128
+    return f"build-{stripe:03d}.lock"
 
 
 def _busy():
@@ -135,8 +147,27 @@ def chart(request):
     if result is None:
         if not _CHART_BUILD_LOCK.acquire(blocking=False):
             return _busy()
+        lock_file = None
         try:
-            # Recheck after acquiring the process-local admission lock.
+            # File cache is shared by workers on this instance; its build lock
+            # must share the same scope to keep old calculations from winning.
+            cache_dir = getattr(cache, "_dir", None)
+            if cache_dir:
+                try:
+                    Path(cache_dir).mkdir(mode=0o700, parents=True, exist_ok=True)
+                    fd = os.open(
+                        str(Path(cache_dir) / _build_lock_name(product.product_key, anchor)),
+                        os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0),
+                        0o600,
+                    )
+                    lock_file = os.fdopen(fd, "a+")
+                    fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    return _busy()
+                except OSError:
+                    logger.exception("Chart build lock unavailable")
+                    return JsonResponse({"error": "Chart data is temporarily unavailable."}, status=503)
+            # Recheck after acquiring the shared admission lock.
             result = None if refresh else _cached_chart(cache_key)
             if result is None:
                 if (
@@ -155,10 +186,22 @@ def chart(request):
                 finally:
                     _LAST_BUILD_FINISHED = clock.monotonic()
                 try:
+                    if refresh:
+                        other_source = (
+                            "owner-confirmed" if anchor_source == "caller-supplied"
+                            else "caller-supplied"
+                        )
+                        other_key = (
+                            f"single-brand-comp:v1:{product.product_key}:"
+                            f"{anchor.isoformat()}:{other_source}"
+                        )
+                        cache.delete(other_key)
                     cache.set(cache_key, result, timeout=_CHART_CACHE_SECONDS)
                 except OSError:
                     logger.warning("Chart cache write failed", exc_info=True)
         finally:
+            if lock_file is not None:
+                lock_file.close()
             _CHART_BUILD_LOCK.release()
     locale = content_locale(request)
     result = {**result, "lines": [dict(line) for line in result["lines"]]}

@@ -339,3 +339,70 @@ def test_cache_io_failure_does_not_break_chart(monkeypatch):
     )
     assert single_brand_chart.chart(request).status_code == 200
     assert build.call_count == 1
+
+
+def test_explicit_refresh_invalidates_default_example_cache(monkeypatch):
+    import json
+
+    product = SimpleNamespace(product_key=UUID("01e3dd37-c83a-46c5-9e96-c83ff651f5a8"))
+    monkeypatch.setattr(
+        single_brand_chart, "_public_products",
+        lambda: SimpleNamespace(filter=lambda **kw: SimpleNamespace(first=lambda: product)),
+    )
+    count = 0
+
+    def calculate(request):
+        nonlocal count
+        count += 1
+        return {
+            "product": {"anchor_source": request.target.source},
+            "as_of": count,
+            "lines": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr(single_brand_chart, "_calculate_chart", calculate)
+    factory = RequestFactory()
+    first = json.loads(single_brand_chart.chart(factory.get("/general/chart/")).content)
+    params = {"product": str(product.product_key), "release_date": "2026-08-13", "refresh": "1"}
+    refreshed = json.loads(single_brand_chart.chart(factory.get("/general/chart/", params)).content)
+    again = json.loads(single_brand_chart.chart(factory.get("/general/chart/")).content)
+    assert (first["as_of"], refreshed["as_of"], again["as_of"]) == (1, 2, 3)
+    assert again["product"]["anchor_source"] == "owner-confirmed"
+
+
+def test_chart_build_lock_blocks_other_worker(monkeypatch, tmp_path):
+    import subprocess
+    import sys
+
+    from django.core.cache.backends.filebased import FileBasedCache
+
+    product = SimpleNamespace(product_key=UUID("db2ee0af-ea53-4d37-a99a-e601ca770c7f"))
+    monkeypatch.setattr(
+        single_brand_chart, "_public_products",
+        lambda: SimpleNamespace(filter=lambda **kw: SimpleNamespace(first=lambda: product)),
+    )
+    monkeypatch.setattr(single_brand_chart, "cache", FileBasedCache(str(tmp_path), {}))
+    build = Mock(return_value={"product": {}, "lines": [], "notes": []})
+    monkeypatch.setattr(single_brand_chart, "_calculate_chart", build)
+    code = (
+        "import fcntl,sys; f=open(sys.argv[1],'a+'); "
+        "fcntl.flock(f,fcntl.LOCK_EX); print('ready',flush=True); sys.stdin.read()"
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-u", "-c", code, str(tmp_path / single_brand_chart._build_lock_name(product.product_key, date(2026, 8, 13)))],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+    )
+    try:
+        assert process.stdout.readline().strip() == "ready"
+        request = RequestFactory().get("/general/chart/", {
+            "product": str(product.product_key), "release_date": "2026-08-13", "refresh": "1",
+        })
+        assert single_brand_chart.chart(request).status_code == 429
+        build.assert_not_called()
+    finally:
+        process.stdin.close()
+        assert process.wait(timeout=5) == 0
+        process.stdout.close()
+    assert single_brand_chart.chart(request).status_code == 200
+    assert build.call_count == 1

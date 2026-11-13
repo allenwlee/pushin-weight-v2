@@ -15,6 +15,10 @@ from monitor import general_views, single_brand_chart
 
 
 def test_public_general_pulse_chart_browser(monkeypatch):
+    from django.core.cache.backends.locmem import LocMemCache
+
+    monkeypatch.setattr(single_brand_chart, "cache", LocMemCache(None, {}))
+    single_brand_chart.cache.clear()
     key = UUID("d5278b36-2098-4648-a791-b4b696de0b6c")
     monkeypatch.setattr(single_brand_chart, "_CHART_BUILD_INTERVAL_SECONDS", 0)
     monkeypatch.setattr(context_processors, "_get_brands", lambda *args: [])
@@ -126,6 +130,16 @@ def test_public_general_pulse_chart_browser(monkeypatch):
                 page = browser.new_page(viewport={"width": 1280, "height": 800})
                 errors = []
                 page.on("pageerror", lambda error: errors.append(str(error)))
+                chart_requests = []
+
+                def busy_once(route):
+                    chart_requests.append(route.request.url)
+                    if len(chart_requests) == 1:
+                        route.fulfill(status=429, headers={"Retry-After": "0"}, body="busy")
+                    else:
+                        route.continue_()
+
+                page.route("**/general/chart/?*", busy_once)
                 response = page.goto(
                     f"http://127.0.0.1:{server.server_port}/general/?lang=en",
                     wait_until="networkidle",
@@ -133,6 +147,7 @@ def test_public_general_pulse_chart_browser(monkeypatch):
                 assert response.status == 200
                 page.locator("#ce-content:not([hidden])").wait_for(timeout=20000)
                 assert page.locator("#ce-title").inner_text() == "Test model"
+                assert len(chart_requests) >= 2
                 assert page.evaluate(
                     "Chart.getChart(document.getElementById('ce-chart')).data.datasets[0].data"
                 ) == [0, 10, None, 20]
