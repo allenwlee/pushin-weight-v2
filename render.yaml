@@ -137,6 +137,265 @@ services:
       - key: X_MONITOR_HEADLINE_CRITIC_RISK_ROUTING_ENABLED
         value: "True"
 
+  # Graphics workers consume only their dedicated queues; no scheduler is added.
+  - type: worker
+    name: pushinweight-graphics-a
+    repo: https://github.com/allenwlee/pushin-weight-v2
+    branch: main
+    autoDeployTrigger: commit
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -e '.[dev]'
+    startCommand: >-
+      celery -A project worker -l INFO -Q graphics-creation --concurrency=1
+      --prefetch-multiplier=1 --without-gossip --without-mingle
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
+      - key: GRAPHICS_RECONCILER_ENABLED
+        value: "True"
+      - key: GRAPHICS_REQUIRE_SHARED_MEDIA
+        value: "True"
+      - key: STAFF_MEDIA_DURABLE
+        value: "True"
+      - key: EDITORIAL_MEDIA_DURABLE
+        value: "True"
+      - key: ORIGINAL_CONTENT_STORAGE
+        value: shared
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: XAI_API_KEY_PW
+        sync: false
+      - key: EXA_API_KEY
+        sync: false
+      - key: STAFF_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: STAFF_MEDIA_STORAGE_BACKEND
+      - key: STAFF_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: STAFF_MEDIA_STORAGE_OPTIONS
+      - key: EDITORIAL_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: EDITORIAL_MEDIA_STORAGE_BACKEND
+      - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: EDITORIAL_MEDIA_STORAGE_OPTIONS
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: R2_SECRET_ACCESS_KEY
+
+  - type: worker
+    name: pushinweight-graphics-b
+    repo: https://github.com/allenwlee/pushin-weight-v2
+    branch: main
+    autoDeployTrigger: commit
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -e '.[dev]'
+    startCommand: >-
+      celery -A project worker -l INFO -Q graphics-creation --concurrency=1
+      --prefetch-multiplier=1 --without-gossip --without-mingle
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
+      - key: GRAPHICS_RECONCILER_ENABLED
+        value: "True"
+      - key: GRAPHICS_REQUIRE_SHARED_MEDIA
+        value: "True"
+      - key: STAFF_MEDIA_DURABLE
+        value: "True"
+      - key: EDITORIAL_MEDIA_DURABLE
+        value: "True"
+      - key: ORIGINAL_CONTENT_STORAGE
+        value: shared
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: XAI_API_KEY_PW
+        sync: false
+      - key: EXA_API_KEY
+        sync: false
+      - key: STAFF_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: STAFF_MEDIA_STORAGE_BACKEND
+      - key: STAFF_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: STAFF_MEDIA_STORAGE_OPTIONS
+      - key: EDITORIAL_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: EDITORIAL_MEDIA_STORAGE_BACKEND
+      - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: EDITORIAL_MEDIA_STORAGE_OPTIONS
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: R2_SECRET_ACCESS_KEY
+
+  - type: worker
+    name: pushinweight-graphics-review
+    repo: https://github.com/allenwlee/pushin-weight-v2
+    branch: main
+    autoDeployTrigger: commit
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -e '.[dev]'
+    startCommand: >-
+      celery -A project worker -l INFO -Q graphics-review --concurrency=1
+      --prefetch-multiplier=1 --without-gossip --without-mingle
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
+      - key: GRAPHICS_RECONCILER_ENABLED
+        value: "False"
+      - key: GRAPHICS_REQUIRE_SHARED_MEDIA
+        value: "True"
+      - key: STAFF_MEDIA_DURABLE
+        value: "True"
+      - key: EDITORIAL_MEDIA_DURABLE
+        value: "True"
+      - key: ORIGINAL_CONTENT_STORAGE
+        value: shared
+      - key: OPENROUTER_API_KEY
+        sync: false
+
+      - key: STAFF_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: STAFF_MEDIA_STORAGE_BACKEND
+      - key: STAFF_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: STAFF_MEDIA_STORAGE_OPTIONS
+      - key: EDITORIAL_MEDIA_STORAGE_BACKEND
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: EDITORIAL_MEDIA_STORAGE_BACKEND
+      - key: EDITORIAL_MEDIA_STORAGE_OPTIONS
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: EDITORIAL_MEDIA_STORAGE_OPTIONS
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: worker
+          name: pushinweight-headlines
+          envVarKey: R2_SECRET_ACCESS_KEY
+
   # --------------------------------------------------------------------------
   # PostgreSQL-only rich-synthesis worker. It has no scheduler, Twitter key,
   # Celery broker, or headline queue access.
