@@ -61,6 +61,10 @@ Owner requests updating the locally verified chart performance candidate to curr
 
 Integrated current main `3f1621b2`. Review found and the candidate fixes: refresh between owner-confirmed and caller-supplied cache keys; concurrent shared-cache builds racing across workers (128 bounded lock stripes keyed by product/date, plus bounded busy retries); stale async retry cancellation; and a Chart.js source-map link that caused the actual WhiteNoise manifest build to fail. The source-map comment alone was removed; manifest `collectstatic` then passed. The 0813 chart, index, request and browser suite passed 108 tests including 42 PostgreSQL-required, zero skipped/errors. The index was built while 100 synthetic concurrent writes completed and verified valid/ready. The impacted UI suite is rerunning on the isolated DB. An earlier serial affected run had 423 passing tests but two homepage screenshot subtests failed due to pixel drift, also reproduced on unchanged `99c91a54`; they are not passed checks. Exact-candidate assurance and sealed performance are still pending. Preserve live collection during release.
 
+## November 13 exact-source review
+
+Product candidate `9728e1f3` passed 108 focused tests, including 42 PostgreSQL-required checks, zero skipped/errors, and the production WhiteNoise `collectstatic` build. Independent Claude and local reviewer findings (cross-worker stale cache, refresh-key invalidation, retry cancellation, and missing vendor source map) were fixed and checked; the formal review artifact `/tmp/compound-engineering-501/ce-code-review/chart-latency-20261113/review.json` is degraded because five local summaries were not in the helper format and plan requirements were not extracted. Do not report a clean formal-review receipt. Its unchanged code is the target of the post-merge test evidence. An earlier serial affected suite produced 423 passing tests plus two homepage screenshot mismatches; the same independent pixel drift was reproduced on unchanged `99c91a54`, so neither mismatch is reported as passed. The exact-source affected rerun is in progress.
+
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
 
