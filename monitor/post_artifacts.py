@@ -96,6 +96,7 @@ def persist_literal_translation_chunk(
     with transaction.atomic():
         claim = PostEnrichmentState.objects.select_for_update().filter(
             post_id=post_id, claim_run_id=str(expected_claim_run_id)[:128],
+            translation_requested=True,
             translation_status=PostEnrichmentState.Status.PENDING,
             claim_expires_at__gt=timezone.now(),
         ).first()
@@ -203,6 +204,7 @@ def publish_literal_translation(
             )
             if (
                 claim is None
+                or not claim.translation_requested
                 or claim.claim_run_id != str(expected_claim_run_id)[:128]
                 or claim.translation_status != PostEnrichmentState.Status.PENDING
                 or claim.claim_expires_at is None
@@ -299,6 +301,7 @@ def record_literal_translation_failure(
             )
             if (
                 claim is None
+                or not claim.translation_requested
                 or claim.claim_run_id != str(expected_claim_run_id)[:128]
                 or claim.translation_status != PostEnrichmentState.Status.PENDING
                 or claim.claim_expires_at is None
@@ -519,7 +522,12 @@ def read_post_content_many(
         post_id = str(post.pk)
         translation = translations.get(post_id)
         synthesis = syntheses.get(post_id)
+        stale_translation = bool(
+            translation is not None
+            and translation.source_content_fingerprint != source_content_fingerprint(post)
+        )
         literal = (
+            {} if stale_translation else
             {row.locale: row.text for row in translation.texts.all()}
             if translation is not None
             else _legacy_literal(post)
@@ -542,7 +550,7 @@ def read_post_content_many(
         projections[post_id] = PostContentProjection(
             literal=literal,
             synthesis=rich,
-            literal_source="normalized" if translation is not None else "legacy",
+            literal_source="stale" if stale_translation else "normalized" if translation is not None else "legacy",
             synthesis_source="normalized" if synthesis is not None else "legacy",
             synthesis_status=status,
             synthesis_attempts=attempts,

@@ -49,6 +49,7 @@ urlpatterns = [
         views.post_synthesis_demands,
         name="post_synthesis_demands",
     ),
+    path("api/v2/post-translation-demands/", views.post_translation_demands, name="post_translation_demands"),
 
     # HTML partials (htmx swap targets)
     path("chart.html", views.chart_html, name="chart_html"),

@@ -557,3 +557,17 @@ def test_expired_visible_demand_is_cancelled_without_provider_call():
     assert result["claimed"] == 0
     assert demand.state == PostSynthesisDemand.State.CANCELLED
     assert client.calls == []
+
+
+def test_changed_source_does_not_display_stale_normalized_translation():
+    post = Post.objects.create(tweet_id="translation-stale-display", text="モデルを公開しました。")
+    assert publish_literal_translation(
+        post=post, row=_literal_row(post),
+        expected_source_fingerprint=source_content_fingerprint(post),
+        prompt_version="literal-v1", model="deepseek-v4-flash",
+    )
+    post.text = "新しい別の文章"
+    post.save(update_fields=["text"])
+    projection = read_post_content_many([post])[post.pk]
+    assert projection.literal == {}
+    assert projection.literal_source == "stale"

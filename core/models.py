@@ -2148,6 +2148,7 @@ class PostEnrichmentState(models.Model):
     translation_status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.PENDING
     )
+    translation_requested = models.BooleanField(default=False, db_default=False)
     translation_attempts = models.PositiveSmallIntegerField(default=0)
     translation_first_attempt_at = models.DateTimeField(blank=True, null=True)
     translation_last_attempt_at = models.DateTimeField(blank=True, null=True)

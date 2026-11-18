@@ -932,6 +932,7 @@ def test_truncated_response_gets_only_one_search_pass():
 def test_rare_extra_staging_profile_reaches_shared_cycle_with_all_live_caps(
     tmp_path, monkeypatch
 ):
+    from dataclasses import replace
     from core.discovery import plan_discovery_calls
     from monitor.cycle import CycleRunner
     from monitor.staging_acceptance import (
@@ -967,6 +968,10 @@ def test_rare_extra_staging_profile_reaches_shared_cycle_with_all_live_caps(
         for call in plan_discovery_calls(prepared.config, list_id=42)
         if call.call_id == "RARE_EXTRA"
     )
+    # The historical provisional query now exceeds the live UTF-8 wire cap
+    # after runtime suffixes. This test exercises staging limits, so use a
+    # bounded query while leaving the separate wire-length guard intact.
+    call = replace(call, query_string="(model) (released)", query_length=18)
 
     class Delegate:
         timeout_s = 30
@@ -1030,7 +1035,7 @@ def test_rare_extra_staging_profile_reaches_shared_cycle_with_all_live_caps(
     ).run()
 
     assert purposes == [TwitterApiCredentialPurpose.ON_DEMAND]
-    assert len(delegate.calls) == 1
+    assert len(delegate.calls) == 1, repr(stats["calls"][0])
     assert delegate.calls[0][1]["max_results"] == 5
     assert delegate.calls[0][1]["max_pages"] == 1
     assert delegate.calls[0][1]["max_per_page"] == 5
@@ -1226,7 +1231,7 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
     from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
     assert credential_purposes == [TwitterApiCredentialPurpose.ON_DEMAND]
-    assert translation_ids == [tweet_id]
+    assert translation_ids == []
     assert classification_ids == [tweet_id]
     assert stats["totals"]["n_inserted"] == 1
     assert stats["post_fetch"]["inserted_post_ids"] == [tweet_id]
@@ -1234,11 +1239,29 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
         tweet_id
     ]
     assert stats["post_fetch"]["n_enrichment_succeeded_current_cycle"] == 1
-    assert state.translation_status == PostEnrichmentState.Status.SUCCEEDED
+    assert state.translation_status == PostEnrichmentState.Status.PENDING
+    assert state.translation_requested is False
     assert state.classification_status == PostEnrichmentState.Status.SUCCEEDED
-    assert post_persisted_output_complete(post)
+    assert not post_persisted_output_complete(post)
     assert evaluation.status == "accepted"
     assert evaluation.reason_codes == ("terminal_complete",)
+    from monitor.enrichment_queue import request_post_translation
+
+    request_post_translation(tweet_id)
+    state.refresh_from_db()
+    assert state.translation_requested
+    from monitor.enrichment_worker import process_enrichment_batch
+
+    translation_result = process_enrichment_batch(
+        runner, [], run_id="explicit-translation-test", post_ids={tweet_id},
+        scope="continuous", fair_queue=True,
+    )
+    state.refresh_from_db()
+    post.refresh_from_db()
+    assert translation_ids == [tweet_id], translation_result
+    assert classification_ids == [tweet_id]
+    assert state.translation_status == PostEnrichmentState.Status.SUCCEEDED
+    assert post_persisted_output_complete(post)
     assert sum(
         record.message.startswith(HARVEST_COHORT_PREFIX)
         for record in caplog.records

@@ -206,6 +206,12 @@ def save_post_membership(run, scope, post_ids, *, observed_at=None):
     return ids
 
 
+def _historical_enrichment_incomplete(state):
+    return state.classification_status != "succeeded" or (
+        state.translation_requested and state.translation_status != "succeeded"
+    )
+
+
 def record_post_membership(run, scope, post_ids, *, observed_at=None):
     """Historical backfill membership plus its existing enrichment policy."""
     if run.job.operation != "x_backfill":
@@ -213,7 +219,7 @@ def record_post_membership(run, scope, post_ids, *, observed_at=None):
     ids = save_post_membership(run, scope, post_ids, observed_at=observed_at)
     now = timezone.now()
     PostEnrichmentState.objects.filter(
-        Q(translation_status="pending") | Q(classification_status="pending"),
+        Q(translation_requested=True, translation_status="pending") | Q(classification_status="pending"),
         Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now),
         post_id__in=ids,
         source_collection_job__isnull=True,
@@ -225,7 +231,7 @@ def historical_ownership_conflicts(job, states):
     now = timezone.now()
     pending = {
         s.post_id: s for s in states
-        if (s.translation_status, s.classification_status) != ("succeeded", "succeeded")
+        if _historical_enrichment_incomplete(s)
     }
     conflicts = {
         p: "historical_state_missing_or_claimed" for p, s in pending.items()
@@ -268,8 +274,7 @@ def own_historical_posts(job, post_ids, *, defer_conflicts=False):
         if conflicts and not defer_conflicts:
             raise BatchAdmissionError(next(iter(conflicts.values())))
         eligible = [s.post_id for s in states if s.post_id not in conflicts
-                    and (s.translation_status, s.classification_status)
-                    != ("succeeded", "succeeded")]
+                    and _historical_enrichment_incomplete(s)]
         PostEnrichmentState.objects.filter(post_id__in=eligible).update(
             source_collection_job=job
         )
@@ -434,6 +439,8 @@ def reserve_requests(claim, requests):
             for post_id in request["context"]["post_ids"]:
                 state = states.get(str(post_id))
                 if state is not None and state.source_collection_job_id == job.pk:
+                    if state.claim_expires_at and state.claim_expires_at > timezone.now():
+                        raise BatchAdmissionError("historical_state_missing_or_claimed")
                     continue
                 # Base ownership records translation/classification execution.
                 # A separate targeted operation may use a completed shared
@@ -441,7 +448,7 @@ def reserve_requests(claim, requests):
                 if (
                     state is None
                     or request["context"].get("operation") != "post_targeted_extraction"
-                    or (state.translation_status, state.classification_status) != ("succeeded", "succeeded")
+                    or _historical_enrichment_incomplete(state)
                     or (state.claim_expires_at and state.claim_expires_at > timezone.now())
                 ):
                     raise BatchAdmissionError("batch_historical_ownership_missing")

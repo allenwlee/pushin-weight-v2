@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -18,6 +19,8 @@ from scripts.database_lock import (
     acquire_enrichment_coordination_lock,
 )
 from x_monitor.attribution import LLMCallBudgetExhausted
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -235,6 +238,17 @@ def process_enrichment_batch(
                 timeout_seconds=runner.cfg.targeted_extraction.request_timeout_seconds,
             )
         try:
+            if runner.cfg.llm.literal_translation_v2_enabled:
+                try:
+                    from monitor.backfill_enrichment import (
+                        replay_requested_saved_translation,
+                    )
+                    replay_requested_saved_translation(
+                        runner.cfg, delegates=runner._post_fetch_clients, post_ids=kwargs.get("post_ids"),
+                    )
+                except Exception:
+                    # A historical replay must never stop ordinary collection.
+                    logger.exception("Saved translation replay failed")
             result = runner._process_enrichment_claim_batch(
                 kept_posts, dispatch_guard=guard, **kwargs
             )

@@ -6,14 +6,16 @@ import hashlib
 import inspect
 import json
 import threading
+import time
 import uuid
 from collections import Counter, defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.postgres.expressions import ArraySubquery
+from django.contrib.postgres.fields import ArrayField
 from django.db import connection, transaction
-from django.db.models import Exists, OuterRef, Q, Sum
+from django.db.models import CharField, Exists, Func, OuterRef, Q, Sum
 from django.utils import timezone
 
 from core.models import (
@@ -188,8 +190,11 @@ def verify_cohort(observations):
             break
         after = ids[-1]
         total += len(ids)
+        requested = set(PostEnrichmentState.objects.filter(
+            pk__in=ids, translation_requested=True,
+        ).values_list("post_id", flat=True))
         for identifier, fact in completion_facts(ids).items():
-            if not all(fact.values()):
+            if not fact["classification"] or (identifier in requested and not fact["translation"]):
                 invalid[identifier] = fact
     return total, invalid
 
@@ -282,7 +287,7 @@ def _classifier_ready(body):
             return False
         cases = packet.get("cases", {})
         return bool(cases) and all(
-            case.get("evidence", {}).get("english_translation", "").strip()
+            case.get("evidence", {}).get("source_text", "").strip()
             for case in cases.values()
         )
     return False
@@ -566,7 +571,87 @@ def close_unrecoverable_direct_imports(
     return {"closed_imports": closed, "already_closed": already_closed}
 
 
-def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot=None):
+_saved_replay_cooldowns = {}
+_saved_replay_lock = threading.Lock()
+
+
+def replay_requested_saved_translation(cfg, *, delegates=None, post_ids=None):
+    """Replay one paid historical reply, without sending any new requests."""
+    now = timezone.now()
+    with _saved_replay_lock:
+        current = time.monotonic()
+        for post_id, deadline in list(_saved_replay_cooldowns.items()):
+            if deadline <= current:
+                del _saved_replay_cooldowns[post_id]
+        cooling = list(_saved_replay_cooldowns)
+    outstanding = OriginalContentCall.objects.filter(
+        provider_batch__source_collection_job_id=OuterRef("source_collection_job_id"),
+        stage="translation", state__in=("reserved", "sent", "ambiguous", "completed"),
+        import_state="pending",
+        member_post_ids__contains=Func(
+            OuterRef("post_id"), template="ARRAY[%(expressions)s]",
+            output_field=ArrayField(CharField(max_length=128)),
+        ),
+    )
+    candidates = (
+        PostEnrichmentState.objects.filter(
+            translation_requested=True, translation_status="pending",
+            classification_status="succeeded", source_collection_job__isnull=False,
+        )
+        .filter(Q(translation_next_attempt_at__isnull=True) | Q(translation_next_attempt_at__lte=now))
+        .filter(Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now))
+        .filter(Exists(outstanding))
+        .exclude(pk__in=cooling)
+        .select_related("source_collection_job")
+        .order_by("updated_at", "pk")
+    )
+    if post_ids is not None:
+        candidates = candidates.filter(pk__in=post_ids)
+    state = candidates.first()
+    if state is None:
+        return False
+    if delegates is None:
+        delegates = {
+            "translation": build_translator_client_from_env(cfg),
+            "classification": build_classifier_client_from_env(cfg),
+        }
+    if not all(delegates.values()):
+        return False
+    try:
+        # prepare_page only replays cached replies or prepares requests in
+        # memory. We deliberately never register or send those requests here.
+        _, _, missing = prepare_page(
+            state.source_collection_job, [str(state.pk)], cfg, delegates=delegates,
+            quarantine_rejected=False,
+        )
+        if missing:
+            with transaction.atomic():
+                locked = PostEnrichmentState.objects.select_for_update().get(pk=state.pk)
+                Post.objects.select_for_update().get(pk=state.pk)
+                active = OriginalContentCall.objects.filter(
+                    provider_batch__isnull=False, stage="translation", import_state="pending",
+                    state__in=("reserved", "sent", "ambiguous"),
+                    member_post_ids__overlap=[str(state.pk)],
+                ).exists()
+                if (locked.translation_requested
+                        and locked.translation_status == "pending"
+                        and locked.classification_status == "succeeded"
+                        and (not locked.claim_expires_at or locked.claim_expires_at <= timezone.now())):
+                    locked.translation_error_code = (
+                        "historical_translation_unresolved" if active else "incomplete_saved_translation"
+                    )
+                    locked.save(update_fields=["translation_error_code", "updated_at"])
+    finally:
+        # Keep this worker's replay attempts bounded without touching the
+        # historical owner's independent retry schedule.
+        with _saved_replay_lock:
+            if len(_saved_replay_cooldowns) >= 512:
+                _saved_replay_cooldowns.pop(next(iter(_saved_replay_cooldowns)))
+            _saved_replay_cooldowns[str(state.pk)] = time.monotonic() + 300
+    return True
+
+
+def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot=None, quarantine_rejected=True):
     """Replay exact shared callers; missing replies roll back every Post write."""
     own_historical_posts(job, ids)
     stage_targets = {
@@ -578,6 +663,9 @@ def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot
         )
         for stage in ("translation", "classification")
     }
+    stage_targets["translation"] &= set(PostEnrichmentState.objects.filter(
+        pk__in=ids, translation_requested=True,
+    ).values_list("post_id", flat=True))
     calls = list(
         OriginalContentCall.objects.filter(
             member_post_ids__overlap=ids,
@@ -731,7 +819,7 @@ def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot
                 )
     # A missing dependency rolls back Post publication, not evidence that a
     # particular saved reply failed validation. Otherwise it would replay forever.
-    if rejected:
+    if rejected and quarantine_rejected:
         with transaction.atomic():
             CollectionJob.objects.select_for_update().get(pk=job.pk)
             for call in OriginalContentCall.objects.select_for_update().filter(
@@ -1364,7 +1452,8 @@ def execute_enrichment(
             )
             after = ""
             work = observations.filter(
-                Q(post__enrichment_state__translation_status="pending")
+                Q(post__enrichment_state__translation_requested=True,
+                  post__enrichment_state__translation_status="pending")
                 | Q(post__enrichment_state__classification_status="pending")
             )
             if deferred:
@@ -1383,10 +1472,8 @@ def execute_enrichment(
                 after = ids[-1]
                 pending = list(
                     PostEnrichmentState.objects.filter(pk__in=ids)
-                    .exclude(
-                        translation_status="succeeded",
-                        classification_status="succeeded",
-                    )
+                    .exclude(Q(translation_requested=False) | Q(translation_status="succeeded"),
+                             classification_status="succeeded")
                     .values_list("post_id", flat=True)
                 )
                 if not pending:
@@ -1421,14 +1508,13 @@ def execute_enrichment(
         output_tokens=Sum("output_tokens"),
     )
     pending_count = states.exclude(
-        translation_status="succeeded", classification_status="succeeded"
+        Q(translation_requested=False) | Q(translation_status="succeeded"),
+        classification_status="succeeded",
     ).count()
     actionable_pending_count = (
         states.exclude(post_id__in=deferred)
-        .exclude(
-            translation_status="succeeded",
-            classification_status="succeeded",
-        )
+        .exclude(Q(translation_requested=False) | Q(translation_status="succeeded"),
+                 classification_status="succeeded")
         .count()
     )
     cohort_count = observations.values("post_id").distinct().count()

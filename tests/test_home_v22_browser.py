@@ -907,6 +907,89 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
             )
         )
 
+    def test_translation_requires_explicit_click_in_public_feed(self) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from core.models import PostEnrichmentState, PostTranslationArtifact
+        from monitor.post_artifacts import publish_literal_translation, source_content_fingerprint
+
+        PostTranslationArtifact.objects.all().delete()
+        Post.objects.update(text_en=None, text_zh_cn=None, lang_detected=None)
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                requests = []
+                page.on("request", lambda request: requests.append(request.post_data_json) if "/api/v2/post-translation-demands/" in request.url else None)
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                row = page.locator(".feed-row[data-tweet-id]").first
+                self.assertTrue(row.is_visible())
+                post_id = row.get_attribute("data-tweet-id")
+                self.assertFalse(requests)
+                with page.expect_response(lambda response: "/api/v2/post-translation-demands/" in response.url) as received:
+                    row.locator("[data-post-translate]").evaluate("button => { button.click(); button.click(); }")
+                self.assertEqual(received.value.status, 200)
+                row.locator("[data-text-cycle]").click()
+                row.locator("[data-post-translate]").click()
+                row.locator("[data-text-cycle]").click()
+                row.locator("[data-post-translate]").click()
+                page.wait_for_timeout(2500)
+                self.assertEqual(sum(bool(r.get("poll_only")) for r in requests), 2)
+                with page.expect_response(lambda response: "/feed/" in response.url):
+                    page.evaluate("document.dispatchEvent(new CustomEvent('pw:filter-change'))")
+                row = page.locator(f'.feed-row[data-tweet-id="{post_id}"]')
+                row.wait_for(state="visible")
+                page.wait_for_timeout(2500)
+                self.assertEqual(sum(not r.get("poll_only") for r in requests), 1)
+                self.assertTrue(any(r.get("poll_only") for r in requests))
+                def publish_result():
+                    self.assertTrue(PostEnrichmentState.objects.get(pk=post_id).translation_requested)
+                    post = Post.objects.get(pk=post_id)
+                    self.assertIsNotNone(publish_literal_translation(
+                        post=post,
+                        row={"lang_detected": "ja", "text_en": "Requested translation result", "text_zh_cn": "请求的翻译", "text_ja": post.text},
+                        expected_source_fingerprint=source_content_fingerprint(post),
+                        prompt_version="browser-test", model="browser-test",
+                    ))
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    executor.submit(publish_result).result()
+                page.wait_for_function("""id => {
+                    const row = document.querySelector('[data-tweet-id="' + id + '"]');
+                    return row && row.querySelector('[data-text-cycle]').textContent.includes('Requested translation result');
+                }""", arg=post_id, timeout=10000)
+                self.assertTrue(row.locator("[data-post-translate]").is_visible())
+                context.close()
+            finally:
+                browser.close()
+
+    def test_commentary_still_appears_automatically_without_translation(self) -> None:
+        from core.models import PostSynthesisArtifact
+
+        PostSynthesisArtifact.objects.all().delete()
+        Post.objects.update(text_en=None, text_zh_cn=None, commentary_en=None, commentary_zh_cn=None)
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                def commentary_response(route):
+                    ids = route.request.post_data_json["post_ids"]
+                    route.fulfill(json={"results": [{
+                        "post_id": post_id, "status": "ready",
+                        "synthesis": {"en": "Automatically available commentary"},
+                        "literal": {}, "processing_badges": [],
+                    } for post_id in ids]})
+                page.route("**/api/v2/post-synthesis-demands/", commentary_response)
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                row = page.locator(".feed-row[data-tweet-id]").first
+                row.locator("[data-text-cycle]").get_by_text("Automatically available commentary").wait_for()
+                context.close()
+            finally:
+                browser.close()
+
     def test_zh_hans_renders_chinese_chrome_in_browser(self) -> None:
         """The Django ``zh_hans`` alias keeps v22 chrome Chinese after JS initializes."""
         cookies = self._anonymous_cookies("zh_hans")

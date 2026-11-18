@@ -704,6 +704,11 @@ brands:
       - 模型
       - 智能体
       - トークン
+    search_alias_exclusions:
+    - alias: Meta
+      any_of:
+      - $META
+      - meta analysis
     c_bare_aliases:
     - '"Muse Wonder"'
     - '"Muse Code"'

@@ -15,7 +15,7 @@ def _cfg():
     return Config(enabled_models=["deepseek"], daily_ceiling=100)
 
 
-def _state(tweet_id: str):
+def _state(tweet_id: str, *, translation_requested=False):
     from core.models import (
         Brand,
         Post,
@@ -33,7 +33,11 @@ def _state(tweet_id: str):
     SentimentKey.objects.get_or_create(key="neutral")
     PostTypeKey.objects.get_or_create(key="releases_updates")
     PostBrand.objects.create(post=post, brand=brand)
-    return PostEnrichmentState.objects.create(post=post)
+    return PostEnrichmentState.objects.create(post=post, translation_requested=translation_requested)
+
+
+def _requested_state(tweet_id: str):
+    return _state(tweet_id, translation_requested=True)
 
 
 def _classification_results(tweets):
@@ -63,7 +67,7 @@ def test_exact_repair_manifest_mismatch_blocks_all_publication(monkeypatch):
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute
 
-    states = [_state("repair-1"), _state("repair-2")]
+    states = [_requested_state("repair-1"), _requested_state("repair-2")]
     for state in states:
         state.translation_status = PostEnrichmentState.Status.SUCCEEDED
         state.save(update_fields=["translation_status"])
@@ -83,7 +87,8 @@ def test_exact_repair_manifest_mismatch_blocks_all_publication(monkeypatch):
         }
         for state in states
     }
-    counters = CycleRunner(cfg=_cfg())._run_post_fetch(
+    runner = CycleRunner(cfg=_cfg())
+    counters = runner._run_post_fetch(
         [], run_id="repair-mismatch", post_ids=set(manifest), repair_manifest=manifest,
     )
 
@@ -101,7 +106,7 @@ def test_claims_are_bounded_and_active_claims_are_not_double_owned():
     from monitor.cycle import _claim_enrichment_states
 
     for index in range(51):
-        _state(f"claim-{index:02d}")
+        _requested_state(f"claim-{index:02d}")
     cfg = _cfg().harvest.enrichment
 
     first = _claim_enrichment_states(cfg=cfg, run_id="run-1")
@@ -122,8 +127,8 @@ def test_two_lane_claim_rolls_back_all_ownership_and_attempts_on_failure(
     from monitor.cycle import _claim_enrichment_states
 
     cutoff = timezone.now()
-    carryover = [_state(f"rollback-old-{index}") for index in range(2)]
-    current = [_state(f"rollback-new-{index}") for index in range(2)]
+    carryover = [_requested_state(f"rollback-old-{index}") for index in range(2)]
+    current = [_requested_state(f"rollback-new-{index}") for index in range(2)]
     PostEnrichmentState.objects.filter(pk__in=[s.pk for s in carryover]).update(
         created_at=cutoff - timedelta(minutes=1)
     )
@@ -161,7 +166,7 @@ def test_two_lane_claim_rolls_back_all_ownership_and_attempts_on_failure(
 def test_expired_claim_is_recoverable_by_the_next_cycle():
     from monitor.cycle import _claim_enrichment_states
 
-    state = _state("expired-claim")
+    state = _requested_state("expired-claim")
     state.claim_owner = "dead-worker"
     state.claim_run_id = "old-run"
     state.claimed_at = timezone.now() - timedelta(minutes=10)
@@ -181,11 +186,11 @@ def test_only_attempt_exhaustion_is_terminal_while_old_waiting_work_is_claimed()
     from core.models import PostEnrichmentState
     from monitor.cycle import _claim_enrichment_states
 
-    exhausted = _state("attempts-exhausted")
+    exhausted = _requested_state("attempts-exhausted")
     exhausted.translation_attempts = 8
     exhausted.classification_attempts = 8
     exhausted.save()
-    aged = _state("age-exhausted")
+    aged = _requested_state("age-exhausted")
     PostEnrichmentState.objects.filter(pk=aged.pk).update(
         created_at=timezone.now() - timedelta(hours=25)
     )
@@ -214,15 +219,15 @@ def test_post_fetch_reaches_classifier_when_expired_debt_fills_claim_window(
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
 
-    expired = [_state(f"expired-debt-{index:02d}") for index in range(25)]
+    expired = [_requested_state(f"expired-debt-{index:02d}") for index in range(25)]
     PostEnrichmentState.objects.filter(pk__in=[state.pk for state in expired]).update(
         created_at=timezone.now() - timedelta(hours=25)
     )
-    older_due = [_state(f"older-due-{index:02d}") for index in range(50)]
+    older_due = [_requested_state(f"older-due-{index:02d}") for index in range(50)]
     PostEnrichmentState.objects.filter(pk__in=[state.pk for state in older_due]).update(
         created_at=timezone.now() - timedelta(hours=23)
     )
-    fresh = _state("fresh-after-expired-debt")
+    fresh = _requested_state("fresh-after-expired-debt")
 
     client = object()
     classified_ids: list[str] = []
@@ -258,7 +263,8 @@ def test_post_fetch_reaches_classifier_when_expired_debt_fills_claim_window(
 
     monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
 
-    counters = CycleRunner(cfg=_cfg())._run_post_fetch(
+    runner = CycleRunner(cfg=_cfg())
+    counters = runner._run_post_fetch(
         [],
         run_id="run-after-expired-debt", fair_queue=True,
     )
@@ -276,7 +282,7 @@ def test_releasing_a_claim_preserves_stage_status_and_clears_lease():
     from core.models import PostEnrichmentState
     from monitor.cycle import _claim_enrichment_states, _release_enrichment_claim
 
-    state = _state("release-claim")
+    state = _requested_state("release-claim")
     batch = _claim_enrichment_states(
         cfg=_cfg().harvest.enrichment,
         run_id="run-release",
@@ -306,7 +312,7 @@ def test_deadline_defers_work_without_claiming_or_spending_an_attempt():
             self.requested_seconds = seconds
             return False
 
-    state = _state("deadline-deferred")
+    state = _requested_state("deadline-deferred")
     deadline = ExhaustedDeadline()
     runner = CycleRunner(cfg=_cfg())
 
@@ -329,8 +335,8 @@ def test_claims_disjoint_current_and_carryover_lanes_without_borrowing():
     from monitor.cycle import _claim_enrichment_states
 
     cutoff = timezone.now()
-    previous = [_state(f"previous-{index:02d}") for index in range(75)]
-    current = [_state(f"current-{index:02d}") for index in range(75)]
+    previous = [_requested_state(f"previous-{index:02d}") for index in range(75)]
+    current = [_requested_state(f"current-{index:02d}") for index in range(75)]
     PostEnrichmentState.objects.filter(pk__in=[s.pk for s in previous]).update(
         created_at=cutoff - timedelta(minutes=1)
     )
@@ -358,8 +364,8 @@ def test_claim_lanes_do_not_borrow_unused_capacity():
     from monitor.cycle import _claim_enrichment_states
 
     cutoff = timezone.now().astimezone(ZoneInfo("Asia/Tokyo"))
-    retained = [_state(f"retained-{index:02d}") for index in range(50)]
-    current = [_state(f"new-arrival-{index:02d}") for index in range(37)]
+    retained = [_requested_state(f"retained-{index:02d}") for index in range(50)]
+    current = [_requested_state(f"new-arrival-{index:02d}") for index in range(37)]
     PostEnrichmentState.objects.filter(pk__in=[state.pk for state in retained]).update(
         created_at=cutoff - timedelta(minutes=30)
     )
@@ -386,8 +392,8 @@ def test_combined_lanes_enter_existing_provider_callers_once_with_pinned_guards(
     from x_monitor import attribution, reattribute, translator
 
     cutoff = timezone.now()
-    carryover = [_state(f"combined-old-{index:02d}") for index in range(50)]
-    current = [_state(f"combined-new-{index:02d}") for index in range(37)]
+    carryover = [_requested_state(f"combined-old-{index:02d}") for index in range(50)]
+    current = [_requested_state(f"combined-new-{index:02d}") for index in range(37)]
     from core.models import PostEnrichmentState
 
     PostEnrichmentState.objects.filter(pk__in=[s.pk for s in carryover]).update(
@@ -423,7 +429,8 @@ def test_combined_lanes_enter_existing_provider_callers_once_with_pinned_guards(
     monkeypatch.setattr(translator, "translate_batch_pragmatics", translate)
     monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
 
-    counters = CycleRunner(cfg=_cfg())._run_post_fetch(
+    runner = CycleRunner(cfg=_cfg())
+    counters = runner._run_post_fetch(
         [],
         run_id="combined-two-lane-provider-path",
         prefer_created_before=cutoff,
@@ -450,7 +457,7 @@ def test_no_cutoff_preserves_legacy_fifty_row_capacity():
     from monitor.cycle import _claim_enrichment_states
 
     for index in range(75):
-        _state(f"legacy-no-cutoff-{index:02d}")
+        _requested_state(f"legacy-no-cutoff-{index:02d}")
 
     batch = _claim_enrichment_states(
         cfg=_cfg().harvest.enrichment,
@@ -525,8 +532,8 @@ def test_claim_preserves_fresh_pre_cycle_cohort_ahead_of_older_retries():
     from monitor.cycle import _claim_enrichment_states
 
     cutoff = timezone.now()
-    retained = [_state(f"fresh-retained-{index:02d}") for index in range(50)]
-    retries = [_state(f"older-retry-{index:02d}") for index in range(50)]
+    retained = [_requested_state(f"fresh-retained-{index:02d}") for index in range(50)]
+    retries = [_requested_state(f"older-retry-{index:02d}") for index in range(50)]
     PostEnrichmentState.objects.filter(pk__in=[state.pk for state in retained]).update(
         created_at=cutoff - timedelta(minutes=1)
     )
@@ -552,7 +559,7 @@ def test_translation_timeout_does_not_consume_classifier_stage_budget(monkeypatc
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
 
-    state = _state("separate-stage-deadlines")
+    state = _requested_state("separate-stage-deadlines")
     client = object()
     clock = [0.0]
     monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: client)
@@ -605,7 +612,7 @@ def test_recent_incomplete_translation_success_is_reopened_without_touching_clas
     from monitor.cycle import _requeue_recent_incomplete_translations
 
     now = timezone.now()
-    incomplete = _state("recent-false-success")
+    incomplete = _requested_state("recent-false-success")
     incomplete.translation_status = PostEnrichmentState.Status.SUCCEEDED
     incomplete.classification_status = PostEnrichmentState.Status.SUCCEEDED
     incomplete.save()
@@ -621,6 +628,7 @@ def test_recent_incomplete_translation_success_is_reopened_without_touching_clas
     )
     complete = PostEnrichmentState.objects.create(
         post=complete_post,
+        translation_requested=True,
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         classification_status=PostEnrichmentState.Status.SUCCEEDED,
     )
@@ -636,6 +644,7 @@ def test_recent_incomplete_translation_success_is_reopened_without_touching_clas
     )
     invalid_lang = PostEnrichmentState.objects.create(
         post=invalid_lang_post,
+        translation_requested=True,
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         classification_status=PostEnrichmentState.Status.SUCCEEDED,
     )
@@ -651,11 +660,12 @@ def test_recent_incomplete_translation_success_is_reopened_without_touching_clas
     )
     copied_commentary = PostEnrichmentState.objects.create(
         post=copied_commentary_post,
+        translation_requested=True,
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         classification_status=PostEnrichmentState.Status.SUCCEEDED,
     )
 
-    aged = _state("aged-false-success")
+    aged = _requested_state("aged-false-success")
     aged.translation_status = PostEnrichmentState.Status.SUCCEEDED
     aged.classification_status = PostEnrichmentState.Status.SUCCEEDED
     aged.save()
@@ -688,7 +698,7 @@ def test_translation_only_debt_does_not_rerun_classifier(monkeypatch):
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
 
-    state = _state("translation-only")
+    state = _requested_state("translation-only")
     state.classification_status = PostEnrichmentState.Status.SUCCEEDED
     state.save()
     client = object()
@@ -726,7 +736,7 @@ def test_classification_only_debt_does_not_rerun_translator(monkeypatch):
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
 
-    state = _state("classification-only")
+    state = _requested_state("classification-only")
     state.translation_status = PostEnrichmentState.Status.SUCCEEDED
     state.post.text_en = state.post.text
     state.post.text_zh_cn = "深度求索发布了更新"
@@ -764,7 +774,7 @@ def test_failed_translation_does_not_erase_previously_valid_fields(monkeypatch):
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
 
-    state = _state("preserve-partial-output")
+    state = _requested_state("preserve-partial-output")
     state.classification_status = PostEnrichmentState.Status.SUCCEEDED
     state.post.text_zh_cn = "已有中文翻译"
     state.post.commentary_zh_cn = "已有中文评论"
@@ -809,7 +819,7 @@ def test_copied_commentary_cannot_mark_translation_succeeded(monkeypatch):
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
 
-    state = _state("copied-commentary-boundary")
+    state = _requested_state("copied-commentary-boundary")
     state.classification_status = PostEnrichmentState.Status.SUCCEEDED
     state.save()
     client = object()
@@ -849,7 +859,7 @@ def test_zh_hans_source_is_persisted_as_text_zh_cn(monkeypatch):
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
 
-    state = _state("zh-hans-source")
+    state = _requested_state("zh-hans-source")
     state.post.text = "深度求索发布了更新"
     state.post.save()
     state.classification_status = PostEnrichmentState.Status.SUCCEEDED
@@ -890,7 +900,7 @@ def test_classifier_deadline_preserves_flags_and_keeps_stage_pending(monkeypatch
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
 
-    state = _state("classifier-deadline")
+    state = _requested_state("classifier-deadline")
     state.translation_status = PostEnrichmentState.Status.SUCCEEDED
     state.post.text_en = state.post.text
     state.post.text_zh_cn = "深度求索发布了更新"

@@ -19,7 +19,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.core.management.base import CommandError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 
 from core.collection_capture import archive_document, read_document
 from core.collection_jobs import validate_job
@@ -776,7 +776,8 @@ def _report(job, run_id):
     require(len(rows) == len(job.scope["units"]), "incomplete scope ledger")
     require(Post.objects.filter(pk__in=ids).count() == len(ids), "checkpoint Posts missing")
     complete = PostEnrichmentState.objects.filter(
-        post_id__in=ids, translation_status="succeeded", classification_status="succeeded",
+        Q(translation_requested=False) | Q(translation_status="succeeded"),
+        post_id__in=ids, classification_status="succeeded",
     ).count()
     requests = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
     report = {

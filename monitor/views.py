@@ -33,8 +33,11 @@ from django.core.cache import cache
 from django.core.signing import salted_hmac
 from django.db import DatabaseError, connection, transaction
 from django.db.models import (
+    Case,
+    CharField,
     Count,
     Exists,
+    F,
     FilteredRelation,
     IntegerField,
     Max,
@@ -44,8 +47,10 @@ from django.db.models import (
     QuerySet,
     Subquery,
     Value,
+    When,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Lower, NullIf, Trim
+from django.db.models.lookups import In
 from django.http import (
     Http404,
     HttpRequest,
@@ -242,6 +247,27 @@ _DASHBOARD_LANG_FILTER_KEYS: tuple[str, ...] = (
     "en", "zh-hans", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar", "pl",
     "undetected", "other",
 )
+_TRUSTED_SOURCE_LANGS = ("en", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar", "pl")
+
+
+def _post_language(detected, source):
+    """Use the provider's unambiguous language when translation has not run."""
+    if detected:
+        return detected
+    source = str(source or "").strip().lower()
+    return source if source in _TRUSTED_SOURCE_LANGS else None
+
+
+def _post_language_expression(prefix=""):
+    source = Lower(Trim(F(f"{prefix}lang")))
+    return Coalesce(
+        NullIf(F(f"{prefix}lang_detected"), Value("")),
+        Case(
+            When(In(source, _TRUSTED_SOURCE_LANGS), then=source),
+            default=Value(None), output_field=CharField(),
+        ),
+        output_field=CharField(),
+    )
 
 _DASHBOARD_LANG_PERSISTED_VALUES: dict[str, str] = {
     "zh-hans": "zh-Hans",
@@ -1209,9 +1235,10 @@ def _feed_tint_class(sentiment_keys: list[str]) -> str:
 def _enrichment_status(
     translation_status: str | None,
     classification_status: str | None,
+    translation_requested: bool = True,
 ) -> str:
     """Collapse the two durable stages into one additive feed state."""
-    statuses = {translation_status, classification_status}
+    statuses = {translation_status if translation_requested else "succeeded", classification_status}
     if PostEnrichmentState.Status.FAILED in statuses:
         return PostEnrichmentState.Status.FAILED
     if statuses == {PostEnrichmentState.Status.SUCCEEDED}:
@@ -1255,7 +1282,7 @@ def _enrichment_stage_states(state: dict[str, Any], now: datetime) -> dict[str, 
     active = bool(state["claim_owner"] and state["claim_expires_at"] and state["claim_expires_at"] > now)
     return {
         stage: (
-            "processing" if active and state[f"{stage}_status"] == "pending" else state[f"{stage}_status"],
+            "not_requested" if stage == "translation" and not state.get("translation_requested", True) else "processing" if active and state[f"{stage}_status"] == "pending" else state[f"{stage}_status"],
             state[f"{stage}_attempts"],
         )
         for stage in ("translation", "classification")
@@ -1992,8 +2019,8 @@ def _post_to_wire(
         "tweet_id": post.tweet_id,
         "created_at": created_at_raw,
         "created_at_iso": created_at_iso,
-        "lang_detected": post.lang_detected,
-        "language_display": _compact_language_display(post.lang_detected, locale),
+        "lang_detected": _post_language(post.lang_detected, post.lang),
+        "language_display": _compact_language_display(_post_language(post.lang_detected, post.lang), locale),
         "text": text_original,
         "text_original": text_original,
         "text_translated": text_translated,
@@ -2123,14 +2150,14 @@ def _enrich_posts_with_classifications(
 
     enrichment_rows = list(
         PostEnrichmentState.objects.filter(post_id__in=tweet_ids).values(
-            "post_id", "translation_status", "translation_attempts",
+            "post_id", "translation_status", "translation_attempts", "translation_requested",
             "classification_status", "classification_attempts",
             "claim_owner", "claim_expires_at",
         )
     )
     enrichment_by_tweet = {
         state["post_id"]: _enrichment_status(
-            state["translation_status"], state["classification_status"]
+            state["translation_status"], state["classification_status"], state["translation_requested"]
         )
         for state in enrichment_rows
     }
@@ -2294,6 +2321,7 @@ def _enrich_posts_with_classifications(
             "commentary_zh_cn": content.synthesis.get("zh-cn"),
             "commentary_ja": content.synthesis.get("ja"),
             "literal_source": content.literal_source,
+            "translation_status": dict(enrichment_stages_by_tweet.get(tid, {})).get("translation", ("not_requested", 0))[0],
             "synthesis_source": content.synthesis_source,
             "synthesis_status": content.synthesis_status,
             "synthesis_attempts": content.synthesis_attempts,
@@ -2301,7 +2329,7 @@ def _enrich_posts_with_classifications(
             "like_count": post.like_count or 0,
             "retweet_count": post.retweet_count or 0,
             "reply_count": post.reply_count or 0,
-            "lang_detected": post.lang_detected,
+            "lang_detected": _post_language(post.lang_detected, post.lang),
             "author_handle": post.author_handle,
             "author_name": post.author_name,
             "author_id": post.author_id,
@@ -3081,19 +3109,19 @@ def _filter_home_posts_queryset(
         if not active:
             return queryset.none()
         if axis == "lang":
+            queryset = queryset.annotate(_effective_post_language=_post_language_expression())
             known = [
                 _DASHBOARD_LANG_PERSISTED_VALUES.get(value, value)
                 for value in active
                 if value not in {"other", "undetected"}
             ]
-            condition = Q(lang_detected__in=known)
+            condition = Q(_effective_post_language__in=known)
             if "undetected" in active:
-                condition |= Q(lang_detected__isnull=True) | Q(lang_detected="")
+                condition |= Q(_effective_post_language__isnull=True)
             if "other" in active:
                 condition |= (
-                    ~Q(lang_detected__in=_DASHBOARD_LANG_KNOWN_PERSISTED_VALUES)
-                    & ~Q(lang_detected="")
-                    & Q(lang_detected__isnull=False)
+                    ~Q(_effective_post_language__in=_DASHBOARD_LANG_KNOWN_PERSISTED_VALUES)
+                    & Q(_effective_post_language__isnull=False)
                 )
             queryset = queryset.filter(condition)
         else:
@@ -4224,8 +4252,8 @@ def _each_chart_payload(
 
     rows = PostBrand.objects.filter(
         brand_id=brand, post__created_at__gte=start, post__created_at__lt=at,
-    ).order_by().values_list(
-        "post_id", "post__created_at", "post__lang_detected", "post__author_id",
+    ).annotate(_effective_post_language=_post_language_expression("post__")).order_by().values_list(
+        "post_id", "post__created_at", "_effective_post_language", "post__author_id",
     ).iterator(chunk_size=5000) if sentiment_counts is None else iter(())
     audience_revision = None
     if tab == "audience_topics":
@@ -4723,6 +4751,7 @@ def _serialize_feed_row(
         "commentary_zh_cn": post.get("commentary_zh_cn"),
         "commentary_ja": post.get("commentary_ja"),
         "literal_source": post.get("literal_source", "legacy"),
+        "translation_status": post.get("translation_status", "not_requested"),
         "synthesis_source": post.get("synthesis_source", "legacy"),
         "synthesis_status": post.get("synthesis_status", "not_requested"),
         "synthesis_status_label": _synthesis_status_label(
@@ -5403,6 +5432,97 @@ def brand_feed_json(request: HttpRequest, brand: str) -> JsonResponse:
     })
 
 
+class _TranslationCapacityExceeded(Exception):
+    pass
+
+
+@require_POST
+def post_translation_demands(request: HttpRequest) -> JsonResponse:
+    """Request one shared literal translation, or inspect it without enqueueing."""
+    from monitor.enrichment_queue import request_post_translation
+    from monitor.post_artifacts import (
+        literal_translation_artifact_complete,
+        read_post_content_many,
+    )
+
+    if len(request.body) > 4096:
+        return JsonResponse({"error": "request too large"}, status=413)
+    try:
+        body = json.loads(request.body or b"{}")
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({"error": "invalid request"}, status=400)
+    post_ids, poll_only = body.get("post_ids"), body.get("poll_only", False)
+    if (not isinstance(post_ids, list) or len(post_ids) != 1
+            or not isinstance(post_ids[0], str) or not post_ids[0]
+            or not isinstance(poll_only, bool)):
+        return JsonResponse({"error": "one post ID and a boolean poll_only are required"}, status=400)
+    locale = _normalize_locale(body.get("locale") if isinstance(body.get("locale"), str) else "en")
+    target_locale = "zh-cn" if _is_zh_locale(locale) else "ja" if _is_ja_locale(locale) else "en"
+    if not _accept_scoped_rate(request, cost=1, salt="post-translation-rate-limit", limit=120):
+        return JsonResponse({"error": "rate limit exceeded"}, status=429)
+    post = Post.objects.filter(pk=post_ids[0]).first()
+    if post is None:
+        return JsonResponse({"error": "post not visible"}, status=404)
+    content = read_post_content_many([post])[str(post.pk)]
+    # A normalized artifact belongs to a specific source fingerprint; never
+    # serve its old translation after the underlying post has changed.
+    literal = dict(content.literal)
+    if content.literal_source == "normalized" and not literal_translation_artifact_complete(post):
+        literal = {}
+    state = PostEnrichmentState.objects.filter(post=post).first()
+    try:
+        if not poll_only and not literal.get(target_locale):
+            with transaction.atomic():
+                state, _ = PostEnrichmentState.objects.get_or_create(post=post)
+                state = PostEnrichmentState.objects.select_for_update().get(pk=post.pk)
+                # Publication locks the state and then the post. Recheck after
+                # acquiring both locks so a just-completed translation is not
+                # charged or returned as an empty "succeeded" result.
+                post = Post.objects.select_for_update().get(pk=post.pk)
+                locked_content = read_post_content_many([post])[str(post.pk)]
+                literal = dict(locked_content.literal)
+                if locked_content.literal_source == "normalized" and not literal_translation_artifact_complete(post):
+                    literal = {}
+                is_new = not literal.get(target_locale) and not (
+                    state.translation_requested and state.translation_status == "pending"
+                )
+                if is_new:
+                    now = django_timezone.now()
+                    day = django_timezone.localtime(now, ZoneInfo("Asia/Tokyo")).replace(hour=0, minute=0, second=0, microsecond=0)
+                    bucket, _ = PostSynthesisRateLimitBucket.objects.get_or_create(
+                        bucket_start=day,
+                        scope_hash=salted_hmac("post-translation-capacity", "all", algorithm="sha256").hexdigest(),
+                    )
+                    bucket = PostSynthesisRateLimitBucket.objects.select_for_update().get(pk=bucket.pk)
+                    if bucket.count >= max(0, settings.POST_TRANSLATION_DAILY_REQUEST_LIMIT):
+                        raise _TranslationCapacityExceeded
+                    bucket.count += 1
+                    bucket.save(update_fields=["count", "updated_at"])
+                if not literal.get(target_locale):
+                    state = request_post_translation(str(post.pk))
+    except _TranslationCapacityExceeded:
+        return JsonResponse({"error": "translation capacity reached; please try later", "status": "deferred"}, status=429)
+    post.refresh_from_db()
+    content = read_post_content_many([post])[str(post.pk)]
+    literal = dict(content.literal)
+    if content.literal_source == "normalized" and not literal_translation_artifact_complete(post):
+        literal = {}
+    state = PostEnrichmentState.objects.filter(post=post).first()
+    status = ("ready" if literal.get(target_locale) else
+              state.translation_status if state and state.translation_requested else "not_requested")
+    if status == "pending" and state.translation_error_code in {
+        "historical_translation_unresolved", "incomplete_saved_translation",
+    }:
+        status = "deferred"
+    if status == "succeeded":
+        # Legacy translators may finish without producing every supported
+        # locale. Never tell the browser an absent translation is ready.
+        status = "failed"
+    return JsonResponse({"results": [{"post_id": str(post.pk), "status": status, "literal": literal}]})
+
+
 @require_POST
 def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
     """Create/read shared synthesis demand for feed-visible post IDs."""
@@ -5463,7 +5583,7 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
     states = {
         state["post_id"]: _enrichment_stage_states(state, inspected_at)
         for state in PostEnrichmentState.objects.filter(post_id__in=unique_ids).values(
-            "post_id", "translation_status", "translation_attempts",
+            "post_id", "translation_status", "translation_attempts", "translation_requested",
             "classification_status", "classification_attempts", "claim_owner", "claim_expires_at",
         )
     }
@@ -5473,11 +5593,11 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
                 {
                     "post_id": post_id,
                     "status": projections[post_id].synthesis_status,
-                    "language_display": _compact_language_display(posts_by_id[post_id].lang_detected, locale),
-                    "language_undetected": _language_undetected(posts_by_id[post_id].lang_detected),
+                    "language_display": _compact_language_display(_post_language(posts_by_id[post_id].lang_detected, posts_by_id[post_id].lang), locale),
+                    "language_undetected": _language_undetected(_post_language(posts_by_id[post_id].lang_detected, posts_by_id[post_id].lang)),
                     "language_inspection": _language_inspection(states.get(post_id, {}), locale),
                     "processing_badges": _processing_badges({
-                        "lang_detected": posts_by_id[post_id].lang_detected,
+                        "lang_detected": _post_language(posts_by_id[post_id].lang_detected, posts_by_id[post_id].lang),
                         "enrichment_stages": states.get(post_id, {}),
                         "synthesis_status": projections[post_id].synthesis_status,
                         "synthesis_attempts": projections[post_id].synthesis_attempts,
@@ -5493,6 +5613,10 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
 
 
 def _accept_synthesis_rate(request: HttpRequest, *, cost: int) -> bool:
+    return _accept_scoped_rate(request, cost=cost, salt="post-synthesis-rate-limit", limit=120)
+
+
+def _accept_scoped_rate(request: HttpRequest, *, cost: int, salt: str, limit: int) -> bool:
     now = django_timezone.now()
     bucket_start = now.replace(second=0, microsecond=0)
     address = str(request.META.get("REMOTE_ADDR") or "-")
@@ -5501,11 +5625,10 @@ def _accept_synthesis_rate(request: HttpRequest, *, cost: int) -> bool:
         identities.insert(0, f"user:{request.user.pk}")
     scope_hashes = [
         salted_hmac(
-            "post-synthesis-rate-limit", identity, algorithm="sha256"
+            salt, identity, algorithm="sha256"
         ).hexdigest()
         for identity in identities
     ]
-    limit = 120
     with transaction.atomic():
         buckets = []
         for scope_hash in scope_hashes:

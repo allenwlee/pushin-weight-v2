@@ -10,28 +10,73 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+from django.contrib.postgres.fields import ArrayField
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import CharField, Exists, Func, OuterRef, Q
 from django.utils import timezone
 
-from core.models import PostEnrichmentState
+from core.models import OriginalContentCall, PostEnrichmentState
 
 STAGES = ("translation", "classification")
+
+
+def _outstanding_historical_translations(post_ids: set[str]) -> set[str]:
+    """Find paid historical translations that have not finished importing."""
+    calls = OriginalContentCall.objects.filter(
+        provider_batch__isnull=False, stage="translation", import_state="pending",
+        state__in=("reserved", "sent", "ambiguous", "completed"),
+    )
+    if not post_ids:
+        return set()
+    calls = calls.filter(member_post_ids__overlap=sorted(post_ids))
+    return {str(post_id) for members in calls.values_list("member_post_ids", flat=True) for post_id in members}
+
+
+def request_post_translation(post_id: str) -> PostEnrichmentState:
+    """Coalesce an explicit request into the existing shared post queue."""
+    from core.models import Post
+    from monitor.post_artifacts import literal_translation_artifact_complete
+
+    with transaction.atomic():
+        PostEnrichmentState.objects.get_or_create(post_id=post_id)
+        state = PostEnrichmentState.objects.select_for_update().get(pk=post_id)
+        # Publishers lock the state before the post; keep the same ordering.
+        post = Post.objects.select_for_update().get(pk=post_id)
+        if literal_translation_artifact_complete(post):
+            return state
+        first_request = not state.translation_requested
+        state.translation_requested = True
+        if first_request or state.translation_status != PostEnrichmentState.Status.PENDING:
+            state.translation_status = PostEnrichmentState.Status.PENDING
+            state.translation_next_attempt_at = None
+            state.translation_attempts = 0
+            state.translation_first_attempt_at = None
+            state.translation_last_attempt_at = None
+            state.translation_error_code = ""
+        state.save(update_fields=[
+            "translation_requested", "translation_status", "translation_next_attempt_at",
+            "translation_attempts", "translation_first_attempt_at", "translation_last_attempt_at",
+            "translation_error_code", "updated_at",
+        ])
+        return state
 
 
 def stage_due_q(stage: str, now: datetime) -> Q:
     if stage not in STAGES:
         raise ValueError(f"unknown enrichment stage: {stage}")
-    return Q(**{f"{stage}_status": "pending"}) & (
+    requested = Q(translation_requested=True) if stage == "translation" else Q()
+    return requested & Q(**{f"{stage}_status": "pending"}) & (
         Q(**{f"{stage}_next_attempt_at__isnull": True})
         | Q(**{f"{stage}_next_attempt_at__lte": now})
     )
 
 
 def stage_is_due(state: PostEnrichmentState, stage: str, now: datetime) -> bool:
+    if stage == "translation" and not state.translation_requested:
+        return False
     retry_at = getattr(state, f"{stage}_next_attempt_at")
     return getattr(state, f"{stage}_status") == "pending" and (
-        state.source_collection_job_id is not None
+        (state.source_collection_job_id is not None and stage == "classification")
         or retry_at is None
         or retry_at <= now
     )
@@ -68,18 +113,40 @@ def claim_enrichment_states(
     fair_queue: bool = False,
 ) -> EnrichmentClaimBatch:
     now = now or timezone.now()
-    available = Q(source_collection_job_id=source_collection_job_id) & (
+    available = (
         Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now)
     )
+    if source_collection_job_id is None:
+        # A reader can request a translation even when a historical job owns
+        # classification. Never claim that job's classification here.
+        available &= Q(source_collection_job_id__isnull=True) | stage_due_q("translation", now)
+    else:
+        available &= Q(source_collection_job_id=source_collection_job_id)
     if post_ids is not None:
         available &= Q(post_id__in=post_ids)
     due = stage_due_q("translation", now) | stage_due_q("classification", now)
     if source_collection_job_id is not None:
         # Historical jobs own request/replay timing in their collection budget.
         # Reusing a saved paid reply must not wait for the scheduled retry lane.
-        due = Q(translation_status="pending") | Q(classification_status="pending")
+        due = (Q(translation_requested=True, translation_status="pending")
+               | Q(classification_status="pending"))
     quarantined = 0
     with transaction.atomic():
+        # Historical batches retain their paid reply after a worker lease
+        # expires. Exclude those posts from the ordinary queue before slicing,
+        # otherwise a full page of pending batches could starve live work.
+        if source_collection_job_id is None and PostEnrichmentState.objects.filter(
+            available, source_collection_job_id__isnull=False,
+        ).exists():
+            outstanding = OriginalContentCall.objects.filter(
+                provider_batch__isnull=False, stage="translation", import_state="pending",
+                state__in=("reserved", "sent", "ambiguous", "completed"),
+                member_post_ids__contains=Func(
+                    OuterRef("post_id"), template="ARRAY[%(expressions)s]",
+                    output_field=ArrayField(CharField(max_length=128)),
+                ),
+            )
+            available &= ~(Q(source_collection_job_id__isnull=False) & Q(Exists(outstanding)))
         # A crashed final attempt still terminates on the next claim. Retain
         # its diagnostic cause; never substitute queue age for that cause.
         if source_collection_job_id is None:
@@ -88,21 +155,27 @@ def claim_enrichment_states(
                 .filter(
                     available,
                     Q(
-                        translation_status="pending",
+                        translation_status="pending", translation_requested=True,
                         translation_attempts__gte=cfg.max_attempts,
                     )
                     | Q(
-                        classification_status="pending",
+                        source_collection_job_id__isnull=True, classification_status="pending",
                         classification_attempts__gte=cfg.max_attempts,
                     ),
                 )
                 .order_by("post_id")
             )
+            exhausted = list(exhausted)
+            blocked = _outstanding_historical_translations({str(s.pk) for s in exhausted if s.source_collection_job_id})
             for state in exhausted:
+                if str(state.pk) in blocked and state.source_collection_job_id:
+                    continue
                 for stage in STAGES:
                     if (
                         getattr(state, f"{stage}_status") == "pending"
                         and getattr(state, f"{stage}_attempts") >= cfg.max_attempts
+                        and (stage != "translation" or state.translation_requested)
+                        and (stage != "classification" or state.source_collection_job_id is None)
                     ):
                         setattr(state, f"{stage}_status", "failed")
                         setattr(state, f"{stage}_next_attempt_at", None)
@@ -163,6 +236,12 @@ def claim_enrichment_states(
                     )
                 ]
             )
+        # Recheck after locking the selected state rows. A reservation that
+        # committed after the initial query must win before we issue a claim.
+        if source_collection_job_id is None:
+            blocked = _outstanding_historical_translations({str(s.pk) for s in current + carryover if s.source_collection_job_id})
+            current = [s for s in current if not (s.source_collection_job_id and str(s.pk) in blocked)]
+            carryover = [s for s in carryover if not (s.source_collection_job_id and str(s.pk) in blocked)]
         for state in current + carryover:
             state.claim_owner = f"enrichment:{run_id}"[:128]
             state.claim_run_id = str(run_id)[:128]
@@ -306,7 +385,7 @@ def finish_enrichment_stage(
             else:
                 attempts = getattr(state, f"{stage}_attempts")
                 exhausted = (
-                    state.source_collection_job_id is None
+                    (state.source_collection_job_id is None or stage == "translation")
                     and attempts >= cfg.max_attempts
                 )
                 setattr(
@@ -326,7 +405,7 @@ def finish_enrichment_stage(
                     minutes = (
                         min(360, 5 * 2 ** min(max(attempts - 1, 0), 7)) if called else 1
                     )
-                    if state.source_collection_job_id is not None or post_id in (
+                    if (stage != "translation" and state.source_collection_job_id is not None) or post_id in (
                         progressed_ids or set()
                     ):
                         minutes = 0

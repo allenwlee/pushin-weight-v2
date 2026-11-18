@@ -1013,6 +1013,7 @@ def _requeue_recent_incomplete_translations(
     age_cutoff = now - timedelta(hours=cfg.max_age_hours)
     candidates = PostEnrichmentState.objects.filter(
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
+        translation_requested=True,
         created_at__gt=age_cutoff,
         source_collection_job__isnull=True,
     )
@@ -3739,14 +3740,13 @@ class CycleRunner:
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
-        Stage 1 (translate): the split feature flag calls
-        translate_batch_literal_plaintext to produce locale-complete literal EN / ZH-CN
-        / JA output independently of rich synthesis; the rollback lane keeps
-        the prior combined translator.
-
-        Stage 2 (classify): calls classify_batch_pragmatics_full and atomically
+        Classification runs first: classify_batch_pragmatics_full atomically
         publishes the versioned per-brand Stage 1 state, type edges, product
         labels, scalar judgments, and top-level unsanctioned flags.
+
+        Requested translation then produces locale-complete EN / ZH-CN / JA
+        output independently of rich synthesis; the rollback lane retains the
+        prior combined translator.
 
         Guardrails:
           - Space classifier request starts (X_MONITOR_LLM_PAUSE_SECONDS).
@@ -3783,7 +3783,7 @@ class CycleRunner:
         )
         if model_allowance_empty or (deadline is not None and not deadline.can_start(claim_safe_envelope)):
             deferred = PostEnrichmentState.objects.filter(
-                Q(translation_status=PostEnrichmentState.Status.PENDING)
+                Q(translation_requested=True, translation_status=PostEnrichmentState.Status.PENDING)
                 | Q(classification_status=PostEnrichmentState.Status.PENDING)
             )
             if selected_post_ids is not None:
@@ -3904,15 +3904,21 @@ class CycleRunner:
                         if affiliation["brand_id"] in brand_ids
                     ],
                 }
+                classification_due = (
+                    state.source_collection_job_id == source_collection_job_id
+                    and stage_is_due(state, "classification", state.claimed_at)
+                )
+                # The classifier dispatches first below. A requested translation
+                # can then use the same claim without delaying classification.
                 if stage_is_due(state, "translation", state.claimed_at):
                     translation_tweets.append(tweet)
-                if stage_is_due(state, "classification", state.claimed_at):
+                if classification_due:
                     classification_tweets.append(tweet)
 
         if not translation_tweets and not classification_tweets:
             for stage in ("translation", "classification"):
                 _finish_enrichment_stage(
-                    post_ids=[str(state.pk) for state in claimed_states if stage_is_due(state, stage, state.claimed_at)],
+                    post_ids=[str(state.pk) for state in claimed_states if stage_is_due(state, stage, state.claimed_at) and (stage != "classification" or state.source_collection_job_id == source_collection_job_id)],
                     run_id=run_id, stage=stage, succeeded_ids=set(), error_code="source_text_missing",
                     cfg=enrichment_cfg, called_ids=set(), attempts_recorded=True,
                 )
@@ -3969,9 +3975,7 @@ class CycleRunner:
             )
             for b in brand_rows
         ]
-        # ---- Stage 1: translate ----
-        # The feature flag preserves the prior combined translator as the
-        # rollback lane until the split literal contract passes staging.
+        # Translator imports are shared by the optional translation stage.
         from x_monitor.literal_translation import (
             LITERAL_TRANSLATION_PROMPT_VERSION,
             LONG_POST_THRESHOLD,
@@ -4004,6 +4008,262 @@ class CycleRunner:
 
             return record
 
+        # Only the selected v4 route fingerprints the complete catalog.  It is
+        # assembled from the source packet before dispatch. `BrandRow` is too
+        # thin for this catalog; curated terms/accounts are authoritative.
+        classification_publish_ids = {str(t["tweet_id"]) for t in classification_tweets}
+        if getattr(classifier_client, "request_profile", None) == "deepseek_0731":
+            # Deferred replies describe the evidence submitted with their paid
+            # request. Replay that exact packet, including its catalog revision,
+            # rather than silently replacing it with today's mutable catalog.
+            from x_monitor.attribution import _validated_tracked_brand_catalog_snapshot
+
+            if classification_input_snapshot is not None:
+                # Positional replies retain their original packet even when
+                # only some members remain pending. Complete members supply
+                # context/slots and are never republished below.
+                pending_tweets = {str(t["tweet_id"]): t for t in classification_tweets}
+                classification_tweets = [
+                    pending_tweets.get(post_id, {"tweet_id": post_id, **saved})
+                    for post_id, saved in classification_input_snapshot["inputs"].items()
+                ]
+            catalog_source = (
+                _validated_tracked_brand_catalog_snapshot(
+                    classification_input_snapshot["catalog"]
+                )["brands"]
+                if classification_input_snapshot is not None
+                else _classification_tracked_brand_catalog()
+            )
+            for tweet in classification_tweets:
+                if classification_input_snapshot is not None:
+                    saved = classification_input_snapshot["inputs"][str(tweet["tweet_id"])]
+                    if saved["text"] != tweet["text"] or set(saved["brand_ids"]) != set(tweet["brand_ids"]):
+                        raise ValueError("classification_snapshot_source_changed")
+                    tweet.update(saved)
+                tweet["tracked_brand_catalog"] = catalog_source
+            classification_catalog = (
+                _validated_tracked_brand_catalog_snapshot(classification_input_snapshot["catalog"])
+                if classification_input_snapshot is not None
+                else _tracked_brand_catalog(brand_registry, classification_tweets)
+            )
+            for tweet in classification_tweets:
+                tweet["tracked_brand_catalog"] = classification_catalog["brands"]
+                tweet["_classification_catalog_revision"] = classification_catalog[
+                    "revision"
+                ]
+
+        newly_failed = 0
+
+        # ---- Classify before requested translations ----
+        from x_monitor.attribution import classify_batch_pragmatics_full
+
+        pause_sec = getattr(settings, "X_MONITOR_LLM_PAUSE_SECONDS", 1)
+
+        results: list[dict[str, Any]] = []
+        classification_error_code = "classification_incomplete"
+        classification_errors: dict[str, str] = {}
+
+        def classification_failed(batch, exc):
+            self._error_counts["classifier_batch_failed"] += 1
+            code = "classification_transport_error"
+            if isinstance(exc, LLMCallBudgetExhausted):
+                code = "classification_budget_deferred"
+            elif isinstance(exc, TimeoutError):
+                code = "classification_timeout"
+            elif isinstance(exc, ValueError) and str(exc).startswith("classification_"):
+                code = str(exc)[:128]
+            for tweet in batch:
+                classification_errors[str(tweet["tweet_id"])] = code
+        if classification_tweets and classifier_client is None:
+            logger.warning("_run_post_fetch: no classifier client — skipping classify")
+            self._error_counts["classifier_unavailable"] += 1
+            self._errors.append("post_fetch.classifier_unavailable")
+            counters["n_classifier_unavailable"] = 1
+            classification_error_code = "classifier_unavailable"
+        elif classification_tweets:
+            classification_deadline = enrichment_cfg.start_attempt_deadline(
+                monotonic=self._monotonic
+            )
+            remaining_llm_calls = self._remaining_model_calls()
+            bounded_classifier_client = _BoundedClassifierClient(
+                (
+                    _RepairRetryLimitedClient(classifier_client)
+                    if repair_manifest is not None else classifier_client
+                ),
+                maximum_calls=remaining_llm_calls,
+                pause_seconds=pause_sec,
+                monotonic=self._monotonic,
+                before_dispatch=before_dispatch("classification"),
+                reserve_pair_budget=dispatch_guard.reserve_pair if dispatch_guard is not None else None,
+                **self._backfill_model_callbacks(),
+            )
+            try:
+                results = classify_batch_pragmatics_full(
+                    classification_tweets,
+                    brand_registry,
+                    bounded_classifier_client,
+                    model=self.cfg.llm.classifier_model,
+                    on_batch_error=classification_failed,
+                    deadline=classification_deadline,
+                    max_workers=enrichment_cfg.classification_concurrency,
+                    telemetry_context={"stage": "post_fetch", "run_id": run_id},
+                    tracked_catalog_snapshot=(
+                        classification_catalog
+                        if getattr(classifier_client, "request_profile", None)
+                        == "deepseek_0731"
+                        else None
+                    ),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "_run_post_fetch: classify failed: %s", exc, exc_info=True
+                )
+                self._error_counts["classifier_batch_failed"] += 1
+                classification_error_code = "classifier_exception"
+            finally:
+                self._llm_call_count += bounded_classifier_client.calls
+
+        if repair_manifest is not None:
+            # A repair is an exact-set operation. Inspect every complete result
+            # before the first current judgment can be replaced; a model drift
+            # on any axis aborts publication for the whole selected batch.
+            observed_ids = {str(tweet["tweet_id"]) for tweet in classification_tweets}
+            expected_ids = set(repair_manifest)
+            results_match = (
+                observed_ids == expected_ids
+                and len(results) == len(classification_tweets)
+                and all(
+                    _repair_result_matches_manifest(result, repair_manifest[str(tweet["tweet_id"])])
+                    for tweet, result in zip(classification_tweets, results)
+                )
+            )
+            if not results_match:
+                self._errors.append("post_fetch.repair_manifest_mismatch")
+                classification_error_code = "repair_manifest_mismatch"
+                results = []
+
+        classification_succeeded: set[str] = set()
+        counters["n_tracked_promotion_subjects_removed"] = 0
+        targeted_calls_remaining = (
+            0 if repair_manifest is not None
+            else (
+                self._optional_calls_remaining if self.cfg.official_company.enabled
+                else self.cfg.targeted_extraction.max_calls_per_cycle
+            )
+        )
+        counters["n_targeted_extraction_calls"] = 0
+        counters["n_targeted_records_written"] = 0
+        counters["n_targeted_evidence_written"] = 0
+        counters["n_targeted_organization_candidates"] = 0
+        counters["targeted_failed_roles"] = []
+        counters["targeted_deferred_roles"] = []
+        for i, (tweet, result) in enumerate(zip(classification_tweets, results)):
+            tid = tweet["tweet_id"]
+            if tid not in classification_publish_ids:
+                continue
+            removed_subjects = 0
+            try:
+                if dispatch_guard is not None:
+                    dispatch_guard.lease.assert_held()
+                if isinstance(result, dict) and result.get("valid") is True and result.get("promoted_subjects"):
+                    from monitor.classification_persistence import (
+                        discard_tracked_promotion_subjects,
+                    )
+
+                    original_count = len(result["promoted_subjects"])
+                    result = discard_tracked_promotion_subjects(result, tweet.get("tracked_brand_catalog") or [])
+                    removed_subjects = original_count - len(result["promoted_subjects"])
+                flag_result = _publish_stage1_classification(
+                    post_id=tid,
+                    result=result if isinstance(result, dict) else {},
+                    tweet=tweet,
+                    model=self.cfg.llm.classifier_model,
+                    run_id=run_id,
+                    cfg=enrichment_cfg,
+                )
+            except (DatabaseError, ValueError, KeyError) as exc:
+                logger.warning("_run_post_fetch: Stage 1 publish failed for %s: %s", tid, exc)
+                classification_errors[tid] = (
+                    str(exc) if isinstance(exc, ValueError) and str(exc).startswith("classification_")
+                    else "classification_publication_conflict"
+                )[:128]
+                flag_result = None
+            if flag_result is not None and flag_result.outcome in {"persisted", "cleared"}:
+                counters["n_tracked_promotion_subjects_removed"] += removed_subjects
+                classification_succeeded.add(tid)
+                counters[
+                    "n_unsanctioned_persisted"
+                    if flag_result.outcome == "persisted"
+                    else "n_unsanctioned_cleared"
+                ] += 1
+                if repair_manifest is not None:
+                    # Exact Stage 1 repair is not a targeted-extraction run.
+                    counters["n_classifications_published"] = (
+                        counters.get("n_classifications_published", 0) + 1
+                    )
+                    continue
+                from core.targeted_extraction import run_targeted_extractions
+
+                post_types = {
+                    post_type
+                    for classification in (result.get("by_brand") or {}).values()
+                    if isinstance(classification, dict)
+                    for post_type in classification.get("post_types", [])
+                }
+                post_types.update(
+                    PostBrandSignal.objects.filter(post_id=tid).values_list(
+                        "post_type_id", flat=True
+                    )
+                )
+                targeted = run_targeted_extractions(
+                    post=Post.objects.get(pk=tid),
+                    post_types=post_types,
+                    config=self.cfg.targeted_extraction,
+                    calls=getattr(self, "_targeted_extraction_calls", {}),
+                    max_calls=targeted_calls_remaining,
+                    deadline=deadline,
+                )
+                targeted_calls_remaining -= targeted.calls_made
+                if self.cfg.official_company.enabled:
+                    self._optional_calls_remaining -= targeted.calls_made
+                counters["n_targeted_extraction_calls"] += targeted.calls_made
+                counters["n_targeted_records_written"] += targeted.records_written
+                counters["n_targeted_evidence_written"] += targeted.evidence_written
+                counters["n_targeted_organization_candidates"] += (
+                    targeted.organization_candidates_written
+                )
+                counters["targeted_failed_roles"].extend(targeted.failed_roles)
+                counters["targeted_deferred_roles"].extend(targeted.deferred_roles)
+                if targeted.failed_roles:
+                    self._error_counts["targeted_extraction_failed"] += len(
+                        targeted.failed_roles
+                    )
+                    self._errors.extend(
+                        f"post_fetch.targeted_extraction_failed:{role}"
+                        for role in targeted.failed_roles
+                    )
+            if flag_result is not None and flag_result.degraded:
+                self._error_counts["classifier_flags_invalid"] += 1
+                self._errors.append(f"post_fetch.classifier_flags_invalid:{tid}")
+                if flag_result.dead_letter is not None:
+                    counters["flag_dead_letters"].append(flag_result.dead_letter)
+
+            if flag_result is not None:
+                counters["n_classifications_published"] = (
+                    counters.get("n_classifications_published", 0) + 1
+                )
+
+        newly_failed += _finish_enrichment_stage(
+            post_ids=[str(tweet["tweet_id"]) for tweet in classification_tweets],
+            run_id=run_id,
+            stage="classification",
+            succeeded_ids=classification_succeeded,
+            error_code=classification_error_code,
+            error_codes=classification_errors,
+            cfg=enrichment_cfg,
+            called_ids=started_ids["classification"],
+            attempts_recorded=True,
+        )
         translation_succeeded: set[str] = set()
         bounded_translator_client = None
         if translation_tweets and translator_client is None:
@@ -4245,66 +4505,6 @@ class CycleRunner:
                 1 for r in translation_rows if r.get("translation_failed")
             )
 
-        # The selected classifier uses only literal, already-validated English
-        # text.  Refresh the in-memory source packet after its artifact/write
-        # has succeeded; failures retain an earlier literal translation, or an
-        # empty value for a non-English source.  The timestamp is set when the
-        # packet is made and never inferred from fetch time.
-        fresh_english = {
-            str(row.get("tweet_id")): _present_text(row.get("text_en"))
-            for row in translation_rows
-            if str(row.get("tweet_id") or "") in translation_succeeded
-        }
-        for tweet in classification_tweets:
-            tid = str(tweet["tweet_id"])
-            if tid in fresh_english and fresh_english[tid]:
-                tweet["english_translation"] = fresh_english[tid]
-
-        # Only the selected v4 route fingerprints the complete catalog.  It is
-        # assembled after translation so both the prompt and the fingerprint
-        # see their final source packet.  `BrandRow` is intentionally too thin
-        # for this catalog; Django's curated terms/accounts are authoritative.
-        classification_publish_ids = {str(t["tweet_id"]) for t in classification_tweets}
-        if getattr(classifier_client, "request_profile", None) == "deepseek_0731":
-            # Deferred replies describe the evidence submitted with their paid
-            # request. Replay that exact packet, including its catalog revision,
-            # rather than silently replacing it with today's mutable catalog.
-            from x_monitor.attribution import _validated_tracked_brand_catalog_snapshot
-
-            if classification_input_snapshot is not None:
-                # Positional replies retain their original packet even when
-                # only some members remain pending. Complete members supply
-                # context/slots and are never republished below.
-                pending_tweets = {str(t["tweet_id"]): t for t in classification_tweets}
-                classification_tweets = [
-                    pending_tweets.get(post_id, {"tweet_id": post_id, **saved})
-                    for post_id, saved in classification_input_snapshot["inputs"].items()
-                ]
-            catalog_source = (
-                _validated_tracked_brand_catalog_snapshot(
-                    classification_input_snapshot["catalog"]
-                )["brands"]
-                if classification_input_snapshot is not None
-                else _classification_tracked_brand_catalog()
-            )
-            for tweet in classification_tweets:
-                if classification_input_snapshot is not None:
-                    saved = classification_input_snapshot["inputs"][str(tweet["tweet_id"])]
-                    if saved["text"] != tweet["text"] or set(saved["brand_ids"]) != set(tweet["brand_ids"]):
-                        raise ValueError("classification_snapshot_source_changed")
-                    tweet.update(saved)
-                tweet["tracked_brand_catalog"] = catalog_source
-            classification_catalog = (
-                _validated_tracked_brand_catalog_snapshot(classification_input_snapshot["catalog"])
-                if classification_input_snapshot is not None
-                else _tracked_brand_catalog(brand_registry, classification_tweets)
-            )
-            for tweet in classification_tweets:
-                tweet["tracked_brand_catalog"] = classification_catalog["brands"]
-                tweet["_classification_catalog_revision"] = classification_catalog[
-                    "revision"
-                ]
-
         translation_row_by_id = {
             str(row.get("tweet_id")): row for row in translation_rows
             if row.get("tweet_id")
@@ -4318,7 +4518,7 @@ class CycleRunner:
             if int(row.get("new_chunks") or 0) > 0
             and len(str(translation_input_text.get(post_id) or "")) > LONG_POST_THRESHOLD
         } if self.cfg.llm.literal_translation_v2_enabled else set()
-        newly_failed = _finish_enrichment_stage(
+        newly_failed += _finish_enrichment_stage(
             post_ids=[str(tweet["tweet_id"]) for tweet in translation_tweets],
             run_id=run_id,
             stage="translation",
@@ -4348,216 +4548,6 @@ class CycleRunner:
         )
         counters["n_enrichment_quarantined"] += newly_failed
 
-        # ---- Stage 2: classify ----
-        from x_monitor.attribution import classify_batch_pragmatics_full
-
-        pause_sec = getattr(settings, "X_MONITOR_LLM_PAUSE_SECONDS", 1)
-
-        results: list[dict[str, Any]] = []
-        classification_error_code = "classification_incomplete"
-        classification_errors: dict[str, str] = {}
-
-        def classification_failed(batch, exc):
-            self._error_counts["classifier_batch_failed"] += 1
-            code = "classification_transport_error"
-            if isinstance(exc, LLMCallBudgetExhausted):
-                code = "classification_budget_deferred"
-            elif isinstance(exc, TimeoutError):
-                code = "classification_timeout"
-            elif isinstance(exc, ValueError) and str(exc).startswith("classification_"):
-                code = str(exc)[:128]
-            for tweet in batch:
-                classification_errors[str(tweet["tweet_id"])] = code
-        if classification_tweets and classifier_client is None:
-            logger.warning("_run_post_fetch: no classifier client — skipping classify")
-            self._error_counts["classifier_unavailable"] += 1
-            self._errors.append("post_fetch.classifier_unavailable")
-            counters["n_classifier_unavailable"] = 1
-            classification_error_code = "classifier_unavailable"
-        elif classification_tweets:
-            classification_deadline = enrichment_cfg.start_attempt_deadline(
-                monotonic=self._monotonic
-            )
-            remaining_llm_calls = self._remaining_model_calls()
-            bounded_classifier_client = _BoundedClassifierClient(
-                (
-                    _RepairRetryLimitedClient(classifier_client)
-                    if repair_manifest is not None else classifier_client
-                ),
-                maximum_calls=remaining_llm_calls,
-                pause_seconds=pause_sec,
-                monotonic=self._monotonic,
-                before_dispatch=before_dispatch("classification"),
-                reserve_pair_budget=dispatch_guard.reserve_pair if dispatch_guard is not None else None,
-                **self._backfill_model_callbacks(),
-            )
-            try:
-                results = classify_batch_pragmatics_full(
-                    classification_tweets,
-                    brand_registry,
-                    bounded_classifier_client,
-                    model=self.cfg.llm.classifier_model,
-                    on_batch_error=classification_failed,
-                    deadline=classification_deadline,
-                    max_workers=enrichment_cfg.classification_concurrency,
-                    telemetry_context={"stage": "post_fetch", "run_id": run_id},
-                    tracked_catalog_snapshot=(
-                        classification_catalog
-                        if getattr(classifier_client, "request_profile", None)
-                        == "deepseek_0731"
-                        else None
-                    ),
-                )
-            except Exception as exc:
-                logger.warning(
-                    "_run_post_fetch: classify failed: %s", exc, exc_info=True
-                )
-                self._error_counts["classifier_batch_failed"] += 1
-                classification_error_code = "classifier_exception"
-            finally:
-                self._llm_call_count += bounded_classifier_client.calls
-
-        if repair_manifest is not None:
-            # A repair is an exact-set operation. Inspect every complete result
-            # before the first current judgment can be replaced; a model drift
-            # on any axis aborts publication for the whole selected batch.
-            observed_ids = {str(tweet["tweet_id"]) for tweet in classification_tweets}
-            expected_ids = set(repair_manifest)
-            results_match = (
-                observed_ids == expected_ids
-                and len(results) == len(classification_tweets)
-                and all(
-                    _repair_result_matches_manifest(result, repair_manifest[str(tweet["tweet_id"])])
-                    for tweet, result in zip(classification_tweets, results)
-                )
-            )
-            if not results_match:
-                self._errors.append("post_fetch.repair_manifest_mismatch")
-                classification_error_code = "repair_manifest_mismatch"
-                results = []
-
-        classification_succeeded: set[str] = set()
-        counters["n_tracked_promotion_subjects_removed"] = 0
-        targeted_calls_remaining = (
-            0 if repair_manifest is not None
-            else (
-                self._optional_calls_remaining if self.cfg.official_company.enabled
-                else self.cfg.targeted_extraction.max_calls_per_cycle
-            )
-        )
-        counters["n_targeted_extraction_calls"] = 0
-        counters["n_targeted_records_written"] = 0
-        counters["n_targeted_evidence_written"] = 0
-        counters["n_targeted_organization_candidates"] = 0
-        counters["targeted_failed_roles"] = []
-        counters["targeted_deferred_roles"] = []
-        for i, (tweet, result) in enumerate(zip(classification_tweets, results)):
-            tid = tweet["tweet_id"]
-            if tid not in classification_publish_ids:
-                continue
-            removed_subjects = 0
-            try:
-                if dispatch_guard is not None:
-                    dispatch_guard.lease.assert_held()
-                if isinstance(result, dict) and result.get("valid") is True and result.get("promoted_subjects"):
-                    from monitor.classification_persistence import (
-                        discard_tracked_promotion_subjects,
-                    )
-
-                    original_count = len(result["promoted_subjects"])
-                    result = discard_tracked_promotion_subjects(result, tweet.get("tracked_brand_catalog") or [])
-                    removed_subjects = original_count - len(result["promoted_subjects"])
-                flag_result = _publish_stage1_classification(
-                    post_id=tid,
-                    result=result if isinstance(result, dict) else {},
-                    tweet=tweet,
-                    model=self.cfg.llm.classifier_model,
-                    run_id=run_id,
-                    cfg=enrichment_cfg,
-                )
-            except (DatabaseError, ValueError, KeyError) as exc:
-                logger.warning("_run_post_fetch: Stage 1 publish failed for %s: %s", tid, exc)
-                classification_errors[tid] = (
-                    str(exc) if isinstance(exc, ValueError) and str(exc).startswith("classification_")
-                    else "classification_publication_conflict"
-                )[:128]
-                flag_result = None
-            if flag_result is not None and flag_result.outcome in {"persisted", "cleared"}:
-                counters["n_tracked_promotion_subjects_removed"] += removed_subjects
-                classification_succeeded.add(tid)
-                counters[
-                    "n_unsanctioned_persisted"
-                    if flag_result.outcome == "persisted"
-                    else "n_unsanctioned_cleared"
-                ] += 1
-                if repair_manifest is not None:
-                    # Exact Stage 1 repair is not a targeted-extraction run.
-                    counters["n_classifications_published"] = (
-                        counters.get("n_classifications_published", 0) + 1
-                    )
-                    continue
-                from core.targeted_extraction import run_targeted_extractions
-
-                post_types = {
-                    post_type
-                    for classification in (result.get("by_brand") or {}).values()
-                    if isinstance(classification, dict)
-                    for post_type in classification.get("post_types", [])
-                }
-                post_types.update(
-                    PostBrandSignal.objects.filter(post_id=tid).values_list(
-                        "post_type_id", flat=True
-                    )
-                )
-                targeted = run_targeted_extractions(
-                    post=Post.objects.get(pk=tid),
-                    post_types=post_types,
-                    config=self.cfg.targeted_extraction,
-                    calls=getattr(self, "_targeted_extraction_calls", {}),
-                    max_calls=targeted_calls_remaining,
-                    deadline=deadline,
-                )
-                targeted_calls_remaining -= targeted.calls_made
-                if self.cfg.official_company.enabled:
-                    self._optional_calls_remaining -= targeted.calls_made
-                counters["n_targeted_extraction_calls"] += targeted.calls_made
-                counters["n_targeted_records_written"] += targeted.records_written
-                counters["n_targeted_evidence_written"] += targeted.evidence_written
-                counters["n_targeted_organization_candidates"] += (
-                    targeted.organization_candidates_written
-                )
-                counters["targeted_failed_roles"].extend(targeted.failed_roles)
-                counters["targeted_deferred_roles"].extend(targeted.deferred_roles)
-                if targeted.failed_roles:
-                    self._error_counts["targeted_extraction_failed"] += len(
-                        targeted.failed_roles
-                    )
-                    self._errors.extend(
-                        f"post_fetch.targeted_extraction_failed:{role}"
-                        for role in targeted.failed_roles
-                    )
-            if flag_result is not None and flag_result.degraded:
-                self._error_counts["classifier_flags_invalid"] += 1
-                self._errors.append(f"post_fetch.classifier_flags_invalid:{tid}")
-                if flag_result.dead_letter is not None:
-                    counters["flag_dead_letters"].append(flag_result.dead_letter)
-
-            if flag_result is not None:
-                counters["n_classifications_published"] = (
-                    counters.get("n_classifications_published", 0) + 1
-                )
-
-        newly_failed += _finish_enrichment_stage(
-            post_ids=[str(tweet["tweet_id"]) for tweet in classification_tweets],
-            run_id=run_id,
-            stage="classification",
-            succeeded_ids=classification_succeeded,
-            error_code=classification_error_code,
-            error_codes=classification_errors,
-            cfg=enrichment_cfg,
-            called_ids=started_ids["classification"],
-            attempts_recorded=True,
-        )
         resolved_states = list(
             PostEnrichmentState.objects.select_related("post").filter(
                 post_id__in=claimed_post_ids
@@ -4579,6 +4569,7 @@ class CycleRunner:
                     else "carryover"
                 ),
                 "translation_status": state.translation_status,
+                "translation_requested": state.translation_requested,
                 "classification_status": state.classification_status,
                 "output_complete": output_complete(state.post),
             }
@@ -4589,6 +4580,7 @@ class CycleRunner:
         for fact in counters["enrichment_state_facts"]:
             outcome = enrichment_stage_outcome(
                 translation_status=fact["translation_status"],
+                translation_requested=fact["translation_requested"],
                 classification_status=fact["classification_status"],
             )
             lane = fact["lane"]

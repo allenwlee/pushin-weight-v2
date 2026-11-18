@@ -842,7 +842,9 @@ def _cohort_facts(value: Any) -> list[dict[str, Any]]:
         raise SummaryValidationError("invalid cohort enrichment facts")
     facts: list[dict[str, Any]] = []
     for value_fact in value:
-        if not isinstance(value_fact, Mapping) or set(value_fact) != _COHORT_FACT_KEYS:
+        if not isinstance(value_fact, Mapping) or set(value_fact) not in (
+            _COHORT_FACT_KEYS, _COHORT_FACT_KEYS | {"translation_requested"}
+        ):
             raise SummaryValidationError("invalid cohort enrichment facts")
         fact = dict(value_fact)
         if (
@@ -856,6 +858,7 @@ def _cohort_facts(value: Any) -> list[dict[str, Any]]:
             enrichment_stage_outcome(
                 translation_status=fact["translation_status"],
                 classification_status=fact["classification_status"],
+                translation_requested=fact.get("translation_requested", True),
             )
         except ValueError as exc:
             raise SummaryValidationError("invalid cohort enrichment facts") from exc
@@ -941,6 +944,7 @@ def build_cohort_receipt(
             enrichment_stage_outcome(
                 translation_status=fact["translation_status"],
                 classification_status=fact["classification_status"],
+                translation_requested=fact.get("translation_requested", True),
             )
             == outcome
             and fact["lane"] == lane

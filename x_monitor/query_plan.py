@@ -224,6 +224,7 @@ class XQuerySpec:
     c_bare_aliases: list[str] = field(default_factory=list)
     not_include: list[str] = field(default_factory=list)
     alias_context: dict[str, tuple[AliasContext, ...]] = field(default_factory=dict)
+    search_alias_exclusions: dict[str, dict[str, tuple[str, ...]]] = field(default_factory=dict)
     # Packed calls retain independently rendered brand/family blocks. Historical
     # flat specs use the same renderer and keep their original wire strings.
     components: tuple[XQuerySpec, ...] = ()
@@ -275,7 +276,8 @@ def _build_query(
     """
     if spec.components:
         if (spec.brands or spec.handles or spec.is_wide_net or spec.co_occurrence
-                or spec.c_bare_aliases or spec.alias_context or spec.min_faves != 0):
+                or spec.c_bare_aliases or spec.alias_context or spec.search_alias_exclusions
+                or spec.min_faves != 0):
             raise ValueError("packed calls contain only zero-floor components")
         parts = []
         combined = XQuerySpec()
@@ -293,6 +295,8 @@ def _build_query(
                 combined.brands.setdefault(brand, []).extend(tokens)
             for brand, rules in component.alias_context.items():
                 combined.alias_context[brand] = combined.alias_context.get(brand, ()) + rules
+            for brand, rules in component.search_alias_exclusions.items():
+                combined.search_alias_exclusions.setdefault(brand, {}).update(rules)
             combined.c_bare_aliases.extend(component.c_bare_aliases)
             combined.c_bare_aliases.extend(f"@{h}" for h in component.handles)
         if can_combine and combined.brands:
@@ -341,6 +345,13 @@ def _build_query(
         parts = []
         for token in tokens:
             context = rules.get(normalize_policy_token(token))
+            exclusions = spec.search_alias_exclusions.get(brand_id, {}).get(normalize_policy_token(token), ())
+            if exclusions:
+                if not context:
+                    raise ValueError("search exclusions require an alias context")
+                negatives = " ".join(f'-"{term}"' if " " in term else f'-{term}' for term in exclusions)
+                contextual.setdefault(context, []).append(f"({token} {negatives})")
+                continue
             if context is None:
                 parts.append(token)
             elif spec.is_wide_net:

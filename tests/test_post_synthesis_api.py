@@ -84,7 +84,7 @@ def test_synthesis_demand_api_creates_once_and_poll_only_does_not_mutate():
 def test_synthesis_demand_refresh_returns_one_complete_pending_projection():
     post = Post.objects.create(tweet_id="api-pending-projection", text="Bonjour", lang_detected=None)
     PostEnrichmentState.objects.create(
-        post=post, translation_status="pending", classification_status="pending"
+        post=post, translation_requested=True, translation_status="pending", classification_status="pending"
     )
     client = Client()
     created = client.post(

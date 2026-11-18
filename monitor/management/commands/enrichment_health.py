@@ -18,13 +18,14 @@ class Command(BaseCommand):
         now = timezone.now()
         states = PostEnrichmentState.objects.filter(source_collection_job__isnull=True)
         pending = states.filter(
-            Q(translation_status="pending") | Q(classification_status="pending")
+            Q(translation_requested=True, translation_status="pending") | Q(classification_status="pending")
         )
         due = pending.filter(
             stage_due_q("translation", now) | stage_due_q("classification", now)
         )
         completed = states.filter(
-            translation_status="succeeded", classification_status="succeeded"
+            Q(translation_requested=False) | Q(translation_status="succeeded"),
+            classification_status="succeeded",
         )
         receipt = {
             "observed_at": now.isoformat(),
