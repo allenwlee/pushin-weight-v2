@@ -27,7 +27,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.db import connection
 from django.test import Client, override_settings
 from django.test.utils import CaptureQueriesContext
-from playwright.sync_api import BrowserContext, Page, sync_playwright
+from playwright.sync_api import BrowserContext, Page, expect, sync_playwright
 
 from core.models import Brand, Post, PostBrand, PostUnsanctionedFlag
 from monitor.views import _build_brand_chart_payload, _clear_home_pulse_cache
@@ -6287,7 +6287,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         )
                         globe = row.locator('.post-language-tag.processing-status')
                         # General style mutes the pending language tag (prototype rule).
-                        self.assertEqual(globe.evaluate('node => getComputedStyle(node).color'), 'rgb(104, 117, 137)')
+                        expect(globe).to_have_css('color', 'rgb(104, 117, 137)')
                         self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語・翻訳・解説待ち（目安1〜5分）')
                         self.assertIn('#icon-pending-armillary-frame', globe.locator('use').get_attribute('href'))
                         globe.hover()
