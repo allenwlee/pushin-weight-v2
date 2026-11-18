@@ -5967,17 +5967,21 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         from core.models import Account, PostEnrichmentState
 
         self._seed_account_geography_fixture()
+        # The test database may already contain a preferred imported Japanese
+        # name. Pin this fixture's label without removing the imported record.
+        self.geolocation_fixture["US"].alternate_names.filter(locale_id="ja").exclude(name="米国").update(is_preferred=False)
         call_command("seed_i18n_labels", verbosity=0)
         Account.objects.filter(author_id="v22-metadata-account-000").update(based_in_location=self.geolocation_fixture["US"])
         Post.objects.filter(tweet_id=self.fixture["replacement_id"]).update(lang_detected="und")
         PostEnrichmentState.objects.update_or_create(
             post_id=self.fixture["replacement_id"],
-            defaults={"translation_status": "pending", "classification_status": "failed"},
+            defaults={"translation_requested": True, "translation_status": "pending", "classification_status": "failed"},
         )
         PostEnrichmentState.objects.update_or_create(
             post_id="v22-metadata-001",
             defaults={
                 "translation_status": "pending",
+                "translation_requested": True,
                 "translation_attempts": 1,
                 "classification_status": "succeeded",
                 "claim_owner": "browser-fixture",
