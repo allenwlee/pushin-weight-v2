@@ -638,6 +638,55 @@ def _harvest_yield_reason(timeout):
         return "harvest_active" if cursor.fetchone()[0] else None
 
 
+def resume_provider(manifest, *, call, expected_error, expected_updated_at):
+    """Clear only a confirmed on-demand provider block for the current key."""
+    from django.utils import timezone
+    from django.utils.dateparse import parse_datetime
+
+    from core.models import OfficialCompanyProviderState
+    from core.official_company_lock import official_company_writer_lock
+
+    _environment(manifest)
+    allowed = {f"deepinfra_http_status_{status}" for status in (400, 401, 402, 403)}
+    revision = getattr(call, "credential_revision", None)
+    try:
+        observed_at = parse_datetime(expected_updated_at or "")
+    except ValueError:
+        observed_at = None
+    if (
+        expected_error not in allowed
+        or not isinstance(revision, str)
+        or not revision
+        or observed_at is None
+        or timezone.is_naive(observed_at)
+    ):
+        raise ValueError(
+            "expected provider error, timestamp, and on-demand credential are required"
+        )
+    reason = _harvest_yield_reason(0)
+    if reason:
+        raise ValueError(reason)
+    with official_company_writer_lock(
+        execution_mode="manual",
+        entrypoint="queue-pass-resume",
+        run_id=manifest["run_id"],
+    ) as lease:
+        if not lease.acquired:
+            raise ValueError("official-company discovery is busy")
+        reason = _harvest_yield_reason(0)
+        if reason:
+            raise ValueError(reason)
+        updated = OfficialCompanyProviderState.objects.filter(
+            key="deepinfra-on-demand",
+            credential_revision=revision,
+            blocked_reason=expected_error,
+            updated_at=observed_at,
+        ).update(blocked_reason="", updated_at=timezone.now())
+    if updated != 1:
+        raise ValueError("on-demand provider block changed or does not match")
+    return {"resumed": True, "provider": "deepinfra-on-demand"}
+
+
 def _proof_matches(path, manifest, cfg, call):
     from core.models import OfficialCompanyProviderState
 

@@ -573,12 +573,13 @@ def claim_account(
             )
             / Decimal(1_000_000)
         ).quantize(Decimal("0.0000000001"), rounding=ROUND_UP)
+        budget_prefix = "on-demand:" if run_budget is not None else ""
         limits = (
             {"initial-total": cfg.initial_scan_max_usd}
             if initial
             else {
-                "day:" + now.date().isoformat(): cfg.max_usd_per_day,
-                "cycle:" + budget_scope: cfg.max_usd_per_cycle,
+                budget_prefix + "day:" + now.date().isoformat(): cfg.max_usd_per_day,
+                budget_prefix + "cycle:" + budget_scope: cfg.max_usd_per_cycle,
             }
         )
         if run_budget is not None:
@@ -731,6 +732,7 @@ def evaluate_account(
     if not cfg.enabled or call is None:
         return False
     from django.db import transaction
+    from django.utils import timezone
 
     from core.models import OfficialCompanyProviderState
 
@@ -780,7 +782,7 @@ def evaluate_account(
         ):
             OfficialCompanyProviderState.objects.filter(
                 key=provider_state_key, credential_revision=revision
-            ).update(blocked_reason=str(exc))
+            ).update(blocked_reason=str(exc), updated_at=timezone.now())
     else:
         complete_attempt(attempt.pk, cfg=cfg, response=response)
     return True

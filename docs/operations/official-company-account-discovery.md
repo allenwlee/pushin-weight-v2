@@ -194,7 +194,13 @@ Existing official X app setup and locally verified list access are documented in
 
 ## Frozen evaluation queue pass
 
-The one-time pass uses `DEEPINFRA_ON_DEMAND` and the separate `deepinfra-on-demand` provider state. Scheduled discovery continues to use `DEEPINFRA_API_KEY` and its existing `deepinfra` state. Neither credential falls back to the other. A provider block in one lane does not clear or change the other lane's block.
+The one-time pass uses `DEEPINFRA_ON_DEMAND` and the separate `deepinfra-on-demand` provider state. Scheduled discovery continues to use `DEEPINFRA_API_KEY` and its existing `deepinfra` state. Neither credential falls back to the other. A provider block in one lane does not clear or change the other lane's block. The pass maintains its own daily and per-batch budget records using the configured limits, as well as its frozen-run ceiling; its spending and reservations do not consume scheduled discovery's budget records.
+
+The configured daily limit applies separately to each lane, so their combined daily spend can exceed that single limit. Set the pass's own authorized run ceiling accordingly.
+
+After fixing an on-demand provider error, read `blocked_reason` and `updated_at` from the `deepinfra-on-demand` row in `official_company_provider_states`. Clear only that observed block with `python manage.py official_company_queue_pass resume-provider --manifest /secure/operator/queue.json --expected-provider-error deepinfra_http_status_402 --expected-provider-updated-at '2026-11-18T15:49:38.123456+09:00'`, substituting the exact observed error and timestamp. This checks the current on-demand key and the manifest's database identity, and yields to an active harvest. It does not clear failed-attempt reservations; reconcile any uncertain cost before continuing. Do not use the scheduled lane's `resume-model` action for an on-demand block.
+
+If the on-demand key is rotated, the next `run` detects the new key revision and requires a fresh one-account verification; `resume-provider` intentionally refuses to clear a block associated with the old key. Reconcile any unresolved prior attempt before running with the new key.
 
 The one-time queue pass freezes the eligible priority 1–3 states, including delayed retries and active claims. Its manifest belongs in a restricted, durable operator directory; use a new path for each run. A manifest records the database identity, evidence hashes, starting statuses and an aggregate USD ceiling. The first successful verification also writes a checksum-protected `.verification.json` receipt beside the manifest, bound to the model and credential revision. Preserve both together in the same restricted directory; neither should be committed. The process never registers accounts, verifies HF identities, or writes to X lists.
 

@@ -21,7 +21,15 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "action", choices=("freeze", "report", "run", "acknowledge", "reconcile")
+            "action",
+            choices=(
+                "freeze",
+                "report",
+                "run",
+                "acknowledge",
+                "reconcile",
+                "resume-provider",
+            ),
         )
         parser.add_argument("--manifest", required=True)
         parser.add_argument("--total-limit-usd")
@@ -31,6 +39,8 @@ class Command(BaseCommand):
         parser.add_argument("--attempt-id", type=int)
         parser.add_argument("--reason")
         parser.add_argument("--actual-usd")
+        parser.add_argument("--expected-provider-error")
+        parser.add_argument("--expected-provider-updated-at")
 
     def handle(self, *args, **opts):
         action = opts["action"]
@@ -53,6 +63,21 @@ class Command(BaseCommand):
                 manifest = read_manifest(opts["manifest"])
                 if action == "report":
                     result = report(manifest)
+                elif action == "resume-provider":
+                    from core.official_company_discovery import build_discovery_call
+                    from core.official_company_queue_pass import resume_provider
+                    from x_monitor.config import load_config
+
+                    cfg = load_config(Path(opts["config"])).official_company
+                    call = build_discovery_call(
+                        cfg, credential_env="DEEPINFRA_ON_DEMAND"
+                    )
+                    result = resume_provider(
+                        manifest,
+                        call=call,
+                        expected_error=opts["expected_provider_error"],
+                        expected_updated_at=opts["expected_provider_updated_at"],
+                    )
                 elif action == "reconcile":
                     result = reconcile_uncertain(
                         manifest,
@@ -76,7 +101,9 @@ class Command(BaseCommand):
                     cfg = load_config(Path(opts["config"])).official_company
                     if not cfg.enabled:
                         raise ValueError("official-company evaluator is disabled")
-                    call = build_discovery_call(cfg, credential_env="DEEPINFRA_ON_DEMAND")
+                    call = build_discovery_call(
+                        cfg, credential_env="DEEPINFRA_ON_DEMAND"
+                    )
                     if call is None:
                         raise ValueError(
                             "official-company model provider is not configured"

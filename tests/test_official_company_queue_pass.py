@@ -154,10 +154,14 @@ def test_command_freeze_run_and_report_through_real_evaluator(tmp_path, monkeypa
         lambda path: SimpleNamespace(official_company=cfg),
     )
     credential_envs = []
+
     def build_call(cfg, *, credential_env):
         credential_envs.append(credential_env)
         return accept
-    monkeypatch.setattr("core.official_company_discovery.build_discovery_call", build_call)
+
+    monkeypatch.setattr(
+        "core.official_company_discovery.build_discovery_call", build_call
+    )
     path = str(tmp_path / "manifest.json")
     output = StringIO()
     call_command(
@@ -755,7 +759,8 @@ def test_command_completes_and_resumes_frozen_three_tier_pass(tmp_path, monkeypa
         lambda path: SimpleNamespace(official_company=cfg),
     )
     monkeypatch.setattr(
-        "core.official_company_discovery.build_discovery_call", lambda cfg, **kwargs: call
+        "core.official_company_discovery.build_discovery_call",
+        lambda cfg, **kwargs: call,
     )
     monkeypatch.setattr(time, "sleep", lambda seconds: None)
     path = str(tmp_path / "manifest.json")
@@ -1231,7 +1236,8 @@ def test_missing_provider_is_reported_before_claim(tmp_path, monkeypatch):
         lambda path: SimpleNamespace(official_company=cfg),
     )
     monkeypatch.setattr(
-        "core.official_company_discovery.build_discovery_call", lambda cfg, **kwargs: None
+        "core.official_company_discovery.build_discovery_call",
+        lambda cfg, **kwargs: None,
     )
     with pytest.raises(CommandError, match="provider is not configured"):
         call_command(
@@ -1263,22 +1269,246 @@ def test_on_demand_gate_does_not_clear_scheduled_provider_block(tmp_path):
 
     candidate(30001, 1)
     OfficialCompanyProviderState.objects.create(
-        key="deepinfra", credential_revision="scheduled",
+        key="deepinfra",
+        credential_revision="scheduled",
         blocked_reason="deepinfra_http_status_402",
     )
+
     def on_demand(*args):
         return accept(*args)
+
     on_demand.credential_revision = "on-demand-revision"
     cfg = OfficialCompanyConfig(
         enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
     )
     manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
     result = run_batch(
-        manifest, cfg=cfg, call=on_demand, limit=1, seconds=60,
+        manifest,
+        cfg=cfg,
+        call=on_demand,
+        limit=1,
+        seconds=60,
         receipt_path=tmp_path / "proof.json",
     )
     assert result["reason"] == "verification_complete"
     scheduled = OfficialCompanyProviderState.objects.get(pk="deepinfra")
     assert scheduled.credential_revision == "scheduled"
     assert scheduled.blocked_reason == "deepinfra_http_status_402"
-    assert OfficialCompanyProviderState.objects.get(pk="deepinfra-on-demand").credential_revision == "on-demand-revision"
+    assert (
+        OfficialCompanyProviderState.objects.get(
+            pk="deepinfra-on-demand"
+        ).credential_revision
+        == "on-demand-revision"
+    )
+
+
+def test_resume_provider_clears_only_matching_on_demand_block(tmp_path, monkeypatch):
+    import json
+    from io import StringIO
+    from types import SimpleNamespace
+
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+
+    from core.models import OfficialCompanyProviderState
+    from x_monitor.config import OfficialCompanyConfig
+
+    candidate(30002, 1)
+    scheduled = OfficialCompanyProviderState.objects.create(
+        key="deepinfra",
+        credential_revision="scheduled",
+        blocked_reason="deepinfra_http_status_402",
+    )
+    on_demand = OfficialCompanyProviderState.objects.create(
+        key="deepinfra-on-demand",
+        credential_revision="on-demand",
+        blocked_reason="deepinfra_http_status_402",
+    )
+    cfg = OfficialCompanyConfig(enabled=True)
+    monkeypatch.setattr(
+        "x_monitor.config.load_config",
+        lambda path: SimpleNamespace(official_company=cfg),
+    )
+    seen = []
+
+    def make_call(config, *, credential_env):
+        seen.append(credential_env)
+        return SimpleNamespace(credential_revision="on-demand")
+
+    monkeypatch.setattr(
+        "core.official_company_discovery.build_discovery_call", make_call
+    )
+    path = str(tmp_path / "queue.json")
+    call_command(
+        "official_company_queue_pass",
+        "freeze",
+        manifest=path,
+        total_limit_usd="1",
+        stdout=StringIO(),
+    )
+    with pytest.raises(CommandError, match="does not match"):
+        call_command(
+            "official_company_queue_pass",
+            "resume-provider",
+            manifest=path,
+            expected_provider_error="deepinfra_http_status_401",
+            expected_provider_updated_at=on_demand.updated_at.isoformat(),
+            stdout=StringIO(),
+        )
+    on_demand.refresh_from_db()
+    assert on_demand.blocked_reason == "deepinfra_http_status_402"
+    with pytest.raises(CommandError, match="does not match"):
+        call_command(
+            "official_company_queue_pass",
+            "resume-provider",
+            manifest=path,
+            expected_provider_error="deepinfra_http_status_402",
+            expected_provider_updated_at=(
+                on_demand.updated_at - timedelta(seconds=1)
+            ).isoformat(),
+            stdout=StringIO(),
+        )
+    output = StringIO()
+    call_command(
+        "official_company_queue_pass",
+        "resume-provider",
+        manifest=path,
+        expected_provider_error="deepinfra_http_status_402",
+        expected_provider_updated_at=on_demand.updated_at.isoformat(),
+        stdout=output,
+    )
+    assert json.loads(output.getvalue()) == {
+        "resumed": True,
+        "provider": "deepinfra-on-demand",
+    }
+    scheduled.refresh_from_db()
+    on_demand.refresh_from_db()
+    assert scheduled.blocked_reason == "deepinfra_http_status_402"
+    assert on_demand.blocked_reason == ""
+    assert seen == ["DEEPINFRA_ON_DEMAND"] * 3
+
+
+def test_resume_provider_rejects_stale_revision_and_yields_to_harvest(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from core.models import OfficialCompanyProviderState
+    from core.official_company_queue_pass import freeze_queue, resume_provider
+
+    candidate(30003, 1)
+    gate = OfficialCompanyProviderState.objects.create(
+        key="deepinfra-on-demand",
+        credential_revision="current",
+        blocked_reason="deepinfra_http_status_402",
+    )
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(1))
+    args = {
+        "expected_error": gate.blocked_reason,
+        "expected_updated_at": gate.updated_at.isoformat(),
+    }
+    with pytest.raises(ValueError, match="does not match"):
+        resume_provider(
+            manifest, call=SimpleNamespace(credential_revision="stale"), **args
+        )
+    monkeypatch.setattr(
+        "core.official_company_queue_pass._harvest_yield_reason",
+        lambda timeout: "harvest_active",
+    )
+    with pytest.raises(ValueError, match="harvest_active"):
+        resume_provider(
+            manifest, call=SimpleNamespace(credential_revision="current"), **args
+        )
+    gate.refresh_from_db()
+    assert gate.blocked_reason == "deepinfra_http_status_402"
+
+
+def test_recorded_on_demand_provider_error_advances_block_timestamp():
+    from core.models import OfficialCompanyProviderState
+    from core.official_company_accounts import evaluate_account
+    from x_monitor.config import OfficialCompanyConfig
+    from x_monitor.deepinfra import DeepInfraPermanentError
+
+    state = candidate(30004, 1)
+    gate = OfficialCompanyProviderState.objects.create(
+        key="deepinfra-on-demand", credential_revision="current", blocked_reason=""
+    )
+    earlier = gate.updated_at - timedelta(days=1)
+    OfficialCompanyProviderState.objects.filter(pk=gate.pk).update(updated_at=earlier)
+
+    def fails(*args):
+        raise DeepInfraPermanentError("deepinfra_http_status_402")
+
+    fails.credential_revision = "current"
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    assert evaluate_account(
+        state.pk,
+        cfg=cfg,
+        call=fails,
+        budget_scope="test-provider-error",
+        provider_state_key="deepinfra-on-demand",
+    )
+    gate.refresh_from_db()
+    assert gate.blocked_reason == "deepinfra_http_status_402"
+    assert gate.updated_at > earlier
+
+
+def test_on_demand_and_scheduled_daily_budgets_do_not_block_each_other():
+    from core.models import OfficialCompanyBudget
+    from core.official_company_accounts import claim_account
+    from x_monitor.config import OfficialCompanyConfig
+
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    today = timezone.now().date().isoformat()
+    scheduled = OfficialCompanyBudget.objects.create(
+        key="day:" + today, spent_usd=Decimal(1)
+    )
+    first = candidate(30005, 1)
+    assert (
+        claim_account(
+            first.pk,
+            cfg=cfg,
+            budget_scope="batch",
+            run_budget=("queue-pass:budget-isolation", Decimal(1)),
+        )
+        is not None
+    )
+    scheduled.refresh_from_db()
+    assert scheduled.spent_usd == Decimal(1)
+    assert scheduled.reserved_usd == 0
+    on_demand = OfficialCompanyBudget.objects.get(key="on-demand:day:" + today)
+    original_reservation = on_demand.reserved_usd
+    on_demand.spent_usd = Decimal(1) - original_reservation
+    on_demand.save()
+    capped = candidate(30007, 1)
+    assert claim_account(
+        capped.pk,
+        cfg=cfg,
+        budget_scope="second-batch",
+        run_budget=("queue-pass:budget-isolation", Decimal(1)),
+    ) is None
+    scheduled.spent_usd = 0
+    scheduled.save()
+    second = candidate(30006, 1)
+    assert claim_account(second.pk, cfg=cfg, budget_scope="scheduled") is not None
+    on_demand.refresh_from_db()
+    assert on_demand.spent_usd == Decimal(1) - original_reservation
+    assert on_demand.reserved_usd == original_reservation
+
+
+def test_on_demand_factory_does_not_fall_back_to_scheduled_key(monkeypatch):
+    from core.official_company_discovery import build_discovery_call
+    from x_monitor.config import OfficialCompanyConfig
+
+    cfg = OfficialCompanyConfig(enabled=True)
+    monkeypatch.setenv("DEEPINFRA_API_KEY", "scheduled-test-key")
+    monkeypatch.delenv("DEEPINFRA_ON_DEMAND", raising=False)
+    assert build_discovery_call(cfg, credential_env="DEEPINFRA_ON_DEMAND") is None
+    monkeypatch.setenv("DEEPINFRA_ON_DEMAND", "on-demand-test-key")
+    call = build_discovery_call(cfg, credential_env="DEEPINFRA_ON_DEMAND")
+    assert call is not None
+    assert call.credential_revision != build_discovery_call(cfg).credential_revision
