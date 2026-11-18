@@ -45,6 +45,37 @@ def test_duplicate_and_run_capacity_are_independent_of_review():
     assert claimed and review.pk != call.pk
 
 
+def test_chatter_in_flight_blocks_graphics_creation_and_review():
+    from monitor.editorial.persistence import CapacityHeld
+
+    now = timezone.now()
+    chatter = make_run()
+    OriginalContentCall.objects.create(
+        run=chatter, stage='chatter-stage', workflow_key='chatter-discovery', budget_scope='chatter',
+        request_identity='chatter:active', request_hash='a' * 64, state='sent',
+        claim_owner='chatter', claim_fence=1, claimed_at=now,
+        claim_expires_at=now + timedelta(minutes=1), reserved_at=now, sent_at=now,
+    )
+    with pytest.raises(CapacityHeld, match='Chatter'):
+        reserve(make_run())
+    with pytest.raises(CapacityHeld, match='Chatter'):
+        reserve(make_run(), 'E1', review=True)
+
+
+def test_chatter_sent_with_unknown_claim_expiry_is_not_ignored():
+    from monitor.editorial.persistence import CapacityHeld
+
+    now = timezone.now()
+    chatter = make_run()
+    OriginalContentCall.objects.create(
+        run=chatter, stage='chatter-stage', workflow_key='chatter-discovery', budget_scope='chatter',
+        request_identity='chatter:unknown-expiry', request_hash='a' * 64, state='sent',
+        reserved_at=now, sent_at=now,
+    )
+    with pytest.raises(CapacityHeld, match='Chatter'):
+        reserve(make_run())
+
+
 def test_two_creation_slots_and_expired_unknown_charge_retained():
     from monitor.trend_narrative_lifecycle import (
         mark_trend_narrative_provider_call_sent,

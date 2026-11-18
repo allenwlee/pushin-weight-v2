@@ -80,7 +80,7 @@ def require_fence(row):
     return current
 
 
-def _completed_text_cost(response, request_metadata):
+def completed_text_cost(response, request_metadata):
     """Missing or invalid billing evidence keeps the full reservation."""
     usage = response.get("usage") if isinstance(response, dict) else None
     if not isinstance(usage, dict):
@@ -230,6 +230,16 @@ def reserve_graphics_call(
         ).filter(Q(state="sent") | Q(state="reserved", claim_expires_at__gt=now))
         if active.filter(run=run).exists():
             raise CapacityHeld("graphics run already in flight")
+        # Staging's Chatter caller owns an exclusive provider lane. Honor that
+        # contract in both directions without counting Graphics' own social-brief calls.
+        chatter_active = OriginalContentCall.objects.filter(
+            workflow_key__in=["chatter-discovery", "social-brief"], state="sent",
+        ).exclude(request_identity__startswith=_GRAPHICS_PREFIX)
+        chatter_active.filter(
+            Q(claim_expires_at__lte=now) | Q(run__lease_until__lte=now)
+        ).update(state="ambiguous", error_code="lease_expired_after_send")
+        if chatter_active.exists():
+            raise CapacityHeld("Chatter provider already in flight")
         if review:
             if active.count() >= 1:
                 raise CapacityHeld("graphics review capacity exhausted")
@@ -495,7 +505,8 @@ def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):
                 run__lease_until__lt=timezone.now(),
             ).exclude(request_identity__startswith=_GRAPHICS_PREFIX).update(state="ambiguous", error_code="lease_expired")
             if OriginalContentCall.objects.filter(
-                budget_scope="editorial"
+                Q(budget_scope="editorial")
+                | Q(workflow_key__in=["chatter-discovery", "social-brief"])
             ).filter(
                 Q(state="sent") | Q(state="reserved", request_identity__startswith=_GRAPHICS_PREFIX,
                                      claim_expires_at__gt=timezone.now(), run__lease_until__gt=timezone.now())
@@ -522,7 +533,7 @@ def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):
                 call.refresh_from_db()
                 import_call(call, run, request_metadata=request_metadata)
         raise
-    cost = _completed_text_cost(response, request_metadata) if kind == "text" else None
+    cost = completed_text_cost(response, request_metadata) if kind == "text" else None
     charged = min(call.reserved_usd, cost) if cost is not None else call.reserved_usd
     with transaction.atomic():
         advisory_lock(f"content-budget:editorial:{call.budget_day}")

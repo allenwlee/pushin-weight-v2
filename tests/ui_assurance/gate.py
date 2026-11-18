@@ -22,6 +22,7 @@ FOCUSED_TESTS = [
     "tests/test_general_editorial.py",
     "tests/test_content_detail.py",
     "tests/test_general_browser.py",
+    "tests/test_chatter_pool_browser.py",
     "tests/test_dashboard_each.py",
     "tests/test_dashboard_each_browser.py",
     "tests/test_ui_assurance_contract.py",
