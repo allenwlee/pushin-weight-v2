@@ -500,7 +500,10 @@ def _apply_owner_attestation(state):
     )
 
 
-def claim_account(state_id, *, cfg, budget_scope, initial=False):
+def claim_account(
+    state_id, *, cfg, budget_scope, initial=False,
+    expected_account_key=None, expected_evidence_hash=None, run_budget=None,
+):
     """Reserve conservative cost under ordered row locks before one physical call."""
     import uuid
     from datetime import timedelta
@@ -518,6 +521,10 @@ def claim_account(state_id, *, cfg, budget_scope, initial=False):
     now = timezone.now()
     with transaction.atomic():
         state = OfficialCompanyAccountState.objects.select_for_update().get(pk=state_id)
+        if expected_account_key is not None and str(state.account_id) != str(expected_account_key):
+            return None
+        if expected_evidence_hash is not None and state.evidence_hash != expected_evidence_hash:
+            return None
         if state.status not in {"pending", "retry_due", "claimed"}:
             return None
         if state.candidate_priority not in {1, 2, 3}:
@@ -528,6 +535,16 @@ def claim_account(state_id, *, cfg, budget_scope, initial=False):
             state.status == "claimed"
             and state.claim_expires_at
             and state.claim_expires_at > now
+        ):
+            return None
+        # A lease expiring does not prove the provider did not receive the call.
+        # Keep the original reservation until its outcome is reconciled.
+        unknown_attempts = OfficialCompanyAttempt.objects.filter(
+            state=state, actual_usd__isnull=True, reserved_usd__gt=0
+        ).values_list("status", "budget_keys")
+        if any(
+            status == "reserved" or any(key.startswith("queue-pass:") for key in keys)
+            for status, keys in unknown_attempts
         ):
             return None
         if _hold_existing_tracked_account(state):
@@ -562,6 +579,11 @@ def claim_account(state_id, *, cfg, budget_scope, initial=False):
                 "cycle:" + budget_scope: cfg.max_usd_per_cycle,
             }
         )
+        if run_budget is not None:
+            key, limit = run_budget
+            if initial or not key.startswith("queue-pass:") or len(key) > 96:
+                raise ValueError("invalid queue-pass budget")
+            limits[key] = limit
         budgets = []
         for key in sorted(limits):
             if limits[key] <= 0:
@@ -694,7 +716,10 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
         return True
 
 
-def evaluate_account(state_id, *, cfg, call, budget_scope, initial=False):
+def evaluate_account(
+    state_id, *, cfg, call, budget_scope, initial=False,
+    expected_account_key=None, expected_evidence_hash=None, run_budget=None,
+):
     if not cfg.enabled or call is None:
         return False
     from django.db import transaction
@@ -716,7 +741,10 @@ def evaluate_account(state_id, *, cfg, call, budget_scope, initial=False):
             if gate.blocked_reason:
                 return False
     attempt = claim_account(
-        state_id, cfg=cfg, budget_scope=budget_scope, initial=initial
+        state_id, cfg=cfg, budget_scope=budget_scope, initial=initial,
+        expected_account_key=expected_account_key,
+        expected_evidence_hash=expected_evidence_hash,
+        run_budget=run_budget,
     )
     if attempt is None:
         return False

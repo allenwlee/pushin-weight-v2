@@ -191,3 +191,29 @@ Before a list write, the adapter checks the authenticated user's stable ID and t
 Registration reuses stable official organization edges and explicitly reviewed candidate mappings. Name/slug/role conflicts require review. It does not infer legal ownership percentages, create a BrandCompany ownership edge, or assign a specific product. The two new account references—account state and list intent—must join the benchmark branch's provider-neutral migration inventory before that migration integrates. This feature uses the current schema through shared identity functions.
 
 Existing official X app setup and locally verified list access are documented in the plan. [X's OAuth2 documentation](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code) describes the standard two-hour access-token lifetime and refresh flow; actual runtime lifetime comes from the token response.
+
+## Frozen evaluation queue pass
+
+The one-time queue pass freezes the eligible priority 1–3 states, including delayed retries and active claims. Its manifest belongs in a restricted, durable operator directory; use a new path for each run. A manifest records the database identity, evidence hashes, starting statuses and an aggregate USD ceiling. The first successful verification also writes a checksum-protected `.verification.json` receipt beside the manifest, bound to the model and credential revision. Preserve both together in the same restricted directory; neither should be committed. The process never registers accounts, verifies HF identities, or writes to X lists.
+
+Before any paid call, independently verify the target environment, deployed revision, model, credential revision, provider status, effective prices and daily/per-cycle limits. Resolve a provider block only after correcting its cause. Choose an authorized run ceiling including conservative outstanding reservations, then freeze before the verification call:
+
+```bash
+python manage.py official_company_queue_pass freeze --manifest /secure/operator/queue.json --total-limit-usd 2
+python manage.py official_company_queue_pass report --manifest /secure/operator/queue.json
+python manage.py official_company_queue_pass run --manifest /secure/operator/queue.json --limit 1 --seconds 60
+```
+
+The first run performs at most one evaluation. Inspect its validated decision, usage, provider gate and reservations before continuing. A changed model or credential revision requires another one-account verification. A rejection or review-needed decision can verify the evaluator. The ceiling in the example is illustrative, not spending authorization. A non-completed or uncertain first attempt stops the batch; investigate and reconcile its provider outcome and reservation before any retry. Never erase a reservation merely to make progress.
+
+Subsequent bounded `run` commands use the same manifest and an explicit limit and deadline. Each invocation releases the independent discovery lock after every model call, waits between calls, and stops immediately if the lock is busy. Neither the harvest lock nor the production cron is controlled by this command. Monitor natural harvest cycles and scheduled discovery against the agreed baseline; stop running batches if collection or discovery is adversely affected. Restart by using the same manifest and inspecting `report`; do not create a new snapshot to represent an interrupted run. The report includes every frozen state and its starting tier, current disposition, recorded evaluator attempts and the aggregate budget ledger. An evaluator invocation is not necessarily a physical provider request; unknown outcomes remain explicitly unknown. Changed evidence and settled/suppressed states are not re-evaluated under stale evidence. New arrivals are outside the frozen set. An unknown provider outcome is not proof that no call occurred.
+
+A model call with unknown spend retains its budget reservation. Queue-pass attempts with unknown spend cannot be retried by either the batch or the scheduled evaluator until reconciled; an expired claim alone is not evidence of a safe retry. Existing completed historical retry behavior outside this pass is unchanged.
+
+If a failed attempt has a known cost and its cause has been investigated, record that decision before continuing with other frozen accounts:
+
+```bash
+python manage.py official_company_queue_pass acknowledge --manifest /secure/operator/queue.json --attempt-id 123 --reason 'Invalid response investigated; continue with remaining accounts'
+```
+
+The acknowledgement is bound to this run and saved in a restricted, checksum-protected sidecar beside the manifest. Keep it with the manifest and verification receipt. It does not retry or change the failed account. An attempt with unknown cost cannot be acknowledged this way and needs reconciliation through the applicable operator recovery before further dispatch.
