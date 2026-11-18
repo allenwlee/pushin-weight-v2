@@ -76,7 +76,7 @@ class Command(BaseCommand):
                     cfg = load_config(Path(opts["config"])).official_company
                     if not cfg.enabled:
                         raise ValueError("official-company evaluator is disabled")
-                    call = build_discovery_call(cfg)
+                    call = build_discovery_call(cfg, credential_env="DEEPINFRA_ON_DEMAND")
                     if call is None:
                         raise ValueError(
                             "official-company model provider is not configured"

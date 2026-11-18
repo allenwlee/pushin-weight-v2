@@ -671,7 +671,7 @@ def _proof_matches(path, manifest, cfg, call):
     if (
         revision is not None
         and not OfficialCompanyProviderState.objects.filter(
-            key="deepinfra", credential_revision=revision, blocked_reason=""
+            key="deepinfra-on-demand", credential_revision=revision, blocked_reason=""
         ).exists()
     ):
         return False
@@ -699,7 +699,7 @@ def _write_proof(path, manifest, cfg, call, row):
     if (
         revision is not None
         and not OfficialCompanyProviderState.objects.filter(
-            key="deepinfra", credential_revision=revision, blocked_reason=""
+            key="deepinfra-on-demand", credential_revision=revision, blocked_reason=""
         ).exists()
     ):
         return False
@@ -792,6 +792,7 @@ def run_batch(manifest, *, cfg, call, limit, seconds, receipt_path):
                 expected_account_key=member["account_key"],
                 expected_evidence_hash=member["evidence_hash"],
                 run_budget=run_budget,
+                provider_state_key="deepinfra-on-demand",
             )
             if not made:
                 reason = "claim_or_budget_blocked"

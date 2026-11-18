@@ -264,14 +264,14 @@ def enqueue_incremental(*, limit=100, deadline=None):
     return count
 
 
-def build_discovery_call(cfg):
+def build_discovery_call(cfg, *, credential_env="DEEPINFRA_API_KEY"):
     from core.targeted_extraction import build_targeted_extraction_calls
     from x_monitor.deepinfra import DeepInfraChatCompletionsClient
 
     if not cfg.enabled:
         return None
     client = DeepInfraChatCompletionsClient.from_env(
-        model=cfg.model, request_profile="deepseek_0731"
+        model=cfg.model, request_profile="deepseek_0731", credential_env=credential_env
     )
     call = build_targeted_extraction_calls(
         client=client, roles={ROLE: cfg}, timeout_seconds=cfg.request_timeout_seconds

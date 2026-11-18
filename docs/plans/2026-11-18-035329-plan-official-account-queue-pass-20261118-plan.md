@@ -60,6 +60,10 @@ Execution finding, November 18: the shared staging branch and staging services c
 
 The owner selected LFG through an isolated staging test on November 18. Staging deployment and testing are the endpoint; no production release or production queue processing is authorized. The owner requires uninterrupted production harvesting. Never pause, reschedule, replace, or run the production harvester as a test. Do not transfer an old production authorization from another plan.
 
+On November 18 the owner selected `DEEPINFRA_ON_DEMAND` for the one-time pass. Keep its `deepinfra-on-demand` provider state independent from the scheduled credential's `deepinfra` state. A single separately authorized production request using this on-demand key returned HTTP 200; its probe omitted the qualification transformation before validating the answer, so it does not prove a valid evaluator decision or replace the required recorded one-account verification. The request did not update the queue; its billed usage was not captured.
+
+The owner also requested repair of the scheduled 402. A diagnostic using the same scheduled credential revision returned HTTP 200 and a valid `review_needed` decision; provider-reported usage was $0.00008946. A guarded update cleared only the matching scheduled 402 state, and read-back confirmed it was unblocked. The diagnostic did not persist a queue decision. After the unblock, two scheduled attempts completed at 15:49 JST with recorded usage and validated outcomes (`review_needed` and `accepted`); the normal caller retains its existing review handling.
+
 ## Goal Capsule
 
 - **Objective:** One reconciled pass over a frozen set of eligible official-company accounts, with no interruption to the production harvester.

@@ -194,6 +194,8 @@ Existing official X app setup and locally verified list access are documented in
 
 ## Frozen evaluation queue pass
 
+The one-time pass uses `DEEPINFRA_ON_DEMAND` and the separate `deepinfra-on-demand` provider state. Scheduled discovery continues to use `DEEPINFRA_API_KEY` and its existing `deepinfra` state. Neither credential falls back to the other. A provider block in one lane does not clear or change the other lane's block.
+
 The one-time queue pass freezes the eligible priority 1–3 states, including delayed retries and active claims. Its manifest belongs in a restricted, durable operator directory; use a new path for each run. A manifest records the database identity, evidence hashes, starting statuses and an aggregate USD ceiling. The first successful verification also writes a checksum-protected `.verification.json` receipt beside the manifest, bound to the model and credential revision. Preserve both together in the same restricted directory; neither should be committed. The process never registers accounts, verifies HF identities, or writes to X lists.
 
 Before freezing or running, independently verify the target database and the scheduled service’s `X_MONITOR_DEPLOYMENT_ENVIRONMENT` without printing credentials; explicitly set that same value in the operator process. The manifest binds that value and database identity, and refuses a mismatched process. Verify the deployed revision, model, credential revision, provider status, effective prices and daily/per-cycle limits before any paid call. Resolve a provider block only after correcting its cause. Choose an authorized run ceiling including conservative outstanding reservations, then freeze before the verification call:

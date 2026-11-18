@@ -153,9 +153,11 @@ def test_command_freeze_run_and_report_through_real_evaluator(tmp_path, monkeypa
         "x_monitor.config.load_config",
         lambda path: SimpleNamespace(official_company=cfg),
     )
-    monkeypatch.setattr(
-        "core.official_company_discovery.build_discovery_call", lambda cfg: accept
-    )
+    credential_envs = []
+    def build_call(cfg, *, credential_env):
+        credential_envs.append(credential_env)
+        return accept
+    monkeypatch.setattr("core.official_company_discovery.build_discovery_call", build_call)
     path = str(tmp_path / "manifest.json")
     output = StringIO()
     call_command(
@@ -171,6 +173,7 @@ def test_command_freeze_run_and_report_through_real_evaluator(tmp_path, monkeypa
         "official_company_queue_pass", "run", manifest=path, seconds=60, stdout=output
     )
     assert json.loads(output.getvalue())["reason"] == "verification_complete"
+    assert credential_envs == ["DEEPINFRA_ON_DEMAND"]
     output = StringIO()
     call_command("official_company_queue_pass", "report", manifest=path, stdout=output)
     assert json.loads(output.getvalue())["counts"] == {"completed": 1}
@@ -466,7 +469,7 @@ def test_credential_rotation_requires_a_new_verification_even_if_gate_was_update
         manifest, cfg=cfg, call=call_v1, limit=2, seconds=60, receipt_path=proof
     )
     assert first["reason"] == "verification_complete"
-    OfficialCompanyProviderState.objects.filter(pk="deepinfra").update(
+    OfficialCompanyProviderState.objects.filter(pk="deepinfra-on-demand").update(
         credential_revision="revision-two", blocked_reason=""
     )
     second = run_batch(
@@ -752,7 +755,7 @@ def test_command_completes_and_resumes_frozen_three_tier_pass(tmp_path, monkeypa
         lambda path: SimpleNamespace(official_company=cfg),
     )
     monkeypatch.setattr(
-        "core.official_company_discovery.build_discovery_call", lambda cfg: call
+        "core.official_company_discovery.build_discovery_call", lambda cfg, **kwargs: call
     )
     monkeypatch.setattr(time, "sleep", lambda seconds: None)
     path = str(tmp_path / "manifest.json")
@@ -1228,7 +1231,7 @@ def test_missing_provider_is_reported_before_claim(tmp_path, monkeypatch):
         lambda path: SimpleNamespace(official_company=cfg),
     )
     monkeypatch.setattr(
-        "core.official_company_discovery.build_discovery_call", lambda cfg: None
+        "core.official_company_discovery.build_discovery_call", lambda cfg, **kwargs: None
     )
     with pytest.raises(CommandError, match="provider is not configured"):
         call_command(
@@ -1250,3 +1253,32 @@ def test_production_name_on_wrong_cluster_cannot_use_production_locks(monkeypatc
     )
     with pytest.raises(ValueError, match="database identity"):
         _environment()
+
+
+def test_on_demand_gate_does_not_clear_scheduled_provider_block(tmp_path):
+    from core.models import OfficialCompanyProviderState
+    from core.official_company_queue_pass import freeze_queue, run_batch
+    from tests.test_official_company_cycle import accept
+    from x_monitor.config import OfficialCompanyConfig
+
+    candidate(30001, 1)
+    OfficialCompanyProviderState.objects.create(
+        key="deepinfra", credential_revision="scheduled",
+        blocked_reason="deepinfra_http_status_402",
+    )
+    def on_demand(*args):
+        return accept(*args)
+    on_demand.credential_revision = "on-demand-revision"
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    result = run_batch(
+        manifest, cfg=cfg, call=on_demand, limit=1, seconds=60,
+        receipt_path=tmp_path / "proof.json",
+    )
+    assert result["reason"] == "verification_complete"
+    scheduled = OfficialCompanyProviderState.objects.get(pk="deepinfra")
+    assert scheduled.credential_revision == "scheduled"
+    assert scheduled.blocked_reason == "deepinfra_http_status_402"
+    assert OfficialCompanyProviderState.objects.get(pk="deepinfra-on-demand").credential_revision == "on-demand-revision"

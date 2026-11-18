@@ -726,6 +726,7 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
 def evaluate_account(
     state_id, *, cfg, call, budget_scope, initial=False,
     expected_account_key=None, expected_evidence_hash=None, run_budget=None,
+    provider_state_key="deepinfra",
 ):
     if not cfg.enabled or call is None:
         return False
@@ -738,7 +739,7 @@ def evaluate_account(
         with transaction.atomic():
             gate, _ = (
                 OfficialCompanyProviderState.objects.select_for_update().get_or_create(
-                    key="deepinfra", defaults={"credential_revision": revision}
+                    key=provider_state_key, defaults={"credential_revision": revision}
                 )
             )
             if gate.credential_revision != revision:
@@ -778,7 +779,7 @@ def evaluate_account(
             }
         ):
             OfficialCompanyProviderState.objects.filter(
-                key="deepinfra", credential_revision=revision
+                key=provider_state_key, credential_revision=revision
             ).update(blocked_reason=str(exc))
     else:
         complete_attempt(attempt.pk, cfg=cfg, response=response)
