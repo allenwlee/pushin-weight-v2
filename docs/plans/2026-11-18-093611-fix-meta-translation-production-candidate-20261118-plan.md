@@ -52,6 +52,8 @@ Occupied staging: if a staged route finds `staging` in use by an unrelated relea
 
 ## Delivery Exceptions
 
+The owner requested agreement between the web and worker translator, full UI checks, a production read-only health follow-up, and one real reader-requested translation test. The shared `config.yaml` selects literal translation v2 for all roles; changing it to false requires a coordinated code/config release, rather than a per-service environment override. Preserve production, use a bounded staging test, and avoid activating the staging backlog.
+
 The owner directed this production-based candidate first after review found unrelated Chatter commits in staging. Preserve the existing staging branch, its changes and data, and uninterrupted production harvesting. The owner authorized temporarily deploying the exact candidate to the existing staging web service for testing, then restoring the prior Chatter revision and service settings. Verify worker and database compatibility before changing the service. The other review findings are not addressed by this isolation step; do not deploy to production.
 
 # Goal

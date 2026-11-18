@@ -340,7 +340,8 @@ llm:
   classifier_openrouter_max_output_price: null
   relevancy_model: "deepseek-ai/DeepSeek-V4-Flash-0731"
   signal_model: "deepseek-v4-flash"
-  literal_translation_v2_enabled: null
+  # Shared by web, scheduled collection and enrichment; change here for every role.
+  literal_translation_v2_enabled: true
 
 # Shared V22 trend-narrative generation. This role never inherits the
 # translator/classifier route. Service-specific environment variables request

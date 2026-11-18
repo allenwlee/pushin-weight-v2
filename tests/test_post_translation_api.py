@@ -56,7 +56,12 @@ def test_cached_legacy_translation_does_not_use_capacity():
     assert not PostEnrichmentState.objects.filter(post=post).exists()
 
 
-def test_completed_legacy_result_missing_requested_locale_is_not_ready():
+def test_completed_legacy_result_missing_requested_locale_is_not_ready(monkeypatch):
+    from pathlib import Path
+    from x_monitor import config
+    cfg = config.load_config(Path("config.yaml"))
+    cfg.llm.literal_translation_v2_enabled = False
+    monkeypatch.setattr(config, "load_config", lambda path: cfg)
     post = Post.objects.create(tweet_id="legacy-missing-ja", text="Bonjour", text_en="Hello")
     PostEnrichmentState.objects.create(post=post, translation_requested=True, translation_status="succeeded")
     response = Client().post(
@@ -141,7 +146,11 @@ def test_untrusted_forwarded_headers_do_not_change_identity():
 
 
 def test_legacy_japanese_request_does_not_enqueue_or_consume_capacity(monkeypatch):
-    monkeypatch.setenv("X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED", "false")
+    from pathlib import Path
+    from x_monitor import config
+    cfg = config.load_config(Path("config.yaml"))
+    cfg.llm.literal_translation_v2_enabled = False
+    monkeypatch.setattr(config, "load_config", lambda path: cfg)
     post = Post.objects.create(tweet_id="legacy-ja-no-spend", text="Bonjour")
     response = Client().post(
         "/api/v2/post-translation-demands/",
