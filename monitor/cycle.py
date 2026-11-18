@@ -3593,56 +3593,75 @@ class CycleRunner:
         profile_account_contexts = build_account_affiliation_contexts(
             str(it.get("author_id") or it.get("authorId") or "") for it in items
         )
+        class _RetryPostLockOrder(Exception):
+            pass
+
         for it in items:
             if it.get("_unattributed") and not it.get("_discovery_lane"):
                 continue
             it.pop("_db_inserted", None)
             it.pop("_persisted_post_id", None)
-            try:
-                with transaction.atomic():
-                    account = _upsert_account(it)
-                    post, created = _upsert_post(it, account=account)
-                    if post is None:
-                        continue
-                    capture_post_profile_snapshot(
-                        post=post,
-                        raw=it,
-                        references=profile_brand_references,
-                        affiliation_context=profile_account_contexts.get(
-                            str(it.get("author_id") or it.get("authorId") or "")
-                        ),
-                    )
-                    PostEnrichmentState.objects.get_or_create(post=post)
-                    if settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
-                        from core.product_release_detection_queue import enqueue_saved_post
+            for attempt in range(2):
+                try:
+                    with transaction.atomic():
+                        account = _upsert_account(it)
+                        post_id = str(it.get("id") or it.get("tweet_id") or "")
+                        existed = bool(post_id and Post.objects.filter(pk=post_id).exists())
+                        if existed:
+                            PostEnrichmentState.objects.get_or_create(post_id=post_id)
+                            PostEnrichmentState.objects.select_for_update().get(pk=post_id)
+                        post, created = _upsert_post(it, account=account)
+                        if post is not None and not existed and not created:
+                            # Another collector inserted this post after our existence
+                            # check. Roll back its post lock and retry state-first.
+                            raise _RetryPostLockOrder
+                        if post is None:
+                            break
+                        capture_post_profile_snapshot(
+                            post=post,
+                            raw=it,
+                            references=profile_brand_references,
+                            affiliation_context=profile_account_contexts.get(
+                                str(it.get("author_id") or it.get("authorId") or "")
+                            ),
+                        )
+                        PostEnrichmentState.objects.get_or_create(post=post)
+                        if settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
+                            from core.product_release_detection_queue import enqueue_saved_post
 
-                        enqueue_saved_post(post.pk)
-                    brand_ids: list[str] = list(it.get("brand_ids") or [])
-                    mentions: list[MentionRow] = list(it.get("mentions") or [])
-                    classifications: dict = it.get("classifications") or {}
-                    n_attr = _persist_attribution(
-                        post,
-                        brand_ids,
-                        mentions,
-                        classifications,
-                        allow_unattributed=bool(it.get("_discovery_lane")),
-                    )
-                if created:
-                    n_inserted += 1
-                else:
-                    n_updated += 1
-                n_attributed += n_attr
-                # The timestamp is taken after the atomic block exits: this
-                # is the server-owned commit boundary, including duplicate
-                # updates. It is intentionally not Post.fetched_at.
-                it["_db_inserted"] = bool(created)
-                it["_persisted_post_id"] = str(post.pk)
-                it["_db_committed_at"] = self._wall_now().isoformat()
-            except Exception as exc:
-                n_failed += 1
-                tid = str(it.get("id") or it.get("tweet_id") or "?")
-                logger.warning("_persist_items: failed for tweet_id=%s: %s", tid, exc)
-                self._errors.append(f"persist.{tid}: {exc}")
+                            enqueue_saved_post(post.pk)
+                        brand_ids: list[str] = list(it.get("brand_ids") or [])
+                        mentions: list[MentionRow] = list(it.get("mentions") or [])
+                        classifications: dict = it.get("classifications") or {}
+                        n_attr = _persist_attribution(
+                            post,
+                            brand_ids,
+                            mentions,
+                            classifications,
+                            allow_unattributed=bool(it.get("_discovery_lane")),
+                        )
+                    if created:
+                        n_inserted += 1
+                    else:
+                        n_updated += 1
+                    n_attributed += n_attr
+                    # The timestamp is taken after the atomic block exits: this
+                    # is the server-owned commit boundary, including duplicate
+                    # updates. It is intentionally not Post.fetched_at.
+                    it["_db_inserted"] = bool(created)
+                    it["_persisted_post_id"] = str(post.pk)
+                    it["_db_committed_at"] = self._wall_now().isoformat()
+                except _RetryPostLockOrder:
+                    if attempt == 0:
+                        continue
+                    n_failed += 1
+                    self._errors.append(f"persist.{post_id}: post lock order retry exhausted")
+                except Exception as exc:
+                    n_failed += 1
+                    tid = str(it.get("id") or it.get("tweet_id") or "?")
+                    logger.warning("_persist_items: failed for tweet_id=%s: %s", tid, exc)
+                    self._errors.append(f"persist.{tid}: {exc}")
+                break
         return n_inserted, n_updated, n_attributed, n_failed
 
     # ------------------------------------------------------------------
@@ -3735,6 +3754,7 @@ class CycleRunner:
         repair_manifest: dict[str, dict[str, Any]] | None = None,
         source_collection_job_id: Any | None = None,
         classification_input_snapshot: dict[str, Any] | None = None,
+        translation_only: bool = False,
         fair_queue: bool = False,
         dispatch_guard: Any | None = None,
     ) -> dict[str, Any]:
@@ -3905,7 +3925,8 @@ class CycleRunner:
                     ],
                 }
                 classification_due = (
-                    state.source_collection_job_id == source_collection_job_id
+                    not translation_only
+                    and state.source_collection_job_id == source_collection_job_id
                     and stage_is_due(state, "classification", state.claimed_at)
                 )
                 # The classifier dispatches first below. A requested translation
@@ -3916,7 +3937,7 @@ class CycleRunner:
                     classification_tweets.append(tweet)
 
         if not translation_tweets and not classification_tweets:
-            for stage in ("translation", "classification"):
+            for stage in (("translation",) if translation_only else ("translation", "classification")):
                 _finish_enrichment_stage(
                     post_ids=[str(state.pk) for state in claimed_states if stage_is_due(state, stage, state.claimed_at) and (stage != "classification" or state.source_collection_job_id == source_collection_job_id)],
                     run_id=run_id, stage=stage, succeeded_ids=set(), error_code="source_text_missing",

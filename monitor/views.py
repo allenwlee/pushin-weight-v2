@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import ipaddress
 import logging
 import re
 from collections import OrderedDict
@@ -123,7 +124,7 @@ from core.product_vocabulary import product_type_choices
 from core.u18a_activation import enabled_audience_topics
 from core.u18a_activation import is_enabled as u18a_enabled
 from monitor.country_flags import COUNTRY_FLAG_CODES, country_flag_symbol_id
-from x_monitor.translator import normalize_lang_detected
+from x_monitor.translator import TRUSTED_SOURCE_LANGS, normalize_lang_detected, post_source_language
 
 log = logging.getLogger(__name__)
 
@@ -247,15 +248,8 @@ _DASHBOARD_LANG_FILTER_KEYS: tuple[str, ...] = (
     "en", "zh-hans", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar", "pl",
     "undetected", "other",
 )
-_TRUSTED_SOURCE_LANGS = ("en", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar", "pl")
-
-
-def _post_language(detected, source):
-    """Use the provider's unambiguous language when translation has not run."""
-    if detected:
-        return detected
-    source = str(source or "").strip().lower()
-    return source if source in _TRUSTED_SOURCE_LANGS else None
+_TRUSTED_SOURCE_LANGS = TRUSTED_SOURCE_LANGS
+_post_language = post_source_language
 
 
 def _post_language_expression(prefix=""):
@@ -1311,7 +1305,7 @@ def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]
     badges: list[dict[str, str]] = []
     pending: set[str] = set()
     retry_notes: dict[str, str] = {}
-    language_pending = _language_undetected(post.get("lang_detected"))
+    language_pending = _language_undetected(post.get("effective_language", post.get("lang_detected")))
 
     def append(process: str, state: str, attempts: int = 0) -> None:
         if state not in {"pending", "processing", "failed"}:
@@ -2019,7 +2013,8 @@ def _post_to_wire(
         "tweet_id": post.tweet_id,
         "created_at": created_at_raw,
         "created_at_iso": created_at_iso,
-        "lang_detected": _post_language(post.lang_detected, post.lang),
+        "lang_detected": post.lang_detected,
+        "effective_language": _post_language(post.lang_detected, post.lang),
         "language_display": _compact_language_display(_post_language(post.lang_detected, post.lang), locale),
         "text": text_original,
         "text_original": text_original,
@@ -2329,7 +2324,8 @@ def _enrich_posts_with_classifications(
             "like_count": post.like_count or 0,
             "retweet_count": post.retweet_count or 0,
             "reply_count": post.reply_count or 0,
-            "lang_detected": _post_language(post.lang_detected, post.lang),
+            "lang_detected": post.lang_detected,
+            "effective_language": _post_language(post.lang_detected, post.lang),
             "author_handle": post.author_handle,
             "author_name": post.author_name,
             "author_id": post.author_id,
@@ -3018,7 +3014,7 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
         if not lang:
             return False
         else:
-            post_lang = post.get("lang_detected")
+            post_lang = post.get("effective_language", post.get("lang_detected"))
             post_lang = _DASHBOARD_LANG_FILTER_KEYS_BY_PERSISTED_VALUE.get(
                 post_lang, post_lang
             )
@@ -4735,10 +4731,13 @@ def _serialize_feed_row(
         "created_at": post.get("created_at"),
         "created_at_iso": post.get("created_at"),
         "lang_detected": post.get("lang_detected"),
+        "effective_language": post.get("effective_language", post.get("lang_detected")),
         "language_display": _compact_language_display(
-            post.get("lang_detected"), locale
+            post.get("effective_language", post.get("lang_detected")), locale
         ),
-        "language_undetected": _language_undetected(post.get("lang_detected")),
+        "language_undetected": _language_undetected(
+            post.get("effective_language", post.get("lang_detected"))
+        ),
         "language_inspection": _language_inspection(post.get("enrichment_stages", {}), locale),
         "text": text_original,
         "text_original": text_original,
@@ -5441,9 +5440,10 @@ def post_translation_demands(request: HttpRequest) -> JsonResponse:
     """Request one shared literal translation, or inspect it without enqueueing."""
     from monitor.enrichment_queue import request_post_translation
     from monitor.post_artifacts import (
-        literal_translation_artifact_complete,
         read_post_content_many,
     )
+    from pathlib import Path
+    from x_monitor.config import load_config
 
     if len(request.body) > 4096:
         return JsonResponse({"error": "request too large"}, status=413)
@@ -5469,9 +5469,10 @@ def post_translation_demands(request: HttpRequest) -> JsonResponse:
     # A normalized artifact belongs to a specific source fingerprint; never
     # serve its old translation after the underlying post has changed.
     literal = dict(content.literal)
-    if content.literal_source == "normalized" and not literal_translation_artifact_complete(post):
-        literal = {}
     state = PostEnrichmentState.objects.filter(post=post).first()
+    if (target_locale == "ja" and not literal.get(target_locale)
+            and not load_config(Path("config.yaml")).llm.literal_translation_v2_enabled):
+        return JsonResponse({"results": [{"post_id": str(post.pk), "status": "unsupported", "literal": literal}]})
     try:
         if not poll_only and not literal.get(target_locale):
             with transaction.atomic():
@@ -5483,8 +5484,6 @@ def post_translation_demands(request: HttpRequest) -> JsonResponse:
                 post = Post.objects.select_for_update().get(pk=post.pk)
                 locked_content = read_post_content_many([post])[str(post.pk)]
                 literal = dict(locked_content.literal)
-                if locked_content.literal_source == "normalized" and not literal_translation_artifact_complete(post):
-                    literal = {}
                 is_new = not literal.get(target_locale) and not (
                     state.translation_requested and state.translation_status == "pending"
                 )
@@ -5507,14 +5506,12 @@ def post_translation_demands(request: HttpRequest) -> JsonResponse:
     post.refresh_from_db()
     content = read_post_content_many([post])[str(post.pk)]
     literal = dict(content.literal)
-    if content.literal_source == "normalized" and not literal_translation_artifact_complete(post):
-        literal = {}
     state = PostEnrichmentState.objects.filter(post=post).first()
     status = ("ready" if literal.get(target_locale) else
               state.translation_status if state and state.translation_requested else "not_requested")
-    if status == "pending" and state.translation_error_code in {
-        "historical_translation_unresolved", "incomplete_saved_translation",
-    }:
+    if status == "pending" and state.translation_error_code == "incomplete_saved_translation":
+        status = "unavailable"
+    elif status == "pending" and state.translation_error_code == "historical_translation_unresolved":
         status = "deferred"
     if status == "succeeded":
         # Legacy translators may finish without producing every supported
@@ -5620,6 +5617,13 @@ def _accept_scoped_rate(request: HttpRequest, *, cost: int, salt: str, limit: in
     now = django_timezone.now()
     bucket_start = now.replace(second=0, microsecond=0)
     address = str(request.META.get("REMOTE_ADDR") or "-")
+    # Render's public edge overwrites CF-Connecting-IP; never trust the
+    # client-supplied X-Forwarded-For chain. Other deployments use the socket.
+    if getattr(settings, "TRUST_RENDER_CLIENT_IP", False):
+        try:
+            address = str(ipaddress.ip_address(request.META.get("HTTP_CF_CONNECTING_IP", "")))
+        except ValueError:
+            pass
     identities = [f"ip:{address}"]
     if request.user.is_authenticated:
         identities.insert(0, f"user:{request.user.pk}")

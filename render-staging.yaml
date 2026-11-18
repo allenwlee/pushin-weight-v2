@@ -26,6 +26,10 @@ services:
         value: 3.12.0
       - key: DEBUG
         value: "False"
+      - key: TRUST_RENDER_CLIENT_IP
+        value: "True"
+      - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
+        value: "True"
       - key: ALLOWED_HOSTS
         value: pushinweight-staging-web.onrender.com
       - key: CSRF_TRUSTED_ORIGINS

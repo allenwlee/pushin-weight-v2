@@ -366,3 +366,23 @@ def test_expired_batch_claim_cannot_import_after_takeover(admitted):
     assert new.fence > old.fence
     with pytest.raises(StaleBatchClaim):
         import_response(old, {"custom_id": "irrelevant"})
+
+
+def test_translation_completed_after_preparation_is_not_reserved(admitted):
+    from core.models import PostTranslationArtifact, PostTranslationText
+    from core.provider_batches import BatchAdmissionError, reserve_requests
+    from monitor.post_artifacts import source_content_fingerprint
+
+    batch, claim, request = admitted
+    post = Post.objects.get(pk='1')
+    artifact = PostTranslationArtifact.objects.create(
+        post=post, source_content_fingerprint=source_content_fingerprint(post),
+        source_language='fr', prompt_version='test', model='test', provider_role='literal_translation',
+        state='succeeded', is_current=True, started_at=timezone.now(), completed_at=timezone.now(),
+    )
+    for locale in ('en', 'zh-cn', 'ja'):
+        PostTranslationText.objects.create(artifact=artifact, locale=locale, text='translated ' + locale)
+    PostEnrichmentState.objects.filter(post=post).update(translation_status='succeeded')
+    with pytest.raises(BatchAdmissionError, match='model_member_work_already_outstanding'):
+        reserve_requests(claim, [request])
+    assert not batch.calls.exists()

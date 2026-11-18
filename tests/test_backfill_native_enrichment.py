@@ -231,6 +231,43 @@ def test_request_recovers_paid_historical_reply_without_sending_again(native):
     assert len(NativeProvider.submissions) == before
 
 
+@pytest.mark.parametrize("classification_status", ["pending", "failed"])
+def test_reader_replays_saved_translation_without_touching_classification(native, classification_status):
+    from monitor.backfill_enrichment import replay_requested_saved_translation
+    from monitor.enrichment_queue import request_post_translation
+    from monitor.post_artifacts import literal_translation_artifact_complete
+
+    job, cfg, delegates, _ = native
+    advance(native, initial=True)
+    PostEnrichmentState.objects.update(translation_requested=False)
+    advance(native)
+    request_post_translation("native-1")
+    PostEnrichmentState.objects.filter(pk="native-1").update(
+        classification_status=classification_status,
+        classification_attempts=2,
+        classification_error_code="owned_by_historical_job",
+    )
+    before = PostEnrichmentState.objects.values(
+        "classification_status", "classification_attempts", "classification_error_code",
+        "classification_first_attempt_at", "classification_last_attempt_at",
+        "classification_next_attempt_at", "source_collection_job_id",
+    ).get(pk="native-1")
+    submissions = len(NativeProvider.submissions)
+    PostEnrichmentState.objects.filter(pk="native-1").update(
+        claim_owner="classification-worker", claim_run_id="classification-worker",
+        claim_expires_at=timezone.now() + timedelta(minutes=5),
+    )
+    assert not replay_requested_saved_translation(cfg, delegates=delegates, post_ids={"native-1"})
+    PostEnrichmentState.objects.filter(pk="native-1").update(
+        claim_owner="", claim_run_id="", claim_expires_at=None,
+    )
+    assert replay_requested_saved_translation(cfg, delegates=delegates, post_ids={"native-1"})
+    assert literal_translation_artifact_complete(Post.objects.get(pk="native-1"))
+    assert PostEnrichmentState.objects.values(*before).get(pk="native-1") == before
+    assert before["source_collection_job_id"] == job.pk
+    assert len(NativeProvider.submissions) == submissions
+
+
 @pytest.mark.parametrize("outstanding", [False, True])
 def test_partial_paid_packet_is_honest_and_does_not_starve_replay(native, outstanding):
     from django.test import Client
@@ -271,10 +308,27 @@ def test_partial_paid_packet_is_honest_and_does_not_starve_replay(native, outsta
         assert state.translation_error_code == "incomplete_saved_translation"
     response = Client().post(
         "/api/v2/post-translation-demands/",
-        data=json.dumps({"post_ids": ["native-1"], "poll_only": True}),
+        data=json.dumps({"post_ids": ["native-1"], "poll_only": True, "locale": "zh-cn"}),
         content_type="application/json", secure=True,
     )
-    assert response.json()["results"][0]["status"] == "deferred"
+    assert response.json()["results"][0]["status"] == ("deferred" if outstanding else "unavailable")
+    # Repeated reader demands must not reset this owned request or reserve a
+    # second daily slot. The historical owner can still resume pending work.
+    from core.models import PostSynthesisRateLimitBucket
+    from django.utils.crypto import salted_hmac
+    capacity = PostSynthesisRateLimitBucket.objects.filter(
+        scope_hash=salted_hmac("post-translation-capacity", "all", algorithm="sha256").hexdigest(),
+    )
+    buckets_before = list(capacity.values_list("pk", "count"))
+    retry = Client().post(
+        "/api/v2/post-translation-demands/",
+        data=json.dumps({"post_ids": ["native-1"], "poll_only": False, "locale": "zh-cn"}),
+        content_type="application/json", secure=True,
+    )
+    assert retry.json()["results"][0]["status"] == ("deferred" if outstanding else "unavailable")
+    assert list(capacity.values_list("pk", "count")) == buckets_before
+    state.refresh_from_db()
+    assert state.translation_status == "pending" and state.source_collection_job_id == _job.pk
     assert len(NativeProvider.submissions) == before
 
 
@@ -943,3 +997,53 @@ def test_historical_reservation_refuses_an_active_live_claim(native):
     with pytest.raises(BatchAdmissionError, match='historical_state_missing_or_claimed'):
         _register_requests(job, requests, policy, cfg)
     assert not OriginalContentCall.objects.exists()
+
+
+def test_saved_translation_replay_does_not_require_classifier_client(native):
+    from monitor.backfill_enrichment import replay_requested_saved_translation
+    from monitor.enrichment_queue import request_post_translation
+    from monitor.post_artifacts import literal_translation_artifact_complete
+
+    job, cfg, delegates, _ = native
+    advance(native, initial=True)
+    PostEnrichmentState.objects.update(translation_requested=False)
+    advance(native)
+    request_post_translation('native-1')
+    submissions = len(NativeProvider.submissions)
+    assert replay_requested_saved_translation(cfg, delegates={'translation': delegates['translation'], 'classification': None}, post_ids={'native-1'})
+    assert literal_translation_artifact_complete(Post.objects.get(pk='native-1'))
+    assert len(NativeProvider.submissions) == submissions
+
+
+def test_historical_run_defers_active_reader_claim_and_advances_other_members(native):
+    job, cfg, delegates, policy = native
+    from monitor.backfill_enrichment import execute_enrichment
+    # Establish the historical ownership before a reader acquires the lease.
+    from core.provider_batches import own_historical_posts
+    own_historical_posts(job, ['native-1', 'native-2'])
+    PostEnrichmentState.objects.filter(pk='native-1').update(
+        claim_owner='reader', claim_run_id='reader', claim_expires_at=timezone.now() + timedelta(minutes=5),
+    )
+    execute_enrichment(job.pk, cfg=cfg, api_key='test', policy=policy,
+                       delegates=delegates, client_factory=NativeProvider)
+    state = PostEnrichmentState.objects.get(pk='native-1')
+    assert state.claim_owner == 'reader'
+    assert not OriginalContentCall.objects.filter(member_post_ids__contains=['native-1']).exists()
+    assert OriginalContentCall.objects.filter(member_post_ids__contains=['native-2']).exists()
+
+
+def test_reader_claim_after_historical_preparation_defers_reservation(native):
+    from monitor.backfill_enrichment import _register_requests, prepare_page
+
+    job, cfg, delegates, policy = native
+    requests, _, _ = prepare_page(job, ['native-1', 'native-2'], cfg, delegates=delegates)
+    assert requests
+    PostEnrichmentState.objects.filter(pk='native-1').update(
+        claim_owner='reader', claim_run_id='reader', claim_expires_at=timezone.now() + timedelta(minutes=5),
+    )
+    deferred = {}
+    _register_requests(job, requests, policy, cfg, deferred=deferred, defer_claim_conflicts=True)
+    assert deferred['native-1'] == 'historical_state_missing_or_claimed'
+    assert not OriginalContentCall.objects.filter(member_post_ids__contains=['native-1']).exists()
+    assert OriginalContentCall.objects.filter(member_post_ids__contains=['native-2']).exists()
+    assert PostEnrichmentState.objects.get(pk='native-1').claim_owner == 'reader'

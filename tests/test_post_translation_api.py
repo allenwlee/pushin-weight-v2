@@ -64,7 +64,7 @@ def test_completed_legacy_result_missing_requested_locale_is_not_ready():
         data=json.dumps({"post_ids": [post.pk], "poll_only": True, "locale": "ja"}),
         content_type="application/json", secure=True,
     )
-    assert response.json()["results"][0]["status"] == "failed"
+    assert response.json()["results"][0]["status"] == "unsupported"
 
 
 @override_settings(POST_TRANSLATION_DAILY_REQUEST_LIMIT=1)
@@ -105,4 +105,49 @@ def test_completed_translation_race_returns_ready_without_spending_capacity(monk
     response = _request(Client(), post.pk)
     assert response.json()["results"][0]["status"] == "ready"
     assert response.json()["results"][0]["literal"]["en"] == "Original text"
+    assert not PostSynthesisRateLimitBucket.objects.filter(count__gt=1).exists()
+
+
+def test_proxy_identity_ignores_spoofed_forwarding_and_separates_clients():
+    from django.contrib.auth.models import AnonymousUser
+    from django.test import RequestFactory
+    from monitor.views import _accept_scoped_rate
+
+    factory = RequestFactory()
+    with override_settings(TRUST_RENDER_CLIENT_IP=True):
+        first = factory.post('/', REMOTE_ADDR='10.0.0.1', HTTP_CF_CONNECTING_IP='198.51.100.1', HTTP_X_FORWARDED_FOR='1.1.1.1')
+        first.user = AnonymousUser()
+        second = factory.post('/', REMOTE_ADDR='10.0.0.1', HTTP_CF_CONNECTING_IP='198.51.100.2', HTTP_X_FORWARDED_FOR='1.1.1.1')
+        second.user = AnonymousUser()
+        spoof = factory.post('/', REMOTE_ADDR='10.0.0.1', HTTP_CF_CONNECTING_IP='198.51.100.1', HTTP_X_FORWARDED_FOR='2.2.2.2')
+        spoof.user = AnonymousUser()
+        assert _accept_scoped_rate(first, cost=120, salt='proxy-test', limit=120)
+        assert _accept_scoped_rate(second, cost=1, salt='proxy-test', limit=120)
+        assert not _accept_scoped_rate(spoof, cost=1, salt='proxy-test', limit=120)
+
+
+def test_untrusted_forwarded_headers_do_not_change_identity():
+    from django.contrib.auth.models import AnonymousUser
+    from django.test import RequestFactory
+    from monitor.views import _accept_scoped_rate
+
+    factory = RequestFactory()
+    with override_settings(TRUST_RENDER_CLIENT_IP=False):
+        first = factory.post('/', REMOTE_ADDR='127.0.0.1', HTTP_CF_CONNECTING_IP='198.51.100.1')
+        second = factory.post('/', REMOTE_ADDR='127.0.0.1', HTTP_CF_CONNECTING_IP='198.51.100.2')
+        first.user = second.user = AnonymousUser()
+        assert _accept_scoped_rate(first, cost=120, salt='untrusted-test', limit=120)
+        assert not _accept_scoped_rate(second, cost=1, salt='untrusted-test', limit=120)
+
+
+def test_legacy_japanese_request_does_not_enqueue_or_consume_capacity(monkeypatch):
+    monkeypatch.setenv("X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED", "false")
+    post = Post.objects.create(tweet_id="legacy-ja-no-spend", text="Bonjour")
+    response = Client().post(
+        "/api/v2/post-translation-demands/",
+        data=json.dumps({"post_ids": [post.pk], "locale": "ja"}),
+        content_type="application/json", secure=True,
+    )
+    assert response.json()["results"][0]["status"] == "unsupported"
+    assert not PostEnrichmentState.objects.filter(post=post).exists()
     assert not PostSynthesisRateLimitBucket.objects.filter(count__gt=1).exists()

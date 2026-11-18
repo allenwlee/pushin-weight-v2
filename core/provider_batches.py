@@ -440,7 +440,7 @@ def reserve_requests(claim, requests):
                 state = states.get(str(post_id))
                 if state is not None and state.source_collection_job_id == job.pk:
                     if state.claim_expires_at and state.claim_expires_at > timezone.now():
-                        raise BatchAdmissionError("historical_state_missing_or_claimed")
+                        raise BatchAdmissionError("historical_state_missing_or_claimed", member_ids=[str(post_id)])
                     continue
                 # Base ownership records translation/classification execution.
                 # A separate targeted operation may use a completed shared
@@ -469,6 +469,19 @@ def reserve_requests(claim, requests):
                 raise BatchAdmissionError("request_member_or_model_mismatch")
             if request.get("snapshots") != {p: snapshots[p] for p in ids}:
                 raise BatchAdmissionError("request_source_changed_before_reservation")
+            if context["stage"] == "translation":
+                # An ordinary worker may have completed this translation after
+                # preparation. Recheck while holding the shared state/post locks.
+                from monitor.post_artifacts import literal_translation_artifact_complete
+
+                finished = {
+                    str(post.pk) for post in posts if str(post.pk) in ids
+                    and states.get(str(post.pk)) is not None
+                    and states[str(post.pk)].translation_status == "succeeded"
+                    and literal_translation_artifact_complete(post)
+                }
+                if finished:
+                    raise BatchAdmissionError("model_member_work_already_outstanding", member_ids=finished)
             if (
                 OriginalContentCall.objects.filter(
                     request_hash=logical_hash, member_post_ids__overlap=ids
