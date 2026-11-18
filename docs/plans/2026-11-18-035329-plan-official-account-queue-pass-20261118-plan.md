@@ -56,6 +56,8 @@ Test the actual command and overlap behavior on isolated staging, using fixtures
 
 ## Delivery Exceptions
 
+Execution finding, November 18: the shared staging branch and staging services currently carry another graphics candidate, and the staging database has a different migration history from the candidate baseline. Do not move that branch, replace the unrelated candidate, or apply unrelated migrations merely to run this test. Verify a dedicated staging execution path and fixture-only database before staging. Render one-off jobs have ephemeral filesystems; a verified secure cross-job handoff for the manifest and all receipts is still needed before any future production pass.
+
 The owner selected LFG through an isolated staging test on November 18. Staging deployment and testing are the endpoint; no production release or production queue processing is authorized. The owner requires uninterrupted production harvesting. Never pause, reschedule, replace, or run the production harvester as a test. Do not transfer an old production authorization from another plan.
 
 ## Goal Capsule

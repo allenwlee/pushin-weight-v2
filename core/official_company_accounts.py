@@ -541,10 +541,12 @@ def claim_account(
         # Keep the original reservation until its outcome is reconciled.
         unknown_attempts = OfficialCompanyAttempt.objects.filter(
             state=state, actual_usd__isnull=True, reserved_usd__gt=0
-        ).values_list("status", "budget_keys")
+        ).values_list("status", "budget_keys", "claim_token")
         if any(
-            status == "reserved" or any(key.startswith("queue-pass:") for key in keys)
-            for status, keys in unknown_attempts
+            expected_evidence_hash is not None
+            or (status == "reserved" and state.claim_token and token == state.claim_token)
+            or any(key.startswith("queue-pass:") for key in keys)
+            for status, keys, token in unknown_attempts
         ):
             return None
         if _hold_existing_tracked_account(state):
@@ -695,13 +697,18 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
             terminal = isinstance(
                 error, (TypeError, ValueError, DeepInfraPermanentError)
             ) or getattr(error, "status_code", None) in {400, 401, 403}
+            unknown_queue_pass = attempt.actual_usd is None and any(
+                key.startswith("queue-pass:") for key in attempt.budget_keys
+            )
             state.status = (
-                "review_needed" if terminal or state.attempts >= 3 else "retry_due"
+                "review_needed"
+                if terminal or state.attempts >= 3 or unknown_queue_pass
+                else "retry_due"
             )
             state.next_attempt_at = (
                 now + timedelta(minutes=15) if state.status == "retry_due" else None
             )
-            state.last_error = code
+            state.last_error = "unresolved_provider_call" if unknown_queue_pass else code
         else:
             state.status = decision["outcome"]
             state.decision = decision

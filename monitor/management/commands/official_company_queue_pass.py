@@ -10,6 +10,7 @@ from core.official_company_queue_pass import (
     acknowledge_failure,
     freeze_queue,
     read_manifest,
+    reconcile_uncertain,
     report,
     run_batch,
 )
@@ -20,7 +21,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "action", choices=("freeze", "report", "run", "acknowledge")
+            "action", choices=("freeze", "report", "run", "acknowledge", "reconcile")
         )
         parser.add_argument("--manifest", required=True)
         parser.add_argument("--total-limit-usd")
@@ -29,6 +30,7 @@ class Command(BaseCommand):
         parser.add_argument("--config", default="config.yaml")
         parser.add_argument("--attempt-id", type=int)
         parser.add_argument("--reason")
+        parser.add_argument("--actual-usd")
 
     def handle(self, *args, **opts):
         action = opts["action"]
@@ -51,6 +53,14 @@ class Command(BaseCommand):
                 manifest = read_manifest(opts["manifest"])
                 if action == "report":
                     result = report(manifest)
+                elif action == "reconcile":
+                    result = reconcile_uncertain(
+                        manifest,
+                        attempt_id=opts["attempt_id"],
+                        actual_usd=opts["actual_usd"],
+                        evidence=opts["reason"],
+                        reconciliation_path=opts["manifest"] + ".reconciled.json",
+                    )
                 elif action == "acknowledge":
                     result = acknowledge_failure(
                         manifest,
@@ -66,10 +76,15 @@ class Command(BaseCommand):
                     cfg = load_config(Path(opts["config"])).official_company
                     if not cfg.enabled:
                         raise ValueError("official-company evaluator is disabled")
+                    call = build_discovery_call(cfg)
+                    if call is None:
+                        raise ValueError(
+                            "official-company model provider is not configured"
+                        )
                     result = run_batch(
                         manifest,
                         cfg=cfg,
-                        call=build_discovery_call(cfg),
+                        call=call,
                         limit=opts["limit"],
                         seconds=opts["seconds"],
                         receipt_path=opts["manifest"] + ".verification.json",

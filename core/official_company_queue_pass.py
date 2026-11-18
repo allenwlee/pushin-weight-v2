@@ -26,10 +26,38 @@ def _timestamp(value):
 def _database_identity():
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT current_database(), inet_server_addr()::text, inet_server_port()"
+            "SELECT current_database(), system_identifier::text FROM pg_control_system()"
         )
-        name, host, port = cursor.fetchone()
-    return {"name": name, "host": host, "port": port}
+        name, system_identifier = cursor.fetchone()
+    return {"name": name, "system_identifier": system_identifier}
+
+
+def _environment(manifest=None):
+    value = os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT")
+    if value not in {"production", "staging", "test"}:
+        raise ValueError("explicit X_MONITOR_DEPLOYMENT_ENVIRONMENT is required")
+    database = _database_identity()
+    expected_targets = {
+        "production": ("pushinweight_shadow", "7667808775691038771"),
+        "staging": ("pushinweight_staging", "7673769124639031347"),
+    }
+    if value == "test":
+        if not database["name"].startswith("test_pw_queue_pass_") or database[
+            "system_identifier"
+        ] not in {
+            "7693527921830478235",  # Local shared PostgreSQL server on fuchitalee.
+            "7673769124639031347",  # Staging PostgreSQL server.
+        }:
+            raise ValueError(
+                "test environment requires an approved fixture-only database"
+            )
+    elif (database["name"], database["system_identifier"]) != expected_targets[value]:
+        raise ValueError("deployment environment does not match database identity")
+    if manifest is not None and manifest.get("lock_environment") != value:
+        raise ValueError("manifest lock environment does not match the process")
+    if manifest is not None and manifest.get("database") != database:
+        raise ValueError("manifest database does not match connection")
+    return value
 
 
 def freeze_queue(*, path, total_limit):
@@ -39,6 +67,7 @@ def freeze_queue(*, path, total_limit):
         raise ValueError("total limit must be positive and finite")
     if connection.in_atomic_block:
         raise ValueError("snapshot requires an outermost transaction")
+    environment = _environment()
     with transaction.atomic():
         with connection.cursor() as cursor:
             cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
@@ -68,6 +97,15 @@ def freeze_queue(*, path, total_limit):
                 "claim_token", "id"
             )
         )
+        baseline_attempts = {}
+        for state_id, attempt_id in (
+            OfficialCompanyAttempt.objects.filter(
+                state_id__in=[s["id"] for s in states]
+            )
+            .values_list("state_id", "id")
+            .iterator(chunk_size=500)
+        ):
+            baseline_attempts.setdefault(state_id, []).append(attempt_id)
         members = [
             {
                 "state_id": s["id"],
@@ -79,6 +117,7 @@ def freeze_queue(*, path, total_limit):
                 "claim_token": s["claim_token"],
                 "claim_expires_at": _timestamp(s["claim_expires_at"]),
                 "attempt_id": attempt_ids.get(s["claim_token"]),
+                "baseline_attempt_ids": baseline_attempts.get(s["id"], []),
             }
             for s in states
         ]
@@ -86,6 +125,7 @@ def freeze_queue(*, path, total_limit):
         "version": 1,
         "run_id": uuid.uuid4().hex,
         "database": database,
+        "lock_environment": environment,
         "cutoff": cutoff.isoformat(),
         "total_limit_usd": str(total_limit),
         "count": len(members),
@@ -141,6 +181,8 @@ def read_manifest(path):
         or member.get("starting_status") not in ("pending", "retry_due", "claimed")
         or not {"claim_token", "claim_expires_at", "attempt_id", "next_attempt_at"}
         <= member.keys()
+        or not isinstance(member.get("baseline_attempt_ids"), list)
+        or any(not isinstance(pk, int) for pk in member["baseline_attempt_ids"])
         for member in manifest["members"]
     ):
         raise ValueError("invalid manifest member")
@@ -163,15 +205,15 @@ def read_manifest(path):
         raise ValueError("invalid cutoff")
     if manifest.get("database") != _database_identity():
         raise ValueError("manifest database does not match connection")
+    _environment(manifest)
     return manifest
 
 
-def report(manifest):
+def _report_snapshot(manifest):
     """Reconcile every frozen member against state and immutable attempt rows."""
     from collections import Counter
 
     from django.utils import timezone
-    from django.utils.dateparse import parse_datetime
 
     from core.models import OfficialCompanyBudget
 
@@ -188,18 +230,16 @@ def report(manifest):
             "next_attempt_at",
         )
     }
-    cutoff = parse_datetime(manifest["cutoff"])
-    attempt_ids = [m["attempt_id"] for m in members if m["attempt_id"]]
-    from django.db.models import Q
-
     attempts = (
         OfficialCompanyAttempt.objects.filter(state_id__in=ids)
-        .filter(Q(created_at__gte=cutoff) | Q(pk__in=attempt_ids))
         .only(
             "id",
             "state_id",
             "evidence_hash",
             "actual_usd",
+            "input_tokens",
+            "output_tokens",
+            "reserved_usd",
             "status",
             "decision",
             "model",
@@ -216,18 +256,49 @@ def report(manifest):
     for member in members:
         state = states.get(member["state_id"])
         row = {"state_id": member["state_id"], "starting_priority": member["priority"]}
+        baseline_ids = set(member["baseline_attempt_ids"])
         relevant = [
             a
             for a in by_state.get(member["state_id"], [])
             if a.evidence_hash == member["evidence_hash"]
+            and (a.pk not in baseline_ids or a.pk == member["attempt_id"])
         ]
+        unknown_ids = [
+            a.pk
+            for a in by_state.get(member["state_id"], [])
+            if a.actual_usd is None and a.reserved_usd > 0
+        ]
+        if unknown_ids:
+            row["unresolved_attempt_ids"] = unknown_ids
         if state is None or str(state.account_id) != member["account_key"]:
             row["disposition"] = "identity_unavailable"
         elif state.evidence_hash != member["evidence_hash"]:
             row["disposition"] = "changed_evidence"
         elif state.status in ("suppressed", "registered"):
             row["disposition"] = state.status
-        elif any(a.actual_usd is None for a in relevant):
+        elif relevant and relevant[-1].status == "owner_attested":
+            row["disposition"] = "owner_settled"
+        elif (
+            relevant
+            and relevant[-1].status == "completed"
+            and relevant[-1].actual_usd is not None
+        ):
+            attempt = relevant[-1]
+            row["attempt_id"] = attempt.pk
+            row["disposition"] = "completed"
+            row["outcome"] = (
+                attempt.decision.get("outcome")
+                if isinstance(attempt.decision, dict)
+                else None
+            )
+            row["model"] = attempt.model
+            row["input_tokens"] = attempt.input_tokens
+            row["output_tokens"] = attempt.output_tokens
+            row["actual_usd"] = str(attempt.actual_usd)
+            row["run_attempt"] = (
+                "queue-pass:" + manifest["run_id"] in attempt.budget_keys
+            )
+        elif unknown_ids or any(a.actual_usd is None for a in relevant):
             active = (
                 state.status == "claimed"
                 and state.claim_expires_at
@@ -246,6 +317,9 @@ def report(manifest):
                 else None
             )
             row["model"] = attempt.model
+            row["input_tokens"] = attempt.input_tokens
+            row["output_tokens"] = attempt.output_tokens
+            row["actual_usd"] = str(attempt.actual_usd)
             row["run_attempt"] = (
                 "queue-pass:" + manifest["run_id"] in attempt.budget_keys
             )
@@ -304,9 +378,24 @@ def report(manifest):
         "recorded_attempts": len(own_attempts),
         "attempts_with_unknown_cost": sum(a.actual_usd is None for a in own_attempts),
         "actual_usd": str(budget.spent_usd if budget else 0),
+        "cost_basis": "configured_usage_rates_or_evidenced_reconciliation",
         "reserved_usd": str(budget.reserved_usd if budget else 0),
         "members": rows,
     }
+
+
+def report(manifest):
+    """Reconcile states and attempts at a single database observation time."""
+    if connection.in_atomic_block:
+        raise ValueError("report requires an outermost transaction")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            cursor.execute("SELECT transaction_timestamp()")
+            observed = cursor.fetchone()[0]
+        result = _report_snapshot(manifest)
+        result["observed_at"] = observed.isoformat()
+        return result
 
 
 def _acknowledgements(path, manifest):
@@ -357,13 +446,18 @@ def acknowledge_failure(manifest, *, attempt_id, reason, acknowledgement_path):
     """Record an investigated known-cost failure without retrying it."""
     from core.official_company_lock import official_company_writer_lock
 
+    _environment(manifest)
     if not reason or not reason.strip() or len(reason) > 500:
         raise ValueError("a bounded investigation reason is required")
+    if yield_reason := _harvest_yield_reason(0):
+        raise ValueError(yield_reason)
     with official_company_writer_lock(
         execution_mode="manual", entrypoint="queue-ack", run_id=manifest["run_id"]
     ) as lease:
         if not lease.acquired:
             raise ValueError("discovery lock busy")
+        if yield_reason := _harvest_yield_reason(0):
+            raise ValueError(yield_reason)
         attempt = OfficialCompanyAttempt.objects.filter(
             pk=attempt_id,
             status="failed",
@@ -384,18 +478,164 @@ def acknowledge_failure(manifest, *, attempt_id, reason, acknowledgement_path):
         return {"acknowledged_attempt": attempt.pk}
 
 
+def reconcile_uncertain(
+    manifest, *, attempt_id, actual_usd, evidence, reconciliation_path
+):
+    """Settle a known provider charge without inventing a model decision."""
+    from django.utils import timezone
+
+    from core.models import OfficialCompanyBudget
+    from core.official_company_lock import official_company_writer_lock
+
+    _environment(manifest)
+    try:
+        actual = Decimal(actual_usd)
+    except (InvalidOperation, TypeError):
+        raise ValueError("a verified actual cost is required") from None
+    if (
+        not actual.is_finite()
+        or actual < 0
+        or actual > Decimal("999999.9999999999")
+        or actual != actual.quantize(Decimal("0.0000000001"))
+    ):
+        raise ValueError("actual cost is outside supported precision")
+    if not evidence or not evidence.strip() or len(evidence) > 500:
+        raise ValueError("a bounded provider evidence reference is required")
+    if yield_reason := _harvest_yield_reason(0):
+        raise ValueError(yield_reason)
+    with official_company_writer_lock(
+        execution_mode="manual", entrypoint="queue-reconcile", run_id=manifest["run_id"]
+    ) as lease:
+        if not lease.acquired:
+            raise ValueError("discovery lock busy")
+        if yield_reason := _harvest_yield_reason(0):
+            raise ValueError(yield_reason)
+        with transaction.atomic():
+            attempt = (
+                OfficialCompanyAttempt.objects.select_for_update()
+                .filter(
+                    pk=attempt_id,
+                    budget_keys__contains=["queue-pass:" + manifest["run_id"]],
+                    state_id__in=[m["state_id"] for m in manifest["members"]],
+                )
+                .first()
+            )
+            if attempt is None or attempt.status not in (
+                "failed",
+                "reserved",
+                "completed",
+            ):
+                raise ValueError("attempt is not an unresolved call from this run")
+            state = OfficialCompanyAccountState.objects.select_for_update().get(
+                pk=attempt.state_id
+            )
+            if (
+                state.claim_token == attempt.claim_token
+                and state.claim_expires_at
+                and state.claim_expires_at > timezone.now()
+            ):
+                raise ValueError("attempt claim is still active")
+            entries = _acknowledgements(reconciliation_path, manifest)
+            entry = {"actual_usd": str(actual), "evidence": evidence.strip()}
+            previous = entries.get(str(attempt.pk))
+            if previous is not None and previous != entry:
+                raise ValueError(
+                    "attempt already has different reconciliation evidence"
+                )
+            if attempt.actual_usd is not None:
+                if previous == entry and attempt.actual_usd == actual:
+                    return {
+                        "reconciled_attempt": attempt.pk,
+                        "already_reconciled": True,
+                    }
+                raise ValueError("attempt already has a recorded cost")
+            budgets = [
+                OfficialCompanyBudget.objects.select_for_update().get(pk=key)
+                for key in sorted(attempt.budget_keys)
+            ]
+            if any(b.reserved_usd < attempt.reserved_usd for b in budgets):
+                raise ValueError("budget reservation does not match attempt")
+            entries[str(attempt.pk)] = entry
+            _write_receipt(
+                reconciliation_path,
+                {"version": 1, "run_id": manifest["run_id"], "attempts": entries},
+            )
+            for budget in budgets:
+                budget.reserved_usd -= attempt.reserved_usd
+                budget.spent_usd += actual
+                budget.save(update_fields=["reserved_usd", "spent_usd"])
+            attempt.actual_usd = actual
+            if attempt.status == "reserved":
+                attempt.status = "failed"
+                attempt.error_code = "reconciled_unknown_outcome"
+                attempt.completed_at = timezone.now()
+            attempt.save(
+                update_fields=["actual_usd", "status", "error_code", "completed_at"]
+            )
+            if state.claim_token == attempt.claim_token:
+                state.status = "review_needed"
+                state.last_error = "reconciled_unknown_outcome"
+                state.claim_token = ""
+                state.claim_expires_at = None
+                state.next_attempt_at = None
+                state.save(
+                    update_fields=[
+                        "status",
+                        "last_error",
+                        "claim_token",
+                        "claim_expires_at",
+                        "next_attempt_at",
+                        "updated_at",
+                    ]
+                )
+            return {"reconciled_attempt": attempt.pk, "already_reconciled": False}
+
+
 def _run_guard(manifest, acknowledgement_path):
     """Check all this run's attempts again while holding the discovery lock."""
     acknowledged = _acknowledgements(acknowledgement_path, manifest)
     attempts = OfficialCompanyAttempt.objects.filter(
         budget_keys__contains=["queue-pass:" + manifest["run_id"]]
-    ).values_list("id", "status", "actual_usd")
-    for attempt_id, status, actual in attempts:
-        if actual is None:
-            return "unresolved_run_attempt"
-        if status != "completed" and str(attempt_id) not in acknowledged:
-            return "evaluation_failed"
+    )
+    if attempts.filter(actual_usd__isnull=True).exists():
+        return "unresolved_run_attempt"
+    if attempts.exclude(status="completed").exclude(pk__in=list(acknowledged)).exists():
+        return "evaluation_failed"
     return None
+
+
+def _near_scheduled_tick(timeout):
+    import time
+
+    elapsed = time.time() % 900
+    return elapsed < 120 or 900 - elapsed <= timeout + 60
+
+
+def _harvest_yield_reason(timeout):
+    """Yield around scheduled ticks and while another harvest owns its lock."""
+    from monitor.run_lock import _lock_keys
+
+    if _near_scheduled_tick(timeout):
+        return "scheduled_harvest_window"
+    environment = (
+        os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT")
+        or os.environ.get("RENDER_GIT_BRANCH")
+        or str(connection.settings_dict.get("NAME") or "default")
+    )
+    _, _, class_id, object_id = _lock_keys(environment)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1 FROM pg_locks
+              WHERE locktype = 'advisory' AND granted AND objsubid = 2
+                AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+                AND classid::bigint = %s AND objid::bigint = %s
+            )
+            """,
+            [class_id, object_id],
+        )
+        return "harvest_active" if cursor.fetchone()[0] else None
 
 
 def _proof_matches(path, manifest, cfg, call):
@@ -414,10 +654,18 @@ def _proof_matches(path, manifest, cfg, call):
     revision = getattr(call, "credential_revision", None)
     if not isinstance(revision, str):
         revision = None
-    if (proof.get("run_id"), proof.get("model"), proof.get("credential_revision")) != (
+    if (
+        proof.get("run_id"),
+        proof.get("model"),
+        proof.get("credential_revision"),
+        proof.get("input_usd_per_million"),
+        proof.get("output_usd_per_million"),
+    ) != (
         manifest["run_id"],
         cfg.model,
         revision,
+        str(cfg.input_usd_per_million),
+        str(cfg.output_usd_per_million),
     ):
         return False
     if (
@@ -460,6 +708,8 @@ def _write_proof(path, manifest, cfg, call, row):
         "run_id": manifest["run_id"],
         "model": cfg.model,
         "credential_revision": revision,
+        "input_usd_per_million": str(cfg.input_usd_per_million),
+        "output_usd_per_million": str(cfg.output_usd_per_million),
         "state_id": row["state_id"],
         "attempt_id": row["attempt_id"],
     }
@@ -474,8 +724,11 @@ def run_batch(manifest, *, cfg, call, limit, seconds, receipt_path):
     from core.official_company_accounts import evaluate_account
     from core.official_company_lock import official_company_writer_lock
 
+    _environment(manifest)
     if not 1 <= limit <= 500 or not 1 <= seconds <= 3600:
         raise ValueError("invalid batch bound")
+    if cfg.input_usd_per_million <= 0 or cfg.output_usd_per_million <= 0:
+        raise ValueError("positive configured input and output prices are required")
     started = time.monotonic()
     deadline = started + seconds
     batch_scope = "queue-" + uuid.uuid4().hex
@@ -494,7 +747,7 @@ def run_batch(manifest, *, cfg, call, limit, seconds, receipt_path):
             "report": initial_report,
         }
     calls = 0
-    reason = "complete"
+    reason = "batch_finished"
     members_by_id = {m["state_id"]: m for m in manifest["members"]}
     for row in initial_report["members"]:
         if row["disposition"] != "pending":
@@ -506,11 +759,17 @@ def run_batch(manifest, *, cfg, call, limit, seconds, receipt_path):
             reason = "batch_bound"
             break
         member = members_by_id[row["state_id"]]
+        reason = _harvest_yield_reason(cfg.request_timeout_seconds)
+        if reason:
+            break
         with official_company_writer_lock(
             execution_mode="manual", entrypoint="queue-pass", run_id=manifest["run_id"]
         ) as lease:
             if not lease.acquired:
                 reason = "discovery_busy"
+                break
+            reason = _harvest_yield_reason(cfg.request_timeout_seconds)
+            if reason:
                 break
             reason = _run_guard(manifest, acknowledgement_path)
             if reason:
@@ -519,6 +778,12 @@ def run_batch(manifest, *, cfg, call, limit, seconds, receipt_path):
             current = report({**manifest, "members": [member]})["members"][0]
             if current["disposition"] != "pending":
                 continue
+            if time.monotonic() + cfg.request_timeout_seconds + 2 > deadline:
+                reason = "batch_bound"
+                break
+            reason = _harvest_yield_reason(cfg.request_timeout_seconds)
+            if reason:
+                break
             made = evaluate_account(
                 member["state_id"],
                 cfg=cfg,
@@ -552,7 +817,7 @@ def run_batch(manifest, *, cfg, call, limit, seconds, receipt_path):
             time.sleep(5)
     return {
         "evaluator_invocations": calls,
-        "reason": reason or "complete",
+        "reason": reason or "batch_finished",
         "elapsed_seconds": round(time.monotonic() - started, 2),
         "report": report(manifest),
     }

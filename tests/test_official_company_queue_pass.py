@@ -10,6 +10,14 @@ from core.official_company_accounts import enqueue_account
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
 
+@pytest.fixture(autouse=True)
+def ignore_clock_window(monkeypatch):
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "test")
+    monkeypatch.setattr(
+        "core.official_company_queue_pass._near_scheduled_tick", lambda timeout: False
+    )
+
+
 def candidate(identifier, priority, status="pending"):
     DataSource.objects.get_or_create(
         pk="x", defaults={"name": "X", "source_type": "social"}
@@ -111,6 +119,9 @@ def test_frozen_runner_processes_one_snapshot_member_and_reconciles(tmp_path):
     assert reconciled["members"][0]["state_id"] == first.pk
     assert reconciled["members"][0]["disposition"] == "completed"
     assert reconciled["members"][0]["outcome"] == "accepted"
+    assert reconciled["members"][0]["input_tokens"] == 100
+    assert reconciled["members"][0]["output_tokens"] == 100
+    assert Decimal(reconciled["members"][0]["actual_usd"]) > 0
     assert (
         run_batch(
             manifest,
@@ -222,7 +233,7 @@ def test_unknown_queue_pass_call_is_never_repeated_by_scheduled_caller(tmp_path)
     assert call.call_count == 1
 
 
-def test_queue_pass_runs_while_another_connection_holds_harvest_lock(tmp_path):
+def test_queue_pass_yields_while_another_connection_holds_harvest_lock(tmp_path):
     import threading
 
     from django.db import connections
@@ -263,7 +274,8 @@ def test_queue_pass_runs_while_another_connection_holds_harvest_lock(tmp_path):
             seconds=60,
             receipt_path=tmp_path / "proof.json",
         )
-        assert result["reason"] == "verification_complete"
+        assert result["reason"] == "harvest_active"
+        assert result["evaluator_invocations"] == 0
     finally:
         release.set()
         thread.join(timeout=30)
@@ -606,3 +618,635 @@ def test_unknown_cost_failure_cannot_be_acknowledged(tmp_path):
             acknowledgement_path=tmp_path / "ack.json",
         )
     assert not (tmp_path / "ack.json").exists()
+
+
+def test_precutoff_unknown_attempt_is_not_redispatched(tmp_path):
+    from unittest.mock import Mock
+
+    from core.official_company_accounts import evaluate_account
+    from core.official_company_queue_pass import freeze_queue, report, run_batch
+    from x_monitor.config import OfficialCompanyConfig
+
+    state = candidate(826, 1)
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    call = Mock(side_effect=TimeoutError())
+    assert evaluate_account(state.pk, cfg=cfg, call=call, budget_scope="old")
+    state.refresh_from_db()
+    state.next_attempt_at = timezone.now() - timedelta(seconds=1)
+    state.save()
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    assert report(manifest)["members"][0]["disposition"] == "unknown_call"
+    result = run_batch(
+        manifest,
+        cfg=cfg,
+        call=call,
+        limit=1,
+        seconds=60,
+        receipt_path=tmp_path / "proof.json",
+    )
+    assert result["evaluator_invocations"] == 0
+    assert call.call_count == 1
+
+
+def test_snapshot_detects_attempt_committed_after_snapshot(tmp_path):
+    import json
+    import threading
+
+    from django.db import connections, transaction
+
+    from core.official_company_accounts import claim_account, complete_attempt
+    from core.official_company_queue_pass import freeze_queue, report
+    from tests.test_official_company_cycle import accept
+    from x_monitor.config import OfficialCompanyConfig
+
+    state = candidate(827, 1)
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    claimed, release = threading.Event(), threading.Event()
+    errors = []
+
+    def concurrent_claim():
+        try:
+            with transaction.atomic():
+                attempt = claim_account(state.pk, cfg=cfg, budget_scope="concurrent")
+                claimed.set()
+                assert release.wait(timeout=20)
+            complete_attempt(
+                attempt.pk,
+                cfg=cfg,
+                response=accept(
+                    "model-llm model-other", json.dumps(attempt.evidence), "model", 100
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 - report worker failures in the test thread
+            errors.append(exc)
+        finally:
+            connections.close_all()
+
+    thread = threading.Thread(target=concurrent_claim)
+    thread.start()
+    try:
+        assert claimed.wait(timeout=10)
+        manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    finally:
+        release.set()
+        thread.join(timeout=30)
+    assert not thread.is_alive() and not errors
+    assert manifest["members"][0]["baseline_attempt_ids"] == []
+    assert report(manifest)["members"][0]["disposition"] == "completed"
+
+
+def test_waiting_only_snapshot_never_claims_complete(tmp_path):
+    from unittest.mock import Mock
+
+    from core.official_company_queue_pass import freeze_queue, run_batch
+    from x_monitor.config import OfficialCompanyConfig
+
+    state = candidate(828, 1, "retry_due")
+    state.next_attempt_at = timezone.now() + timedelta(hours=1)
+    state.save()
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    result = run_batch(
+        manifest,
+        cfg=cfg,
+        call=Mock(),
+        limit=5,
+        seconds=60,
+        receipt_path=tmp_path / "proof.json",
+    )
+    assert result["reason"] == "batch_finished"
+    assert result["report"]["counts"] == {"waiting_retry": 1}
+
+
+def test_command_completes_and_resumes_frozen_three_tier_pass(tmp_path, monkeypatch):
+    import json
+    import time
+    from io import StringIO
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from django.core.management import call_command
+
+    from core.models import (
+        BrandAccount,
+        CompanyAccount,
+        OfficialCompanyAttempt,
+        OfficialCompanyListIntent,
+    )
+    from tests.test_official_company_cycle import accept
+    from x_monitor.config import OfficialCompanyConfig
+
+    states = [candidate(829, 1), candidate(830, 2), candidate(831, 3)]
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    call = Mock(side_effect=accept)
+    monkeypatch.setattr(
+        "x_monitor.config.load_config",
+        lambda path: SimpleNamespace(official_company=cfg),
+    )
+    monkeypatch.setattr(
+        "core.official_company_discovery.build_discovery_call", lambda cfg: call
+    )
+    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    path = str(tmp_path / "manifest.json")
+    call_command(
+        "official_company_queue_pass",
+        "freeze",
+        manifest=path,
+        total_limit_usd="2",
+        stdout=StringIO(),
+    )
+    arrival = candidate(832, 1)
+    for limit in (1, 1, 2):
+        call_command(
+            "official_company_queue_pass",
+            "run",
+            manifest=path,
+            limit=limit,
+            seconds=60,
+            stdout=StringIO(),
+        )
+    output = StringIO()
+    call_command("official_company_queue_pass", "report", manifest=path, stdout=output)
+    result = json.loads(output.getvalue())
+    assert result["count"] == 3 and result["counts"] == {"completed": 3}
+    assert result["outcomes_by_starting_priority"] == {
+        "1": {"accepted": 1},
+        "2": {"accepted": 1},
+        "3": {"accepted": 1},
+    }
+    assert {row["state_id"] for row in result["members"]} == {s.pk for s in states}
+    assert call.call_count == 3
+    assert OfficialCompanyAttempt.objects.filter(state__in=states).count() == 3
+    assert not OfficialCompanyAttempt.objects.filter(state=arrival).exists()
+    assert not BrandAccount.objects.exists() and not CompanyAccount.objects.exists()
+    assert not OfficialCompanyListIntent.objects.exists()
+
+
+def test_uncertain_cost_reconciliation_is_audited_and_idempotent(tmp_path):
+    from unittest.mock import Mock
+
+    from core.models import OfficialCompanyAttempt, OfficialCompanyBudget
+    from core.official_company_queue_pass import (
+        freeze_queue,
+        reconcile_uncertain,
+        run_batch,
+    )
+    from x_monitor.config import OfficialCompanyConfig
+
+    candidate(833, 1)
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    run_batch(
+        manifest,
+        cfg=cfg,
+        call=Mock(side_effect=TimeoutError()),
+        limit=1,
+        seconds=60,
+        receipt_path=tmp_path / "proof.json",
+    )
+    attempt = OfficialCompanyAttempt.objects.get()
+    keys = attempt.budget_keys
+    assert all(OfficialCompanyBudget.objects.get(pk=k).reserved_usd > 0 for k in keys)
+    kwargs = {
+        "attempt_id": attempt.pk,
+        "actual_usd": "0.0001",
+        "evidence": "provider receipt abc",
+        "reconciliation_path": tmp_path / "reconciled.json",
+    }
+    assert not reconcile_uncertain(manifest, **kwargs)["already_reconciled"]
+    assert reconcile_uncertain(manifest, **kwargs)["already_reconciled"]
+    attempt.refresh_from_db()
+    assert attempt.actual_usd == Decimal("0.0001")
+    assert all(OfficialCompanyBudget.objects.get(pk=k).reserved_usd == 0 for k in keys)
+    assert all(
+        OfficialCompanyBudget.objects.get(pk=k).spent_usd == Decimal("0.0001")
+        for k in keys
+    )
+    with pytest.raises(ValueError, match="different reconciliation"):
+        reconcile_uncertain(manifest, **{**kwargs, "actual_usd": "0"})
+
+
+def test_scheduled_drain_skips_unresolved_claim_and_advances_next_retry(monkeypatch):
+    from core.official_company_accounts import claim_account
+    from core.official_company_discovery import drain_accounts
+    from x_monitor.config import OfficialCompanyConfig
+
+    blocked = candidate(834, 1)
+    other = candidate(835, 1, "retry_due")
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    claim_account(blocked.pk, cfg=cfg, budget_scope="old-reservation")
+    blocked.refresh_from_db()
+    blocked.claim_expires_at = timezone.now() - timedelta(seconds=1)
+    blocked.save()
+    seen = []
+    monkeypatch.setattr(
+        "core.official_company_discovery.evaluate_account",
+        lambda pk, **kwargs: seen.append(pk) or True,
+    )
+    result = drain_accounts(cfg=cfg, call=object(), limit=1, budget_scope="scheduled")
+    assert result["attempted"] == 1
+    assert seen == [other.pk]
+
+
+def test_batch_yields_scheduled_window_and_real_scheduled_lane_proceeds(
+    tmp_path, monkeypatch
+):
+    from unittest.mock import Mock
+
+    from core.official_company_queue_pass import freeze_queue, run_batch
+    from monitor.cycle import CycleRunner
+    from tests.test_official_company_cycle import accept, config
+
+    candidate(836, 1)
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    cfg = config()
+    call = Mock(side_effect=accept)
+    monkeypatch.setattr(
+        "core.official_company_queue_pass._near_scheduled_tick", lambda timeout: True
+    )
+    batch = run_batch(
+        manifest,
+        cfg=cfg.official_company,
+        call=call,
+        limit=1,
+        seconds=60,
+        receipt_path=tmp_path / "proof.json",
+    )
+    assert batch["reason"] == "scheduled_harvest_window"
+    assert batch["evaluator_invocations"] == 0
+    runner = CycleRunner(
+        cfg=cfg,
+        cycle_kind="scheduled",
+        _official_company_call=call,
+        _official_list_client=Mock(),
+    )
+    scheduled = runner._run_official_company_discovery(
+        run_id="scheduled-after-yield", deadline=cfg.harvest.start_deadline()
+    )
+    assert scheduled["attempted"] == 1
+    assert call.call_count == 1
+
+
+def test_concurrent_completed_decision_preserves_earlier_unknown_cost(tmp_path):
+    from unittest.mock import Mock
+
+    from core.models import OfficialCompanyAttempt
+    from core.official_company_accounts import evaluate_account
+    from core.official_company_queue_pass import freeze_queue, report
+    from tests.test_official_company_cycle import accept
+    from x_monitor.config import OfficialCompanyConfig
+
+    state = candidate(837, 1)
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    assert evaluate_account(
+        state.pk, cfg=cfg, call=Mock(side_effect=TimeoutError()), budget_scope="old"
+    )
+    old_attempt = OfficialCompanyAttempt.objects.get()
+    state.refresh_from_db()
+    state.next_attempt_at = timezone.now() - timedelta(seconds=1)
+    state.save()
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    assert evaluate_account(
+        state.pk, cfg=cfg, call=accept, budget_scope="scheduled-later"
+    )
+    row = report(manifest)["members"][0]
+    assert row["disposition"] == "completed" and row["outcome"] == "accepted"
+    assert row["unresolved_attempt_ids"] == [old_attempt.pk]
+
+
+def test_superseded_legacy_reservation_does_not_block_scheduled_claim():
+    from core.official_company_accounts import claim_account
+    from x_monitor.config import OfficialCompanyConfig
+
+    state = candidate(838, 1)
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    assert claim_account(state.pk, cfg=cfg, budget_scope="old")
+    state.account.bio = "We develop a new reasoning model"
+    state.account.save()
+    current = enqueue_account(state.account)
+    assert current.claim_token == "" and current.status == "pending"
+    assert claim_account(current.pk, cfg=cfg, budget_scope="scheduled-new") is not None
+
+
+def test_scheduled_drain_skips_queue_timeout_after_new_evidence(tmp_path, monkeypatch):
+    from unittest.mock import Mock
+
+    from core.official_company_discovery import drain_accounts
+    from core.official_company_queue_pass import freeze_queue, run_batch
+    from x_monitor.config import OfficialCompanyConfig
+
+    state = candidate(839, 1)
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    run_batch(
+        manifest,
+        cfg=cfg,
+        call=Mock(side_effect=TimeoutError()),
+        limit=1,
+        seconds=60,
+        receipt_path=tmp_path / "proof.json",
+    )
+    state.account.bio = "We develop a new reasoning model"
+    state.account.save()
+    state = enqueue_account(state.account)
+    assert state.status == "pending"
+    other = candidate(840, 1, "retry_due")
+    seen = []
+    monkeypatch.setattr(
+        "core.official_company_discovery.evaluate_account",
+        lambda pk, **kwargs: seen.append(pk) or True,
+    )
+    drain_accounts(cfg=cfg, call=object(), limit=1, budget_scope="scheduled")
+    assert seen == [other.pk]
+
+
+def test_environment_mismatch_blocks_before_any_model_call(tmp_path, monkeypatch):
+    from unittest.mock import Mock
+
+    from core.official_company_queue_pass import freeze_queue, read_manifest, run_batch
+    from x_monitor.config import OfficialCompanyConfig
+
+    candidate(841, 1)
+    path = tmp_path / "queue.json"
+    manifest = freeze_queue(path=path, total_limit=Decimal(2))
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    call = Mock()
+    with pytest.raises(ValueError, match="environment"):
+        read_manifest(path)
+    with pytest.raises(ValueError, match="environment"):
+        run_batch(
+            manifest,
+            cfg=OfficialCompanyConfig(enabled=True),
+            call=call,
+            limit=1,
+            seconds=60,
+            receipt_path=tmp_path / "proof.json",
+        )
+    call.assert_not_called()
+
+
+def test_batch_rechecks_yield_immediately_before_dispatch(tmp_path, monkeypatch):
+    from unittest.mock import Mock
+
+    from core.official_company_queue_pass import freeze_queue, run_batch
+    from x_monitor.config import OfficialCompanyConfig
+
+    candidate(842, 1)
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    checks = iter([None, None, "scheduled_harvest_window"])
+    monkeypatch.setattr(
+        "core.official_company_queue_pass._harvest_yield_reason",
+        lambda timeout: next(checks),
+    )
+    call = Mock()
+    result = run_batch(
+        manifest,
+        cfg=cfg,
+        call=call,
+        limit=1,
+        seconds=60,
+        receipt_path=tmp_path / "proof.json",
+    )
+    assert result["reason"] == "scheduled_harvest_window"
+    call.assert_not_called()
+
+
+def test_concurrent_owner_attestation_is_not_a_model_failure(tmp_path):
+    from core.models import OfficialCompanyAttempt
+    from core.official_company_queue_pass import freeze_queue, report
+
+    state = candidate(843, 1)
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    state.status = "accepted"
+    state.save()
+    OfficialCompanyAttempt.objects.create(
+        state=state,
+        evidence_hash=state.evidence_hash,
+        claim_token="owner-test",
+        model="owner-attestation",
+        policy_version="owner:test",
+        status="owner_attested",
+        reserved_usd=0,
+        actual_usd=0,
+    )
+    assert report(manifest)["members"][0]["disposition"] == "owner_settled"
+
+
+def test_report_observes_one_database_snapshot_during_concurrent_change(
+    tmp_path, monkeypatch
+):
+    import threading
+
+    from django.db import connections
+
+    from core.models import OfficialCompanyAttempt
+    from core.official_company_queue_pass import freeze_queue, report
+
+    state = candidate(844, 1)
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    captured, resume = threading.Event(), threading.Event()
+    original_filter = OfficialCompanyAttempt.objects.filter
+
+    def controlled_filter(*args, **kwargs):
+        if threading.current_thread().name == "report-reader" and not captured.is_set():
+            captured.set()
+            assert resume.wait(timeout=20)
+        return original_filter(*args, **kwargs)
+
+    monkeypatch.setattr(OfficialCompanyAttempt.objects, "filter", controlled_filter)
+    results, errors = [], []
+
+    def read_report():
+        try:
+            results.append(report(manifest))
+        except Exception as exc:  # noqa: BLE001 - report worker failures in the test thread
+            errors.append(exc)
+        finally:
+            connections.close_all()
+
+    thread = threading.Thread(target=read_report, name="report-reader")
+    thread.start()
+    try:
+        assert captured.wait(timeout=10)
+        state.status = "suppressed"
+        state.save()
+    finally:
+        resume.set()
+        thread.join(timeout=30)
+    assert not thread.is_alive() and not errors
+    assert results[0]["members"][0]["disposition"] == "pending"
+    assert results[0]["observed_at"]
+    assert report(manifest)["members"][0]["disposition"] == "suppressed"
+
+
+def test_wrong_database_environment_is_refused_at_snapshot(tmp_path, monkeypatch):
+    from core.official_company_queue_pass import freeze_queue
+
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "staging")
+    with pytest.raises(ValueError, match="database identity"):
+        freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    assert not (tmp_path / "queue.json").exists()
+
+
+def test_zero_provider_prices_block_before_evaluation(tmp_path):
+    from unittest.mock import Mock
+
+    from core.official_company_queue_pass import freeze_queue, run_batch
+    from x_monitor.config import OfficialCompanyConfig
+
+    candidate(845, 1)
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    cfg = OfficialCompanyConfig(
+        enabled=True,
+        max_usd_per_cycle=Decimal(1),
+        max_usd_per_day=Decimal(1),
+        input_usd_per_million=Decimal(0),
+    )
+    call = Mock()
+    with pytest.raises(ValueError, match="positive configured"):
+        run_batch(
+            manifest,
+            cfg=cfg,
+            call=call,
+            limit=1,
+            seconds=60,
+            receipt_path=tmp_path / "proof.json",
+        )
+    call.assert_not_called()
+
+
+def test_completed_decision_with_unknown_cost_can_be_reconciled(tmp_path):
+    from core.models import OfficialCompanyAttempt
+    from core.official_company_queue_pass import (
+        freeze_queue,
+        reconcile_uncertain,
+        report,
+        run_batch,
+    )
+    from tests.test_official_company_cycle import accept
+    from x_monitor.config import OfficialCompanyConfig
+
+    state = candidate(846, 1)
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+
+    def no_usage(*args):
+        result = accept(*args)
+        result.pop("usage")
+        return result
+
+    result = run_batch(
+        manifest,
+        cfg=cfg,
+        call=no_usage,
+        limit=1,
+        seconds=60,
+        receipt_path=tmp_path / "proof.json",
+    )
+    assert result["reason"] == "evaluation_not_verified"
+    attempt = OfficialCompanyAttempt.objects.get()
+    assert attempt.status == "completed" and attempt.actual_usd is None
+    reconcile_uncertain(
+        manifest,
+        attempt_id=attempt.pk,
+        actual_usd="0.0002",
+        evidence="provider bill 123",
+        reconciliation_path=tmp_path / "reconcile.json",
+    )
+    state.refresh_from_db()
+    assert state.decision["outcome"] == "accepted"
+    row = report(manifest)["members"][0]
+    assert row["disposition"] == "completed" and row["actual_usd"] == "0.0002000000"
+
+
+def test_price_change_requires_another_verification(tmp_path):
+    from core.official_company_queue_pass import freeze_queue, run_batch
+    from tests.test_official_company_cycle import accept
+    from x_monitor.config import OfficialCompanyConfig
+
+    candidate(847, 1)
+    candidate(848, 2)
+    candidate(849, 3)
+    manifest = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    cfg = OfficialCompanyConfig(
+        enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1)
+    )
+    proof = tmp_path / "proof.json"
+    first = run_batch(
+        manifest, cfg=cfg, call=accept, limit=2, seconds=60, receipt_path=proof
+    )
+    assert first["reason"] == "verification_complete"
+    changed = cfg.model_copy(update={"input_usd_per_million": Decimal("0.12")})
+    second = run_batch(
+        manifest, cfg=changed, call=accept, limit=2, seconds=60, receipt_path=proof
+    )
+    assert second["reason"] == "verification_complete"
+    assert second["evaluator_invocations"] == 1
+    assert second["report"]["counts"] == {"completed": 2, "pending": 1}
+
+
+def test_missing_provider_is_reported_before_claim(tmp_path, monkeypatch):
+    from io import StringIO
+    from types import SimpleNamespace
+
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+
+    from core.models import OfficialCompanyAttempt
+    from core.official_company_queue_pass import freeze_queue
+    from x_monitor.config import OfficialCompanyConfig
+
+    candidate(850, 1)
+    path = tmp_path / "queue.json"
+    freeze_queue(path=path, total_limit=Decimal(2))
+    cfg = OfficialCompanyConfig(enabled=True)
+    monkeypatch.setattr(
+        "x_monitor.config.load_config",
+        lambda path: SimpleNamespace(official_company=cfg),
+    )
+    monkeypatch.setattr(
+        "core.official_company_discovery.build_discovery_call", lambda cfg: None
+    )
+    with pytest.raises(CommandError, match="provider is not configured"):
+        call_command(
+            "official_company_queue_pass", "run", manifest=str(path), stdout=StringIO()
+        )
+    assert not OfficialCompanyAttempt.objects.exists()
+
+
+def test_production_name_on_wrong_cluster_cannot_use_production_locks(monkeypatch):
+    from core.official_company_queue_pass import _environment
+
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    monkeypatch.setattr(
+        "core.official_company_queue_pass._database_identity",
+        lambda: {
+            "name": "pushinweight_shadow",
+            "system_identifier": "7673769124639031347",
+        },
+    )
+    with pytest.raises(ValueError, match="database identity"):
+        _environment()
