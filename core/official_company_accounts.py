@@ -500,7 +500,10 @@ def _apply_owner_attestation(state):
     )
 
 
-def claim_account(state_id, *, cfg, budget_scope, initial=False):
+def claim_account(
+    state_id, *, cfg, budget_scope, initial=False,
+    expected_account_key=None, expected_evidence_hash=None, run_budget=None,
+):
     """Reserve conservative cost under ordered row locks before one physical call."""
     import uuid
     from datetime import timedelta
@@ -518,6 +521,10 @@ def claim_account(state_id, *, cfg, budget_scope, initial=False):
     now = timezone.now()
     with transaction.atomic():
         state = OfficialCompanyAccountState.objects.select_for_update().get(pk=state_id)
+        if expected_account_key is not None and str(state.account_id) != str(expected_account_key):
+            return None
+        if expected_evidence_hash is not None and state.evidence_hash != expected_evidence_hash:
+            return None
         if state.status not in {"pending", "retry_due", "claimed"}:
             return None
         if state.candidate_priority not in {1, 2, 3}:
@@ -528,6 +535,18 @@ def claim_account(state_id, *, cfg, budget_scope, initial=False):
             state.status == "claimed"
             and state.claim_expires_at
             and state.claim_expires_at > now
+        ):
+            return None
+        # A lease expiring does not prove the provider did not receive the call.
+        # Keep the original reservation until its outcome is reconciled.
+        unknown_attempts = OfficialCompanyAttempt.objects.filter(
+            state=state, actual_usd__isnull=True, reserved_usd__gt=0
+        ).values_list("status", "budget_keys", "claim_token")
+        if any(
+            expected_evidence_hash is not None
+            or (status == "reserved" and state.claim_token and token == state.claim_token)
+            or any(key.startswith("queue-pass:") for key in keys)
+            for status, keys, token in unknown_attempts
         ):
             return None
         if _hold_existing_tracked_account(state):
@@ -554,14 +573,20 @@ def claim_account(state_id, *, cfg, budget_scope, initial=False):
             )
             / Decimal(1_000_000)
         ).quantize(Decimal("0.0000000001"), rounding=ROUND_UP)
+        budget_prefix = "on-demand:" if run_budget is not None else ""
         limits = (
             {"initial-total": cfg.initial_scan_max_usd}
             if initial
             else {
-                "day:" + now.date().isoformat(): cfg.max_usd_per_day,
-                "cycle:" + budget_scope: cfg.max_usd_per_cycle,
+                budget_prefix + "day:" + now.date().isoformat(): cfg.max_usd_per_day,
+                budget_prefix + "cycle:" + budget_scope: cfg.max_usd_per_cycle,
             }
         )
+        if run_budget is not None:
+            key, limit = run_budget
+            if initial or not key.startswith("queue-pass:") or len(key) > 96:
+                raise ValueError("invalid queue-pass budget")
+            limits[key] = limit
         budgets = []
         for key in sorted(limits):
             if limits[key] <= 0:
@@ -673,13 +698,18 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
             terminal = isinstance(
                 error, (TypeError, ValueError, DeepInfraPermanentError)
             ) or getattr(error, "status_code", None) in {400, 401, 403}
+            unknown_queue_pass = attempt.actual_usd is None and any(
+                key.startswith("queue-pass:") for key in attempt.budget_keys
+            )
             state.status = (
-                "review_needed" if terminal or state.attempts >= 3 else "retry_due"
+                "review_needed"
+                if terminal or state.attempts >= 3 or unknown_queue_pass
+                else "retry_due"
             )
             state.next_attempt_at = (
                 now + timedelta(minutes=15) if state.status == "retry_due" else None
             )
-            state.last_error = code
+            state.last_error = "unresolved_provider_call" if unknown_queue_pass else code
         else:
             state.status = decision["outcome"]
             state.decision = decision
@@ -694,10 +724,15 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
         return True
 
 
-def evaluate_account(state_id, *, cfg, call, budget_scope, initial=False):
+def evaluate_account(
+    state_id, *, cfg, call, budget_scope, initial=False,
+    expected_account_key=None, expected_evidence_hash=None, run_budget=None,
+    provider_state_key="deepinfra",
+):
     if not cfg.enabled or call is None:
         return False
     from django.db import transaction
+    from django.utils import timezone
 
     from core.models import OfficialCompanyProviderState
 
@@ -706,7 +741,7 @@ def evaluate_account(state_id, *, cfg, call, budget_scope, initial=False):
         with transaction.atomic():
             gate, _ = (
                 OfficialCompanyProviderState.objects.select_for_update().get_or_create(
-                    key="deepinfra", defaults={"credential_revision": revision}
+                    key=provider_state_key, defaults={"credential_revision": revision}
                 )
             )
             if gate.credential_revision != revision:
@@ -716,7 +751,10 @@ def evaluate_account(state_id, *, cfg, call, budget_scope, initial=False):
             if gate.blocked_reason:
                 return False
     attempt = claim_account(
-        state_id, cfg=cfg, budget_scope=budget_scope, initial=initial
+        state_id, cfg=cfg, budget_scope=budget_scope, initial=initial,
+        expected_account_key=expected_account_key,
+        expected_evidence_hash=expected_evidence_hash,
+        run_budget=run_budget,
     )
     if attempt is None:
         return False
@@ -743,8 +781,8 @@ def evaluate_account(state_id, *, cfg, call, budget_scope, initial=False):
             }
         ):
             OfficialCompanyProviderState.objects.filter(
-                key="deepinfra", credential_revision=revision
-            ).update(blocked_reason=str(exc))
+                key=provider_state_key, credential_revision=revision
+            ).update(blocked_reason=str(exc), updated_at=timezone.now())
     else:
         complete_attempt(attempt.pk, cfg=cfg, response=response)
     return True
