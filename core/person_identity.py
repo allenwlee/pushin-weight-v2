@@ -6,7 +6,14 @@ import uuid
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import Account, Person, PersonAccount, StaffIntake
+from core.models import (
+    Account,
+    AccountProfileSnapshot,
+    Person,
+    PersonAccount,
+    Post,
+    StaffIntake,
+)
 from core.person_names import record_legacy_display_name
 
 
@@ -61,6 +68,27 @@ def person_id_for_handle(handle):
     return uuid.uuid5(uuid.NAMESPACE_URL, f"pushinweight:person:x-handle:{handle}")
 
 
+def account_observation_person_ids(native_id):
+    """The two existing account-observation identities, shared with offline previews."""
+    return [
+        person_id_for_account(str(native_id)),
+        uuid.uuid5(uuid.NAMESPACE_URL, f"staff-library:account:{native_id}"),
+    ]
+
+
+def account_has_observed_handle(account, handle):
+    """Accept a current spelling or a proved spelling of this same account."""
+    if account.handle and account.handle.casefold() == handle.casefold():
+        return True
+    return (
+        not Account.x.filter(handle__iexact=handle).exclude(pk=account.pk).exists()
+        and (
+            Post.objects.filter(author=account, author_handle__iexact=handle).exists()
+            or AccountProfileSnapshot.objects.filter(account=account, handle__iexact=handle).exists()
+        )
+    )
+
+
 @transaction.atomic
 def account_person(account, *, create=False, observed_at=None, display_name=None):
     """Reuse confirmed identity or this account's own provisional observation.
@@ -76,10 +104,7 @@ def account_person(account, *, create=False, observed_at=None, display_name=None
     if confirmed:
         person = canonical_person(confirmed[0].person_id)
     else:
-        ids = [
-            person_id_for_account(account.pk),
-            uuid.uuid5(uuid.NAMESPACE_URL, f"staff-library:account:{account.author_id or account.pk}"),
-        ]
+        ids = account_observation_person_ids(account.author_id or account.pk)
         resolved = [
             canonical_person(pk)
             for pk in Person.objects.filter(pk__in=ids).values_list("pk", flat=True)

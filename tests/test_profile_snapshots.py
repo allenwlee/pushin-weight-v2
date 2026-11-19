@@ -395,6 +395,22 @@ def test_backfill_checkpoint_resume_and_full_rerun_are_idempotent(tmp_path, caps
     assert AccountProfileSnapshot.objects.count() == count_after_resume
 
 
+def test_backfill_holds_observation_inside_existing_compressed_window(capsys):
+    start = timezone.now() - timedelta(hours=5)
+    account = Account.objects.create(author_id="backfill-conflict", handle="backfillconflict")
+    for hour in (0, 4):
+        record_profile_snapshot(account=account, observation=_observation("A"), observed_at=start + timedelta(hours=hour), source_kind="post")
+    post = _post(account, "backfill-conflict-post", start + timedelta(hours=2))
+    Post.objects.filter(pk=post.pk).update(author_description="B")
+    call_command("backfill_account_profile_snapshots")
+    result = json.loads(capsys.readouterr().out)
+    held = next(row for row in result["held_observations"] if row["source_post_id"] == post.pk)
+    assert held["reason"] == "ambiguous_profile_interval"
+    assert held["profile_data"]["description"] == "B"
+    snapshot = AccountProfileSnapshot.objects.get(account=account, description="A")
+    assert snapshot.description == "A" and snapshot.last_observed_at == start + timedelta(hours=4)
+
+
 def test_production_persist_call_chain_captures_profile_without_provider_call():
     runner = CycleRunner.__new__(CycleRunner)
     runner._errors = []
@@ -466,3 +482,105 @@ def test_production_persist_keeps_affiliate_fields_for_observed_label_shapes(sty
     assert snapshot.affiliate_badge_image_url == "https://example.com/badge.png"
     assert source_evidence(snapshot).raw_profile_payload["author_affiliates_highlighted_label"] == raw_label
     assert runner._errors == []
+
+
+def test_same_post_later_changed_profile_is_a_new_snapshot():
+    account = Account.objects.create(author_id="same-post-profile", handle="samepost")
+    observed = timezone.now()
+    post = _post(account, "same-post-profile-post", observed)
+    first, _, _ = record_profile_snapshot(account=account, observation=_observation("A"), observed_at=observed, source_kind="post", source_post=post)
+    second, created, _ = record_profile_snapshot(account=account, observation=_observation("B"), observed_at=observed + timedelta(hours=1), source_kind="post", source_post=post)
+    assert created and second.pk != first.pk
+    assert list(AccountProfileSnapshot.objects.filter(account=account).order_by("first_observed_at").values_list("description", flat=True)) == ["A", "B"]
+
+
+def test_historical_profile_conflict_holds_original_evidence():
+    from core.profile_snapshots import ProfileHistoryConflict
+
+    account = Account.objects.create(author_id="profile-window", handle="profilewindow")
+    observed = timezone.now()
+    post = _post(account, "profile-window-post", observed)
+    for offset in (0, 4):
+        record_profile_snapshot(account=account, observation=_observation("A"), observed_at=observed + timedelta(hours=offset), source_kind="post", source_post=post)
+    incoming = _observation("B")
+    with pytest.raises(ProfileHistoryConflict) as caught:
+        record_profile_snapshot(account=account, observation=incoming, observed_at=observed + timedelta(hours=2), source_kind="post", source_post=post, reject_ambiguous_history=True)
+    assert caught.value.observation is incoming
+    snapshot = AccountProfileSnapshot.objects.get(account=account)
+    assert snapshot.description == "A" and snapshot.observation_count == 2
+    assert snapshot.last_observed_at == observed + timedelta(hours=4)
+
+
+def test_historical_profile_replay_uses_preceding_version_not_latest():
+    account = Account.objects.create(author_id="profile-history-order", handle="profileorder")
+    observed = timezone.now()
+    post = _post(account, "profile-history-order-post", observed)
+    for offset, value in [(0, "A"), (2, "B"), (4, "A")]:
+        record_profile_snapshot(account=account, observation=_observation(value), observed_at=observed + timedelta(hours=offset), source_kind="post", source_post=post, reject_ambiguous_history=True)
+    result, created, _ = record_profile_snapshot(account=account, observation=_observation("A"), observed_at=observed + timedelta(hours=1), source_kind="post", source_post=post, reject_ambiguous_history=True)
+    assert not created
+    assert result.first_observed_at == observed
+    assert result.last_observed_at == observed + timedelta(hours=1)
+    assert AccountProfileSnapshot.objects.filter(account=account).order_by("-first_observed_at").first().first_observed_at == observed + timedelta(hours=4)
+
+
+def test_live_caller_uses_new_profile_observation_time_for_repeat_post():
+    runner = CycleRunner.__new__(CycleRunner)
+    runner._errors = []
+    now = timezone.now()
+    runner._clock = lambda: now
+    item = {"id": "live-repeat-profile", "text": "hello", "author_id": "live-repeat-author", "author_handle": "repeated", "author_name": "Live Person", "author_description": "Bio A", "_author_present_fields": ["author_handle", "author_name", "author_description"], "brand_ids": [], "mentions": [], "classifications": {}}
+    item["_api_received_at"] = now.isoformat()
+    assert runner._persist_items([dict(item)]) == (1, 0, 0, 0)
+    runner._clock = lambda: now + timedelta(hours=1)
+    item["author_description"] = "Bio B"
+    item["_api_received_at"] = (now + timedelta(hours=1)).isoformat()
+    assert runner._persist_items([dict(item)]) == (0, 1, 0, 0)
+    snapshots = AccountProfileSnapshot.objects.filter(account__author_id="live-repeat-author").order_by("first_observed_at")
+    assert list(snapshots.values_list("description", flat=True)) == ["Bio A", "Bio B"]
+    assert snapshots[0].first_observed_at == now
+    assert snapshots[1].first_observed_at == now + timedelta(hours=1)
+    assert runner._errors == []
+
+
+def test_backfill_resume_retains_earlier_held_source_evidence(tmp_path, monkeypatch):
+    from copy import deepcopy
+
+    from core.management.commands.backfill_account_profile_snapshots import Command
+
+    now = timezone.now()
+    for native in ("checkpoint-one", "checkpoint-two"):
+        account = Account.objects.create(author_id=native, handle=native)
+        _post(account, native + "-post", now)
+    def process(*, account, references, dry_run):
+        return {"observations": 1, "snapshots_created": 0, "snapshots_changed": 0,
+            "snapshots_unchanged": 0, "held_observations": [{"account_id": account.author_id, "profile_data": {"description": "Retained source"}}],
+            "candidate_counts": {}, "call_a": {}}
+    monkeypatch.setattr(Command, "_process_account", staticmethod(process))
+    checkpoint = tmp_path / "checkpoint.json"
+    call_command("backfill_account_profile_snapshots", checkpoint=checkpoint, limit_accounts=1)
+    first = json.loads(checkpoint.read_text())
+    held = deepcopy(first["held_observations"])
+    call_command("backfill_account_profile_snapshots", checkpoint=checkpoint)
+    resumed = json.loads(checkpoint.read_text())
+    assert resumed["held_observations"][:1] == held
+    assert [row["account_id"] for row in resumed["held_observations"]] == ["checkpoint-one", "checkpoint-two"]
+    assert resumed["accounts_processed"] == 1
+
+
+def test_backfill_extends_identical_profile_intervals_without_source_holds(capsys):
+    start = timezone.now() - timedelta(hours=5)
+    account = Account.objects.create(author_id="backfill-repeat", handle="backfillrepeat")
+    for index, hour in enumerate((0, 2)):
+        post = _post(account, "backfill-repeat-" + str(index), start + timedelta(hours=hour))
+        Post.objects.filter(pk=post.pk).update(author_description="Same bio")
+    call_command("backfill_account_profile_snapshots")
+    report = json.loads(capsys.readouterr().out)
+    assert report["held_observations"] == []
+    snapshot = AccountProfileSnapshot.objects.get(account=account, description="Same bio")
+    assert (snapshot.first_observed_at, snapshot.last_observed_at) == (start, start + timedelta(hours=2))
+    assert snapshot.observation_count == 2
+    call_command("backfill_account_profile_snapshots")
+    assert json.loads(capsys.readouterr().out)["held_observations"] == []
+    snapshot.refresh_from_db()
+    assert snapshot.observation_count == 2

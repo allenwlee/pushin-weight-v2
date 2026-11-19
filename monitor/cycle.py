@@ -37,7 +37,7 @@ import time
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -2371,6 +2371,20 @@ class CycleRunner:
     def _now_iso(self) -> str:
         return self._wall_now().isoformat(timespec="seconds")
 
+    def _profile_receipt_time(self, item: dict[str, Any]) -> datetime | None:
+        """Use the actual page receipt when the client supplied its clock."""
+        received = item.get("_api_received_at")
+        if isinstance(received, str):
+            try:
+                parsed = datetime.fromisoformat(received)
+                if parsed.utcoffset() is not None:
+                    return parsed.astimezone(UTC)
+            except ValueError:
+                pass
+        # Preserve capture_post_profile_snapshot's persisted fetched_at fallback
+        # for compatibility clients that cannot prove a fresh receipt clock.
+        return None
+
     def _record_latency_observations(self, items: list[dict[str, Any]]) -> None:
         for item in items:
             tweet_id = str(item.get("id") or item.get("tweet_id") or "")
@@ -3620,6 +3634,7 @@ class CycleRunner:
                         capture_post_profile_snapshot(
                             post=post,
                             raw=it,
+                            observed_at=self._profile_receipt_time(it),
                             references=profile_brand_references,
                             affiliation_context=profile_account_contexts.get(
                                 str(it.get("author_id") or it.get("authorId") or "")
