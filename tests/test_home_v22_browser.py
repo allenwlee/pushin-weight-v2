@@ -6042,10 +6042,22 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             trigger_rect["x"] - (popover_rect["x"] + popover_rect["width"]),
                         )
                         self.assertGreaterEqual(clearance, 11.5)
-                        self.assertGreater(
-                            popover.locator('.inspection-visual svg').evaluate('node => node.getBoundingClientRect().width'),
-                            globe.locator('svg').evaluate('node => node.getBoundingClientRect().width'),
-                        )
+                        # Pointer events can replace the cloned tooltip icon.
+                        # Measure the current pair in one browser evaluation so
+                        # a detached clone cannot masquerade as a hidden icon.
+                        sizes = globe.evaluate("""trigger => {
+                          const tip = document.getElementById(trigger.getAttribute('aria-describedby'));
+                          const visual = tip && tip.querySelector('.inspection-visual svg');
+                          return {
+                            connected: trigger.isConnected,
+                            visible: Boolean(tip && !tip.hidden && visual && visual.isConnected),
+                            expanded: visual ? visual.getBoundingClientRect().width : 0,
+                            trigger: trigger.querySelector('svg').getBoundingClientRect().width
+                          };
+                        }""")
+                        self.assertTrue(sizes['connected'])
+                        self.assertTrue(sizes['visible'])
+                        self.assertGreater(sizes['expanded'], sizes['trigger'])
                         follower = row.locator('.follower-magnitude')
                         follower.hover()
                         self.assertEqual(popover.locator('.inspection-words .feed-x-icon').count(), 1)
