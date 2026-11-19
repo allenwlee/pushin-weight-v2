@@ -127,11 +127,13 @@ class EachRequestBudget:
 
         class DeadlineConnection(PsycopgConnection):
             @classmethod
-            def _connect_gen(cls, conninfo='', *, timeout=0.0):
+            def _connect_gen(cls, *args, **kwargs):
                 # All address attempts share this request's monotonic deadline.
                 # Delegate authentication, adapters and connection construction
                 # to psycopg, rather than maintaining a separate backend.
-                return budget._io_generator(super()._connect_gen(conninfo, timeout=timeout))
+                # psycopg moved timeout handling out of this generator in
+                # 3.3.9. Forward exactly the arguments its caller supplied.
+                return budget._io_generator(super()._connect_gen(*args, **kwargs))
 
         class ScopedDriver:
             connect = staticmethod(DeadlineConnection.connect)
@@ -147,10 +149,11 @@ class EachRequestBudget:
             own_wait = raw.__dict__.get('wait')
             original_wait = raw.wait
 
-            def wait(generator, interval=.1):
+            def wait(generator, interval=.1, **kwargs):
                 try:
                     return original_wait(self._io_generator(generator),
-                                         interval=max(.001, min(interval, .02)))
+                                         interval=max(.001, min(interval, .02)),
+                                         **kwargs)
                 except EachChartUnavailable:
                     # A blocked connection cannot safely restore GUCs or serve a
                     # later writer. Close it synchronously; no query worker is

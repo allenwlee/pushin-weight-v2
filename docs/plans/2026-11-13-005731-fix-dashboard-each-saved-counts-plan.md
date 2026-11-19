@@ -1011,3 +1011,41 @@ new creation-default grants. This is not a permission-normalization operation.
 Actual staging compatibility must be checked before rollout. Independent scoped
 review has no remaining findings; receipt is
 `/tmp/compound-engineering-501/ce-code-review/20261119-215522-613f15bc/followup-grouped-build-review.json`.
+
+
+### Staging driver compatibility repair
+
+A provider-free serving-role all-live probe on G2 descendant `8a943b14`
+confirmed bounded responses, including Meta tabs200at7.90–14.83s and a DeepSeek
+Sentiment controlled503at15.002s. Its next cold connection exposed a real
+compatibility bug: staging psycopg3.3.9 removed `_connect_gen`'s `timeout`
+keyword, while local3.3.4 still accepts it. The deadline subclass injected that
+old keyword, causing TypeError on initial/reopened connections. These partial
+fallback measurements are not a completed timing matrix or performance pass.
+
+The `4d170180` candidate gate was deliberately interrupted after this finding;
+it is not green. A private dependency overlay uses exact staging versions
+psycopg3.3.9/Django5.2.19 without changing the shared local3.3.4/5.2.16 environment.
+The repair forwards native connect/wait arguments transparently, preserving the
+shared monotonic deadline. Tests must cover old/new signatures, actual cold
+connections and timeout-discard followed by a successful fresh connection on
+both versions. The next complete candidate gate/preview must use the staging
+version overlay, and staging activation remains pending.
+
+The staging owner allowlist has no existing active account. If needed for real
+HTTPS/browser verification, create one temporary normal account using an
+already-configured allowed owner email and an unusable password, obtain a short
+normal Django session, then delete only that test account/session. Preserve any
+existing inactive owner; do not change the allowlist, OAuth configuration or
+provider credentials. Record this as an authentication test fixture, not proof
+of the external OAuth login flow. Cookie material stays private and untracked.
+
+
+Driver repair verification is now green on both runtime combinations:31tests
+per version, required PostgreSQL20executed/skipped0/errors0. The target overlay
+run took66.66s including task-test schema creation; the old-version repeat took
+16.63s. The actual3.3.9 cold-connect failure was captured red before repair;
+the dual-signature regression was red1failed/1passed before repair. Both actual
+cold SELECT1 and timed-out initial settings discovery followed by a fresh
+budgeted SELECT1 pass. Evidence is `driver-compatibility-repair.json` under the
+private task evidence root. No shared environment dependency was replaced.

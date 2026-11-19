@@ -102,7 +102,8 @@ def test_initial_settings_discovery_consumes_the_same_request_io_deadline():
     assert monotonic() - started < .25
     assert connection.connection is None or connection.connection.closed
     # A timed-out connection is discarded, not reused with unknown session GUCs.
-    with connection.cursor() as cursor:
+    with (EachRequestBudget(seconds=3) as recovery, recovery.query_scope(),
+          connection.cursor() as cursor):
         cursor.execute('SELECT 1')
         assert cursor.fetchone() == (1,)
 
@@ -166,3 +167,52 @@ def test_connection_attempt_generators_share_one_deadline(monkeypatch):
         with pytest.raises(EachChartUnavailable):
             second.send(1)
     assert closed == [True, True]
+
+
+@pytest.mark.parametrize('accepts_timeout', [False, True])
+def test_connection_generator_forwards_only_the_installed_driver_arguments(
+    accepts_timeout, monkeypatch,
+):
+    """Pin both psycopg 3.3.4 and 3.3.9 calling conventions without network IO."""
+    import psycopg
+
+    observed = []
+
+    def operation(arguments):
+        observed.append(arguments)
+        yield (17, 1)
+        return 'connected'
+
+    if accepts_timeout:
+        def driver_connect(cls, conninfo='', *, timeout):
+            return operation((conninfo, {'timeout': timeout}))
+        arguments = {'timeout': 1.25}
+    else:
+        def driver_connect(cls, conninfo=''):
+            return operation((conninfo, {}))
+        arguments = {}
+
+    monkeypatch.setattr(psycopg.Connection, '_connect_gen', classmethod(driver_connect))
+    with EachRequestBudget(seconds=3) as budget, budget._connection_io_scope():
+        scoped_class = connection.Database.connect.__self__
+        generator = scoped_class._connect_gen('dbname=each_probe', **arguments)
+        assert next(generator) == (17, 1)
+        with pytest.raises(StopIteration) as finished:
+            generator.send(1)
+        assert finished.value.value == 'connected'
+    assert observed == [('dbname=each_probe', arguments)]
+
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.requires_postgres
+def test_budgeted_cold_connection_initializes_with_the_installed_driver():
+    configuration = deepcopy(connection.settings_dict)
+    connection.close()
+    assert connection.connection is None
+    with (EachRequestBudget(seconds=3) as budget, budget.query_scope(),
+          connection.cursor() as cursor):
+        cursor.execute('SELECT 1')
+        assert cursor.fetchone() == (1,)
+    assert connection.settings_dict == configuration
+    assert 'Database' not in connection._connections[connection.alias].__dict__
