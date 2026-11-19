@@ -13,7 +13,7 @@ pulse_limit: 1
 pictures:
   atomic: select_only
   current_headline: select_only
-  chatter: 'off'
+  chatter: derive
   pulse: derive
 permitted_reuse:
 - permitted

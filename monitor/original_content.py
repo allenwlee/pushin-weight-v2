@@ -45,6 +45,15 @@ def featured_scope(workflow, locale, *, source_locale=None, editorial_group=None
     return f"featured:{workflow}:{source.casefold()}:{group}:{locale}"
 
 
+def publication_scope(content, locale):
+    pool = (
+        {"source_locale": content.source_locale_id, "editorial_group": content.editorial_group}
+        if content.source_locale_id is not None and content.editorial_group is not None
+        else {}
+    )
+    return featured_scope(content.workflow_key, locale, **pool)
+
+
 def shared_storage():
     mode = os.environ.get("ORIGINAL_CONTENT_STORAGE", "legacy")
     if mode not in {"legacy", "shared"}:
@@ -213,15 +222,20 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
             values = citation_values(spec.get("sources", []), legacy=legacy)
             if row.workflow_key in WORKFLOWS.values() and not values:
                 raise ValueError("editorial output requires citations")
-            if row.consideration_state is not None:
+            from monitor.editorial.graphics_chatter import source_for_run
+
+            source_owner = source_for_run(run) if run.workflow_key == "graphics-package" else None
+            if row.consideration_state is not None or source_owner is not None:
                 from monitor.editorial.chatter_history import read_sources
+
+                owner = source_owner or row
 
                 expected = {
                     (source["post_id"], source["dossier_source_id"]): source
-                    for source in citation_values(read_sources(row, usage="consideration"))
+                    for source in citation_values(read_sources(owner, usage=None if source_owner else "consideration"))
                 }
-                owners = {(source.post_id, source.dossier_source_id): source.snapshot_run_id
-                          for source in row.consideration_sources.all()}
+                owners = {(source.post_id, source.dossier_source_id): (source.snapshot_run_id or owner.run_id) if source_owner else source.snapshot_run_id
+                          for source in owner.consideration_sources.all()}
                 for value in values:
                     source = expected.get((value["post_id"], value["dossier_source_id"]))
                     if source is None or any(
@@ -247,7 +261,7 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
                     "post_id", "dossier_source_id", "position", "url_snapshot",
                     "author_label_snapshot", "source_hash", "hash_basis",
                 ]
-                if row.consideration_state is not None:
+                if row.consideration_state is not None or source_owner is not None:
                     source_fields.append("snapshot_run_id")
                 saved_sources = list(existing.sources.order_by("position").values(*source_fields))
                 if not append_locale or (
@@ -288,11 +302,7 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
                     setattr(row, f"secondary_{suffix}", text.secondary)
         row.save()
         if selected_scope:
-            expected_scope = featured_scope(
-                row.workflow_key, results[0].locale,
-                **({"source_locale": row.source_locale_id, "editorial_group": row.editorial_group}
-                   if row.consideration_state is not None else {}),
-            )
+            expected_scope = publication_scope(row, results[0].locale)
             if (
                 len(results) != 1
                 or selected_scope != expected_scope

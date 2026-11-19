@@ -202,7 +202,7 @@ def reserve_due_slot(source_cycle_id, started, *, cfg, purpose):
         advisory_lock(TRENDS_SCOPE)
         existing = OriginalContentRun.objects.filter(scope_key=TRENDS_SCOPE, interval=slot).first()
         if existing:
-            checkpoint(existing)
+            validate_slot_authority(existing, cfg=cfg, purpose=purpose)
             return existing, False
         latest = OriginalContentRun.objects.filter(scope_key=TRENDS_SCOPE).order_by("-interval").first()
         if latest:
@@ -225,6 +225,15 @@ def reserve_due_slot(source_cycle_id, started, *, cfg, purpose):
             outcome={"phase": "queued", "trends": state.model_dump(mode="json")},
         )
     return run, True
+
+
+def validate_slot_authority(run, *, cfg, purpose):
+    """A reused slot retains its credential purpose and complete trial grant."""
+    state = checkpoint(run)
+    saved = EditorialConfig.model_validate(run.config_snapshot["editorial"])
+    if state.credential_purpose != purpose or saved.chatter.trial != cfg.chatter.trial:
+        raise ValueError("saved Chatter slot authority differs from requested purpose or trial")
+    return state
 
 
 def envelope_for(run):

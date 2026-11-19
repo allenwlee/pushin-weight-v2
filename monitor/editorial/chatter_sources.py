@@ -156,6 +156,59 @@ def compact_post_wire(row):
     return value
 
 
+def _validated_ranked_execution(run, execution, requests, purpose):
+    """Check the same immutable receipts for dispatch admission and fenced reclaim."""
+    from .chatter_trends import read_ranked_batch
+
+    batch = read_ranked_batch(run.pk)
+    now = timezone.now()
+    definition = execution.job.definition
+    options = definition.get("options") if isinstance(definition, dict) else None
+    if (execution.content_run_id != run.pk or execution.job.operation != "chatter_search"
+            or execution.job.source_id != "x" or execution.job.purpose != "content"
+            or not isinstance(options, dict) or options.get("workflow_version") != "chatter-trends-sources-v1"
+            or execution.completed_at is None and (
+                execution.lease_expires_at is None or execution.lease_expires_at > now)
+            or execution.attempts.exclude(credential_purpose=purpose).exists()
+            or len({request.endpoint_url for request in requests}) != len(requests)):
+        raise BudgetHeld("saved Chatter source execution requires reconciliation")
+    for request in requests:
+        if (request.attempt.run_id != execution.pk or request.transport_outcome != "received"
+                or request.http_status != 200 or request.received_at is None
+                or request.archive_id is None or request.body_lost or not request.selection_accounted
+                or not request.response_sha256
+                or request.scope_run.run_id != execution.pk
+                or request.scope_run.content_call_id != batch["rank_call_id"]
+                or request.archive.encoding != "selected-json-canonical-v1"
+                or request.archive.capture_kind != "chatter_source_projection"
+                or request.archive.byte_count != len(bytes(request.archive.body))):
+            raise BudgetHeld("saved Chatter source requests require reconciliation")
+        value = CompactSourceReply.model_validate(read_document(request.archive))
+        if len(value.tweets) + len(value.gaps) != request.raw_count:
+            raise BudgetHeld("saved Chatter source projection count changed")
+
+
+def source_resume_is_safe(run):
+    """Provider-free eligibility; an uncertain send or live source lease stays held."""
+    from .chatter_trends import checkpoint
+
+    try:
+        if run.scope_key != "chatter:personalized-trends:v1":
+            return False
+        purpose = checkpoint(run).credential_purpose
+        executions = list(CollectionRun.objects.filter(content_run=run).exclude(
+            job__job_key__startswith="chatter-personalized-trends:").select_related("job"))
+        if len(executions) > 1:
+            return False
+        for execution in executions:
+            requests = list(CollectionRequest.objects.filter(attempt__run=execution).select_related(
+                "archive", "attempt", "scope_run"))
+            _validated_ranked_execution(run, execution, requests, purpose)
+        return True
+    except (ValueError, TypeError, KeyError, OriginalContentCall.DoesNotExist, CollectionRun.DoesNotExist):
+        return False
+
+
 class SourceSession:
     def __init__(
         self,
@@ -321,22 +374,9 @@ class SourceSession:
         return claim
 
     def _resume_ranked(self, current, execution, requests, job, purpose):
-        from .chatter_trends import read_ranked_batch
-
-        batch = read_ranked_batch(current.pk)
-        if (execution.completed_at is None or execution.status not in {"failed", "partial", "success"}
-                or execution.attempts.exclude(credential_purpose=purpose.value).exists()
-                or any(row.transport_outcome != "received" or row.http_status != 200
-                       or row.archive_id is None or row.scope_run.content_call_id != batch["rank_call_id"]
-                       for row in requests)):
-            raise BudgetHeld("saved Chatter source requests require reconciliation")
-        for request in requests:
-            # Validate retained compact evidence before reopening a source job.
-            if request.archive.encoding != "selected-json-canonical-v1":
-                raise BudgetHeld("saved Chatter source projection is unavailable")
-            projected = CompactSourceReply.model_validate(read_document(request.archive))
-            if len(projected.tweets) + len(projected.gaps) != request.raw_count:
-                raise BudgetHeld("saved Chatter source projection count changed")
+        _validated_ranked_execution(current, execution, requests, purpose.value)
+        execution.attempts.filter(outcome="running").update(
+            outcome="interrupted", stop_reason="expired_lease")
         current.fence += 1
         current.save(update_fields=["fence", "updated_at"])
         execution.completed_at, execution.status, execution.execution_state = None, "partial", "yielded"
@@ -652,7 +692,7 @@ class SourceSession:
             compact = {row["id"]: row for row in self.captured_reply(self.last_request)["tweets"]}
         return [{**item, **compact.get(str(item.get("id") or ""), {})} for item in items]
 
-    def ingest(self, items):
+    def ingest(self, items, *, freeze=True):
         from monitor.cycle import persist_x_post
 
         snapshot = self.run.__class__.objects.get(pk=self.run.pk).snapshot
@@ -760,7 +800,7 @@ class SourceSession:
                     "payload_sha256": digest(source),
                 },
             )
-        if projected:
+        if projected and freeze:
             freeze_sources(self.run, projected, fence=self.run.fence)
         return existing
 

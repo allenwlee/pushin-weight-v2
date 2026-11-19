@@ -87,7 +87,7 @@ def shared_feed_payload(
         )
     else:
         # The old global feed remains stable until its caller selects pool mode.
-        pool_query = pool_query.filter(narrative__consideration_state__isnull=True)
+        pool_query = pool_query.filter(narrative__consideration_state__isnull=True, narrative__source_locale__isnull=True)
     if locale != "en" and not pool_query.filter(locale=locale).exists():
         locale = "en"
     query = pool_query.filter(locale=locale).order_by(

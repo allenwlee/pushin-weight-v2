@@ -112,6 +112,12 @@ def _incumbents():
         text__narrative__development__isnull=False,
     ).select_related("text__narrative__development"):
         parent = pointer.text.narrative
+        if parent.run.workflow_key == "graphics-package":
+            from .graphics_chatter import source_for_run
+
+            parent = source_for_run(parent.run)
+            if parent is None:
+                continue
         if parent.source_locale_id is None or parent.editorial_group is None:
             continue
         pool = f"{parent.source_locale_id.casefold()}-{parent.editorial_group}"
@@ -839,6 +845,13 @@ def _queue_writers(run, cfg, enqueue):
     locales.sort(key=lambda locale: locale != "en")
     planned = [f"{row.pk}:{locale}" for locale in locales for row in selected]
     _update(run, planned_writers=planned)
+    from .chatter_trends import TRENDS_SCOPE
+
+    if run.scope_key == TRENDS_SCOPE:
+        for locale in locales:
+            for row in selected:
+                write_chatter(row.pk, locale, cfg=cfg, enqueue=enqueue)
+        return
     for locale in locales:
         for row in selected:
             if not row.localized_texts.filter(locale=locale).exists():
@@ -855,12 +868,65 @@ def _complete(run):
         current.save(update_fields=["execution_state", "outcome", "updated_at"])
 
 
+def reconcile_chatter_graphics(run):
+    """Observe terminal saved packages without dispatching or retrying C1."""
+    from .chatter_accounting import linked_graphics_runs
+    from .graphics_chatter import published_text, record_ready
+
+    for package in linked_graphics_runs(run):
+        output = OriginalContent.objects.get(run=package, output_key="graphics-primary/v1")
+        text = published_text(package, output)
+        if text:
+            record_ready(text)
+            continue
+        if package.execution_state not in {"suspended", "complete", "completed", "failed"}:
+            continue
+        skipped = package.decisions.get("graphics_skipped_stages", {})
+        call = package.provider_calls.filter(request_identity=f"graphics:{package.pk}:C1").first()
+        stage = "C1" if "C1" in skipped or call else "attention"
+        reason = skipped.get(stage) or (call.error_code if call else None) or package.outcome.get("graphics_state") or "no_copy"
+        with transaction.atomic():
+            current = OriginalContentRun.objects.select_for_update().get(pk=run.pk)
+            current.outcome = {**current.outcome, "phase": "held", "error_code": "graphics_no_copy",
+                "graphics_hold": {"run_id": package.pk, "stage": stage, "reason": reason,
+                                  "execution_state": package.execution_state}}
+            current.execution_state = "suspended"
+            current.claim_owner = ""
+            current.lease_until = None
+            current.fence += 1
+            current.save(update_fields=["outcome", "execution_state", "claim_owner", "lease_until", "fence", "updated_at"])
+        run.refresh_from_db()
+        return True
+    run.refresh_from_db()
+    return run.execution_state == "completed"
+
+
 def write_chatter(content_id, locale, *, cfg=None, transport=None, enqueue=enqueue):
     row = OriginalContent.objects.select_related("run").get(pk=content_id)
     run = row.run
     cfg = _saved_config(run, cfg)
     if cfg is None:
         return {"status": "disabled"}
+    from .chatter_trends import TRENDS_SCOPE
+
+    if run.scope_key == TRENDS_SCOPE:
+        from .graphics_chatter import record_ready
+        from .graphics_entry import run_selected_story
+
+        try:
+            if reconcile_chatter_graphics(run):
+                return {"status": "held" if run.outcome.get("phase") == "held" else "already_published", "run_id": run.pk}
+            result = run_selected_story(content_id=row.pk, run_id=run.pk, locale=locale)
+            output = OriginalContent.objects.get(pk=result["content_id"])
+            text = output.localized_texts.filter(locale=locale).first()
+            if text:
+                record_ready(text)
+                return {"status": "already_published", "text_id": str(text.public_id), "run_id": run.pk}
+            if reconcile_chatter_graphics(run):
+                return {"status": "held", "run_id": run.pk, "graphics_run_id": result["run_id"]}
+            return {"status": result["state"], "run_id": run.pk, "graphics_run_id": result["run_id"]}
+        except Exception as exc:  # noqa: BLE001 -- preserve the selected source for reconciliation
+            return _failure(run, "graphics:" + str(row.pk) + ":" + locale, exc)
     if row.localized_texts.filter(locale=locale).exists():
         if run.execution_state == "running" and run.lease_until > timezone.now():
             _record_ready(run, row.localized_texts.get(locale=locale))
@@ -948,7 +1014,7 @@ def _writer_finished(run, key, status, enqueue):
         return  # A stale worker cannot mutate a newer fence or replace its outcome.
 
 
-def _record_ready(run, text):
+def _record_ready(run, text, *, require_live=True):
     from .readers import find_saved_edition
 
     edition = find_saved_edition(
@@ -960,7 +1026,8 @@ def _record_ready(run, text):
     elapsed = (text.created_at - run.cycle_started_at).total_seconds()
     reader_elapsed = (observed - run.cycle_started_at).total_seconds()
     with transaction.atomic():
-        current = locked_run(run.pk, run.fence)
+        current = (locked_run(run.pk, run.fence) if require_live else
+                   OriginalContentRun.objects.select_for_update().get(pk=run.pk, fence=run.fence))
         outcome = dict(current.outcome)
         outcome.setdefault("healthy_at", observed.isoformat())
         outcome.setdefault("first_text_at", text.created_at.isoformat())

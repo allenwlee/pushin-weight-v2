@@ -47,6 +47,14 @@ class Command(BaseCommand):
             if action == "preview":
                 result = build_packet(cutoff, cfg)
             elif action == "status":
+                from core.models import OriginalContentRun
+                from monitor.editorial.chatter_accounting import chatter_call_report
+
+                chatter = OriginalContentRun.objects.filter(workflow_key="chatter-discovery")
+                if options["chatter_run"]:
+                    chatter = chatter.filter(pk=options["chatter_run"])
+                    if not chatter.exists():
+                        raise ValueError("Chatter run does not exist")
                 result = {
                     "generation_enabled": cfg.enabled,
                     "public_enabled": cfg.public_enabled,
@@ -59,6 +67,7 @@ class Command(BaseCommand):
                             "id", "scope", "cutoff", "state", "outcome"
                         )[:20]
                     ),
+                    "chatter": [chatter_call_report(run.pk) for run in chatter.order_by("-pk")[:5]],
                 }
             elif action == "replay":
                 row = EditorialAssessment.objects.get(pk=options["assessment"])
@@ -115,7 +124,14 @@ class Command(BaseCommand):
                     def queue(stage, *arguments):
                         pending.append((stage, arguments))
                     if options["chatter_run"]:
+                        from monitor.editorial.chatter_trends import (
+                            TRENDS_SCOPE,
+                            validate_slot_authority,
+                        )
+
                         run = OriginalContentRun.objects.get(pk=options["chatter_run"], workflow_key="chatter-discovery")
+                        if run.scope_key == TRENDS_SCOPE:
+                            validate_slot_authority(run, cfg=cfg, purpose="on-demand")
                         if run.discovery_state == "complete":
                             result = {"status": "resuming", "run_id": run.pk}
                             queue("select", run.pk)

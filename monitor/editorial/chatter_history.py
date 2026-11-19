@@ -25,6 +25,8 @@ from .evidence import post_evidence, safe_source_image
 
 WORKFLOW = "chatter-discovery"
 SCOPE = "chatter:v1"
+FROZEN_SOURCE_LIMIT = 200
+FROZEN_PACKET_BYTES = 240000
 
 
 class ClosedSnapshot(BaseModel):
@@ -121,7 +123,7 @@ def validated_packet(value):
     """JSON validation keeps strict scalar types while accepting ISO timestamps."""
     try:
         encoded = json.dumps(value, ensure_ascii=False, allow_nan=False)
-        if len(encoded.encode()) > 240000:
+        if len(encoded.encode()) > FROZEN_PACKET_BYTES:
             raise ValueError("source packet byte limit")
         result = FrozenPacket.model_validate_json(encoded).model_dump(mode="json")
         if result["schema_version"] == 1:
@@ -148,7 +150,7 @@ def resolved_sources(snapshot):
 
 
 @transaction.atomic
-def reference_sources(run, previous, *, fence):
+def reference_sources(run, previous, *, fence, source_ids=None):
     """Reuse immutable evidence without copying the same source text every fifteen minutes."""
     current = locked_run(run.pk, fence)
     packet = validated_packet(current.snapshot or {"schema_version": 1, "sources": {}})
@@ -157,6 +159,10 @@ def reference_sources(run, previous, *, fence):
         raise ValueError("history reference is not from an earlier evaluation")
     prior = validated_packet(previous_run.snapshot)
     sources = read_sources(previous)
+    if source_ids is not None:
+        if not set(source_ids) <= {source["id"] for source in sources}:
+            raise ValueError("history source is outside prior membership")
+        sources = [source for source in sources if source["id"] in source_ids]
     existing = resolved_sources(packet)
     refs = dict(packet.get("source_refs", {}))
     for source in sources:

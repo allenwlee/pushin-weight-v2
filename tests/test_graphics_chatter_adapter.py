@@ -249,6 +249,22 @@ def test_missing_quote_attribution_is_explicit_and_never_assigned_to_the_reporte
     assert quote["attribution_gaps"] == ["passage_date_unavailable", "speaker_unavailable"]
 
 
+@pytest.mark.parametrize("conflict", ["passage", "speaker"])
+def test_conflicting_frozen_quote_does_not_invent_a_resolved_identity(frozen_chatter, conflict):
+    row, _, _ = frozen_chatter
+    post = Post.objects.create(tweet_id="97001", text="Mutable quote source",
+                               created_at=row.run.facts_as_of - timedelta(days=2))
+    source = history.project_post(post)
+    source.update(original_text=("A different passage." if conflict == "passage" else "Maker: testing only; no general release yet."),
+                  author_handle="different_speaker" if conflict == "speaker" else "maker")
+    history.freeze_sources(row.run, [source], fence=row.run.fence)
+    history.attach_sources(row, [post.pk], usage="background", fence=row.run.fence)
+    quoted = next(fact for fact in prepared(row)["handoff"]["fact_items"] if fact["source_role"] == "quoted")
+    assert quoted["source_post_id"] == "98001"
+    assert quoted["created_at"] is None and quoted["speaker"] == "maker"
+    assert "linked_source_conflict" in quoted["attribution_gaps"]
+
+
 def test_saved_writer_voice_and_route_do_not_reload_current_profiles(frozen_chatter, monkeypatch):
     row, _, _ = frozen_chatter
     expected = prepared(row, "ja")
