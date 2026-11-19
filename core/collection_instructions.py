@@ -363,8 +363,15 @@ def validate_settings(job):
             and job.purpose == "content",
             "external driver reserved for X cycle",
         )
+    ranked_chatter = (
+        job.instruction_version == 2 and job.source_id == "x"
+        and job.operation == "chatter_search" and job.purpose == "content" and job.owner_kind == "source"
+        and job.definition.get("options", {}).get("workflow_version") == "chatter-trends-sources-v1"
+    )
     for key, maximum in BUDGET_LIMITS.items():
         value = getattr(job, "max_" + key)
+        if ranked_chatter and key in {"requests", "items"} and value is None:
+            continue  # This lane admits each request by bytes, deadline and money.
         require(type(value) is int and 0 < value <= maximum, "invalid typed budget")
     require(
         job.numeric_contract_id is None or job.purpose == "catalog",

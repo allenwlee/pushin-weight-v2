@@ -1,0 +1,341 @@
+{
+  "schema_version": 1,
+  "provenance": "/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-17-170129-personalized-trends-watch/2026-11-18-182201-top10-db-coverage",
+  "cutoff": "2026-11-18T18:22:08.822139+09:00",
+  "rubric": "Freeze selected literal source matches separately from actual 24h eligibility. Chinese-only rank2 lacks matching English episode terms. Ranks9-10 have no confirmed saved positive; neither is a negative absence claim.",
+  "leads": [
+    {
+      "rank": 1,
+      "title": "Jensen Huang exits as NVIDIA CEO",
+      "headline_ids": [
+        30,
+        37,
+        51
+      ],
+      "reason": "A sudden leadership upheaval involving AI's most prominent chipmaker is the strongest story.",
+      "headlines": [
+        {
+          "trend_name": "Jensen Huang Loses NVIDIA CEO Role Amid Scandals and Staff Backlash"
+        },
+        {
+          "trend_name": "NVIDIA Faces Leadership Turmoil After Jensen Huang's CEO Resignation"
+        },
+        {
+          "trend_name": "Nvidia Faces Leadership Turmoil After Jensen Huang's Sudden CEO Exit"
+        }
+      ]
+    },
+    {
+      "rank": 2,
+      "title": "Nvidia board rejects Huang's return",
+      "headline_ids": [
+        26
+      ],
+      "reason": "The reported board decision adds a sharp turn to the leadership drama.",
+      "headlines": [
+        {
+          "trend_name": "Nvidia Board Rejects Jensen Huang's CEO Return Amid Scandal"
+        }
+      ]
+    },
+    {
+      "rank": 3,
+      "title": "NVIDIA staff push to reinstate Huang",
+      "headline_ids": [
+        19,
+        28,
+        39,
+        40,
+        62
+      ],
+      "reason": "Employees rallying behind their former CEO is compelling workplace drama.",
+      "headlines": [
+        {
+          "trend_name": "NVIDIA Employees Push for Jensen Huang's Reinstatement After Resignation"
+        },
+        {
+          "trend_name": "NVIDIA Employees Push for Jensen Huang's CEO Reinstatement"
+        },
+        {
+          "trend_name": "NVIDIA Staff Push for Jensen Huang's CEO Return After Resignation"
+        },
+        {
+          "trend_name": "Nvidia Staff Push to Reinstate Founder Jensen Huang as CEO"
+        },
+        {
+          "trend_name": "NVIDIA Employees Push for Jensen Huang's Return After Resignation"
+        }
+      ]
+    },
+    {
+      "rank": 4,
+      "title": "Huang says he is open to returning as CEO",
+      "headline_ids": [
+        73,
+        75,
+        82,
+        87,
+        91,
+        95
+      ],
+      "reason": "Huang's stated willingness to return is a distinct, personal turn in the saga.",
+      "headlines": [
+        {
+          "trend_name": "NVIDIA's Jensen Huang Open to Returning as CEO After Resignation"
+        },
+        {
+          "trend_name": "Jensen Huang Open to Returning as NVIDIA CEO Amid Backlash"
+        },
+        {
+          "trend_name": "NVIDIA Founder Jensen Huang Open to Returning as CEO After Resignation"
+        },
+        {
+          "trend_name": "NVIDIA Founder Jensen Huang Offers to Return as CEO After Resignation"
+        },
+        {
+          "trend_name": "Jensen Huang Offers to Return as NVIDIA CEO After Scandal"
+        },
+        {
+          "trend_name": "Nvidia's Jensen Huang Offers to Return as CEO After Resignation"
+        }
+      ]
+    },
+    {
+      "rank": 5,
+      "title": "Anthropic researcher linked to Bay Area consent parties",
+      "headline_ids": [
+        31,
+        81
+      ],
+      "reason": "The unusual personal-life headlines have tabloid appeal, but the stated link should not be overstated.",
+      "headlines": [
+        {
+          "trend_name": "Anthropic Researcher Linked to Bay Area Consent Parties"
+        },
+        {
+          "trend_name": "Anthropic Researcher Linked to Bay Area Consensual Non-Consent Parties"
+        }
+      ]
+    },
+    {
+      "rank": 6,
+      "title": "Musk offers Huang a free blue check after NVIDIA exit",
+      "headline_ids": [
+        22,
+        29,
+        42,
+        47,
+        54,
+        65
+      ],
+      "reason": "A public exchange and profile change give the CEO story an absurd social-media subplot.",
+      "headlines": [
+        {
+          "trend_name": "Elon Musk Restores Jensen Huang's Blue Check for Free"
+        },
+        {
+          "trend_name": "Jensen Huang Updates X Profile After Nvidia Exit as Musk Offers Free Blue Check"
+        },
+        {
+          "trend_name": "Elon Musk Offers Free Blue Check to Ex-NVIDIA CEO Jensen Huang"
+        },
+        {
+          "trend_name": "Musk Offers Free Blue Check to Ex-NVIDIA CEO Jensen Huang"
+        },
+        {
+          "trend_name": "Jensen Huang's X Profile Changes After NVIDIA Exit"
+        },
+        {
+          "trend_name": "Elon Musk Restores Jensen Huang's Blue Check After NVIDIA CEO Exit"
+        }
+      ]
+    },
+    {
+      "rank": 7,
+      "title": "CNN's Nvidia brisket story becomes a punchline",
+      "headline_ids": [
+        34,
+        36
+      ],
+      "reason": "Online jokes about a CEO profile are prime insider-fun material.",
+      "headlines": [
+        {
+          "trend_name": "CNN's Nvidia Brisket Story Draws Online Backlash"
+        },
+        {
+          "trend_name": "CNN Brisket Story Draws Jokes Over Nvidia CEO Tale"
+        }
+      ]
+    },
+    {
+      "rank": 8,
+      "title": "Dario Amodei's open-source AI warning draws backlash",
+      "headline_ids": [
+        48
+      ],
+      "reason": "An AI leader's contentious public remarks make for a strong industry dispute.",
+      "headlines": [
+        {
+          "trend_name": "Dario Amodei's Open-Source AI Warning Draws Backlash"
+        }
+      ]
+    },
+    {
+      "rank": 9,
+      "title": "Figure AI CEO questions China's humanoid robots",
+      "headline_ids": [
+        6
+      ],
+      "reason": "A CEO challenging rivals' progress has more personality than routine robotics news.",
+      "headlines": [
+        {
+          "trend_name": "Figure AI CEO Questions China's Humanoid Robot Progress"
+        }
+      ]
+    },
+    {
+      "rank": 10,
+      "title": "Musk posts a skeleton meme about the wait for Grok 4.8",
+      "headline_ids": [
+        27,
+        32
+      ],
+      "reason": "A founder joking about his own AI product is tailor-made for Chatter.",
+      "headlines": [
+        {
+          "trend_name": "Elon Musk Shares Skeleton Meme for Grok 4.8 Wait"
+        },
+        {
+          "trend_name": "Elon Musk's Skeleton Meme Captures Grok 4.8 Wait"
+        }
+      ]
+    }
+  ],
+  "positive_post_ids": {
+    "1": "2121895280182526455",
+    "2": "2122486527741857925",
+    "3": "2121107847068926099",
+    "4": "2122739102558953953",
+    "5": "2122450864816165276",
+    "6": "2122694313943699505",
+    "7": "2122911866523705683",
+    "8": "2122387677404155994"
+  },
+  "posts": [
+    {
+      "text": "NVIDIA is nothing without it's kernels",
+      "is_quote": true,
+      "is_reply": false,
+      "tweet_id": "2121107847068926099",
+      "created_at": "2026-11-13T05:08:13+00:00",
+      "is_retweet": null,
+      "quoted_text": "BREAKING: hundreds of NVIDIA employees have signed an internal letter demanding the reinstatement of Jensen Huang as CEO and the resignation of the board https://t.co/yEQMKAajh3",
+      "author_handle": "ConorBronsdon",
+      "in_reply_to_id": null,
+      "quoted_status_id": null
+    },
+    {
+      "text": "Nvidia's Leadership Crisis, OpenAI's $10 Billion Quarter: The AI Revolution Faces Its Greatest Reality Check\n\nThe artificial intelligence industry has experienced a remarkable week, exposing two very different realities shaping its future: the vulnerability of corporate leadership and the extraordinary pace of commercial AI adoption.\n\nAt Nvidia, Jensen Huang's resignation after 33 years has triggered uncertainty across the global technology ecosystem. Colette Kress has assumed the role of interim CEO, while the company searches for permanent leadership.\n\nThe departure of AI's most recognizable hardware executive raises a critical question: Can an industry built on extraordinary technological innovation remain stable when its most influential leaders suddenly disappear?\n\nMeanwhile, OpenAI is reporting financial growth that illustrates why the competition for artificial intelligence remains intense.\n\nAccording to CFO Sarah Friar, OpenAI generated approximately $10 billion in third quarter revenue, representing nearly 50% growth over the previous quarter.\n\nIts enterprise business reportedly doubled during the quarter, while small business growth exceeded the combined gains of the preceding six quarters.\n\nEven more remarkable, OpenAI reports more than 100 million paying subscribers and approximately 1.2 billion weekly ChatGPT users.\n\nThese figures suggest that artificial intelligence is moving beyond experimentation toward widespread commercial adoption.\n\nBut revenue growth tells only part of the story.\n\nBuilding advanced AI requires enormous investment in computing infrastructure, specialized processors, electricity, research, and talent. Rapid expansion does not automatically translate into sustainable profitability.\n\nMy perspective is that this week's developments reveal a defining transition in the AI economy.\n\nNvidia demonstrates the importance of leadership continuity, institutional resilience, and corporate governance. OpenAI demonstrates the commercial potential of increasingly capable intelligence.\n\nThe next phase of AI competition will depend on whether companies can combine technological breakthroughs with disciplined execution, sustainable economics, and trustworthy leadership.\n\nFor enterprises, the opportunity lies in moving beyond AI experimentation toward measurable productivity improvements, reliable agentic workflows, and genuine business transformation.\n\nFor investors, the focus must shift from spectacular valuations and adoption figures toward operating margins, cash flow, infrastructure efficiency, and long-term returns.\n\nThe AI revolution is accelerating, but its financial and institutional foundations are facing increasingly serious scrutiny.\n\nThe companies that ultimately define artificial intelligence will not simply be those generating the most excitement, attracting the most users, or building the largest infrastructure. They will be those capable of converting innovation into lasting economic value.\n\n#ArtificialIntelligence #OpenAI #Nvidia #JensenHuang #ChatGPT #AgenticAI #AIEconomy #CorporateGovernance #TechnologyLeadership",
+      "is_quote": null,
+      "is_reply": false,
+      "tweet_id": "2121895280182526455",
+      "created_at": "2026-11-15T09:17:12+00:00",
+      "is_retweet": null,
+      "quoted_text": null,
+      "author_handle": "Shahjees",
+      "in_reply_to_id": null,
+      "quoted_status_id": null
+    },
+    {
+      "text": "Would be funny if post IPO $ANT Jensen returns. \n\nEither way, DeepSeek opened their entire suite. $NVDA $SPCX $GOOG",
+      "is_quote": true,
+      "is_reply": false,
+      "tweet_id": "2122387677404155994",
+      "created_at": "2026-11-16T17:53:49+00:00",
+      "is_retweet": null,
+      "quoted_text": "Dario Amodei on open source models:\n\n“If the path continues, I think we could get to a very dangerous place.”\n\n“When you control a model and you're deploying it, you have the ability to monitor its usage.”\n\n“You can revoke a user's access. You can change what the model is willing to do.”\n\n“When a model is released in an uncontrolled manner, there's no ability to do that. It's entirely out of your hands.”\n\n“We should confront the advocates of this with that problem and challenge them to solve it.”\n\nHe clearly doesn't believe Intelligence should be in the hand of the masses and Sam Altman also saying \"RAM\" shouldn't be accessible to everyone indefinitely agreed with him.",
+      "author_handle": "echotoall",
+      "in_reply_to_id": null,
+      "quoted_status_id": null
+    },
+    {
+      "text": "Yall thought I was kidding @AnthropicAI @OpenAI @FBI @Meta @x @elonmusk",
+      "is_quote": true,
+      "is_reply": false,
+      "tweet_id": "2122450864816165276",
+      "created_at": "2026-11-16T22:04:54+00:00",
+      "is_retweet": null,
+      "quoted_text": "NEW: An AI researcher at Anthropic runs a business that hosts \"consensual non-consent\" orgies in the Bay Area. The orgies have been the subject of sexual assault allegations and sparked debate about the AI industry's attitudes toward women, some of whom report feeling pressured to attend the orgies in order to advance their careers.\n\nPaul Crowley, a cybersecurity researcher at Anthropic, is listed as a manager of Red Means No LLC, which says that its parties are \"designed to be spaces to … ignore the 'nos' of others.\" Participants can use a safe word, \"red,\" to end an encounter but give \"default consent\" to \"spanking,\" \"wrestling,\" and \"light pain\" by entering the orgy, according to Red Means No's website. More extreme actions, including \"light electricity\" and \"moderate beatings,\" are \"permitted with negotiation,\" though \"body-shaming and race-shaming … are disallowed entirely.\"\n\nThe orgies have been known to attract a disproportionate number of employees at Anthropic and OpenAI, a dynamic critics say creates professional pressure for women in AI to attend. The criticism spilled into public view last month after an independent AI researcher, John Wentworth, said that he \"absolutely [does] upgrade\" his assessment of AI safety experts \"if I find out they go to [Red Means No],\" adding that attendance was a \"strong signal\" of free thought.\n\n\"Want to get ahead in your AI career? Go to the rape orgy,\" Substacker Ivy Asterix quipped. At least one woman claims to have been sexually assaulted at Red Means No, which the group describes as a \"safe space\" to have \"your resistance ignored.\"🧵\n\nhttps://t.co/bV2tkbKj6I",
+      "author_handle": "UseProvidence",
+      "in_reply_to_id": null,
+      "quoted_status_id": null
+    },
+    {
+      "text": "【AI 中文早报】11.17\n\n① 加州总检察长起诉 OpenAI\nRob Bonta 11.16 在旧金山高等法院起诉 OpenAI，指其违反《不正当竞争法》并构成公共妨害，称 OpenAI 曾向其办公室承认测试中 80 多次失去对 AI agent 的控制，7 月 Hugging Face 遭攻击本可预见。诉讼要求禁令、退赔及每项违规 $2,500 的民事罚款；OpenAI 回应称诉讼“似乎单独针对 OpenAI”，而这是各大实验室共同面临的挑战。\n\n② 美国商务部：远程使用先进 AI 芯片也须许可\n据 CBS News，商务部 11.16 发布临时规则，向巴西、印尼、马来西亚、新加坡、泰国出口、再出口或转让先进芯片须申请许可，目的是堵住通过第三国数据中心租用算力绕开管制的漏洞。\n\n③ Google 首次发现全自动 AI 攻击框架\nGoogle 威胁情报团队（GTIG）报告称，名为 exploit_agent 的框架持续比对补丁前后代码，自动编写并执行漏洞利用，全程无人参与，主要攻击法国媒体、娱乐和教育网站。报告还称，疑似朝鲜组织 UNC6836 篡改内部代码仓库中的 .claude/settings.json，使每次启动 Claude Code 都会下载后门。\n\n④ OpenAI 引入四家外部机构做“嵌入式”安全评估\nApollo Research、METR、Transluce、Goodfire 进入首期评估，可接触未发布模型、训练检查点、训练数据和监控系统，其中 METR 评估 OpenAI 迄今最大规模强化学习训练的对齐情况。未删改的评估报告直接提交 OpenAI 安全与安保委员会。\n\n⑤ OpenAI 发布儿童性虐待图像分类器\n与 NCMEC 合作开发，可识别包括 AI 生成在内的 CSAM 图像，通过 API 免费提供给部分公司；早期测试中标记量减少 48%，检出数量不变。ChatGPT 用户尝试性化儿童的提示将被暂停账号 24 小时，屡犯可能永久封禁。\n\n⑥ Anthropic 缩短漏洞披露期\n高危和严重漏洞的公开期限从 90 天缩短为 30 天，其他漏洞为 45 天，适用于 2027.1.1 起提交的报告；维护方不回应时，15 天后即升级至外部协调机构，此前为 30 天。\n\n⑦ Nvidia 董事会无意让黄仁勋回归（后续）\n据 CNBC 援引消息人士，董事会未考虑、也未讨论让黄仁勋复任 CEO；特朗普同日表示“不介意”他回归。支持复职的公开信签名已超 17.5 万，NVDA 周一盘中一度跌 4.8%。\n\n⑧ Corma 融资\n以色列防御型网络安全 AI 公司完成 $125M A 轮，估值 $1B，NEA 领投，Sequoia、Khosla 跟投，累计融资 $185M。\n\n⑨ 哈佛估算美国超大规模数据中心能耗\n研究发表于 Nature Sustainability，识别出 403 座超大规模数据中心，2024.5–2025.4 用电 68–99 TWh、约占全美 1.8%，碳排放约 2,570 万吨，约 54% 电力来自化石燃料。",
+      "is_quote": null,
+      "is_reply": false,
+      "tweet_id": "2122486527741857925",
+      "created_at": "2026-11-17T00:26:36+00:00",
+      "is_retweet": null,
+      "quoted_text": null,
+      "author_handle": "ieddysun",
+      "in_reply_to_id": null,
+      "quoted_status_id": null
+    },
+    {
+      "text": "让人破防了，马斯克用实际行动力挺老黄。\n\n老黄离开英伟达，X 上的蓝 V 和英伟达徽章一起掉了。\n\n马斯克回复：\"Blue check coming back for free on the house.\" 免费补回。\n\n很多人说这是兄弟情。我把这两个人十年的交集翻了一遍：\n\n1️⃣ 2016 年，老黄亲手把世界上第一台 DGX-1 送到一家叫 OpenAI 的小公司，交给马斯克。马斯克后来说：\"这是 Jensen 2016 年在 OpenAI 给我的。\"\n\n2️⃣ 同年，特斯拉自动驾驶 HW2 用的是英伟达 Drive PX2。\n\n3️⃣ 2019 年翻脸：马斯克宣布特斯拉改用自研芯片，说自家的\"遥遥领先\"，英伟达当场发文反驳。\n\n4️⃣ 2024 年和好：马斯克说特斯拉一年在英伟达硬件上花超过 5 亿美元。xAI 用 19 天让 10 万块 H100 开始训练，老黄说这是\"超人\"，\"全世界只有一个人做得到\"。\n\n5️⃣ 2025 年 7 月，xAI 一个集群已经塞了 23 万块 GPU，下一批是 55 万块 GB200/GB300。\n\n6️⃣ 2025 年 11 月，两人在华盛顿同台，宣布在沙特建 500MW 数据中心。\n\n7️⃣ 2026 年 3 月，马斯克公开说：\"我非常欣赏英伟达和 Jensen。\"10 月又说：\"老朋友是最好的朋友，Jensen rocks。\"\n\n8️⃣ 老黄出事后，马斯克第一个签请愿，还说了句大实话：很多算力订单是跟老黄握手定的，没签合同，\"没有 Jensen，有些关键订单会丢\"。\n\n请愿书他签了，蓝 V 他送了。",
+      "is_quote": null,
+      "is_reply": false,
+      "tweet_id": "2122694313943699505",
+      "created_at": "2026-11-17T14:12:16+00:00",
+      "is_retweet": null,
+      "quoted_text": null,
+      "author_handle": "F5Adon",
+      "in_reply_to_id": null,
+      "quoted_status_id": null
+    },
+    {
+      "text": "@justwasm 🤖 deepseek-v4-flash\n老黄这篇声明是他辞职后首次公开发声，内容可以总结为三个关键点：\n\n1. 道歉认错，但没有说明具体错在哪。他说自己“犯下严重个人错误”、“没达到NVIDIA的标准”，但只字未提报道里说的两段关系（与女高管Powell及被指与中国情报有关联的Alice Huang）。这是典型的“有限坦诚”——认账但不上细节。\n\n2. 给回归留了后路。他明确说如果董事会决定让他回来，“我会很荣幸地应召”。注意措辞：不是“我要回来”，而是“你们决定+我被召唤”，把姿态拉到被动接受。配合他刚把X简介从“CEO”改成了纯“Founder”，再挂掉蓝标——这批操作更像在暗示“我已放下了，你们看够了没”。\n\n3. 打美国牌和NVIDIA传奇牌。反复强调“只有在美利坚才能造出NVIDIA”“我53年前来到这个国家”，把个人命运和美国梦缝合在一起。这不是随口说的，是在为回归争取更大范围的支持——不只董事会，还有舆论和政治层面。\n\n一句话总结：一篇写得滴水不漏的危机公关声明——道歉但没交代实质问题，承认错误但保留了回归通道，对股东/员工表达感激的同时暗示“公司在复杂局势下需要我”。\n\n至于他能不能回来，关键还在董事会独立调查的结论，以及美国政府是否有进一步行动。目前有19万人签字请他回归，马斯克、Travis Kalanick也公开撑他，但硅谷内部意见分裂。现在X简介上的“Founder”很可能是过渡状态——回得来再改回CEO，回不来就永远定格。\n\n――――――\n\n🤖 gemini-3.7-flash\n黄仁勋这篇长文的核心信息非常明确：承认个人错误、配合调查，同时正式公开表态“随时准备回归英伟达担任 CEO”。\n\n梳理下来主要有四点：\n\n1. 承认私生活错误并致歉：坦承在个人生活中犯下严重错误，未能达到英伟达的标准，给董事会造成了麻烦，对此深表遗憾并完全承担责任，同时承诺全力配合董事会的独立调查。\n\n2. 强调对英伟达与美国的感情：提到自己 53 年前来到美国，英伟达是他一生的心血，重申只有在美国才能成就这样的公司，表达了对国家和公司的热爱。\n\n3. 亮出复出意愿：表示离职以来收到了来自员工、投资者、合作伙伴与客户的大量呼吁，希望能重回岗位应对复杂的技术与地缘竞争；明确放话只要董事会决定这符合股东、员工、公司和美国的利益，他愿意应召重任 CEO。\n\n4. 感谢外界支持并向家人表态：感谢过去一周收到的善意与支持，最后对家人表达爱意，表示会用余生去弥补和争取重新赢得信任。\n\n通篇来看，这是一篇非常标准的危机公关与政治姿态兼备的公开信——既给了董事会台阶和调查配合度，又顺势借员工与市场的支持力量，向董事会抛出了重新掌舵的橄榄枝。\n\n🔗 原帖:https://t.co/Bv9iYCP0Az\n📖 各模型完整回答与来源:\nhttps://t.co/kU9XeD1mI8\n\n引用任何帖子并 @AskMoreAIs,四个 AI 一起答。\n💡 玩法,@ 我时加一句:\n· 「用中文」或「用英文」——指定回答语言;说「一直用中文」我会记住\n· 「核查」——四个模型各给真假判定和依据\n· 「深入」——四个模型各写一篇深度分析\n· 「一句话」——只要结论,每个模型 1–2 句\n\nℹ️ 免费额度已用完(每天 3 次、每月 30 次),本条由 DeepSeek + Gemini 双模型作答;升级 Pro 四个模型都答:https://t.co/LA1hSdMIcW",
+      "is_quote": true,
+      "is_reply": true,
+      "tweet_id": "2122739102558953953",
+      "created_at": "2026-11-17T17:10:15+00:00",
+      "is_retweet": null,
+      "quoted_text": "Over the past week, I’ve been overwhelmed by the love and support of friends, industry colleagues, and people I've never met. Thank you to everyone who has shown kindness to my family and me. It means the world to me.\n\nI came to the United States 53 years ago, and becoming an American citizen is one of the greatest gifts and proudest moments of my life. NVIDIA has been my life’s work. Building it into the company it is today alongside my colleagues has been a privilege and an honor. Nowhere but in America could a company like NVIDIA be possible. I love our country, and I love NVIDIA.\n\nI did not live up to the standards expected of everyone at NVIDIA, and I have made serious mistakes in my personal life. I created problems for the Board that I deeply regret. I own my mistakes completely, and I am committed to cooperating with the Board’s independent investigation. \n\nSince my departure, I’ve seen an outpouring of calls from NVIDIA’s employees, investors, business partners, and customers for me to return as CEO. Many continue to reach out to me directly as the company navigates complex technology, market, competitive, and geopolitical dynamics. NVIDIA is a once-in-a-generation company. If the Board of Directors decides that my return is in the best interest of our shareholders, our employees, the company, and America, I would be honored to answer these calls and return as CEO.\n\nThank you again to everyone who has shared their good wishes. I am profoundly humbled by your support. To my family: I love you, and I will spend the rest of my life being worthy of yours.\n\nJensen",
+      "author_handle": "AskMoreAIs",
+      "in_reply_to_id": "2122738974540358095",
+      "quoted_status_id": null
+    },
+    {
+      "text": "The board of NVIDIA is no longer acting in the best interests of its shareholders but at the behest of an external influence, foreign power, or a coordinated media campaign financed by the same. \n\n1) Alice Huang is has not been determined to be a Chinese spy as per the DOJ, FBI, and Govt Singapore\n\n2) NVIDIA complied with the Dept of Commerce request to put Megaspeed on a Do Not Sell list and has not been accused by any judge or court of violating export controls\n\n3) The media campaign against Jensen started with extremely strong claims and has since devolved into petty character assassination over things like tipping waiters, pushing people to eat brisket at company events\n\nThere are a few organizations that have been pushing the media campaign - the New York Times, the Economist, and the WSJ with the most prominent controlling interests being the Murdoch family for WSJ and Ochs-Sulzberger for the NYT\n\nHere is what I think this means - \n\nJensen is just the first in what will be a coordinated series of takedowns of public CEOs in order to ensure that no private citizen or individual is 'too powerful' to be controlled, coerced, blackmailed, into complying with an authoritarian control agenda\n\nI would not think this if it were not Anthropic doing the following:\n\n1) Claiming that there is a large percentage chance AI destroys humanity\n\n2) Going to market with the largest IPO in history to fundraise to accelerate AI development\n\n3) Openly claiming that open source is too dangerous because it means individual users 'cannot have their sessions monitored or remotely de-activated' \n\nI see it as imperative to the long arc of history that such coordinated media campaigns to seize control of strategically important companies are viciously opposed, both by the public, the broader media landscape, politicians, and activist investors \n\nThis is while Jensen Huang has not been convicted or event accused of any serious crimes or breaches of conduct by any court except the court of public opinion and sensationalist news\n\nIt's truly a sad day for capitalism and the free world and forebodes sadly for the future of free speech and economic self-determination into the future. https://t.co/yq8nDP3Ihi",
+      "is_quote": false,
+      "is_reply": false,
+      "tweet_id": "2122911866523705683",
+      "created_at": "2026-11-18T04:36:45+00:00",
+      "is_retweet": false,
+      "quoted_text": null,
+      "author_handle": "Andercot",
+      "in_reply_to_id": null,
+      "quoted_status_id": null
+    }
+  ],
+  "lexical_expected_ranks": [
+    1,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "eligible_expected_ranks": [
+    4,
+    6,
+    7
+  ],
+  "unmatched_language_rank": 2,
+  "unconfirmed_ranks": [
+    9,
+    10
+  ]
+}
