@@ -21,9 +21,12 @@ from .chatter_history import (
     resolved_sources,
 )
 from .config import EditorialConfig
-from .providers import request_payload
+from .providers import request_fingerprint, request_payload
 from .voices import Voice
 from .writing import writer_request
+
+_SELECTION_V1 = "chatter-selection-v1"
+_SELECTION_V2 = "chatter-selection-v2"
 
 
 def _expanded_history(identities, run):
@@ -173,9 +176,10 @@ def _selection_request(run, stage, payload, cfg):
         current = locked_run(run.pk, run.fence)
         stored = current.outcome.get("selection_inputs", {}).get(stage)
         if stored is None:
-            compact = deepcopy(payload)
-            for candidate in compact["candidates"]:
-                candidate.pop("evidence")
+            compact = deepcopy({**payload, "candidates": [
+                {key: value for key, value in candidate.items() if key != "evidence"}
+                for candidate in payload["candidates"]
+            ]})
             stored = {"schema_version": 1, "payload": compact}
             current.outcome = {
                 **current.outcome,
@@ -186,21 +190,48 @@ def _selection_request(run, stage, payload, cfg):
             }
             current.save(update_fields=["outcome", "updated_at"])
             run.outcome = current.outcome
-    if set(stored) != {"schema_version", "payload"} or stored["schema_version"] != 1:
-        raise ValueError("unsupported saved selection input")
-    rendered = deepcopy(stored["payload"])
-    sources = resolved_sources(OriginalContentRun.objects.get(pk=run.pk).snapshot)
-    for candidate in rendered["candidates"]:
-        candidate["evidence"] = [
-            sources[identity] for identity in candidate["post_ids"]
-        ]
-    built = request("selection", rendered, cfg)
-    built["input_reference"] = {
-        "run_id": run.pk,
-        "stage": stage,
-        "builder": "chatter-selection-v1",
+    prior = run.provider_calls.filter(stage=stage, batch_key="").only("request_packet").first()
+    reference = prior.request_packet["input_reference"] if prior else {
+        "run_id": run.pk, "stage": stage, "builder": _SELECTION_V2,
     }
-    return built, rendered
+    full, rendered = _render_selection_input(current, stage, stored, reference)
+    built = request("selection", rendered, cfg)
+    built["input_reference"] = reference
+    return built, full
+
+
+def _render_selection_input(run, stage, stored, reference):
+    builder = reference.get("builder")
+    if (builder not in {_SELECTION_V1, _SELECTION_V2}
+            or reference != {"run_id": run.pk, "stage": stage, "builder": builder}):
+        raise ValueError("unknown selection input builder")
+    if set(stored) != {"schema_version", "payload"} or stored["schema_version"] != 1:
+        raise ValueError("unknown selection projection")
+    payload = deepcopy(stored["payload"])
+    sources = resolved_sources(run.snapshot)
+    for candidate in payload["candidates"]:
+        candidate["evidence"] = [sources[identity] for identity in candidate["post_ids"]]
+    rendered = payload
+    if builder == _SELECTION_V2 and payload["coverage"].get("gathering") is not None:
+        gathering = payload["coverage"]["gathering"]
+        # Execution receipts remain in the immutable projection, outside model context.
+        summary = {
+            "schema_version": gathering["schema_version"],
+            "recipe": gathering["recipe"],
+            "cutoff": gathering["cutoff"],
+            "leads": [{
+                **{key: lead[key] for key in (
+                    "rank", "headline_ids", "coverage", "query_state", "error_code",
+                    "matched_count", "qualified_count", "context_clipped",
+                    "context_omitted_count", "source_observed_at", "source_gaps",
+                )},
+                "raw_count": len(lead["raw_ids"]),
+                "context_count": len(lead["context_ids"]),
+            } for lead in gathering["leads"]],
+        }
+        rendered = {**payload, "coverage": {**payload["coverage"], "gathering": summary}}
+    # History expansion uses the full saved projection, rather than re-projecting a summary.
+    return payload, rendered
 
 
 def writer_input(content, locale, cfg):
@@ -248,27 +279,13 @@ def reconstruct_writer_request(call):
 
 def reconstruct_selection_request(call):
     """A completed run needs no new lease or provider call to reconstruct its input."""
-    ref = call.request_packet["input_reference"]
-    if ref != {
-        "run_id": call.run_id,
-        "stage": call.stage,
-        "builder": "chatter-selection-v1",
-    }:
-        raise ValueError("unknown selection input builder")
     run = call.run
     cfg = EditorialConfig.model_validate(run.config_snapshot["editorial"])
     stored = run.outcome["selection_inputs"][call.stage]
-    if set(stored) != {"schema_version", "payload"} or stored["schema_version"] != 1:
-        raise ValueError("unknown selection projection")
-    payload = deepcopy(stored["payload"])
-    sources = resolved_sources(run.snapshot)
-    for candidate in payload["candidates"]:
-        candidate["evidence"] = [
-            sources[identity] for identity in candidate["post_ids"]
-        ]
+    _, payload = _render_selection_input(run, call.stage, stored, call.request_packet["input_reference"])
     body = request_payload(cfg.chatter.selector, request("selection", payload, cfg))
     if (
-        hashlib.sha256(json.dumps(body, ensure_ascii=False).encode()).hexdigest()
+        request_fingerprint(body)[1]
         != call.request_hash
     ):
         raise ValueError("reconstructed selection request hash mismatch")

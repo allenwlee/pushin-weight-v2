@@ -79,9 +79,16 @@ def test_stage_routing_uses_existing_queue_and_default_writer_first(
         dispatch_chatter_stage("write", 1, "en")
         dispatch_chatter_stage("write", 1, "ja")
         dispatch_chatter_stage("review", 1)
+        dispatch_chatter_stage("gather", 1)
+        dispatch_chatter_stage("gather", 1, True)
     assert [call.kwargs["priority"] for call in task.apply_async.call_args_list] == [
         0,
         3,
         6,
         9,
+        0,
+        0,
+    ]
+    assert [call.kwargs["args"] for call in task.apply_async.call_args_list[-2:]] == [
+        ["gather", 1], ["gather", 1, True],
     ]
