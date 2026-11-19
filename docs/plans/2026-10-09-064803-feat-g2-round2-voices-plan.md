@@ -7,7 +7,7 @@ round: 2
 date: 2026-10-09
 ollija:
   change_id: feat-g2-round2-voices-2026-10-09-064803
-  branch: feat/g2-chatter-20261103
+  branch: feat/g2-chatter-integration-20261119
   workflow: chatter-repair-and-integration
   delivery_target: staging
   delivery_selected_by_user: true
@@ -16,24 +16,1453 @@ ollija:
   staging_transport: branch
 type: feat
 origin: docs/brainstorms/2026-10-15-095449-g2-summarize-engine-brainstorm.md
-updated: 2026-11-04
+updated: 2026-11-19
+deepened: 2026-11-07
 ---
 # G2-C Chatter publication repair and new workflow - Plan
 
 ## Plain-English Summary
 
-This session owns **G2-C: repair Chatter publication, then connect the new Chatter workflow to the application**.
-The separate **G2-GE workflow** owns Graphics Editor, beginning in the existing cast-reference workspace.
-Both remain under the authoritative General Launch charter and index; the November 3 division below supersedes older instructions that put cast completion before all Chatter work.
+Connect the accepted Chatter discovery method to the completed Copy Editor-led Graphics package. Every hour, collect the owner's personalized X trends and use the selected GPT ranking call to identify ten gathering leads. Resolve those leads into actual saved posts, then give the selected story to the existing package before C1 writes it. Readers receive one article with its still and five-second video through the existing Chatter feed.
 
-First, preserve valid story candidates when another candidate is malformed, record useful provider failures, and make senior-editor review advisory as previously directed.
-Then connect semantic discovery, independent story selection, permanent consideration history, locale writing and publication through the shared application code.
-Chatter can publish supported text while artwork is pending or unavailable; claims about an image still require actual inspection of that image.
+Graphics is already implemented. Its retained worktree is `.worktrees/feat/graphics-package-20261109`; its plan is `docs/plans/2026-11-09-013214-feat-graphics-package-20261109-plan.md` in that checkout. The package code is already on staging and main. Reuse its references, calls, publication, media storage, worker queues and recovery. The integration replaces Chatter's old writer followed by the `no_art` placeholder. Source-format, pool/history and locale adapters are part of that connection.
 
-The existing Render headlines worker and broker remain the execution route.
-The selected endpoint is staging: deliver the publication repair first, then the new workflow. The owner allows $20 total for new live validation and wants routine operating cost measured without a daily spending cutoff. Target the first valid text within five minutes of its discovery cycle starting, publishing sooner whenever ready.
-The owner now invokes LFG to finish the implementation plan and execute both repair-first staging checkpoints. Production is outside the selected staging endpoint.
-Implementation and staging verification are authorized under that LFG continuation. Keep execution progress and test/deployment receipts outside this plan; historical planning-only statements describe their dated amendments.
+Verify the connection first with saved evidence and fake providers, then observe the candidate on staging and run one real selected story through article, citations, still and video. Staging account access and the remaining historical validation allowance must be established before paid validation. This work adds no tables, columns or Render services. One existing appearance-kind constraint needs an additive migration so history truthfully identifies personalized trends.
+
+## Delivery Exceptions
+
+**Current G2 scope, November 19:** the owner directs this session to consolidate and execute the Chatter integration after P1 registers it. P1 has registered `g2-chatter-discovery-integration-01a19fa3` through staging. Complete the necessary integration, review, commit/push, staging deployment and observed proof. Production promotion, staff imports and X-list changes are outside this request.
+
+Preserve the original dirty Chatter checkout and its index. Use a clean integration candidate based on current staging, retaining its peer changes and Chatter schema. This same plan basename and change ID now belong to the clean `feat/g2-chatter-integration-20261119` execution branch. The original dirty checkout retains its source/index and a continuity pointer; its contract is superseded for G2 execution. The automatic worktree hook's generated stub was removed so there is only one active plan. P1 owns shared charter/index coordination. P2 owns Product identity and the release-evidence interface. P3 participates only if a shared presentation surface changes.
+
+Current Chatter instructions below supersede the earlier semantic-discovery, old-writer and `no_art` execution directions. Retained staff/job-history sections describe separate work and are not reactivated. Current asset-use and advisory-review instructions remain those of the completed Graphics package; introduce no approval gate, creative retry or stronger rights policy.
+
+## Goal Capsule
+
+**Objective:** staging readers can receive recurring, source-supported Chatter stories with an article and its generated still/video in the correct existing feed.
+
+**Means:** connect the accepted discovery and ranking route to the existing pre-C1 selected-story package (KTD29–KTD35).
+
+**Authority:** current owner instructions and the General Launch charter/index govern G2. This session owns integration and staging proof; P1 retains coordination. The endpoint is staging, with no production promotion.
+
+**Execution:** U45–U51 are the current Chatter units. Preserve other owners' files, active collection and existing index contents. Continue independent offline work if a live-proof prerequisite is unavailable.
+
+**Stops:** do not send a paid request without reconciled validation authority or intended-environment credentials. Hold only the affected stage on an unknown sent outcome, invalid source ownership or identity conflict. A queued job or code deployment does not establish a completed article/media package.
+
+---
+
+## Product Contract
+
+### Summary
+
+Supply the accepted hourly discovery results to the completed Graphics package using actual saved source evidence, and serve its output through Chatter's existing publication and history paths.
+
+### Problem Frame
+
+The trends collector and accepted ranker are local experiments. Existing Chatter still selects through the former semantic route, writes an article separately and records `no_art` without invoking Graphics. Graphics already accepts selected stories, but its snapshot reader, output identity and locale contract do not yet preserve every Chatter requirement. Calling it unchanged can lose quoted evidence or publish outside the reader's pool.
+
+### Key Decisions
+
+- **Use personalized trends and the accepted GPT ranker.** Governs R77–R79. (session-settled: user-directed — chosen over further Grok semantic-search experiments: the owner accepted this discovery method.)
+- **Connect the completed Graphics work.** Governs R82–R85. (session-settled: user-directed — chosen over rebuilding Graphics or writing the article twice: the owner requests reuse and stitching.)
+- **Run hourly and report operating spend.** Governs R77, R86. (session-settled: user-directed — chosen over the former 15-minute discovery cadence and a routine daily cutoff: the owner selected hourly operation.)
+- **Finish through staging.** Governs R88. (session-settled: user-directed — chosen over a local-only or production endpoint: the owner selected staging.)
+
+### Requirements
+
+**Discovery and evidence**
+
+- R77. Collect personalized trends hourly through the intended account's official X OAuth2 route, retaining each observation's original headline, clocks and receipt.
+- R78. Make one OpenRouter `openai/gpt-6-sol` medium-reasoning ranking call per immutable batch using the accepted generic editor prompt; every supplied headline ID must occur exactly once in the saved ranking.
+- R79. Treat the first ten ranked groups as gathering leads, preserving the full ranking and member headline identities; headlines themselves are not citations or validated Product identities.
+- R80. Resolve leads database-first into actual saved original/quoted posts and attributable passages, preserving source clocks, hash ownership, gaps and the exact gathering query/window.
+- R81. Reuse saved classification and P2 identity evidence without inventing products from headline text; pending, completed-no-release and validated release findings remain distinct.
+
+**Writing, media and readers**
+
+- R82. Preserve Chatter's existing evidence-based editorial selection, then hand its selected story to the completed Graphics package before C1 without invoking the legacy Chatter writer.
+- R83. Preserve the completed package's accepted creative workflow, models, references, bounded technical fallbacks and advisory review; add no creative-quality gate or automatic retry.
+- R84. Preserve Chatter's source-language/group pools, development history, citations, pinned readers and publication locale through Graphics output; English/rest remains the initial default and source language follows site language separately from publication language.
+- R85. Make finished text visible as soon as available, targeting 300 seconds from cycle start; unchanged healthy evaluations may retain the previous edition, and pending video/review must not hide available text/still.
+
+**Operations and delivery**
+
+- R86. Report physical calls, actual charges, reservations and unknown charges without imposing a routine Chatter daily cutoff; reconcile the remaining aggregate historical validation allowance before any paid proof.
+- R87. Repeated slots, task delivery and recovery must reuse completed saved work and never automatically resend a paid request whose acceptance is unknown.
+- R88. Observe the exact integrated candidate and one real cited article/still/five-second-video chain on staging before claiming completion.
+- R89. Preserve live harvesting and existing non-Chatter Graphics behavior, using existing tables, columns, durable storage, workers and scheduler resources.
+
+### Scope Boundaries
+
+Include discovery promotion, deterministic source gathering, prepared-story adaptation and the reader/history/accounting links required by R77–R89. Existing Graphics owns article creation, reference preparation, rendering, video polling and review. The retained package plan governs its creative contract.
+
+### Deferred to Follow-Up Work
+
+Headline-quality experiments, alerts/operations-dashboard redesign, correction-policy implementation, staff imports, private-list administration, new discovery providers and production delivery are separate work. The finite 15-minute watch is historical evidence, not a new recurring scheduler.
+
+---
+
+## Planning Contract
+
+### Key Technical Decisions
+
+- KTD29. Extend the existing selected-story boundary in `graphics_entry.py`, then reuse `graphics_packages.py` and `graphics_pipeline.py` for R82–R85. (session-settled: user-directed — chosen over a second writer/media pipeline: reuse the completed Graphics work.) The retained Graphics package plan and active creative prompt pack own its stage contract.
+- KTD30. Base integration on current staging and reconcile only necessary current-main changes. Staging `f6acc2ce` already includes Chatter ownership/history and Graphics; main `9ed25df7` alone lacks five staging migrations. Preserve peer work and reconcile the actual migration leaves before applying anything.
+- KTD31. Reuse `OriginalContentRun/Call`, `EditorialStory`, `OriginalContent/Source/Text/Selection`, the existing collection ledger/archive and `ContentPicture` for R77–R89. Add `personalized_trend` to `OriginalContent.appearance_kind` and `ck_oc_appearance_kind`, with zero new/retired tables or columns. P1/P2 delegated this narrow extension to G2; their retained 0227–0232 work does not touch it. Existing JSON documents remain strict, versioned immutable evidence/configuration with validation on all new write/replay paths; no new JSON column is proposed.
+- KTD32. Promote the collector/ranker behavior through shared clients and accounting, discarding the watch's SSH/local-file harness. The generic prefix in the accepted `prompt.txt` before `HEADLINES:` remains exact; only batch input changes. The accepted request uses one user message, no tools/system placeholder, 8192 output tokens and no route fallback. Validate exact-once membership against actual batch size. For R77–R79/R87, store the official response before ranking, persist stage identity and request hashes, and reuse only a completed matching reply.
+- KTD33. Build source queries in code from original member headlines and saved entity aliases/handles for R80–R81. Use one versioned predicate over saved original/quote text first; translate that predicate and window into the existing X client only for missing evidence. Save result counts and existing/missing IDs separately. Reuse `run_search_pages` cursor/admission behavior without a one-page cap or a new pagination loop; explicit resource/allowance bounds remain observable. No new keyword-generation or classification model call is introduced; editorial selection remains KTD39's existing stage.
+- KTD34. Resolve Chatter's frozen `sources/source_refs` through its trusted hash-checked reader into Graphics' saved-source boundary for R80/R82. Give C1 explicit original/quoted/background passages, source roles, speaker attribution and dates. Use stable supplied fact IDs through existing actual-used-citation persistence; never reread mutable Post text or represent a document as a fabricated Post.
+- KTD35. Keep the source consideration as development/history owner and the Graphics run as producing owner for R84–R85. Carry source pool metadata and existing provenance through primary/reserve publication, using the shared `featured_scope` helper. Bind the requested locale and saved native voice to C1's prompt/schema and configured route; the ranker's route does not override article-writing routes.
+- KTD36. Add an hourly due/slot gate to the existing post-commit scheduled-harvest trigger for R77/R87/R89. Persist interval ownership before queue delivery so a broker failure leaves discoverable pending work. Extend existing reconciliation rather than adding beat, a new cron or a new service. Keep historical 15-minute semantic appearance calculations versioned separately from hourly personalized-trend history. Staging's harvest cron is intentionally dormant; provide a bounded one-shot entry into this same due-slot/enqueue path with on-demand source purposes for U51, without enabling staging harvest or bypassing discovery.
+- KTD37. Use environment-owned `OfficialCompanyOwnerCredential` and `OwnerTokenStore` for R77/R88. Staging must have its own intended-account credentials; never clone rotating production token pairs. Official-X receipts are not TwitterAPI-priced requests. TwitterAPI source calls keep explicit credential purpose; stage probes use on-demand credentials and scheduled credentials remain restricted to their documented path.
+- KTD38. Attribute costs once across linked collector/source/ranker/Graphics physical requests for R86–R87. Reuse conservative reservations and the exact OpenRouter reported-cost reader, including ambiguous sends. Current Graphics entry/reservation code enforces a finite shared daily cap, which conflicts with R86 for recurring Chatter. Add a trusted Chatter-origin admission scope that accounts for linked calls without that routine daily stop, preserving per-package controls, other callers' caps and the aggregate validation allowance. Untrusted caller JSON cannot select the exception.
+
+- KTD39. Reuse `select_chatter`'s configured evidence-based selector, pool tagging/actions and audited code-keep branch after gathering for R82/R84–R85. Adapt its frozen discovery projection to ranked headline groups and actual source/history inputs; preserve source-language/group eligibility and selected/keep/no-story decisions. The accepted ranking call remains gathering-only. Existing selector calls are separately recorded and charged, not hidden inside the one-ranker claim. This preserves the existing pipeline rather than introducing a new rank-only election policy.
+
+### High-Level Technical Design
+
+**Component connections**
+
+```mermaid
+flowchart LR
+  H[Existing harvest trigger] --> D[Hourly Chatter gate]
+  D --> X[Official personalized trends]
+  X --> R[Accepted GPT ranker]
+  R --> S[Existing source collection and history]
+  S --> G[Existing selected-story Graphics package]
+  G --> F[Existing Chatter readers]
+```
+
+**One selected edition across processes**
+
+```mermaid
+sequenceDiagram
+  participant C as Chatter worker
+  participant DB as Existing database
+  participant G as Graphics worker
+  participant W as Chatter reader
+  C->>DB: Save batch, ranking, sources and selection
+  C->>DB: Materialize selected-story package
+  G->>DB: Claim package and save C1 copy
+  G->>DB: Publish available text and still
+  W->>DB: Read correct pool edition
+  G->>DB: Save accepted video and advisory review
+```
+
+**Durable discovery/recovery states**
+
+```mermaid
+stateDiagram-v2
+  [*] --> Due
+  Due --> Observed: saved official response
+  Observed --> Ranked: completed validated ranker reply
+  Ranked --> Gathered: adequate saved evidence
+  Gathered --> Prepared: existing per-pool selector decision
+  Prepared --> HandedOff: existing package identity
+  HandedOff --> Readable: correct saved edition
+  Observed --> Held: invalid or unknown sent outcome
+  Ranked --> Held: no supported eligible story
+  Held --> [*]: retain prior edition and precise reason
+```
+
+**Edition/media lifecycle**
+
+```mermaid
+flowchart LR
+  P[Prepared story] --> C[C1 copy]
+  C --> T[Text edition published]
+  T --> A[Matching still or recorded media failure]
+  A --> V[Video settles or remains pending]
+  V --> E[One advisory review]
+```
+
+**Lead eligibility decisions**
+
+```mermaid
+flowchart TD
+  L[Ranked lead] --> Q{Saved supporting sources?}
+  Q -->|No| S[Existing source gather]
+  S --> K{Attributable sufficient evidence?}
+  Q -->|Yes| K
+  K -->|No| H[Record this lead gap; continue siblings]
+  K -->|Yes| I{Canonical identity supported?}
+  I -->|Yes| P[Existing per-pool editorial selection]
+  I -->|No| N[Preserve source wording and unresolved identity]
+  N --> P
+  P --> O[Select, keep or no-story; retain prior edition if needed]
+```
+
+**Evidence and publication ownership**
+
+```mermaid
+flowchart LR
+  B[Immutable trends batch] --> R[Ranking call]
+  R --> C[Source consideration]
+  C --> S[Hash-owned source packet]
+  C --> G[Graphics producing run]
+  S --> F[C1 supplied fact IDs]
+  F --> T[Text and actual-used citations]
+  G --> T
+  G --> M[Stored still and video]
+  T --> P[Pool pointer and history reader]
+  M --> P
+```
+
+### Assumptions and implementation prerequisites
+
+Use one hourly observation as the initial batch. Normalize only a derived matching view, retaining exact original headlines. Default gathering searches the preceding day relative to the saved cutoff, with older evidence admitted only as explicitly labeled background. Freeze the deterministic recipe against saved positive/false-match cases before paid validation; these are implementation assumptions, not new owner-selected editorial policy.
+
+Staging OAuth ownership and available validation balance are unproved. Inspect safe credential state and saved spend receipts before live proof. Missing either blocks only the dependent paid stage. The accepted sample cost, USD0.053301 for 95 input headlines, is one measured ranking request and not an operating forecast. Reconcile actual activity across the linked ledgers before estimating hourly/monthly cost.
+
+### System-Wide Impact and risks
+
+The actual staging source has 228 declared tables and 244 numbered migrations, ending at `0228_merge_staging_chatter_translation`; these are source observations, not live applied-schema proof. The main-only graph has the same table count and 239 migrations. Do not recreate staging fields to compensate for choosing the wrong base.
+
+Chatter's old resume path assumes one xAI Responses discovery receipt. Replace that lane-specific condition with saved official-batch/ranking checkpoints. Retain its configured source-grounded selector and existing audited code-keep branch (KTD39); remove the old article writer and its duplicate review dispatch on the new lane. Graphics has its own pending-work reconciliation and unknown-send protection; preserve these when connecting package completion back to Chatter health.
+
+Current C1 entry accepts three locales, but its prompt/schema is English-only. Adapt the shared request builder, preserving native configured voices/routes and existing English callers. Source-language eligibility comes from actual saved evidence, not the English trend title. A missing P1/P2 module requires integrating the reviewed interface revision or preserving a truthful pending state, not a duplicate identity resolver.
+
+### Sources and reuse map
+
+- Accepted discovery: `.local/2026-11-17-170129-personalized-trends-watch/watch.py`, `chatter-ranking-choice.json`, and `2026-11-18-180509-gpt-openrouter-ranking-test/{prompt.txt,request.json,ranking.json,receipt.json}`. These retained local files are evidence, not production entry points.
+- Completed Graphics: `docs/plans/2026-11-09-013214-feat-graphics-package-20261109-plan.md` in `.worktrees/feat/graphics-package-20261109`; deployed implementation commits include `06948b67`, `628a7678`, `9b1965ef`, `19a2830e`, `13ba759c`, `98fc8d72`. Reuse `graphics_entry`, `graphics_packages`, `graphics_pipeline`, `graphics_publication`, `graphics_dispatch`, `graphics_generation`, and staff reference readers.
+- P1/P2 interface: the `G2 Chatter consumer interfaces` section in `.worktrees/docs/pulse-product-identity-20261116/docs/plans/2026-11-16-193608-docs-pulse-product-identity-20261116-plan.md`. `read_publication_findings` distinguishes pending from completed-no-release; `resolve_saved_release_finding` is write-capable and only for validated release anchors.
+- Evidence-delivery learning: `docs/solutions/workflow-issues/2026-10-09-110145-editorial-evidence-delivery-before-voice-evaluation.md`; verify the exact final C1 request, not merely upstream packet contents.
+- Existing active creative guide/prompt pack own task order and asset-use instructions. Its older implementation-status prose is not evidence that the later completed package is missing.
+
+---
+
+## Implementation Units
+
+### U45. Reconcile the integration base and freeze existing behavior
+
+**Goal:** establish a clean staging-compatible candidate while preserving the completed Graphics package and peer work.
+**Requirements:** R89; KTD29–KTD31.
+**Dependencies:** none.
+**Files:** existing Chatter/Graphics modules, `core/models.py`, graph-correct `core/migrations/`, `tests/test_chatter_history.py`, `tests/test_original_content_consideration.py`, `tests/test_graphics_entry.py`, this plan.
+**Approach:** inventory refs, applied-schema prerequisites and dirty/index ownership before selecting source. Bind the existing plan to the clean candidate. Add characterization coverage for source ownership, pool publication and current manual Graphics callers before adapting them. Coordinate the narrow appearance-kind extension with P1/P2.
+**Test scenarios:**
+- Existing manual Graphics selection still validates the same saved packet and produces one package identity.
+- The combined migration graph has one valid leaf; old semantic appearances retain their meaning and new personalized appearances satisfy the updated constraint.
+- A dirty/staged peer file is preserved through integration setup and plan transfer.
+**Verification:** recorded base/revision disposition, schema delta and frozen regression fixtures identify exactly what will change; ordinary tests target a new empty branch-specific fixture database.
+
+### U46. Persist hourly observations and the accepted ranking call
+
+**Goal:** turn the accepted collector/ranker experiments into recoverable recurring input.
+**Requirements:** R77–R79, R86–R87; KTD31–KTD32, KTD36–KTD39.
+**Dependencies:** U45.
+**Files:** `monitor/editorial/chatter_discovery.py`, `chatter_accounting.py`, `chatter_sources.py`, `config.py`, `providers.py`, `dispatch.py`, `monitor/tasks.py`, `config/editorial_chatter_chain/prompts.json`, relevant editorial configuration; `tests/test_chatter_discovery.py`, `test_chatter_dispatch.py`, `test_chatter_accounting.py`, `test_chatter_recovery.py`.
+**Approach:** replace the active semantic lane's provider assumptions with official response capture and accepted ranking construction. Reuse existing collection archives/call records and persist enqueue ownership. Update only the required due hook and reconciliation. Preserve provider-specific receipts, exact reported ranking costs and source clocks.
+**Test scenarios:**
+- Four harvest ticks in an hour produce one durable due slot and one ranking request; dry/backfill ticks produce none.
+- Empty valid observation, authentication failure and rate-reset deferral remain distinguishable and keep the prior edition readable.
+- Duplicate/missing/unknown headline IDs fail before source selection; valid dynamic-size batches preserve complete ranking and top-ten membership.
+- A broker failure leaves recoverable pending work; duplicate delivery reuses the same slot/batch/call.
+- A ranker timeout after send stays ambiguous with its reservation and causes no fallback, downstream selection or automatic resend.
+**Verification:** the exact accepted generic prompt and route reach the shared provider client; saved batch/call/receipt identities reconstruct the same input without live credentials.
+
+### U47. Gather attributable source evidence and consume shared identities
+
+**Goal:** convert gathering leads into source-supported considerations through existing collection paths.
+**Requirements:** R79–R81, R87; KTD31, KTD33–KTD34, KTD37.
+**Dependencies:** U46.
+**Files:** `monitor/editorial/chatter_sources.py`, `chatter_history.py`, `chatter_inputs.py`, `chatter_chain.py`, existing P1/P2 reader interfaces; `tests/test_chatter_sources.py`, `test_chatter_history.py`, `test_chatter_chain.py`.
+**Approach:** implement and version the deterministic query recipe against saved controls. Read the same predicate/window over stored original/quote text first, then use existing missing-post retrieval and pagination. Persist source memberships with hash-owned passages, original/quote attribution and collection receipts. Consume the exact reviewed P1/P2 interface without taking identity ownership.
+**Test scenarios:**
+- A stored source avoids a provider request; a missing source uses the same saved expression/window and existing pagination continuation.
+- Saved lookalike/episode false matches are excluded without injecting benchmark names into the generic prompt.
+- A quote supplies a different speaker from its quoting post; missing attribution or post-cutoff support is recorded as a gap.
+- Pending/no-release/validated-release findings remain distinct, and the write-capable resolver receives only a validated release anchor.
+- One held lead leaves independent supported siblings eligible; an exhausted or partial search never claims complete X coverage.
+**Verification:** lead-to-source lineage and pre-ingestion overlap reconcile; no new keyword-generation/classifier inference exists; existing selection costs remain separately visible under KTD39.
+
+### U48. Adapt saved Chatter evidence into the existing C1 boundary
+
+**Goal:** give the completed Copy Editor the selected story's actual evidence, requested locale and saved voice.
+**Requirements:** R80, R82–R84; KTD29, KTD34–KTD35.
+**Dependencies:** U45, U47.
+**Files:** `monitor/editorial/graphics_entry.py`, `graphics_contracts.py`, `graphics_generation.py`, `chatter_history.py`, active creative prompt/configuration; `tests/test_graphics_entry.py`, `test_graphics_generation.py`, `test_graphics_publication.py`.
+**Approach:** extend the trusted saved-source reader rather than manufacturing a caller-only compatible packet. Project source-owned facts and background with attribution into the exact handoff consumed by C1. Bind native locale/schema/voice and actual writer provider settings. Keep English/manual callers on the same shared boundary.
+**Test scenarios:**
+- A real frozen original plus quote/background reaches C1 with passage, speaker, dates, role and stable support IDs.
+- Later mutable Post text changes nothing; a missing/wrong snapshot hash fails before any paid request.
+- English/Japanese/Chinese requested editions produce locale-bound prompts/schema with their saved route/voice and no second article call.
+- Actual-used fact IDs create only their attributable citations; unsupported IDs cannot silently attach unrelated support.
+- Existing prepared manual Graphics stories retain their evidence semantics and idempotent behavior.
+**Verification:** inspect the final generated request and citation rows across the real entry/materialization path, not only a mocked adapter output.
+
+### U49. Replace the no-art shortcut and retain pool/history ownership
+
+**Goal:** route selected Chatter work through the existing Graphics package and serve its output correctly.
+**Requirements:** R82–R85, R87; KTD29, KTD31, KTD35–KTD36, KTD38–KTD39.
+**Dependencies:** U46–U48.
+**Files:** `monitor/editorial/chatter_chain.py`, `graphics_packages.py`, `graphics_pipeline.py`, `graphics_publication.py`, `graphics_dispatch.py`, `monitor/original_content.py`, `monitor/original_content_readers.py`, editorial readers; `tests/test_chatter_chain.py`, `test_chatter_pool_readers.py`, `test_graphics_packages.py`, `test_graphics_pipeline.py`, `test_graphics_publication.py`.
+**Approach:** replace legacy writer dispatch for this lane with `run_selected_story` at the prepared boundary. Preserve the source consideration/history owner, carry typed pool identity on output and publish with the existing scope helper. Reconcile actual downstream text readiness and package state into Chatter rather than marking queued work complete. Preserve existing per-pool select/keep/no-story decisions, including the audited code-keep branch. Publish Chatter C1 copy independently of pending still work; attach late matching media only to its owning edition. Retire the old article-writer/duplicate-review paths.
+**Test scenarios:**
+- A pool with two supported leads and an incumbent reaches its existing select/keep/no-story decision, then one C1 call and zero legacy writer calls; repeat delivery creates no second package or publication.
+- Each source pool's published edition resolves through its feed, pinned reader and next-cycle incumbent/history path.
+- Primary/reserve fallback retains source revision, pool and matching media; stale completion cannot replace a newer edition.
+- Saved new text is readable while its still is deliberately pending; later still/video attachment matches that edition. Pending review cannot hide it, and a complete unchanged evaluation retains a healthy prior edition.
+- Broker loss, expired lease and an ambiguous media send preserve existing recovery/fencing behavior without resubmission.
+**Verification:** reader-visible output and history link to the exact source consideration, producing Graphics run, text, citations and media IDs.
+
+### U50. Verify the stitched pipeline without paid providers
+
+**Goal:** prove the integration and protect existing callers before staging activation.
+**Requirements:** R77–R89; KTD29–KTD39.
+**Dependencies:** U49.
+**Files:** existing Chatter/Graphics suites, `tests/test_graphics_queue_integration.py`, focused integrated caller-chain tests under `tests/`.
+**Approach:** run the frozen accepted-headline/evidence cases through actual ORM entry points, shared worker dispatch and fake provider transports. Exercise known failure/replay states and sum linked physical accounting once. Use an empty task-owned PostgreSQL fixture database and existing broker test isolation.
+**Test scenarios:**
+- Complete batch→rank→stored source→selection→C1→publication→stored still/video resolves in the correct Chatter reader.
+- Concurrent duplicate work, broker restart, stale fence and worker death preserve one request/package identity.
+- Reported, estimated, reserved and unknown costs remain distinct across source and producing runs without double counting. Exhausting another caller's shared daily cap does not stop trusted recurring Chatter; that caller and aggregate trial limits remain enforced.
+- Historical semantic history, manual Graphics callers, dry/backfill dispatch and normal harvest paths preserve their existing contracts.
+**Verification:** targeted regression suites and required checks pass for the candidate revision; fake outputs remain explicitly labeled offline proof.
+
+### U51. Deploy and observe one real staging package
+
+**Goal:** deliver R88's real reader-visible output on the selected staging endpoint.
+**Requirements:** R85–R89; KTD30, KTD37–KTD38.
+**Dependencies:** U50; intended staging OAuth ownership, usable shared media/worker resources and reconciled validation allowance for live requests.
+**Files:** existing staging configuration/runbooks, `render-staging.yaml` only if needed, existing status/readers, candidate-scoped evidence under `.local/` and a local review document.
+**Approach:** confirm current staging availability and preserve occupants/peer changes. Follow the selected staged route and observe exact web/worker revisions. Freeze one representative real case before paid dispatch. Use a bounded one-shot staging entry into the same durable Chatter due-slot/enqueue path, then inspect actual stored article, citations, still and decoded video. The staging harvest cron stays dormant; a standalone Graphics command cannot substitute for the live official observation→ranking→gathering→selection chain. Reuse completed verification where its revision/scope still applies.
+**Test scenarios:**
+- Missing intended staging access or allowance stops paid dispatch without substituting production credentials or declaring completion.
+- The real article resolves through the correct pool with working source/media links and a stored five-second Lite video.
+- Cycle-start-to-first-readable-text timing and final package state are measured separately; pending/failed stages are accurately reported.
+**Verification:** exact candidate/deployment identities, real lineage, file hashes/decoding, costs and timing are recorded and shown locally. No production promotion is performed.
+
+---
+
+## Verification Contract
+
+Freeze the accepted ranking sample, saved positive/false-match source cases, original/quote attribution case, native-locale cases and six-pool publication cases before evaluating. Mechanical acceptance is U45–U50's expected outcomes; do not add a new creative score threshold after seeing the results.
+
+Run targeted Chatter history/source/dispatch/accounting/recovery/pool suites and Graphics entry/package/generation/publication/pipeline/video/readers/accounting suites on the task-owned PostgreSQL fixture database. Use existing opt-in queue integration to prove separate-worker/restart behavior. Run Django checks, scoped lint, whitespace checks and the repository's required delivery checks. Browser verification applies to changed reader-visible surfaces and must follow `fix-ui`; do not redesign shared UI.
+
+The regression net covers existing manual Graphics callers, legacy Chatter history and six pools, source hash/cutoff rules, actual-used citations, paid-request replay, broker recovery and dry/backfill/harvest exclusions. Tests must exercise the shared caller chain and stored reader result, rather than only assert new helper output.
+
+Live acceptance is U51. Source-only inspection, saved audit counts, queued jobs and fake media do not satisfy it. Validation uses the remaining authorized aggregate allowance, with unknown charges retained. Show the exact selected prompt, source evidence, calls, output and costs in the local review artifact.
+
+## Definition of Done
+
+U45–U51's verification outcomes hold for the integrated candidate, including actual staging reader/media proof. Existing Graphics remains the sole article/media producer for this lane. The relevant existing callers pass their regression net, and the output links source consideration to producing run and actual citations/assets.
+
+Record unresolved prerequisites and failed/waived checks accurately. Remove abandoned experimental implementation and redundant active paths, preserve unrelated work and the original index, and retain the staging worktree under the staging-only endpoint. Shared charter/index updates remain P1-owned.
+
+---
+
+## Retained sibling work and historical Chatter evidence
+
+The following material preserves separate staff/job-history contracts and earlier Chatter experiments. It is not the active execution contract for U45–U51. Existing U1–U44 and R1–R76 retain their identities. U18–U25 supplied prior repair/storage work; their old semantic/selector/writer/no-art directions are replaced by the current G2 contract above. Retained imports, list changes and prior production exceptions do not extend the current staging authority.
+
+## Retained staff/job-history summary
+
+**Latest owner decision — November 9:** lock the fresh 1,083-person prototype as the selected baseline for a future production implementation. It reads source records, not prior per-person cohorts or classifications; the observed local results were 429 proposals / 156 review / 28 do-not-propose / 470 no recognized signal. See U44.G for exact source files, hashes, limits and the deferred CCNC improvement. This is a selected behavior, not deployed functionality or permission to write production data; actual command integration and subsequent delivery remain open. The earlier U44.F gated-pinyin assumption and 284/771/28 run are historical and superseded for the selected baseline.
+
+**Historical affiliation-gated rerun — November 9 (superseded by U44.G):** the pinyin checks now require saved Chinese-company **OR** Chinese-university affiliation before matching a name or handle. Re-evaluating all **1,083** candidates gives **284 zh-Hans definitive / 771 send to review / 28 not-zh-Hans definitive**. Robert Lange, Santiago Aranguri and Shane McCracken now go to review; all original 102 test decisions remain unchanged. [Updated local report](../analysis/2026-11-09-100617-1083-primary-language-rerun.html) includes sources and downloads. Chinese-character evidence keeps its independent rule. These are policy proposals, not verified language findings. No database or previous import-roster changes; application-command integration remains open. U44.F records the correction and 27-test/browser proof.
+
+**Latest owner clarification and completed local test — November 9:** the requested output is a proposed `people.primary_language = 'zh-Hans'` routing value, not a demographic attribute. A deterministic prototype now evaluates the original 102 saved candidates and produces **48 assign / 42 review / 12 do not assign**. [Local test report](../analysis/2026-11-09-095225-102-primary-language-policy-test.html) includes every matched rule, exact source excerpts and full JSON/CSV downloads. Eighteen focused tests and browser checks pass. This is a bounded prototype, not completed U44 application integration; the existing 480-ID import roster and all databases remain unchanged. Written-name vocabulary coverage is limited, and the proposal does not verify language proficiency.
+
+**Latest rule documentation — November 9, 09:30 JST:** U44.B.1 consolidates the owner's newly supplied three-way wording: definite match, ambiguous/review and definite mismatch, under the stated “Chinese co + university affiliation” prerequisite. Overlapping older rules are cross-referenced to this single proposal. The proposal is recorded faithfully; its demographic conclusions from name/script/flag cues are not implemented. No candidate or assignment changes accompany this documentation update.
+
+**Latest local rerun — November 9, 09:14 JST:** replayed the saved decisions and existing `record_job_history` command. The separate remaining-review view now shows [81 people](../analysis/2026-11-09-091449-81-remaining-source-review.html): 102 prior rows minus 18 previously accepted handle matches minus three recorded exclusions. The 84-person saved-source check found no explicit non-Chinese ethnicity/ancestry declaration. Names, scripts, flags and photos were not used to add demographic exclusions. This is a saved-decision replay, not completion of U44's recognizer integration; application code and the 480-ID assignment roster are unchanged.
+
+**Current amendment — November 9:** plan U44, which integrates the reusable logic in the local `audit.py` and `finalize.py` scripts into `record-job-history`. The command should assess saved names, handles and source clues, apply explicit reviewed corrections, and render the same full and compact views through one shared path. This request updates the plan; U44 implementation has not started.
+
+The plan now includes a rule-by-rule checklist for Chinese-name evidence, writing, pinyin handles, scripts, flags, ambiguity, explicit exclusions, confidence grouping and source display. Matching a name's written form stays separate from owner-selected language assignment. Requests for definitive ethnicity or deception judgments from names/photos are recorded as unsupported and are not an automatic classifier requirement. Existing employment/date/company rules remain in U37–U42 and the cross-check below.
+
+The latest saved review contains 483 people, split into 106 confident / 377 less-confident rows; 18 accepted handle cases moved out of the separate 102 list, leaving 84 (81 proposed and three exclusions). Ahmed, Ayush Pranav and gkiwi remain explicit owner exclusions; the last prepared `people.primary_language = "zh-Hans"` roster is 480 exact native IDs. Dan Grover was subsequently raised as a code-recognition example; the owner rejected the assistant's proposed manual workaround, and no fourth exclusion was applied. Verification must preserve these distinctions and all 1,083 source candidates. No database import, new table, service, paid call or deployment is part of this amendment.
+
+Update `record-job-history` so Allen can inspect a better-supported employment history for each person and see why any employer, date, title, function or location is still missing. The existing 1,083-person preview is the baseline, not a completed historical search: 1,286 of its 1,330 saved sources are bios, and only 39 people have their own posts as evidence.
+
+Reuse the app's existing source collection, people, affiliations and evidence. Load complete saved bios and posts first, plan targeted searches for remaining gaps, and extract employers, dates, titles, teams and responsibilities together. Preserve the actual source tweet before linking it, preserve profile versions, and combine multiple sources into one employment spell. Explicit dates, inferred dates and low-certainty Present remain distinguishable.
+
+The broader U37–U42 implementation checkpoint remains planned: a refreshed local preview with before/after coverage and regression proof. Its November 7 request was planning only; November 8 separately authorizes the bounded U43 language assignment above. Later paid collection needs a concrete estimate and run allowance; staging imports and the two Chatter lists remain separate later phases. No new tables, columns, migrations, recurring jobs or Render resources are proposed.
+
+## Retained delivery exceptions
+
+**G1 closed in full by Allen on November 19.** Production read-back verified 1,080 of 1,083 people. `@dgrobinson`, `@rama_akkiraju` and `@scottymccrae` lacked verified native account IDs. These three people and the 317 held or unreviewed affiliation proposals are recorded exceptions at closure. The parent Chatter plan continues under G2.
+
+**Production-data outcome — 2026-11-13T16:52:24+09:00:** All 1,083 source entries have terminal outcomes. Production now contains 1,080 imported people: 559 created by this task and 521 reused, including Yug Shende's independently created live identity. Three identities remain held for missing stable native IDs: `dgrobinson`, `rama_akkiraju`, and `scottymccrae`. At verification on November 13, three of the 1,083 people remained outside the import. Zero unresolved database failures remain. Task writes include 562 names, 793 saved-bio profiles, 308 biographies and 429 reviewed language assignments. Of 341 structured affiliation proposals, 21 roles were created, one enriched and two reused with evidence; 317 remain held or awaiting review (241 prepared holds, 30 review-existing proposals, 46 without usable literal source support). Seventeen applied roles keep unsupported status as unknown. Unsupported prose/profile/name actions remain recorded; compressed history was not rewritten.
+
+The actual production binding is `dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow`. Final repeatable read-only snapshot at 16:48:49 JST verifies all 1,080 stable accounts uniquely linked, preservation of prior names/texts/evidence, exact source payloads/clocks and no conflicting profile intervals. No new collection work or provider requests exist for the cohort. Natural post fetch at 16:48:44 JST and the 16:45 scheduled slot establish continuity; pre-existing partial ledger status does not establish complete harvest health. Thirty-one initial shared-lock failures rolled back and succeeded after recovery with one writer; no live operation stopped. Two changed handles were resolved through persisted same-native-account evidence, a narrow local guard fix, 37 passing tests and native delta review; current handles were preserved. Yug's concurrent live identity was freshly previewed and safely reused.
+
+Earlier 181-test evidence remains scoped to its frozen code; later 37 tests cover the identity/command delta. Three simplification passes and full native review completed; the source-projection schema finding was fixed and verified. Scoped lint passed; 1,940 pre-existing project lint findings remain disclosed. No app/schema deployment, commits, pushes, paid calls, X-list/scheduler/config changes or consolidation occurred. Zero tables/columns were added or retired. Existing index SHA is preserved. The task's two fixture databases and exact two failed-preflight scratch directories were removed; paid task staging and peer work remain. [Local receipt](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-11-13-165128-saved-people-production-import.html); authoritative evidence is under `.local/2026-11-13-person-production/`. The next dependency is verified stable account IDs with source binding for the three held people; do not invent identities or silently expand collection scope.
+
+**Production-data LFG selection — 2026-11-13T15:58:18+09:00:** owner invokes `$compound-engineering:lfg` on the complete accepted production-import prompt in this session. Production DATA application is authorized after current-target reconciliation, meaningful verification/review and dedicated-staging rehearsal. Necessary local importer fixes/tests are authorized; preserve the original session’s uncommitted code and index. No commits, pushes, app release, production schema change, collection-schedule/X-list/provider configuration changes, paid collection/model calls, or live-operation interruption. This data-only endpoint is an explicit exception to the generated application-staging guide; retain that broader workflow metadata. The production service binding is verified as dpg-d9koekqjobas73fvjqng-a/pushinweight_shadow; task staging remains dpg-dbona93m8hqs73ef70mg-a/pushinweight_save_person_job. Source plan U44.G/H and the accepted prompt govern the bounded data tooling/import slice; broader historical collection and all process/evidence-table consolidation stay excluded. Freeze current source/code/packet digests, preserve expected old values, apply in per-person bounded transactions with idempotent replay/checkpoints, and verify production reads and ongoing collection. Resolve held cases only from actual available evidence; complete independent eligible work and report exact incompleteness rather than inventing identities or unsupported claims. Task receipts and live progress are under the authoritative root `.local/2026-11-13-person-production/`.
+
+**Staging-inspection follow-up — 2026-11-13T15:23:06+09:00:** owner asks about company_labels, person_name_selections, the five exported accounts, brand colours and process-table consolidation, then whether the two person-evidence tables could consolidate and why three third-party authors were persisted. Reprinted the same Richard sample without changing its captured values: nine added records are bold, every table has an explicit current-plan disposition, and an expandable mapping covers the broad process plan’s44 source-table retirements. None of the27sample tables is targeted by that plan. Later linked ChartEngine November3 owner correction retains product_release_detection_states; do not revive its superseded retirement. A possible2→1 name/affiliation-evidence merger is separately labelled under discussion, with actual foreign keys/exactly-one-owner and per-kind constraints; the owner’s question is not a settled implementation decision and no schema/name is selected.
+
+Source trace: candidate2677(GoogleDeepMind) retains Figurnov Post2105416154923594202; candidate7432(ElorianAI/ElorianAI handle) retains WallStEngine Post2111145919542694173; candidate7433(ElorianAI/no handle) retains Bang Post2111146588475371770. Richard’s affiliation2359/2358/6913 references those existing candidates. _organization_candidate in core/targeted_extraction.py retains the original source_post on reuse and appends later source identities. These third-party sources support organization discovery; none is a direct source_post_id in Richard’s seven affiliation-evidence rows. Their original search triggers are unverified; no collection was launched for this inspection. Current homepage HTTP read verifies Qwen#ff7018, matching the unchanged seed colour; accent_color already exists in0001_initial. No database, application, provider-collection or deployment mutation. Private renderer/overlay/check receipts remain under the same inspection directory; browser checks retain all367columns/83rows and pass bold, mapping, controls and narrow layout.
+
+**Separate save-person-job production-data fork — 2026-11-13T14:28:44+09:00:** owner explicitly dedicates this new session to eventual production import of the 1,083 saved people, with staging inspection first; then requests one rich person in compact table.column/value form including join tables. This is a data-only fork, not permission to publish the original session’s uncommitted code or deploy Chatter/harvest changes. Preserve the original application workflow metadata and peer code/index. Current bounded stage is read-only inspection and local review; production apply has not begun. Dedicated staging was reverified read-only with 1,078 people, five source identities still held, 803 saved-bio snapshots (zero missing source payloads/overlapping conflicts), 1,334 total affiliations and 317 total person texts. Totals include seed records.
+
+Richard Zhang `@richard_qiuyi_z` is the requested sample: [compact complete-column inspection](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-11-13-142750-richard-zhang-staging-table-columns.html) with exact stored JSON companion. Read-only capture covers 27 relevant scenario/parent tables, 83 rows and all 367 physical columns (1,596 record-column values), including people_accounts, person_name_selections, brands_companies, posts_brands and affiliation/source joins. Compared exactly against the original production-cohort seed: 73 unchanged rows, nine added rows and one changed person row. New sample actions are language assignment, three people_texts, one profile snapshot and five staff_intakes provenance markers; all five affiliations/seven role-evidence rows predate this task import. SQL types/keys/columns come from staging catalogs; current local code remains uncommitted at base963ba4b6. Browser checks verify all columns, FK anchors, search/group/expand controls, desktop/390px fit and exact JSON capture equality. Source receipts: `/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-13-person-staging-inspection/`. Production reconciliation, held-case resolution and import remain future stages after the requested inspection; no schema, provider, staging-data, production-data or deployment mutation occurred.
+
+**Current save-person-job LFG request — November 9:** owner selects a separate task-specific staging database as the endpoint for the saved 1,083-person cohort, then directs LFG to finish implementation, verify and import eligible records there. Preserve the existing staging database and other sessions' resources; never redirect existing services or refresh/replace their data as a shortcut. The task database's required schema changes and import are authorized. The earlier explicit prohibitions on commits, pushes and deployment remain in force; run the reviewed local code against the dedicated target without publishing it. No production writes, paid provider calls, X-list changes, or interruption of live operations. U44.G/H supersede older language and organization-scope descriptions. Keep uncertain identities, unsupported claims, and compressed profile conflicts visible on hold. Record the exact database identity, local code state, checks, and before/after import counts. This replaces the prior local-preview-only endpoint only for the dedicated database.
+
+**Isolated staging progress — 2026-11-09 JST:** Render PostgreSQL resource `dpg-dbona93m8hqs73ef70mg-a`, database `pushinweight_save_person_job`, was initialized from a production schema-only snapshot plus applicable local migrations. A read-only production snapshot of the selected cohort and foreign-key closure was copied to the dedicated database: 19,567 rows across 30 tables, compared against the source values before commit. The source subset is not a complete production copy. A read-only target inventory and 1,083-person preview were generated; the preview has 341 structured affiliations, of which 303 are held, 31 are create proposals, 1 is an evidence-addition proposal, and 6 require review of an existing role. Supported actions are being applied with per-person checkpoints; the importer explicitly reports `complete: false`. Company/brand-company creation, remaining profile materialization and compressed-history reconciliation are not complete. Existing live account observation clocks do not reliably establish source ordering, so no live-writer fix or recovered history is claimed. No paid collection, production writes, commits, pushes, deployment or existing staging replacement were performed.
+
+**Historical snapshot update — 2026-11-09 JST:** Source-only import now considers a dated saved account bio outside known snapshot intervals, after the shared writer locks the account and checks the current timeline and source provenance. Observations inside conflicting compressed intervals and identical observations whose original source cannot be represented stay held. PostgreSQL tests cover an older source before a compressed range, a conflicting source inside it, exact replay and no Account overwrite; 44 focused tests passed. A fresh target inventory after the first pass contained 607 people and 1,123 profile snapshots. The new 1,083-person preview proposes 760 snapshots for locked recheck, holds 2,365 and reuses 57. These are proposals, not recovered-history claims; the ongoing apply reports actual outcomes separately. Existing live account-field ordering remains unresolved.
+
+**Task staging result — 2026-11-09 JST:** The frozen 1,083-person pass reconciled exactly once, with 1,078 processed and five identity holds (three unresolved identities, two saved-handle conflicts); zero people failed with database errors. Across the initial and revised passes, 578 people, 803 source-preserving profile snapshots, 308 person texts and 428 primary-language assignments were created in the isolated target. A subsequent, tested status-only recheck created 18 additional roles as `unknown` status, preserving each proposed status and source in `task-staging-v3-status-report.json`; ten of the 28 rechecked roles remained held. All 18 new roles have evidence and pending review. Across all passes, 22 roles were created, one role enriched and three existing roles received evidence. The read-only final target had 1,078 people, 1,883 profile snapshots and 1,334 affiliations, including the copied pre-existing data. All 803 saved-bio snapshots have source payloads; no saved-bio snapshot overlaps a conflicting profile interval. The isolated target has seven queued staff items based on pre-existing roles, no attached worker and zero provider-request rows.
+
+The final preview has 1,083 people; its fresh language assessments are 429 matches, 156 review, 28 do not assign and 470 without a recognized signal. The language-review table and CSV are local review artifacts. Status-only captures make some proposed current statuses require review against the newly stored unknown status; do not interpret the changed supported/unresolved preview counts as extraction regression or recall gains. The importer remains explicitly partial: company/brand-company creation and other profile materialization are not implemented, 2,360 profile actions were held in the full pass, and literal field checks still hold some otherwise plausible roles. The original timing of older Account-field writes cannot be inferred from the available records; the local capture handoff correction does not establish safe ordering across all live writers. No paid collection or model-quality evaluation was performed. No production data was written and no commit, push, deployment or existing staging replacement was made.
+
+The local scheduled-harvest handoff now uses the actual page-receipt time when available and retains the persistence-clock fallback for compatibility clients. A caller-chain PostgreSQL test persisted two simulated receipts for the same post with different bios and verified two snapshots at the two receipt clocks; no live harvest was paused or deployed. The related harvest/profile suite passed 51 tests, and the subsequent caller test file passed 8 tests.
+
+**Dedicated staging target:** Render PostgreSQL `pushinweight-save-person-job-staging-20261109`, resource `dpg-dbona93m8hqs73ef70mg-a`, database `pushinweight_save_person_job`, PostgreSQL 18, Oregon, `basic_256mb`, 5 GB, ingress limited to the task host's current IP. This is a paid resource and must be reported as such; do not delete it without separate direction. Created for selected task evidence, not a full production-data clone. Existing `pushinweight_staging` remains a separate, untouched database. Verify resource identity and readiness before all writes; preserve production live operations.
+
+**Local implementation checkpoint — November 9, 14:38 JST:** `save_person_job` and its compatibility alias produce an offline, searchable 1,083-person preview using the selected fresh language rules and scoped organization policy. The generated packet has 341 structured affiliations, 1,872 outside-scope role observations and 459 held role observations; the latter count overlaps structured rows. The saved target inventory does not include profile-history comparisons, so those sources remain on hold. A source-only snapshot writer rejects a contradictory observation inside a compressed interval without changing the old record; it cannot reconstruct missing intermediate observations. Source-only intake also holds a previously unlinked account for review until account-link provenance is represented safely. A 221-test affected suite passed (122 PostgreSQL-required), followed by 26 passing staff-intake tests after the account safeguard. The preview and CSV/JSON review copies were delivered locally; no data was imported.
+
+**Historical open-items checkpoint (superseded by later implementation):** U38 lacks the reusable paginated collection/receipt/resume integration and its fake-client acceptance tests; only an offline request plan exists. U39 lacks complete per-field attribution and the frozen multi-spell acceptance proof. U41 lacks a shared end-to-end spell reconciliation and source-first apply path; the source-only account hold is deliberately conservative. U42's complete frozen acceptance set, measured before/after coverage, and full review remain open. The existing passing tests and generated preview do not close these units or authorize import. Live-provider/model quality was not evaluated.
+
+**Review update — November 9, 14:49 JST:** local independent review found and prompted safeguards for unsupported single-source summaries, reused handles, mismatched Post IDs/URLs, duplicate audited-name actions, source-only account enrollment, and profile quote/clock context. The refreshed preview has 332 held structured affiliations, 1,961 held person-text summaries and 3,182 held profile snapshots; these are overlapping record counts. The final local browser check found 1,083 people, working search and both companion downloads. Against the same 1,083 person keys and target-inventory digest, the November 7 broad-scope preview had 2,340 structured roles (24 starts, 10 ends); the current selected scope has 341 (12 starts, 4 ends), with outside-scope roles routed to summaries. The input digest differs, so this is scope/accounting context, not a controlled extraction-recall comparison.
+
+Further release-blocking review findings remain: the live Account and profile writers use persistence time rather than page-receipt time and can process observations out of order; the existing historical backfill does not use the new compressed-interval hold; and same-profile reuse cannot preserve a second observation's full provenance with the current snapshot representation. Same-version enrichment now retains a separate source payload, with exact replay regression-tested. The source-only helper is not a complete import path. No production change or collection was made. Do not mark U37–U42 complete from this checkpoint.
+
+**Read-only harvest health follow-up — November 9, 14:50 JST:** the exact same 20-post cohort was rechecked after 30 minutes against `pushinweight-db-shadow`. All 20 now have detected languages, but all 20 lack English and Chinese commentary; regression and acceptance gates failed. The affected brands in this bounded cohort are Doubao (16) and Nemo Megatron (4). The initial check had all 20 pending and was inconclusive. Detailed IDs and stage/reason codes are saved at `/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-09-save-person-job-work/harvest-health-followup.json`. This is a read-only observation of the existing service; these local changes were not deployed and causation has not been established.
+
+**Final local regression pass:** 232 affected tests passed, including 128 PostgreSQL-required tests; the shared test database wrapper was used. Django system check, scoped Ruff and whitespace checks passed. Browser verification covered the refreshed 1,083-person preview, search, companion links and desktop/mobile rendering without page errors. These checks do not close the implementation and health gaps above.
+
+**Historical November 9 full-cohort correction (superseded by U44.G):** owner explicitly requires Chinese-company OR Chinese-university affiliation before pinyin checks and authorizes fixing the code and rerunning the saved 1,083-person cohort. This supersedes the earlier employer-independent assumption. Both ordinary spelling matches and previously reviewed pinyin handles must pass that prerequisite; Chinese-character evidence retains its independent rule. The endpoint is the corrected local prototype/report, with no provider calls, database changes, import-roster rewrite or release. This does not authorize or complete U44 application-command integration.
+
+**Latest November 9 clarification:** owner explicitly requests testing potential code for `primary_language=zh-Hans` on the original 102. This authorizes local prototype code, deterministic saved-data evaluation and local HTML/CSV/JSON output. The experiment uses the original company-or-university cohort as stated at run start. It records only assign/review/do-not-assign language proposals and source observations; it does not create ethnicity/nationality/intent fields, assert verified proficiency, change the production-bound assignment roster or write any database. The earlier source-only substitute was interrupted and not delivered. U44 application integration and staging import remain separate work.
+
+**November 9 three-way rule addition:** add/deduplicate the supplied wording in the existing plan. This records a requested proposal and does not implement or apply an ethnicity classifier, alter the fixed assignment roster, rerun the candidate selection, or authorize database/provider/release work. Preserve the distinction between observable text and demographic conclusions, and do not silently resolve conflicting categories by inventing precedence.
+
+**November 9 subsequent rerun request:** owner requests applying the rules and showing who remains, then clarifies that the intended exclusion rule assumes candidates may leave background ambiguous but would not deliberately express a different background. That requested demographic/intent inference from names/photos is not executable scope. A bounded local replay of saved explicit decisions and a review of direct source statements is completed, with no new inferred exclusions, provider calls or database access. It does not establish that all requested rules were applied or that U44 is implemented. Exact source quotes can record explicit self-description; ancestry, citizenship, birthplace and hometown must remain distinct, and a stated ancestry does not by itself exclude mixed ancestry.
+
+**November 9 integration request:** add U44 and all current rules to this existing plan only. Do not execute the audit scripts, rewrite saved cohort decisions, add Dan as a manual exclusion, change application code or start U37–U42 as part of planning. Retain historical delivery metadata without activating staging. No additional external model review, fresh collection, roster changes or production writes are authorized by this amendment. The implementation endpoint described for U44 is a reproducible local preview; any later database import remains separately selected staging work.
+
+**November 9 review amendment:** keep all original 483 visible, mark the three explicit owner exclusions and carry only 480 IDs in the current assignment packet. The compact review and method record confidence groups, Chinese-name-first evidence, script/flag review decisions and tentative handle clues. No automatic ethnicity/nationality classification, database application, provider call or deployment is added.
+
+**November 8 override:** the current owner request authorizes code and offline verification for U43 only: assign the fixed483 selected accounts to the existing `people.primary_language` field in the prepared import proposal. This supersedes a planning-only restriction for this bounded work and rejects the proposed `china_connection` storage alternative. No new tables/columns/JSON database fields, language-ability model, extra review/approval gate, provider calls or database application. Parent staging metadata does not activate delivery here.
+
+November 7 follow-up: the owner asks to plan the `record-job-history` update. This turn authorizes documentation and read-only research, not implementation, paid collection, database import, X mutation, commit, push or deployment. U31's original local preview is delivered; U37–U42 define the next implementation checkpoint, ending at a refreshed local preview. U32–U36 remain later staging/list work and must not run as an automatic continuation of this amendment.
+
+The parent staging metadata remains the broader workflow's destination, not permission to write records during preview. The owner rejects additional company/technical columns and the affiliation-function table. Preserve the existing Person → affiliation → Brand → BrandCompany → Company chain. Historical Chatter budgets and original-65 collection allowances are not an allowance for a fresh 1,083-person batch.
+
+## Retained staff/job-history Goal Capsule
+
+**Objective:** Allen can inspect each candidate's sourced employment history, distinguish known facts from inferences, and understand what further evidence would resolve missing information.
+
+**Means:** extend shared source preparation, contextual extraction, profile observations and affiliation reconciliation through `record-job-history` (KTD16–KTD21, KTD23–KTD28).
+
+**Authority:** November 9 requests planning for U44 and rule reconciliation. November 8 authorized U43's local implementation; the November 7 request for U37–U42 was planning only. U37–U42 and U44 remain future implementation; U31 is the delivered baseline. U32–U36 retain their separate staging/list scope and are not activated here. The authoritative General Launch charter/index coordinate G1 employment work and G2 Chatter consumers.
+
+**Execution:** after implementation is selected, the parent owns shared-code fixes, regression verification and local HTML/CSV/JSON delivery. Any external collection/extraction needs its explicit run envelope. The local baseline rerun can finish with accurately labeled gaps and no paid calls.
+
+**Stops:** hold the affected record on identity conflict or incompatible evidence; retain the rest of the preview. Missing provider allowance prevents paid dispatch, not offline preparation. A wrong target database prevents application. Protect live harvesting and peer sessions.
+
+---
+
+## Retained staff/job-history Product Contract
+
+### Summary
+
+Improve the reusable employment-history method and refresh the local preview from the saved candidates. Preserve the broader later staging/list sequence, while keeping employer, evidenced lab/product affiliation, work function and sources distinct.
+
+### Problem Frame
+
+The discovery page identifies plausible staff but is not a completed employment-history search or import specification. The current extractor omits source clocks and responsibilities, can attach bio-derived claims to tweet text, and the profile writer can suppress a changed bio when the same tweet is fetched again. The preview must expose these process gaps separately from information absent from the sources. Company resolution must follow and complete the existing brand/company relationships. The importer does not preview its full writes, and its callbacks can enroll new staff for collection. Those gaps could produce a local résumé that differs from what staging actually stores or triggers; they do not require a new company field or table.
+
+### Key Decisions
+
+- **Local preview precedes staging.** Governs R58, R61. (session-settled: user-directed — chosen over direct production persistence: the owner requires local review and permits only staging imports.)
+- **Reuse the existing company chain and role fields.** Governs R60, R61, R67. (session-settled: user-directed — supersedes the proposed Company FK, technical-involvement column and affiliation–JobFunction table. Create missing records/links in existing tables; infer technical involvement later from title, description and function.)
+- **Copy people without removing source memberships or duplicating Call A coverage.** Governs R64. (session-settled: user-directed — chosen over moving source members and including Call A duplicates: Call A already collects those people.)
+- **Use API-only OAuth2 with slow batches.** Governs R65. (session-settled: user-directed — chosen over browser automation and rapid bulk additions: the account previously became limited.)
+
+### Requirements
+
+**Existing preview, staging and list contract**
+
+- R58. Account for all 1,083 saved candidate accounts in a detailed local preview before any staging migration, deployment or import for this subplan; show accepted, unresolved, excluded and already-represented outcomes without silently dropping people.
+- R59. Preserve each supported current, former, concurrent or uncertain affiliation and its real date precision; discovery labels and observation dates must not manufacture current employment, legal employer, start dates or end dates.
+- R60. Distinguish title, description, department, team/product and work function per affiliation in existing fields, with source text visible beside every employment entry. Technical-involvement inference is deferred.
+- R61. In the later staging phase, import only the reviewed accepted payload, creating missing Person, Account, Brand, Company and existing relationship records as needed, reusing existing identities, and proving read-back and replay parity.
+- R62. Keep source identity, saved text, publication/observation times and review state attached to each affiliation; all supported sources for an entry remain available after ingestion.
+- R63. Make this saved-evidence import independent of fresh collection: preview performs no writes or provider calls, and apply performs only disclosed writes without automatic staff-enrichment enrollment.
+- R64. Create private `for_chatter_giants` and `for_chatter_other` allocations with each eligible stable X identity in at most one destination, excluding current Call A members and preserving all existing lists.
+- R65. Execute list changes through the existing allenwlee OAuth2 account, with at most five attempted additions in a batch and at least one hour between batches across both targets; preserve account holds and verify ambiguous outcomes before retrying.
+- R66. Show per-list counts, routing reasons and capacity headroom; use OpenAI, Anthropic, SpaceXSI/xAI, NVIDIA and Google as the initial giant group, with other affiliations in the other group and explicit balancing overrides separate from employment facts.
+- R67. Add no table or column. Resolve Company through Person → PersonBrandAffiliation → Brand → BrandCompany → Company, and expose missing-record/link actions in the preview. Preserve the existing schema constraints and claim identity rules.
+
+
+**Record-job-history follow-up**
+
+- R68. Keep the additional-1,083 cohort, original-65 cohort, Call A exclusions and newly recovered discovery candidates separately labeled; report people, employment spells and source observations as distinct units.
+- R69. Load all available relevant saved source texts and their real clocks before scheduling additional retrieval; show per-person/window/query coverage and every unfinished search.
+- R70. During later application, ingest an exact cited Post from actual saved or fetched content before binding its evidence FK; capture its accompanying profile as a separately timed snapshot, with target-specific IDs.
+- R71. Extract every employer, date, title, function, team/division, responsibility and supported work-location clause, retaining field-specific source support and reasons for omitted/uncertain facts.
+- R72. Separate effective employment dates, tweet publication, profile collection and continued-current assumptions; preserve partial dates and explicitly label contextual/inferred dates.
+- R73. Keep one record per compatible employment spell with multiple evidence rows; enrich an existing spell without creating a second job merely because a date/title/source became known.
+- R74. Preserve newly observed profile versions, including changed bios returned with a previously seen tweet; replaying the same captured observation must not create a version or increment observations.
+- R75. Report missing-field reasons, actual dates, inferred dates, Present and unresolved status separately, with before/after comparisons on the same population and saved evidence.
+- R76. Reuse the current provider/client/model routing and existing database structures; bound and account for any future paid run, preserve normal scheduled callers, and stop this follow-up's implementation at the local preview.
+
+### Scope and assumptions
+
+The follow-up updates the method, shared code and local preview contract. It does not promise a date-complete résumé or expand the collection window before January 1, 2026 without a later explicit selection. Saved older evidence may still be used. Discovered false negatives appear in a separate recovery section rather than silently changing the 1,083-person comparison. Public bios are source claims, not verified employment dates. The original 65 serve as additional regression evidence, not an automatic expansion of the import or X-list roster.
+
+**Product Contract preservation:** R58–R67 and AE44–AE49 remain. R68–R76 and AE50–AE58 add the owner's current method learnings. KTD19 replaces the URL-only default for available exact source tweets; no new storage or release authority is implied.
+
+The new affiliation preview covers the 1,083 candidates. The original 65 have a separate sourced-history packet and remain separately counted. Proposed list allocation includes an optional original-65 section; its inclusion is an outstanding owner choice before executing those additions. Their history can be reused as regression evidence without silently expanding this import.
+
+The saved discovery labels give an approximate 398 giants / 685 others before role review. These are routing estimates, not current-staff counts. Final counts use reviewed identities, deduplication and a fresh complete Call A snapshot. A 1,000-member target is a provisional operating preference, not X's platform limit.
+
+No production employment import, new recurring schedule, additional Render resource, new media collection, wholesale historical backfill, or credential/billing repair is included. The separate billing plan owns its release, credential hold and recovery of Call A intent 135. Preserve the old `_for_chatter` list, including any already-added member; removal or renaming is not selected.
+
+### Acceptance examples
+
+- AE44. Covers R59, R62: Brad Lightcap's owner-reviewed departure uses `2026-08` with month precision, displays `20260800`, and links the dated announcement with the approximation note; it does not become August 12 solely from the post timestamp.
+- AE45. Covers R60: Addy's Claude Code remains team/product, Lauren's Grok bot is retained under the supported SpaceXSI role, and “Leading Strategic Explorations” is description rather than a fabricated title.
+- AE46. Covers R59, R61: Alibaba-only employment resolves to an evidenced Company without asserting Qwen team membership; the same rule applies to Google versus DeepMind and Meta versus Llama.
+- AE47. Covers R58, R61–R63: two saved sources supporting one role produce one role with two evidence entries, retain different observation times, and replay without duplicates or collection jobs.
+- AE48. Covers R64–R66: a person with giant and other history retains both employment records but gets one reviewed destination; a new Call A overlap is skipped before writing.
+- AE49. Covers R65: after an add times out, the next action is membership verification; confirmation skips another POST, and incomplete verification leaves the operation held.
+
+
+- AE50. Covers R70, R72: synthetic tweet 123 supports Anmol at OpenAI January–April 2026. Prepare one former role with start `2026-01`/month and end `2026-04`/month. A missing target Post is proposed for ingestion from its real source content before evidence FK binding. An ID alone produces a lookup-needed disposition, never a fabricated Post.
+- AE51. Covers R71–R73: synthetic tweet 456, published November 4, 2026, says “I left Mistral in October to join Anthropic”; its collected author bio says “current researcher at Anthropic”. Produce a former Mistral spell with unknown start and explicit `2026-10` end, and one current Anthropic spell with researcher/research from the bio. Proposed Anthropic start `2026-10` is an inferred move month with rationale, not an explicit start. Attach tweet and bio as two evidence rows to the same Anthropic spell. Do not infer Mistral's title or start from adjacent employers, or use November 4 as either start date.
+- AE52. Covers R74: identical captured profile replay is unchanged; a later identical observation updates the latest observation range/count; A→B→A creates three versions. Refetching tweet 456 with a changed bio at a later collection time creates a new version. Importing an older captured bio preserves its original clock and does not overwrite newer Account facts.
+- AE53. Covers R68, R71: review the missed @MaskedTorah work description and product-only staff wording without requiring a conventional job title; distinguish actual employment evidence from Claude users, investors, fellows and official accounts. A weak-queue entry already rescued into the cohort is not counted again as a new miss.
+- AE54. Covers R71: Addy's Claude Code and Lauren's Grok bot become supported team/product fields; “Leading Strategic Explorations” becomes description with no invented title. Each source clause has an extracted or explained disposition.
+- AE55. Covers R69, R76: “my last day”, “starting at”, “after three years at” and equivalent saved non-English move wording can reach job-history extraction without changing scheduled SpecialEvent1. A paginated search interrupted by budget, cursor failure or timeout remains incomplete; rerun reuses saved replies.
+- AE56. Covers R72, R75: “ex-OpenAI” gives former status and unknown dates; “joining next month” alone does not establish current employment. A later current-role bio supports current status at observation time; continuation afterward follows the owner's low-certainty rule. Location of headquarters or an account is not automatically work location.
+- AE57. Covers R73: a second source adding a title or more precise date enriches the same compatible spell. Two separate tenures at the same employer stay separate; an undated ambiguous source cannot merge them. Reviewed/rejected/superseded facts retain existing correction semantics.
+- AE58. Covers R68, R75: baseline is 1,083 people / 2,340 prepared employment entries, 24 start dates, 10 actual end dates and 855 Present. Reprint populated/missing counts and distinct people for every field, brand and company; don't count Present as an actual end date or silently include the original 65.
+
+---
+
+## Retained staff/job-history Planning Contract
+
+### KTD16. One prepared record drives preview, import and read-back
+
+Extend `core/staff_assets/manifest.py`, `core/staff_assets/intake.py` and `core/management/commands/import_staff_manifest.py`. Extract a shared preparation/validation result from the existing writer; render proposed rows from that result and make apply consume the same decisions. Keep one versioned local manifest, a digest of reviewed logical content, and a fixed review timestamp. A separate execution-binding digest covers the actual target revision/schema and resolved target IDs. Rebind against actual target identities without changing reviewed logical values; value/action changes require a refreshed preview. Reuse existing `StaffIntake` for immutable accepted observations, not a second import ledger table.
+
+Preparation must validate the entire selected payload before application. It resolves target identities, permissible fields, real calendar dates, source ownership, official-account exclusions and existing claim matches. The present dry-run only reports person create/reuse/exclude, so it is insufficient. Do not send display-only keys to ORM creation. Preserve `staff-intake/v1` callers through a compatibility adapter to the stricter prepared contract.
+
+An accepted subset is a separate hashed payload derived from the full preview; unresolved/excluded rows remain in the local audit but are not fed to apply merely to produce `StaffIntake` rows. Applications remain atomic per person and resumable after partial completion. A changed payload gets an updated preview before the changed records are applied. No database JSON column is added; the existing intake document remains a versioned variable-shape source document, with strict field/type/reference validation on every writer touched by this work.
+
+**Chinese-name preservation (owner instruction November 8):** carry the 15 disclosed Chinese personal-name forms (13 display-name sources plus two bio sources) into the same Person's existing `PersonName` and `PersonNameEvidence` records, through `core.person_names.record_name`, for both created and reused people. Preserve exact original characters and Latin spellings, source-supported registered locale, `name_type="professional"`, `origin="source"`, and each name's own source text/reference/observation time; missing clocks remain a preparation gap. Do not stop at `names[0]`, copy a later English-name source onto an older Chinese name, invent components/characters, or change existing primary/English selections automatically. Keep the 55 other/uncertain Han display forms in existing source/profile evidence and the reviewed packet without promoting them to full Chinese names or adding an unsupported alias type. Exact audit and preservation rules: [method note](../analysis/2026-11-06-171347-record-job-history-method.md#chinese-name-preservation--owner-instruction-november-8-2026). This is future preview/import work, not a database write authorized by the note.
+
+### KTD17. Resolve companies through the existing relationship chain
+
+Walk `Person.brand_affiliations` → `PersonBrandAffiliation.brand` → `Brand.companies` (`BrandCompany`) → `Company`. `BrandCompany` already stores the brand/company pair as its composite primary key. Reuse matching catalogue identities and propose missing Person, Brand, Company, PersonBrandAffiliation and BrandCompany records where the saved evidence supports them. Account and PersonAccount resolution remain shared identity operations. The local preview resolves or proposes these records without writing them.
+
+Inspect the existing organization-resolution writers/readers before extending them; make preview and later import use the same resolver. Keep `ck_pba_one_organization`, existing brand/candidate semantics, claim identities, supersession guards and source projections unchanged. An unresolved discovery candidate must be shown as unresolved or with an explicit proposed Brand resolution; it cannot be silently presented as a completed company chain.
+
+BrandCompany is not necessarily one-to-one. Show all applicable existing links and their meaning; do not select the first Company arbitrarily or turn brand ownership into an unsupported employing-entity claim. Preserve the observed organization wording separately. Alibaba-only evidence does not establish Qwen team membership: resolve the supported organization through an appropriate existing or proposed Brand and Company, without inventing a model-team assignment or legal suffix. Missing links require proposed records in the existing chain, not another field or table. Show any required catalogue attributes that the saved evidence cannot supply, rather than accepting defaults as evidence.
+
+Use existing semantic claim matching and reviewed replacement paths. Two sources for one employment spell add evidence; rehires, promotions and incompatible date claims remain distinct. Completing a BrandCompany link does not rewrite affiliation claim hashes or flatten historical employment periods.
+
+**Schema total for this subplan:** zero added tables, zero retired tables, zero added columns, zero migrations. Proposed creations are rows in existing identity, catalogue, relationship, affiliation and evidence tables, listed individually in the preview. No new JSON column or service is needed.
+
+### KTD18. Keep title, description and function in existing affiliation fields
+
+Use `PersonBrandAffiliation.title_raw`, `title_normalized`, `description`, `department`, `team` and the existing free-text `job_function`. Preserve supported detailed wording and sources. Multiple functions can remain naturally expressed in that text; do not turn it into encoded catalogue IDs, add an affiliation/function join, or repurpose JobListing-owned `JobFunctionAssignment` rows.
+
+The owner's Research, GTM, Developer, Management, Operations and Other groupings may be derived for review where supported; Unknown stays visible. Reuse existing vocabulary helpers where their meanings fit, without adding persistence or changing frozen job-listing vocabulary. These display groupings are not new database fields or assignments.
+
+**Technical involvement is deferred.** Infer it later from job description, title and function. Do not add it to this task's persistence, prepared import fields or required extraction output, and do not add a separate classification call. Earlier local technical assessments remain historical analysis only. Per-entry sources use existing affiliation evidence; per-field support can be shown in the local projection without a new provenance table.
+
+### KTD19. Reuse source storage and temporal validation
+
+`PersonBrandAffiliationEvidence` already stores `source_post`, `source_profile_snapshot`, `source_url`, `evidence_text`, `observed_at`, extraction method/model/prompt version, confidence and review details. Extend intake's source parsing to populate these fields per source. The current person-level observation timestamp cannot replace every source's own observation time. Reuse existing profile-snapshot provenance and the temporal parser from `core/targeted_extraction.py`.
+
+Source FK resolution is target-specific: match posts by provider/native ID and snapshots by stable source identity/content/observation; never copy production snapshot primary keys into staging. For the exact cited tweet, propose reuse or ingestion through `monitor.cycle.persist_x_post` from real saved content, then bind the evidence FK during later apply. If only the ID is available, plan `XClient.get_posts_by_ids` retrieval under KTD24; never manufacture an ID-only Post. Unavailable sources retain URL/text/identity and a disclosed unresolved FK. This does not import unrelated history. Preview represents planned source rows and foreign keys symbolically; source ingestion and real FK binding occur only under separately selected staging application. The versioned existing intake document retains missing-source metadata under a stable evidence key: source kind, provider/native ID or snapshot identity, publication time and any observation window. Read-back verifies that envelope as well as canonical evidence fields. Show a saved-bio source as “account bio, collected [JST time]”; its current profile URL does not prove today's text is identical.
+
+Existing date values remain nullable strings with separate day/month/year/unknown precision. Partial values are `YYYY`, `YYYY-MM` or `YYYY-MM-DD`; zero-filled forms are display only. Precision and certainty are separate: retain uncertainty/inference in evidence and review notes. Use an announcement's explicit effective date when supplied; otherwise preserve the supported bound or unknown, with owner-approved approximations identified. Profile location and employer headquarters are not automatically work locations.
+
+**Owner continuation rule — November 7:** Assume a person remains in their latest stated role(s) unless saved evidence says otherwise, and label continued employment as low certainty. A later bio omitting an employer is not a departure by itself. Preserve explicit departures, superseding job transitions and ambiguity about which employer is latest; do not manufacture simultaneous employment from an unordered career list. Store current status with null end date and unknown end-date precision. Record the assumption and its low certainty in existing `review_note`; leave numeric `confidence` unset rather than inventing a probability. This changes status interpretation, not the saved source text, start/end date values, schema or import authority.
+
+### KTD20. Build `record-job-history` from complete saved sources
+
+Reuse `profile_affiliation_extraction`, `personnel_change_extraction`, account/profile identity and shared affiliation writers. Adapt them to the saved evidence packet, including full bios and relevant post text. Record the disposition of employer/role/unit/function clauses, including phrases with no title. The fixed 65-person correction scripts are evidence and regression inputs, not the production method.
+
+Use code for normalization, identity matching, date parsing, source accounting and list routing. Reuse saved extraction where adequate. If a model extraction is necessary, use one shared structured extraction for all role fields, with a frozen prompt/version and bounded input batches; do not add a second title/function classifier. The current planning/local preparation starts from saved material with no fresh X search. Any new paid model batch requires a recorded estimate and available task allowance before dispatch; exhausted earlier Chatter allowances cannot be assumed available. Unknowns may remain visible rather than triggering unlimited calls.
+
+Extend the shared extraction/writer path once to retain the existing description, team and job_function fields and use KTD17 for organization resolution. On an existing role, new evidence may fill a supported empty field through the reviewed enrichment path; conflicting values require an explicit proposed replacement. Fixing only a prompt does not repair `get_or_create(defaults=...)` reuse. Preserve the actual supporting bio when the claim came from a profile, rather than saving unrelated post text as its evidence.
+
+### KTD21. Keep staging identity and import side effects explicit
+
+Bind the prepared payload to the exact staging database identity, application revision and schema fingerprint. Saved production revision `6bd4b15f` is dated evidence; the root checkout is older than the task worktree and cannot establish today's deployed schema. Do not identify staging by a database's suggestive name. Do not deploy all unrelated worktree migrations to satisfy this import.
+
+Use `core/account_identity.py` to create/reuse genuine missing Accounts from saved native-X identity, then shared Person resolution. Names and handles are not identity merge keys. Existing conflicting confirmed links hold the record. Show every Account, Person, PersonAccount, name/selection, Brand, Company, BrandCompany, affiliation and evidence write before apply; source-derived media/avatar work is excluded unless it is explicitly present in the reviewed payload.
+
+Add a scoped import-enrollment policy shared by intake and `core/staff_assets/arrivals.py`. Persist strict `collection_mode: evidence_only` and its prepared claim identities in the existing versioned StaffIntake input document; this is replayable import policy, not a new Person eligibility field. In `register_person`, exclude eligibility supplied solely by those marked observations before any avatar/name/queue write. Its existing catch-up caller then observes the same policy in another process. Preserve independently established eligibility and pre-existing collection work, and let a later independent eligible source follow normal behavior. Capture the selected mode when scheduling explicit and signal callbacks, including work deferred until commit; a temporary context alone cannot protect later catch-up. Default behavior for existing callers stays unchanged. This saved-evidence import creates no automatic `StaffCollectionWork` or avatar acquisition from its own observations; it does not disable pre-existing independently authorized collection. Do not globally disconnect signals, pause workers or change production settings to achieve this.
+
+### KTD22. Reuse OAuth transport, with a separate bounded staff operation
+
+Reuse `XOwnerListClient` and the current encrypted/revision-fenced `OwnerTokenStore`. Add only the missing create/owned-list-lookup capabilities needed to create or reconcile these two private destinations. The official-company intent queue is Call A-specific and must retain its fixed-list and official-account guards; never manufacture official-company records for staff.
+
+Use an authoritative local allocation/checkpoint on fuchitalee with stable native X IDs, target list IDs, attempted/acknowledged/confirmed outcomes and the next permitted batch time. Securely bind it to the reviewed allocation digest and owner `17456158` / allenwlee. List creation and other owner-account writes also consume the conservative five-write batch allowance. Check and durably record the staff allowance immediately before every physical list-mutation HTTP dispatch, including automatic POST retries after OAuth refresh. If a retry would exceed the batch allowance, defer it to the next eligible batch. A call-level receipt around `add` is insufficient because `XOwnerListClient._call` can resend after a 401. Preserve the existing token-refresh behavior for other callers; a crash must not erase an attempted write from the allowance.
+
+Coordinate against the same owner-account operational lock and state used by the active Call A writer. The existing dedicated official-company advisory lock does not block harvesting, but only coordinates callers using the same operational database and scope; a staging connection is insufficient. Acquire it only around a batch, never during the hour wait, and do not use entry points that also take `harvest_writer_lock`. A task-local checkpoint alone is not account-wide coordination. Live execution requires verified cooperation from the production owner-list writer so all cooperating writers observe the staff cooldown. Any production deployment needed for that coordination is a separate prerequisite owned with the list-maintenance session, not authority granted by this staging subplan. Until that prerequisite exists, leave X execution pending; do not silently run parallel budgets or write production employment data. Necessary authorized OAuth token refresh bookkeeping remains part of owner API execution; it does not authorize a new production pacing deployment.
+
+Before each batch, recheck owner identity, current token revision/hold, exact destination privacy/ownership, complete Call A membership and relevant destination membership. Stop on throttle, restriction, auth/billing refusal or uncertain mutation. Reconcile ambiguous list creation by owned-list lookup and exact name/privacy/owner; do not blindly create a duplicate. Reconcile uncertain adds by complete read-back before any retry. A current owner hold is different from a fresh provider refusal and must not be cleared by this task.
+
+Keep allocation deterministic: use a supported current affiliation first, otherwise the most recent supported former affiliation. For tied/undated supported affiliations, prefer the giant group and label that routing reason; this does not upgrade employment certainty. Explicit balancing overrides change only destination. Counts use deduplicated native IDs and capacity includes existing members. X's [official limits](https://help.x.com/en/using-x/x-lists-not-working) are 5,000 accounts/list and 1,000 lists/account. Creation uses the [owner-authorized Lists API](https://docs.x.com/x-api/lists/manage-lists/introduction); the shared client must verify `private:true` rather than rely on the API default.
+
+### KTD23. Measure source coverage before interpreting empty fields
+
+Freeze the baseline manifest and input digest. The current packet has 1,286 saved-bio texts, 40 own posts and four third-party posts; only 39 people have own-post evidence. The 2,340 prepared roles differ from raw role-observation counts because compatible observations coalesce. Preserve this counting distinction and all prior fields while rerunning extraction. Original65, additional1083, CallA-excluded and newly recovered candidates remain separate populations.
+
+Extend the existing packet/preview with local per-person source coverage and per-field gap reasons: `not_searched`, `search_incomplete`, `outside_selected_window`, `source_unavailable`, `source_clock_missing`, `not_stated`, `ambiguous`, `conflicting`, or `extraction_omission`. Collection coverage (source/window/query) and field support (what examined evidence establishes) are separate dimensions. Present is a meaningful status, not a missing end-date reason. `not_stated` means absent from the examined sources, not absent everywhere. Derive reports from canonical prepared roles; do not add a coverage table or persistent per-person counters.
+
+The rejected/weak discovery queue requires targeted re-review for role-free descriptions and product-only employer signals. A Claude user or investor remains different from staff; “fellow” requires interpretation rather than blanket acceptance or rejection. Record each candidate's inclusion/exclusion evidence. Brand counts must say new candidates versus combined known roster and current versus former.
+
+### KTD24. Make historical retrieval a reusable, bounded option
+
+Start with saved Account bios, AccountProfileSnapshots, Post text/author evidence and existing role/evidence records. Read all relevant complete texts by stable identity; never use a previously populated title as the extraction input. Deduplicate repeated text within the source packet while retaining every observation’s identity, subject, source kind and relevant clocks; equal text alone does not establish equivalent extraction input. Preserve explicit missing/truncated packet coverage.
+
+Prepare an on-demand history query recipe from January 1, 2026 JST to a frozen run cutoff, using known `from:` handles and epoch date bounds. Keep the original SpecialEvent1 recipe available as the baseline; add a job-history-specific move/tenure phrase set covering departure, joining, promotion and role/team changes, including saved multilingual wording. Combine author and phrase branches with explicit parentheses; known authors do not need an extra generic AI-keyword gate. Do not modify scheduled SpecialEvent1, harvest cadence or staff membership. Reuse the existing query-length safeguards and `XClient.run_search_pages`; no new HTTP client or arbitrary one-page stop.
+
+Reuse `XClient.get_posts_by_ids` for exact cited missing sources; `get_tweets_by_ids` returns metrics and is the wrong path. Current official docs allow at most 50 tweet IDs per lookup, and search supports author filters, `since_time`/`until_time`, `Latest` and cursors. Reconcile response IDs, empty/missing entries, actual authors and timestamps. A drained query means that method finished, not complete X-history recall. Sources: [advanced search](https://docs.twitterapi.io/api-reference/endpoint/tweet_advanced_search), [tweet lookup](https://docs.twitterapi.io/api-reference/endpoint/get_tweet_by_ids), checked November 7, 2026.
+
+The default command remains offline. The optional collect/extract operation requires an explicit selected cohort/window, on-demand credential purpose, frozen query/model versions, estimated cost and finite dollar/request/retry/deadline bounds. The implementation must produce that reviewable run specification before any paid dispatch; this plan selects no new spend. Store exact queries, cursors, attempts, returned appearances, unique IDs, lookup misses and terminal reasons in the existing collection machinery where executed, with compact local receipts for preview-only work. Save normalized source facts/text needed to replay; do not retain large raw response envelopes or duplicate tweet text per affiliation. On bounds or provider failures, preserve completed results and resume position rather than restarting paid work. No pre-2026 or whole-timeline expansion is automatic.
+
+### KTD25. Give shared extraction source clocks and complete clauses
+
+Extend `core/targeted_extraction.py`'s existing personnel/profile contracts and `_prompts` packet. Supply full source text, native identity, source kind, Post publication time, actual collection time and profile first/last observation times. Distinguish author from quoted/mentioned subject. Each output field cites one or more supplied source keys and the supporting span, with explicit versus contextual/inferred basis. Validate keys, source ownership, complete input accounting and schema before preparing roles. Preserve whole evidence text separately from extracted spans.
+
+Use the existing configured model and provider routing, frozen explicitly in the run; do not introduce Grok or a second title/function classifier. Code handles source deduplication, identity/catalogue lookup, deterministic temporal validation, compatible-role matching and reporting. One shared contextual extraction pass handles employer/title/team/description/function/date interpretation. Extend both parser and writer to carry `description`, not only prompts. Model calls, if later selected, are bounded and cached by a hash of the complete canonical contextual request: source text, identities/keys, subjects, source kinds and relevant clocks, plus the frozen prompt/contract and model settings. Identical words with different publication dates or subjects must not reuse an interpreted result. Failures remain visible rather than becoming blank successful results.
+
+Date policy: explicit day/month/year retains that precision. Relative dates resolve against the source publication date, not run time, only when the meaning is supported. The October Mistral→Anthropic example proposes an inferred October arrival, marked in `review_note`; the exact day remains unknown. Bare “ex-” gives no end date, observation dates are not employment dates, and approximate tenure alone does not fabricate an exact start. Store supported bounds/rationale in evidence/review notes when existing partial-date columns cannot express them. Continued Present uses the established low-certainty rule; numeric confidence remains unset unless an actual calibrated value exists. Preserve future/planned moves as such until supporting evidence establishes employment.
+
+No title is inferred from a team or responsibility. “Researcher” supports a research function for that role; it does not determine all prior jobs. Preserve original function wording and the existing Research/GTM/Developer/Management/Operations grouping in display. Technical involvement remains deferred. No inferred work location from company headquarters or profile location alone.
+
+### KTD26. Repair profile-version capture without adding storage
+
+Reuse `profile_observation_from_payload`, the normalized presence-aware hash, `record_profile_snapshot` and the existing AccountProfileSnapshot table. The current shortcut keyed only by `first_source_post` loses a changed profile when the same tweet is fetched again. Replace that shortcut with captured-observation identity/content/time checks. Pass actual capture time through shared adapters; Post.fetched_at is not the timestamp of every later profile observation.
+
+The prepared capture key combines stable account/native identity, source identity, original collection time, field presence and normalized content hash. Missing collection time remains a source-clock gap: display and interpret the source with that limitation, but leave its dated snapshot action unresolved; never substitute tweet publication or import time. Batch historical captures chronologically, and hold conflicting observations inside a compressed range for explicit reconciliation rather than silently claiming uninterrupted A across an observed B.
+
+Exact captured replay is a no-op; a later identical observation extends the current version; A→B→A preserves three temporal versions. Unknown/omitted provider fields must not be interpreted as explicit deletion. Historical imports preserve their original observation times and cannot overwrite newer Account facts. Verify out-of-order observations and concurrent writes using existing constraints and account-scoped coordination, without an additional version/event table.
+
+`capture_post_profile_snapshot` currently also emits preliminary affiliations/movement candidates. Extract/reuse its snapshot-only operation for this controlled method; preserve scheduled-harvest behavior and callback defaults through the normal path. Do not invoke the whole CycleRunner merely to obtain source rows, or create competing preliminary claims alongside the reviewed history.
+
+### KTD27. Reconcile employment spells before applying sources
+
+Share the existing preview's compatible-spell preparation with targeted extraction and staff intake. Neither a changed title/date/status nor a second source is a new job identity. Keep distinct dated tenures separate; an undated source with multiple plausible matches is held for review. Preserve current claim identities and use existing reviewed replacement/supersession machinery for conflicts; do not bulk-rekey legacy rows or overwrite rejected/confirmed facts by `get_or_create(defaults=...)`.
+
+Later explicit evidence can correct an inferred date without becoming another job: e.g. inferred October arrival followed by an explicit November 1 start proposes enrichment/reviewed replacement of the same spell, preserving both sources. Inferred dates are not hard identity keys. A new employer alone does not prove every other concurrent role ended.
+
+A move tweet can support two affiliations; the Anthropic tweet and its bio support one affiliation with two evidence rows. Each evidence row retains its own source FK, exact text, actual observation time and method/version. Evidence identity includes the captured observation, so identical text observed at different times is retained, while replaying the same captured source adds nothing. Per-field support/basis belongs in the existing compact source-claim projection and reviewed local packet, not a new provenance table or full model response. Use the existing `extracted_claim_data` projection through `write_source_evidence` for a compact versioned claim object (source key, supported field/value/span, basis and rationale). Do not duplicate whole bios, tweets or provider envelopes there. Validate allowed keys, source references, field/basis enums, types and version on every affected writer, with negative tests; retain the legacy `candidate_role` reader via a compatibility adapter. The actual role fields remain typed existing columns, and no JSON column is added.
+
+Prepare Account/Post/profile source actions first, then Person/name/account links, existing Brand–Company chain, affiliations and source evidence. List every touched table/action including `staff_intakes`, `accounts`, `posts`, `account_profile_snapshots`, `people`, `people_accounts`, `people_names`, `people_name_evidence`, `person_name_selections`, optional `people_texts`, `brands`, `companies`, `brands_companies`, affiliations/evidence and source/reference projections. Distinguish reused reference rows from new writes, and prove `staff_collection_work`/media/enrichment-queue effects are absent for evidence-only intake; Account/Profile changes must respect source observation clocks. Later apply uses this same prepared decision and existing source/reconciliation writers under U33's `evidence_only` policy, including signal/on-commit/catch-up paths. A failed/deleted source remains visible with its disposition and URL/excerpt. Keep independently supported roles in the reviewed accepted subset; one unavailable tweet does not block the person's other roles. Failed source resolution holds only the affected claim; later rollback/retry must not duplicate paid retrieval, source rows or roles. This amendment implements/previews the shared logic; actual staging import remains U34.
+
+### KTD28. Verify improved extraction without rewarding invented facts
+
+Freeze AE44–AE47 and AE50–AE58 as the required positive, negative, chronology and replay cases before changing extraction. Add a deterministic stratified sample of saved full sources spanning current/former, bio-only/post-backed, non-English, title-free, multiple-employer and ambiguous cases. Record selected identities and expected field/source/basis outcomes before evaluation. Separate this gold sample from aggregate coverage counts; synthetic IDs 123/456 are test fixtures, never lookup targets or live data.
+
+Use one implementation baseline and at most two corrective evaluation passes on the frozen sample; report remaining defects at the bound. This is a proposed future verification limit, not permission for paid calls. The offline path uses saved/fake model responses; real model quality must be labeled untested until an authorized bounded run is completed. Require all deterministic acceptance cases and source-provenance assertions to pass, no unsupported field additions in the reviewed sample, and no silent loss of prior supported fields. Investigate every coverage decrease; no arbitrary fill-rate target can justify invented dates.
+
+The refreshed HTML/CSV/JSON uses the same prepared payload. Show full saved evidence, per-field supporting sources, inference notes, acquisition/extraction gaps and source-first proposed record actions. Reprint entry and distinct-person counts for start/end dates, Present, title/function/description/team/department/location, brand/company resolution and missing values. Show exact-versus-inferred dates separately; brand/company tables distinguish all employment history from current roles and the fixed new cohort from recovered candidates. Deliver through show-locally. Update the method and authoritative charter/index with actual completion evidence only.
+
+### Detailed local table contract
+
+Render one person section with a wide summary and unlimited employment-entry rows; do not add physical database columns named employer-prior2. Pin picture, name and handle. Include current employer group(s), then prior1/prior2/etc where chronology is supported, followed by future/unknown/conflicting entries. Concurrent current jobs remain separate.
+
+| Display columns, repeated for every employment entry | Existing storage / derived view |
+|---|---|
+| Picture, name, handle/URL, native X ID, Person ID, Account ID, create/reuse/hold | Existing Person/name/account paths; local stable IDs for proposed rows |
+| Employer-current / employer-priorN, observed employer, Company name/ID/action | Derived through affiliation → Brand → BrandCompany → Company; show existing IDs and missing-record/link actions or ambiguous matches |
+| Brand name/ID and BrandCompany key/action; any separately evidenced lab/product/team | Existing brand/candidate FK and BrandCompany relationship; team/product wording uses existing team/description fields |
+| ecstart/ecend or epcstart/epcend; stored value, precision, display date, uncertainty note | Existing start/end and precision columns; evidence/review note |
+| eptitle / epctitle, original and normalized wording | Existing title_raw/title_normalized and sourced PersonText where needed |
+| epjobfunction / epcjobfunction, supported wording and derived display group | Existing job_function text; technical involvement deferred |
+| Department/division, team/product, responsibilities, seniority, employment type | Existing department/team/description/seniority/employment_type |
+| Work location, source wording, matched geolocation, workplace type | Existing geolocation/workplace fields and source evidence |
+| Current/former/unknown status, as-of time, confidence/review status, conflicts | Existing status/review fields; do not convert Allen's 90% estimate into row confidence |
+| Source kind/link, tweet ID or snapshot ID, full saved excerpt, publication/observation times, fields supported | Existing affiliation evidence and local per-field support projection |
+| Affiliation/evidence and company-chain record IDs or local IDs, create/reuse/add-evidence/enrich/replace/hold action | Shared prepared write result and exact target read-back |
+
+Print all saved evidence; do not hide it behind collapsed cards. Show missing names/pictures as missing. Search/filter by handle, employer, function, outcome and uncertainty; retain a complete unfiltered count. A person with no accepted role still appears with the reason. Provide machine-readable reviewed payload and CSV alongside HTML, all derived from the same prepared result. Show input digest, target environment and a record-count summary by table/action.
+
+### High-level technical design
+
+The follow-up implementation order is U37 → U38/U39/U40 → U41 → U42. U38's live collection and any paid extraction are optional run actions that require an allowance; offline work uses saved data. U32/U33 may reuse this implementation later, while U34–U36 remain outside this checkpoint.
+
+```mermaid
+flowchart TB
+  A[Saved source inventory and fixed cohort] --> B[Full source packet with publication and collection times]
+  A --> C[Missing-source and history query specification]
+  C --> D{Explicit run allowance available?}
+  D -->|No| E[Retain visible collection gaps]
+  D -->|Yes, later run| F[Existing on-demand X client and saved receipts]
+  F --> B
+  B --> G[Shared contextual extraction and code validation]
+  G --> H[Match employment spell and attach each source]
+  H --> I[Local preview and before-after coverage]
+  E --> I
+  I --> J[Later separately selected source-first staging application]
+```
+
+
+```mermaid
+flowchart LR
+  S[Saved bios and posts] --> E[Shared job-history extraction]
+  E --> P[Prepared identities, roles and sources]
+  P --> H[Full local preview]
+  H --> R[Reviewed payload digest]
+  R --> I[Shared staging importer]
+  I --> V[Read-back and replay comparison]
+  R --> L[One destination per eligible X identity]
+  L --> X[Owner API batches and membership reconciliation]
+```
+
+```mermaid
+erDiagram
+  Person ||--o{ PersonBrandAffiliation : has
+  Brand o|--o{ PersonBrandAffiliation : supported_association
+  Brand ||--o{ BrandCompany : has_company_link
+  Company ||--o{ BrandCompany : linked_from_brand
+  PersonBrandAffiliation ||--o{ PersonBrandAffiliationEvidence : supported_by
+```
+
+```mermaid
+stateDiagram-v2
+  [*] --> Prepared
+  Prepared --> Attempted: identity, ownership and cooldown valid
+  Attempted --> Confirmed: independent read-back
+  Attempted --> Held: refusal or ambiguous result
+  Held --> Confirmed: membership verified
+  Held --> Prepared: absence verified and hold resolved
+  Confirmed --> Waiting: persist checkpoint
+  Waiting --> Prepared: next batch eligible
+```
+
+### Risks and dependencies
+
+The input is 1,083 discovered accounts, not a complete staff census. Preserve the original SpecialEvent1 query and its known language/wording gaps, the timed-out Z.ai historical-bio supplement, and the distinction between saved bios and effective employment dates. Parent-company matches are useful without implying model-team membership.
+
+At five additions/hour, 1,083 additions take 217 batches and at least 216 hours between first and last batches. Including 65 more would be 230 batches and 229 hours. Creation calls, existing members, exclusions, refusals and holds change this estimate; it is neither a provider safe-rate claim nor a promised completion date.
+
+Preserve existing constraints, supersession triggers, source projections, limited-role permissions and old-reader behavior. No task schema migration or new table/column grants are needed. Build any later staging candidate against the compatible target baseline; do not bring unrelated ancestor migrations from the older Chatter branch into this import. Company-chain completeness is a record-resolution task, and many-company links must stay visible rather than collapsing to an arbitrary employer. Before live list work, inspect the separate billing session's actual release/recovery receipt; its earlier saved state is not current proof. The local preview does not depend on that account becoming writable.
+
+### Outstanding execution prerequisites
+
+The local preview can proceed independently. Before adding the optional original 65, settle their inclusion in the two new destinations. Before any live list batch, obtain the peer list-maintenance session's verified account-wide pacing cooperation; if it requires a production change, that work needs its own selected delivery authority. Neither prerequisite blocks the local preview or staging employment work.
+
+### Sources and reuse
+
+- `docs/analysis/2026-11-06-171347-record-job-history-method.md`: role/date/source rules and prior extraction gaps.
+- `docs/analysis/2026-11-06-233000-additional-staff-candidates.html`: owner-reviewed discovery cohort.
+- Authoritative-root `.local/2026-11-06-225852-staff-candidate-db-search/`: final candidates, exact SpecialEvent1 query, source exports and display data.
+- Authoritative-root `.local/2026-11-06-171003-record-job-history/`: original 65, reviewed role/source packet; do not rerun disabled production scripts.
+- `docs/plans/2026-11-05-231021-g2-chatter-private-list-roster-subplan.md`: source lists and Call A exclusion.
+- `core/models.py`, `core/migrations/`, `core/person_affiliations.py`, `core/intelligence_readers.py`: canonical storage and claim-reader invariants.
+- `docs/solutions/workflow-issues/2026-10-16-131500-backfill-coverage-and-completion.md`: distinguish input processing, usable records and independent membership proof.
+
+---
+
+## Retained staff/job-history Implementation Units
+
+Current planning amendment: U44. U43's fixed-roster preparation is implemented; its recent review rules are currently documents/local review data, not an integrated recognizer. U37–U42 remain planned; U31 is the delivered baseline; U32–U36 remain later staging/list work. Stable IDs below are not renumbered.
+
+### U44. Integrate saved name assessment and review finalization into record-job-history
+
+**Bounded rerun evidence — November 9, 09:14 JST:** `.local/2026-11-09-091030-name-rules-rerun/` on the authoritative root contains `replay.py`, saved source hashes, the 81 remaining rows and verification. The actual existing command reproduced the complete earlier prepared packet exactly (1,083 people, 2,340 employment entries, 480 language proposals) with database/network connections blocked. Compact browser proof checks 81 unique rows, source links, one-line rows and filtering. The requested name/photo-based demographic exclusions were not implemented; no fourth owner exclusion was added. U44's shared-code extraction/integration remains open; this report is not its exit evidence.
+
+**Status / endpoint:** planned, not implemented. Execute only on a later implementation instruction. Finish at reproducible local full/compact HTML, CSV and prepared JSON, without database/provider access. This is a bounded extension of U31/U43 and can run on their saved packets without waiting for fresh U38 collection. Reuse U37's source contract when it lands; do not create a competing source loader or person resolver.
+
+**Problem:** the existing command accepts a reviewed people manifest and a fixed `primary_language_assignment` native-ID roster. It does not invoke the recognition logic that produced the audit. `audit.py` and `finalize.py` currently read hardcoded local paths and write files at import time; `finalize.py` also mixes deterministic aggregation with hand-reviewed person corrections. Recent handle/grouping changes were made in review artifacts, so changing a documented rule does not yet rerun the recognizer.
+
+**Authoritative inputs — read; do not rerun the historical scripts in place:**
+
+- `/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-08-211010-staff-name-language-clues/audit.py`: `norm()`, `pinyin()`, `name_assessment()`, surname/English-name/syllable vocabularies, character-script patterns, name/handle observations and source shortlisting.
+- The same directory's `finalize.py`: reviewed corrections, exact source-quote validation, distinct clue categories, employer/institution/source reconciliation and per-person counts. `audit-final.json`, `scope.json`, `verify.py` and the source digest describe the frozen historical output; the numeric judgments are uncalibrated evidence scores, not demographic probabilities.
+- `.local/2026-11-07-153338-chinese-name-audit/name-audit.json`: the 15 disclosed Chinese personal-name forms, including Andrew Dai's bio `戴明博` and Zhen Zhu's bio `朱镇`, and their actual observation records.
+- `.local/2026-11-09-085058-pinyin-handle-review/review-decisions.json`, `removed-18.json`, `remaining-84.json`: the latest review grouping and accepted handle rule. These files do not themselves change the 480-ID assignment packet.
+- `.local/2026-11-09-072738-language-confidence-review/review-manifest-with-language-override.json`: the last prepared 480-ID assignment and 1,083-person input; corresponding `prepared.json` and saved staging inventory are the no-write comparison baseline.
+
+The `.local/` paths above are under the authoritative root on fuchitalee. Runtime code must receive explicit input data, not depend on these particular paths, the current working directory or a developer's home directory.
+
+**Owned implementation files:** new `core/staff_assets/job_history_names.py` for the extracted pure assessment/finalization functions; extend existing `core/staff_assets/job_history.py`, `core/staff_assets/manifest.py`, `core/management/commands/record_job_history.py` and `core/staff_assets/job_history_preview.py`. Add focused `tests/test_job_history_name_review.py` and extend the real-command coverage in `tests/test_record_job_history.py`. Reuse `core/person_names.py` for legitimate sourced name preparation/writing under U37/U41; do not put a classifier into its persistence helpers. No `core/models.py` or migration change is planned.
+
+#### U44.A — Extract shared behavior and explicit reviewed input
+
+**Current precedence:** U44.G selects the fresh prototype as the language implementation baseline; older audit/finalization classifications, roster membership, and affiliation-gating instructions below are historical evidence, not inputs or expected outcomes. Preserve independently applicable source, identity and explicit owner-decision safeguards. U44.H governs organization scope throughout this unit and U37–U42.
+
+1. Inventory all callable logic, constants, corrections and side effects in both scripts. Port reusable normalization, syllable/name-form matching, exact-quote checks and aggregation into the shared module. Functions accept typed values and return data; importing the module must not read files, initialize database access, call a provider, print or write outputs.
+2. Move person-specific `HANDLE`, `FIRST`, `PARTIAL`, `ALIAS_SUR`, `name(...)`, institution/source quote lists, Japanese/brief-text exceptions and the Tencent Research Institute correction into validated review input. Resolve historical handle keys to stable native X IDs with exact source references. Do not silently drop reviewed exceptions, replay them against a different identity or treat handwritten corrections as a general algorithm.
+3. Keep shared lexical vocabularies in one maintained location. Generalize handle tokenization/segmentation where the source supports it; preserve source spelling, capitalization variants, hyphens, aliases, alternate surname order and ambiguous shared spellings. A matching substring or ordinary word alone is not a supported name component. Produce a linguistic match, no match or unresolved result; absence from a dictionary is not proof of another ethnicity.
+4. Add optional `name_review` preparation input to the existing reviewed manifest, with a strict versioned `record-job-history-name-review/v1` contract. This contains the source/cohort digest, rules version, native-ID keyed reviewed corrections and explicit owner decisions. Reject duplicate/absent IDs, stale evidence hashes, unsupported source keys, missing quote/observation information, contradictory same-version decisions, wrong types and unknown fields. Record supersession explicitly. This is local interchange data, not a new database JSON column.
+5. Route the existing command and `import_manifest()` through the same `prepare_job_history()` hook. The current-cohort updated manifest supplies `name_review`, so the real command actually exercises the integration. Legacy manifests without that optional input retain their accepted behavior and exact proposal output. Do not add a second name-audit command or a second identity/affiliation/import path.
+6. Return the analysis, selected evidence, owner decisions, per-person dispositions and counted subsets together in the prepared packet. Keep classification reasons separate from the proposed `people.primary_language` field. U43 remains the only language-field proposal path; retain its strict exact-roster validation. Newly discovered clues outside the selected cohort are review proposals and must not silently expand the 480 assignments.
+
+#### U44.B — Complete owner-rule checklist
+
+The owner's latest wording for the overlapping matching/review/exclusion requests is consolidated once in U44.B.1 below. N01–N16 retain provenance, implementation dispositions and earlier examples; they are not a second competing set of new classification rules. In particular, the earlier two-group review counts are saved historical output, not a completed run of the new three-way proposal.
+
+These rules cover the name/language review. Their **disposition** is part of the implementation contract; do not silently convert a documented assumption into a verified personal attribute.
+
+| ID | Owner instruction / example | Planned behavior and proof |
+|---|---|---|
+| N01 | Use `people.primary_language = 'zh-Hans'`; Allen accepts uncertainty. | Reuse that existing field and the explicit owner-decision roster. No China-connection field, language table, nationality or ethnicity assignment. Keep prior value/action and origin visible. |
+| N02 | Chinese characters in a personal name are stronger evidence than company employment; Ameliayu `余一`. | Read all saved name variants and source-backed Chinese names in bios. Prefer the disclosed personal-name excerpt for display before an employer/university clue. Preserve exact characters and provenance; do not synthesize Han characters from pinyin or silently convert writing systems. |
+| N03 | Chinese writing is extremely strong evidence. | Preserve directly sourced Chinese writing in own bio/post as a high-evidence category; distinguish a brief label, quoted/third-party text, disclosed name and Japanese text. Do not equate every Han character with Chinese prose or a calibrated 99% language/ethnicity probability. |
+| N04 | Inspect handles for possible Chinese names/words; Davy `@shichen`. | Handle becomes a first-class assessment input and visible excerpt. Reuse/generalize the existing linguistic matcher; retain the exact handle/source/native identity and tentative tokenization. Never create a verified `PersonName` merely from a username. |
+| N05 | A possible pinyin handle is definitive for inclusion in this review. | Apply the owner-selected inclusion rule to supported handle clues, label the outcome `owner-accepted`, move it out of the affiliation-only uncertain subset and into the confident review group. Preserve the 27 reviewed handle cases; seven were already confident, 20 change group, and 18 leave the 102 subset. This is a review-policy decision, not independent proof of ethnicity or proficiency. |
+| N06 | Chinese-company/university ties alone can include misleading cases; Ryan-Rhys/ Huawei and Dan/Tencent. | Keep affiliation evidence distinct from name/writing evidence. Never infer personal residence, background or language from the employer chain. Retain the narrow review subset and its exact counting rule. A company match must not overwrite a missing or unresolved name-form result. |
+| N07 | Arabic/other scripts are negative cues; Chinese/Latin and Japanese references are allowed. | Detect and display the script present in source text, preserving Japanese and decorative-symbol distinctions. Carry explicit owner eligibility decisions with their cited source; do not label a person definitively non-Chinese from script. Ahmed's existing owner exclusion is retained. Automated ethnicity classification from these cues is outside the executable scope. |
+| N08 | Ayush Pranav is an exclusion; both given and family names matter. | Preserve the existing native-ID owner exclusion and inspect available given/family name forms separately. Do not infer ethnicity or inability to speak Chinese from a complete-looking name. Keep ambiguous segmentation unresolved and never turn unknown into a negative match. |
+| N09 | gkiwi's Ukrainian flag should rule that account out. | Retain the explicit owner exclusion and exact `🇺🇦` evidence. Flag detection is an observed profile symbol, not a nationality finding or a blanket classification of every flag-bearing account. |
+| N10 | Ambiguous profiles should not rule out Chinese background. | Neutral/English names, generic aliases, absent Chinese disclosure and non-identifying avatars are neutral evidence by themselves. Keep unknowns visible; preserve explicit owner exclusions separately. |
+| N11 | Requested: candidates would never intentionally disguise their background through names/photos/other means. | **Documented limitation, not an executable factual rule.** Intent and ethnicity cannot be established from names/photos. Do not implement a deception detector, ethnicity-by-photo classifier or automatic background exclusion on that assumption. Preserve the neutral-ambiguity behavior in N10. |
+| N12 | Requested: recognize Dan Grover's complete name and apply an automatic “non-Chinese” exclusion. | **Not an automatic ethnicity requirement.** The name recognizer may report its actual lexical findings: `Dan` is in the existing English-given-name lexicon, `Grover` has no match in the supplied Chinese-surname lexicon. This does not establish background. The owner explicitly rejected the assistant's manual-exclusion workaround; do not silently add Dan to the roster exclusions. A policy requiring demographic classification from names remains unsupported. |
+| N13 | Explicit named exclusions override weaker inclusion clues. | Preserve only the current approved three exclusions by native ID: Ahmed `208545957`, Ayush `516369984`, gkiwi `547253597`. An owner decision supersedes prior language inclusion for that reviewed identity without deleting its Person/employment evidence. Rename/replay must not bypass it. |
+| N14 | Separate confident and less-confident candidates. | Compute both groups from the same prepared review, preserving the exact current rubric and source/owner distinction. Frozen latest baseline: 106 + 377 = 483. Exclusions stay visibly labeled; do not count review groups as verified Chinese/non-Chinese populations. |
+| N15 | Show only relevant words and clickable sources; compact one-line rows. | Reuse one renderer projection for name, handle, employer and the most relevant source excerpt; preserve exact wording and mark omissions. Detailed output retains full evidence and source clocks. No whole-bio-first fallback that hides `余一` or `@shichen`. Keep the 483/102/84 views as filters of one prepared result, not manually edited copies. |
+| N16 | Never lose sources, history or prior decisions. | Every clue/correction has source kind, reference, exact text, actual observation time and identity; preserve old name/profile versions. Owner rules carry origin/date/version/supersession separately. Keep excluded records available for review and replay; no background DB mutation. |
+
+#### U44.B.1 — Owner-supplied three-way proposal, November 9, 09:30 JST
+
+**Subsequent clarification / test:** the owner specifies operational primary-language proposals. The completed local experiment is documented in U44.E below. It uses written-form/script cues as heuristic routing inputs, produces no demographic attributes and does not claim language ability is verified. This supersedes the earlier planning-only restriction for that bounded local test, while leaving the original wording below as request history.
+
+**Status:** documentation of the owner's request; not an implemented or approved automatic demographic classifier. The labels below reproduce the requested categories. Detecting text/script or preserving an explicit source statement is distinct from inferring a person's ethnicity, nationality or intent. Do not turn this proposal into name/script/flag-based ethnicity assignments or eligibility decisions. Existing explicit native-ID decisions remain separately recorded.
+
+**Prerequisite, as supplied:** “if there is a chinese co + university affiliation”. Preserve that wording; this document does not silently replace `+` with either an AND or OR condition or change which saved candidates qualify.
+
+| ID | Requested category | Consolidated owner wording / example | Earlier overlap |
+|---|---|---|---|
+| T01 | Definite match | Detected pinyin in the handle or name. | N04–N05; adds name alongside handle. |
+| T02 | Definite match | Chinese characters anywhere. | N02–N03; expands the requested wording beyond disclosed personal names or substantive prose. |
+| T03 | Ambiguous — send to review | Only a given name or nickname is supplied, with no family name; example `@zzxwill`. | N10; makes the incomplete-name case explicit. |
+| T04 | Ambiguous — send to review | Japanese (`ja`) or Korean (`ko`) anywhere, together with an ambiguous CJK name/handle; example `@fujiyuu75e`. CJK means Chinese, Japanese or Korean. | N07, N10. |
+| T05 | Definite mismatch | Arabic, or another non-Roman/non-Chinese character, anywhere. | N07; broadens the requested script condition. |
+| T06 | Definite mismatch | Both a Japanese surname and given name appear in the name or are inferred from the handle. | N07–N08, N12; latest example Shodai Yanagimoto / `@shodaiiiiii`. |
+| T07 | Definite mismatch | Ukrainian flag or Ukrainian identification. | N09; includes identification as well as the flag example. |
+| T08 | Definite mismatch | Both given name and surname, detected in the handle or displayed name, are deemed definitively non-Chinese: European, South Asian, Arabic or other. | N08, N12; prior examples include Ayush Pranav, Dan Grover and Pradyumna Reddy. |
+
+**Unresolved overlap in the supplied wording:** T02's “Chinese characters anywhere” can overlap Japanese text; T04's Japanese/Korean review case overlaps T05's broad script mismatch, and T03 can overlap T01. No precedence was supplied in this addition. Preserve these overlaps in the record rather than claiming a deterministic rule set has been completed. The blank third match bullet in the owner's message supplies no additional rule.
+
+**Retained surrounding requests:** existing `people.primary_language` destination and uncertainty (N01), strongest sourced excerpt first (N02–N03/N15), company/university clues kept distinct (N06), ambiguous profiles kept visible (N10), the recorded limitation on the intent assumption (N11), native-ID explicit exclusions (N13), review grouping/count provenance (N14), compact local display (N15), and source/decision history (N16). U44.A still describes the shared-code integration; this documentation does not claim that work is done. No new exclusion for any named example is created by this table.
+
+#### U44.C — Preserve all previously selected employment rules
+
+Do not let the name amendment replace or weaken U37–U42. Carry these existing decisions into integration fixtures and the method:
+
+- Priority remains company affiliation → its date window → job title → work location; prepare missing Person records through existing stable Account/PersonAccount identity. Preserve Chinese personal-name representations using existing `PersonName` / `PersonNameEvidence` and `core.person_names.record_name` when that later writer is authorized.
+- For employers within U44.H’s selected scope, resolve through Person → affiliation → Brand → BrandCompany → Company. Missing in-scope nodes/links may be proposals in existing tables; multiple-company mappings remain visible. Outside-scope history follows U44.H’s person-text path, with no organization creation solely to represent it. No new Company field, affiliation-function table, technical-involvement column or replacement company registry.
+- Preserve uncertain start/end values and precision. An August 12 departure announcement may support a month-precision August end when the statement supports that inference; do not fabricate a day. Keep announcement, observation and effective employment dates distinct.
+- Continue the latest stated roles as current with low certainty unless evidence says otherwise. Present means null `end_date`, unknown precision and the existing review note; later omission from a bio alone is not departure. Explicit former/current evidence and ambiguous career-list ordering remain separate.
+- Distinguish title, responsibility description, department/division, team/product and work function. “Leading Strategic Explorations” belongs in description; Claude Code and Grok bot are team/product evidence. Preserve Research/GTM/Developer and supported Management/Operations/Other functions. Technical involvement is inferred later, not a new required field.
+- Store/preserve the cited Post before linking an evidence FK during a later authorized import; retain actual profile snapshots and observation clocks. Multiple sources for the same employment spell enrich one affiliation, while distinct tenures remain distinct. Do not duplicate an Anthropic role merely because both a move post and a bio support it.
+- Search saved bios and posts first. Any later January 1, 2026–run-end own-post history queries reuse SpecialEvent1 and the existing TwitterAPI pagination/query/credential path. No live API/model call or new budget is authorized by this planning unit.
+- Full preview retains pictures, names, handles, employers/role periods, title/function/description/team/location and source links. Coverage reports separately count actual start/end dates, Present, missing values, resolved brands/companies and distinct people. Keep original 65, 1,083 candidates and derived review subsets separately counted.
+
+#### U44.D — Regression net and completion evidence
+
+1. **Pure-function boundary:** importing the shared module performs zero file/database/network operations. All source/cohort/config inputs are explicit. The command may read/write the chosen local files only. Historical scripts remain frozen evidence; do not keep their duplicate logic as an active second workflow.
+2. **Extraction parity:** reproduce the selected U44.G fresh prototype output for each of the 1,083 saved people, excluding timestamps/output paths from equality; verify source and code hashes and preserve exact source quotes. The prior 319 name-form matches are historical evidence, not an input or expected classification. Preserve the 15 disclosed Chinese personal names under the separate source-backed name-preservation rule.
+3. **Meaningful cases:** cover Ameliayu/余一, Andrew Dai/戴明博, Zhen Zhu/朱镇, Davy/@shichen, Han-versus-kana text, isolated decorative symbols, an English given name with a supported Chinese surname, repeated/compound/shared surnames, unsupported pinyin substrings, changed handles, missing source clocks, the Tencent advisory-source correction, and a complete-looking unmatched name. N11/N12 must not generate demographic or intent findings.
+4. **Owner-rule precedence:** stale/unknown/duplicate IDs and malformed or conflicting review data fail clearly. A reviewed owner exclusion survives positive employer/handle clues and renamed handles. Rules version and source-context changes invalidate only affected cached/prepared review output; exact replay stays identical.
+5. **Real integration:** test management command → `load_manifest()` → `import_manifest()` → `prepare_job_history()` → shared assessment/finalization → HTML/CSV/JSON with database/network access blocked. The test must fail if the shared recognizer is bypassed. Legacy manifests without `name_review` must reproduce their existing proposal output; unrelated `staff-intake/v1` writers retain their old behavior.
+6. **Frozen cohort accounting:** account for all 1,083 people and the historical 2,340 extracted employment entries, reporting any supported reconciliation changes with reasons. Match the selected fresh baseline per person and its 429 assign / 156 review / 28 do-not-assign / 470 outside counts. The earlier 480-ID roster and 483/84 review groups are historical and must not select fresh outcomes. Test per-person evidence and explicit reviewed exclusions, not totals alone.
+7. **Display proof:** inspect the rendered full and compact views in a browser. Verify 1,083 unique identities and the fresh outcome groups, one-line compact rows, working filters, visible explicit exclusions, accurate source excerpts and links, and no page errors. Deliver the final local artifact through show-locally and record copy/open verification separately.
+8. **Checks for later implementation:** run Ruff on changed Python files and the targeted offline tests using the existing worktree environment and a persistent `--basetemp` under `/Users/fuchitalee/.local/state/pushinweight-tests/`. If a change genuinely touches DB writers, use only the shared PostgreSQL wrapper and the relevant existing person-name/identity tests; do not create a disposable full database. No tests run against staging or production.
+
+**Schema/resources decision:** zero tables added or retired, zero columns/migrations, zero new DB JSON fields, zero Render or other recurring resources. Existing Person names/evidence and affiliation entities keep their distinct meanings. Name-form assessments, review policies and owner overrides live in the versioned local preparation packet until a separately authorized persistence design needs them. Do not hide them in `Person.ethnicity`, affiliation notes, `StaffIntake.payload` or a new catch-all table.
+
+**Exit evidence:** one integrated caller path; original script logic reused and removed from active standalone execution; complete rule checklist with supported behavior and explicit limitations; real-command regression proof; fixed-cohort before/after accounting; local artifacts delivered. Record U44 as implemented only after that evidence exists. Planning or a manually regenerated report does not satisfy this unit.
+
+#### U44.E — Completed 102-person primary-language prototype
+
+**Run location:** authoritative-root `.local/2026-11-09-094720-102-language-policy-test/`. `language_rules.py` contains pure assessment functions; `lexicon.json` supplies versioned written-form vocabularies; `run.py` loads explicit saved inputs and renders the report; `test_rules.py` and `verify_browser.py` preserve checks. Existing audit syllable/surname/English-name vocabularies were extracted as data without running its import-time file writers. Existing source-backed handle observations and reviewed spelling false positives are explicit inputs. No production classifier or management-command integration is claimed.
+
+**Frozen input and output:** exactly the original 102 stable native IDs, their saved names/handles/bios/own posts, the prior audit, and the existing review record. Result: 48 propose `zh-Hans`; 42 review; 12 do not propose `zh-Hans`. No replacement language is invented for the latter groups. The test does not rewrite the earlier 480-ID assignment packet. Source hashes and repeated-call equality are verified. No database/network/provider call is part of assessment.
+
+**Deterministic precedence used in this test:** complete recognized Japanese written-name pair T06 takes precedence over general Han/Japanese-text conditions; other simultaneous positive and negative rules go to review; remaining negative rules lead to do-not-assign; ambiguous Japanese/Korean T04 leads to review before Han-only positive; T01/T02 positive beats generic nickname-only T03; otherwise review. The original cohort used company OR university evidence; this is the explicit test-scope assumption, not a newly confirmed definition of the owner's `+` wording.
+
+**Implementation and limits:** pinyin analysis consumes whole tokens, strips handle digit suffixes, preserves camel-case boundaries and returns actual syllable segmentation. Organization words such as MiniMax are removed before name tokenization. Shared/ambiguous spellings and unresolved names retain review. Specific alternative written-name vocabularies are small prototype data, not comprehensive language identification. For example, `Aina` can segment as `ai + na` and currently produces a positive routing proposal; `Zakaria` can segment as `za + ka + ri + a` but its saved Arabic writing produces a conflict/review. These expose the heuristic's spelling-overlap limits and must not be presented as verified primary languages. Both conflicts and all underlying rule matches are visible in the JSON. Han characters are shared across writing systems. No ethnicity, nationality or intent value is produced.
+
+**Examples and proof:** Meng / `Dameng21189493` → assign (T01); Pradyumna Reddy / `preddy_v1` → do-not-assign (T08); Shodai Yanagimoto / `shodaiiiiii` → do-not-assign (T06); `zzxwill` → review (T03); `fujiyuu75e` → review (T04). Eighteen focused tests pass, covering handle suffixes, nickname-only input, account rename invariance, name pairs, kana sound marks, Hangul, organization-word collisions, script conflicts, source ownership and input immutability. Initial parser failures were repaired before the final run. Browser checks verify 102 unique rows, 48/42/12 groups, compact row geometry, filters, desktop/mobile layout, exact CSV/JSON download bytes and zero page errors. Source digests prove the original inputs/480-ID packet were unchanged. [Report](../analysis/2026-11-09-095225-102-primary-language-policy-test.html); proof and desktop delivery receipt are in the run directory.
+
+**Remaining:** this prototype does not close U44.A's shared command/manifest/planner integration or its 1,083-person extraction-parity requirements. It adds no schema, database JSON field, service, schedule or deployment. Use the test's explicit vocabulary/precedence and limitations when deciding a later implementation; do not relabel a local prototype as a deployed method.
+
+#### U44.F — Corrected 1,083-person rerun: affiliation before pinyin
+
+**Historical correction, superseded for implementation by U44.G:** this experiment required saved Chinese-company **OR** Chinese-university affiliation before either T01 pinyin path. Its gate and outcomes are retained as evidence of that experiment; do not carry the gate into the selected fresh baseline. T02 Chinese-character evidence was independent in this historical run.
+
+**Reproduction:** authoritative-root `.local/2026-11-09-100143-1083-language-policy-rerun/`. `run.py` supplies saved audit clues to the required keyword-only `affiliation_clues` argument of `language_rules.py` v1.2. At the beginning of assessment, only `employer_connection` OR `mainland_institution` clues establish eligibility. Without either, no pinyin segmentation or reviewed-handle T01 match executes. Missing evidence is not inferred from spelling. The filtered clues and eligibility flag remain in each output row. Run `.venv/bin/python -m unittest test_rules`, then `run.py` and `verify_browser.py` from this directory using the existing worktree interpreter. `lexicon.json` remains byte-identical to the accepted 102-person prototype.
+
+**Corrected output:** **284 `zh-Hans definitive` / 771 `Send to review` / 28 `Not-zh-Hans definitive`**, across exactly 1,083 unique candidates. These remain `assign`/`review`/`do_not_assign` proposals; no replacement language or database clearing is implied. Of 284 positives, 275 have the affiliation evidence and nine qualify through independent T02 evidence. Robert Lange/@RobertTLange, Santiago Aranguri/@santiaranguri and Shane McCracken/@shanemccrackenn all become T03 review, with no T01 match. The three missing-name/native-ID accounts retain separate handle keys and stay in review.
+
+**Before/after proof:** the prior incorrect run was 525/533/25. It applied T01 without the prerequisite; that assumption is superseded. `before-affiliation-fix/` preserves its code, reports and receipts. In the correction, 241 positive proposals move to review and three former conflicts resolve to the existing do-not-assign rule after their invalid T01 evidence is removed. A total of 249 rows lose T01, including five whose outcome stays unchanged. Every affiliation-eligible row and every other matched-rule evidence item is unchanged; `gate-fix-comparison.json` records exact affected identities and transitions. Neither the old 483 selection nor 480-ID assignment selects outcomes.
+
+**Verification:** 27 focused tests pass, including company-only and university-only eligibility, missing/unrelated clues, saved-handle bypass prevention, the three named regressions, and a mock that fails if pinyin segmentation is called before eligibility. Han-character and other existing rules remain independent. Reversed-order full replay is identical; all original 102 decisions, rule IDs and evidence match exactly. Original source/assignment inputs and lexicon hashes are unchanged. Browser checks pass for 1,083 unique rows, 284/771/28 groups, the three corrected searches, group/search combinations, `余一` source priority, missing-ID visibility, desktop/mobile layout, byte-exact CSV/JSON downloads and zero page errors. Proofs and screenshots are in the run directory; [updated report](../analysis/2026-11-09-100617-1083-primary-language-rerun.html).
+
+**Limits and endpoint:** prototype spelling can still overmatch within the eligible cohort; the correction does not expand the name vocabulary or establish verified language ability. No demographic fields are produced. Local report only; zero database writes/provider calls and no import-roster, schema, resource or deployment changes. Full `record-job-history` command integration remains open.
+
+#### U44.G — Owner-selected fresh baseline and deferred CCNC improvement
+
+- [ ] **Future follow-up — needs-review routing:** Route the `needs review` group to face-matcher and evaluate its new `ethnicity` feature as the owner-proposed input to primary-language matching. Check the feature and its actual evidence before deciding how to use its output; ethnicity alone does not establish a person’s primary language. This is a to-do only: do not run face-matcher or change classifications on this turn.
+
+**Owner naming decision:** rename the method from `record-job-history` to `save-person-job` in the forthcoming implementation. The current Django command is `python manage.py record_job_history` (`core/management/commands/record_job_history.py`); implement the canonical Django command as `python manage.py save_person_job` (`core/management/commands/save_person_job.py`), with display/documentation name `save-person-job`. Route both command names through the same existing preparation implementation during compatibility transition so current callers continue to work; update tests, help text, current docs and active invocation references. Preserve already-saved `record-job-history/v1`, `record-job-history-preview/v1`, `record-job-history-primary-language/v1` schema identifiers and historical extraction-method values so old artifacts remain readable and auditable; renaming a method does not silently rewrite persisted provenance. Add real-command regression proof that old and new entry points yield equivalent preparation output for legacy manifests. No duplicate execution path, schema migration, data rewrite or new service is implied. The rename remains planned, not yet applied.
+
+**Current selection:** owner locks the latest fresh 1,083-record test as the intended baseline for future production implementation. The selected behavior is exactly the local prototype at authoritative-root `.local/2026-11-09-fresh-language-rules/`: `fresh_rules.py`, `run_fresh.py`, `test_fresh_rules.py`, and the shared frozen lexicon and written-form utilities at `.local/2026-11-09-100143-1083-language-policy-rerun/`. It reads each person's saved names, handle, own bios/posts and roles, with generic vocabulary; it does not read old 319/164/483 membership, historical person-specific audit conclusions or prior classifications. Name/surname signals do not require a Chinese-affiliation gate. The local output has 429 assign / 156 review / 28 do-not-assign / 470 outside; see [fresh evidence report](../analysis/2026-11-09-110134-fresh-1083-language-evidence.html). This is a behavioral selection only: it is not integrated into `record-job-history`, deployed or applied to any database. The real command integration, reviewed deployment and any import remain open. Existing explicit prohibition on production data writes remains in force.
+
+**Frozen local file SHA-256:**
+- `fresh_rules.py`: `87c811efb480eb117dd669ec7e6bcfbe399f5bd3d6982b333e4240452ca8467e`
+- `run_fresh.py`: `799b7c4d5381581086877e78a2842cf531c837d34eebad9d0ef69c7fac924e49`
+- `test_fresh_rules.py`: `be92a341a271b61715eb389f8b46f132041582e946e8e285d2ef38eab7334ea5`
+- `lexicon.json`: `c0f99389c298aaf33b89c9968a6af38f28403bc5a8e36fc91cca8e4b4b011330`
+
+Also freeze/check the imported shared `language_rules.py` at implementation time; the prototype currently uses its pure tokenization, script and matching utilities. Reproduce six prototype tests and all 1,083 source outputs, then test the real command path and old callers as required by U44.A/D. Review limited vocabulary, possible shared name spellings, Han/Japanese overlap, source scope, and incomplete organization aliases. Proposals do not verify primary language. Preserve user-reviewed exclusions as explicit decisions where relevant; do not silently replace them with inferred outcomes. No database/schema/resource changes are implied by this lock.
+
+**Deferred next implementation — CCNC given-name lookup and handle splitting:** do not add it to the currently selected baseline. In the next improvement, evaluate CCNC's Chinese and no-tone pinyin datasets, record source/version and actual file format, normalize casing/tone marks, deduplicate given-name spellings, and load the prepared local vocabulary once into a set. Match whole components first; then try surname + given and given + surname with full remainder matching, optionally repeated initial surname, and a given-name match with a short leftover initial as review. Split on underscores/camel case, remove trailing digits, preserve all plausible candidates and exact character offsets/source text rather than choosing the first. Start by testing a four-letter minimum for given-name components; measure false positives and false negatives on frozen labeled examples before adopting it, and do not treat a name spelling as verified primary language. Examples to exercise include `Yuhang`, `daidaijiayu` (candidate `dai + dai + jiayu`), and `haoqik322` (candidate `haoqi + k`); verify actual CCNC membership rather than assuming it. Compare against current baseline; no API or model calls per lookup. Respect the owner's chosen product/asset-use policy while recording source/license facts.
+
+#### U44.H — Compact person-linked history outside the selected AI scope
+
+**Owner decision:** in `save-person-job`, create structured person-affiliation records only for the 21 tracked brands plus OpenAI, Google, Anthropic and SpaceXSI/xAI (deduplicate overlaps using existing canonical IDs). For all other sourced biographical information, including non-scope employers, preserve concise person-linked prose in the existing `people_texts.text`, instead of creating Brand, Company or BrandCompany records solely for those outside-scope entries. Do not misclassify education as employment. The original complete source bios/posts remain source evidence, with their own account/profile snapshot or post identities and observation times where available; retaining a summary is not a substitute for checking source capture. This replaces the earlier blanket plan to create organization chains for every prior employer. No import or production write is authorized by this planning decision.
+
+**Scope determination:** resolve the actual configured 21 tracked brands plus the four named frontier organizations from authoritative existing configuration/records at preparation time and record the exact stable IDs, aliases, source and snapshot used in the preview. Apply the union once; where a claim is ambiguous between a selected brand, parent company, product or unrelated employer, hold and display it for review rather than inventing an entity or silently moving it across the boundary. A separately established previous-employer company should not be conflated with a different selected brand solely through a loose name match. The source of the precise membership remains a verification task, not an invented hardcoded list.
+
+**Person text:** use the existing `core.person_text.record_text` / `PersonText` path, with `kind=biography`, `origin=summary`, person FK, no affiliation FK, actual source reference and original source observation time, appropriate language and pending review. Follow source provenance/version semantics; where facts come from different source references, use separately source-attributed rows or equivalent explicitly traceable source references rather than attributing a combined statement to the wrong source. For a source that supports multiple roles, use compact semicolon-separated clauses, e.g. `Apple (Apple Inc.): engineer, development, 2020–2022; Acme: researcher, 2023–present`. Include brand (company) where both identities are actually known; omit unavailable parts or mark them unknown and retain a clear gap. Use only supported title, job function, start/end precision and source-specific current/former status. Preserve the owner's earlier low-certainty present rule where applicable, explicitly labeled as an inference. Include other sourced biographical information in equally economical wording, with its relationship identified (e.g. education, not a job). Never invent a title, function, company, date or confidence.
+
+**Idempotency and safety:** reuse `record_text` versioning; exact replay returns the same row, changed prose/source creates a new retained version, and pre-existing unrelated person text remains intact. Avoid repeated boilerplate and storing full raw provider response payloads. Preserve all extracted outside-scope claims and source references in the local preview even when person identity or source persistence is unresolved; expose those as holds. Preview each structured AI affiliation and each compact outside-scope statement, evidence, and source gaps, with per-person and total counts and an explicit no-organization-record result for outside-scope-only names. Reconcile existing organization aliases before proposing any in-scope creation.
+
+**Tests / exit:** add meaningful tests covering one selected AI affiliation plus two outside-scope employers in one saved bio; sources split across two posts; prior and current roles, unknown and imprecise dates, and education separately; selected alias and frontier membership; ambiguous or missing organization identity; same-source repeated facts/deduplication; original source URLs and observation times; existing unrelated `people_texts` preservation, identical replay and changed-text versioning; and no outside-scope Brand/Company/BrandCompany actions. Exercise the actual new `save_person_job` command and the compatibility path with the complete 1,083 preview, assert correct counts and unchanged pre-existing data. Keep staging/production application separate from local preview authority.
+
+### U43. Apply the owner-selected primary-language override in the local proposal
+
+**Current November 9 handle amendment, 08:50 JST:** the owner's definitive inclusion criterion accepts the 27 saved possible-pinyin/Chinese-name-or-word handle clues. Seven were already confident; 20 move to that review group, resulting in 106 confident / 377 less confident. Eighteen of those were in the separate 102 list, so the [remaining list is 84](../analysis/2026-11-09-085058-84-affiliation-only-review.html), including the same three owner exclusions. [Updated full review](../analysis/2026-11-09-085058-483-candidates-confidence-review.html). All 480 proposed assignments and underlying evidence remain unchanged; confidence is the owner's review criterion rather than a verified ethnicity/name finding. Preserve ambiguous profiles as neutral and do not infer deception from appearance. Method rules and proof: `.local/2026-11-09-085058-pinyin-handle-review/`. No application-code, database or provider changes. The earlier November 9 counts immediately below remain historical.
+
+**Current November 9 amendment:** the original 483-person population is still the review denominator; the current assignment roster has 480 IDs after owner exclusions for `alsayadii`, `ayushpranav3` and `_gkiwi`. [Current owner packet](../analysis/2026-11-09-072738-language-480-owner-decision.json) and [two-group compact review](../analysis/2026-11-09-072738-483-candidates-confidence-review.html). Reuse the same planner with a revised manifest. Full-data verification confirms 86 confident / 397 less-confident review rows, 3 exclusions, 480 assignments, 603 people with no assignment, unchanged 2,340 employment entries and deterministic replay with database/network connections blocked. The review uses Chinese-name evidence before employment ties and exposes 27 saved possible-pinyin-handle clues, including Davy/@shichen. Detailed rules and source/manifest paths are in the method's November 9 section. November 8 counts below remain historical evidence.
+
+**Scope:** `core/staff_assets/job_history.py`, existing manifest/command/render paths, `tests/test_record_job_history.py`, the method and this plan. No new database schema or writer activation.
+
+- Freeze exact483 stable X IDs from the audited union:319 surname-form candidates plus164 additional company/university-connected candidates (including the corrected Tencent Research Institute advisory evidence); the6 additional university cases overlap the164. All483 have native IDs. No dynamic expansion to the other600 or future cohorts.
+- Extend the existing reviewed manifest with an explicit owner-decision packet for `people.primary_language="zh-Hans"`, source/audit digest, expected membership count and exact native-ID roster. The owner override is the authority; names, jobs and university clues explain selection rather than claiming verified language proficiency.
+- Use the same `prepare_job_history` path for the existing management command and manifest reader. Project a Person create/update/retain proposal, including the saved prior value and decision ID, for every selected identity. Preserve existing identity-conflict holds; do not drop a language proposal merely because employment remains unresolved.
+- Expose the assignment and owner origin in HTML/CSV/JSON; retain the full decision and evidence reference in the prepared packet. The existing preview/apply boundary remains: no DB writes and apply unavailable.
+- Regression net: exact cohort matching by stable IDs (including renamed handles), duplicate/missing/malformed roster rejection, owner metadata validation, existing Person update/already-set/no-op and identity-hold behavior, unselected and no-override output preservation, plus real command→manifest→prepare→HTML/CSV/JSON proof with database access blocked. Reproduce all1083 offline and assert exact483 field assignments/600 untouched with identical employment/name/source data.
+- Finish at delivered local preview. Do not invoke unrelated U37–U42 collection/extraction or U32–U36 staging/list operations.
+
+**Implementation and verification — November 8:** existing manifest/planner/renderer now prepare the owner override without a database connection. The frozen [decision packet](../analysis/2026-11-08-220010-staff-primary-language-owner-decision.json), [roster](../analysis/2026-11-08-220010-staff-primary-language-roster.csv) and [full preview](../analysis/2026-11-08-220010-staff-primary-language-owner-override.html) record exactly **483 assignments: 451 proposed creates + 32 updates of previously empty values**. All 600 other candidates, all 2,340 employment entries and non-Person record actions are unchanged. The no-override digest exactly matches the historical baseline; replay with the override is deterministic. 54 offline tests and Ruff pass. Full CLI preparation ran with database/network connections blocked; browser confirms 483 labels across 1,083 people, 980 loaded saved photos, working filtering and no page errors. Proof: `/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-08-220010-record-job-history-language-override/verification.json`. No PostgreSQL/import verification is claimed; database writes remain zero and apply remains unavailable.
+
+### U37. Prepare complete source packets and coverage accounting
+
+**Goal:** distinguish missing evidence from missed extraction before any new retrieval. **Requirements:** R58, R62, R68–R71, R75; KTD19/KTD23. **Dependencies:** reuse U31's saved baseline.
+
+**Files:** `core/staff_assets/job_history.py`, `core/staff_assets/manifest.py`, `core/management/commands/record_job_history.py`, `tests/test_record_job_history.py`.
+
+**Approach:** add a strict source-packet adapter for complete saved Account/Post/profile evidence and read-only inventory. Preserve publication/observation clocks, stable identity, input coverage and source-to-field dispositions. Generate local planned Post/snapshot references rather than leaving available cited sources permanently URL-only. Keep existing reviewed-manifest CLI calls compatible; no implicit network or database write.
+
+**Test scenarios:**
+- Covers AE50: real saved tweet data absent from target inventory produces one proposed Post and a symbolic evidence FK; bare ID produces lookup-needed.
+- Covers AE58: counts reconcile to the frozen prepared baseline, with original65 and recovered candidates separately labeled.
+- Duplicate text with distinct captured observations retains provenance while reducing duplicate model input; missing timestamps/foreign source keys are rejected or explicitly unresolved.
+- Preserve all 15 audited Chinese personal-name forms (13 from names, two from bios) and their exact sources for both new/reused identities; retain the 55 uncertain forms separately. Older Chinese names use their own saved observation time. Existing Latin names/selections remain unchanged; compatible name/evidence replay creates no duplicates.
+- Existing offline CLI stays database/network-free and preserves its old accepted inputs.
+
+**Verification:** source accounting reaches the final extraction packet; all proposed source/identity tables appear in the same preview payload.
+
+### U38. Add deterministic history-search and source-recovery planning
+
+**Goal:** reuse collection to fill specific evidence gaps economically. **Requirements:** R69, R70, R76; KTD24. **Dependencies:** U37.
+
+**Files:** `core/management/commands/record_job_history.py`, `core/staff_assets/job_history_collection.py` (new small adapter, not a client), `x_monitor/x_client.py` only if an existing limit/normalization fix is required, `tests/test_record_job_history_collection.py` (new), existing XClient tests.
+
+**Approach:** build exact author/phrase/time queries, lookup batches and a finite run specification; reuse existing lazy pagination, normalization and on-demand credential selection. Preserve baseline SpecialEvent1, add job-history-only wording, validate returned IDs/authors/windows and use existing collection receipts/resume mechanisms. Default to producing the specification; actual paid dispatch requires the concrete allowance. Keep all saved paid replies reusable on resume.
+
+**Test scenarios:**
+- Covers AE55: query alternatives cover frozen move phrasings without requiring a lab name or altering scheduled SpecialEvent1.
+- Boundaries use frozen JST intent converted to epoch seconds, query-size splits preserve Boolean meaning, and >50 known IDs split through the shared lookup.
+- Empty/deleted/private ID results, duplicate pages, repeated cursors, 429/timeout, wrong-author/window rows and exhausted bounds produce explicit partial outcomes.
+- No run allowance or on-demand key means no external call; scheduled credentials never serve this operation.
+
+**Verification:** fake-client integration traces query → returned source → validated packet and resume without rebilling saved pages. Actual history search remains unperformed until separately selected.
+
+### U39. Extend the shared contextual employment extractor
+
+**Goal:** extract full role meaning with correct clocks and field support. **Requirements:** R71, R72, R76; KTD18/KTD20/KTD25. **Dependencies:** U37.
+
+**Files:** `core/targeted_extraction.py`, `core/staff_assets/job_history.py`, `tests/test_targeted_extraction.py`, `tests/test_targeted_extraction_model_route.py`, `tests/test_record_job_history.py`.
+
+**Approach:** extend existing personnel/profile prompt contracts, source packet, parsed representation and common writer handoff together. Pass all source clocks and complete clauses, carry description/team/function, validate supplied source references, and retain explicit/inferred/unknown basis. Reuse model routing and bounded accounting; code owns deterministic normalization and dates.
+
+**Test scenarios:**
+- Covers AE51: two employment spells and three correctly attributed evidence sources, explicit Mistral October departure and inferred Anthropic October arrival; collected-later bio does not become a November 4 snapshot.
+- Covers AE44–AE45/AE53–AE54: retained approximation, title-free employment, Claude Code/Grok bot teams and responsibility-only text.
+- Covers AE56: future move, bare ex-employer, ambiguous month/year, third-party subject and account/company location do not fabricate facts.
+- Identical “joining next month” wording published in different months produces distinct contextual cache identities and correctly distinct inferred months; changing the subject/source keys also prevents incorrect result reuse. Exact contextual replay reuses the saved result.
+- Inspect the final model request, not only prompt helpers; existing model routing, parser failures and legacy extraction behavior remain covered.
+
+**Verification:** deterministic acceptance fixtures prove source-to-field attribution; unperformed live model-quality evaluation is clearly labeled.
+
+### U40. Fix observed profile versioning and historical capture clocks
+
+**Goal:** preserve real profile changes without duplicate replay or stale Account overwrites. **Requirements:** R70, R72, R74; KTD26. **Dependencies:** U37 source-time contract.
+
+**Files:** `core/profile_snapshots.py`, `monitor/cycle.py`, `core/account_identity.py` only where observation handoff requires it, `tests/test_profile_snapshots.py`, existing Account observation/harvest persistence tests.
+
+**Approach:** separate snapshot capture from preliminary employment/movement emission, carry actual capture time, and replace same-tweet-only dedupe with captured-observation checks. Reuse existing hash/presence semantics and account-scoped coordination; scheduled callers keep their normal behavior with the versioning correction.
+
+**Test scenarios:**
+- Covers AE52: same tweet/new bio/later fetch, exact receipt replay, identical later observation and A→B→A.
+- Out-of-order historical observation retains its original time and does not overwrite newer Account facts or extend an incorrect version through a known transition.
+- Partial fields versus explicit null, concurrent same-account observations and existing constraints preserve the history.
+- Real caller-chain test shows source-only import produces snapshots without preliminary affiliations, while scheduled harvest still performs its existing downstream work.
+
+**Verification:** PostgreSQL/caller-chain tests establish identity, ordering and replay, not just hash equality.
+
+### U41. Share role reconciliation and source-first import decisions
+
+**Goal:** make preview and existing writers agree about one job, multiple sources and enrichment. **Requirements:** R61–R63, R70, R73, R76; KTD16/KTD19/KTD21/KTD27. **Dependencies:** U37, U39, U40; reuse U32/U33 contracts without running their staging operation.
+
+**Files:** `core/staff_assets/job_history.py`, `core/staff_assets/intake.py`, `core/staff_assets/manifest.py`, `core/person_affiliations.py`, `core/targeted_extraction.py`, `core/staff_assets/arrivals.py`, `tests/test_record_job_history.py`, `tests/test_staff_library.py`, `tests/test_person_affiliations.py`, `tests/test_person_identity_corrections.py`.
+
+**Approach:** extract one validated reconciliation path for prepared create/enrich/add-evidence/hold/replace decisions. Bind exact target source rows before evidence FKs, preserve per-source clocks and source-kind text, and extend compact source-claim validation without new columns. Implement shared behavior and tests locally; actual staging apply remains U34. Cover all enrollment paths under the existing evidence-only policy rather than disabling signals globally.
+
+**Test scenarios:**
+- Covers AE47/AE57: existing-role add-evidence and nonconflicting enrichment preserve role identity, including month→day precision, with exact replay.
+- Two distinct tenures/ambiguous undated evidence remain separate; inferred October followed by explicit November arrival resolves against the same spell through existing replacement semantics, with prior evidence preserved.
+- Missing source Post/snapshot materializes before FK binding; failed per-person apply rolls back consistent rows and replay resumes without duplication.
+- Explicit callback, post-save and catch-up behavior respects evidence-only import while normal intake defaults and independently eligible staff remain unchanged.
+- Fixed legacy Person UUID fixtures and identity-correction source ownership prevent accidental person recreation.
+
+**Verification:** shared-path DB tests compare prepared and read-back values, source links and side effects. No production/staging import is performed by this unit.
+
+### U42. Reprint the full cohort with measured coverage and gap reasons
+
+**Goal:** deliver an auditable improvement and expose remaining acquisition/extraction limits. **Requirements:** R58, R68, R71, R75, R76; KTD23/KTD28. **Dependencies:** U37–U41; live execution of U38 is not required for the saved-evidence endpoint.
+
+**Files:** `core/staff_assets/job_history_preview.py`, `tests/test_record_job_history.py`, `docs/analysis/2026-11-06-171347-record-job-history-method.md`, new timestamped preview artifacts; authoritative charter/index coordination.
+
+**Approach:** freeze the regression sample, evaluate within KTD28's limits, rerun all saved sources on the same 1,083 cohort, and deliver full-evidence HTML/CSV/JSON. Separate fields recovered by re-extraction from any later new-source gains. Keep a separately counted recovered-candidate appendix. Update method/status only from actual evidence.
+
+**Test scenarios:**
+- Covers AE58: all 1,083 inputs remain accounted for; count actual dates, inferred dates, Present, missing fields, brand/company mappings and distinct people separately.
+- Every populated field has source support; every gap reason describes what was actually searched or examined.
+- Full evidence remains visible with working search/filter, identity/cohort labels, source links and matching artifact digests.
+- Failed extraction/input truncation cannot appear as successful complete processing; prior supported information cannot silently disappear.
+
+**Verification:** frozen deterministic acceptance set passes, sampled claims are supported, before/after differences are explained, and show-locally delivery is verified. Do not claim better live-model recall or complete historical coverage from offline fixtures.
+
+
+### U31. Prepare and show the full employment-history proposal locally
+
+**Goal:** deliver the first requested review artifact for all 1,083 candidates before staging changes.
+
+**Requirements:** R58–R63, R67; AE44–AE47. **Dependencies:** saved cohort and sources already exist.
+
+**Files:** `core/staff_assets/manifest.py`, `core/staff_assets/intake.py`, `core/targeted_extraction.py`, `core/intelligence_readers.py`, a thin `record_job_history` management command, `tests/test_record_job_history.py`, `tests/test_staff_library.py`, and the existing method record.
+
+**Approach:**
+
+1. Freeze saved inputs and their source identities; normalize complete source clauses through KTD20 and retain unsupported/uncertain dispositions.
+2. Implement the shared pure preparation contract in KTD16 using only existing columns, derived company chains and explicit proposed records/links. Reuse the resolver in KTD17; no schema deployment is needed.
+3. Resolve existing target identities through read-only preflight; show absent Accounts, People, Brands, Companies and links as planned creations with local references, not invented target database IDs. Label the source/target snapshot actually inspected.
+4. Render the table contract from the prepared records, deliver locally through `show-locally`, and record the reviewed digest. Keep original-65 inclusion visibly optional in the allocation proposal.
+
+**Test scenarios:**
+
+- Covers AE44–AE46: exact stored/display date distinctions and title/team/description/company distinctions survive rendering.
+- All 1,083 inputs receive an outcome; duplicate handles under one native ID do not duplicate people, and conflicting native identities remain held.
+- A complete bio clause with no title still yields its supported team/function; unknown current status stays unknown.
+- Preview performs no table writes, signal enrollment, external call or media acquisition; rejected unknown keys and impossible dates fail before rendering an importable payload.
+
+**Verification:** every visible value has saved support or an explicit unknown; full text is visible, counts reconcile, and the payload behind the page is the one proposed for staging. Browser inspection checks the actual rendered large table and representative source links, not just HTML generation.
+
+### U32. Complete existing Person–Brand–Company relationships for later import
+
+**Goal:** preserve reviewed employer and role information through existing records and shared readers/writers.
+
+**Requirements:** R59–R62, R67; AE44–AE47. **Dependencies:** U31's prepared contract and local preview. U31 implements the read-only resolution/proposal needed for preview; this later unit adds application of reviewed missing-record actions.
+
+**Files:** existing organization catalogue resolvers identified during tracing, `core/person_affiliations.py`, `core/targeted_extraction.py`, `core/profile_snapshots.py`, `core/intelligence_readers.py`, `core/staff_assets/dossier.py`, `tests/test_person_affiliations.py`, `tests/test_targeted_extraction.py`, `tests/test_staff_dossier.py`. No model or migration changes.
+
+**Approach:** implement KTD17–KTD20 using the existing schema. Reuse or create the reviewed Brand, Company and BrandCompany records; use shared Person and affiliation writers. Read the complete chain through one shared projection. Keep title/description/team/function in their existing columns. Refresh the preview if any proposed value, link or action changes.
+
+**Test scenarios:**
+
+- A complete existing chain is reused; missing Person, Brand, Company or BrandCompany records become explicit proposed actions and are created once during later application.
+- Multiple company links remain visible; Alibaba-only evidence does not become Qwen team membership, and unresolved candidate identity is not a completed company chain.
+- Completing a company link preserves affiliation identity, date precision, evidence and supersession history; the existing brand/candidate constraint still holds.
+- Existing job-function text round-trips with multiple supported functions; no technical field or function assignment is written.
+- Two real employment spells remain separate; multiple sources for one spell add evidence without duplicate roles.
+- Existing targeted extraction/profile callers preserve identity and source-text behavior, including supported team/description enrichment on an existing claim.
+
+**Verification:** representative existing reader/writer invariants and chain resolution pass, with zero added tables, columns or migrations. Validate the shared resolver through both preview and later application paths.
+
+### U33. Make the shared importer exact, resumable and free of automatic enrichment
+
+**Goal:** apply only the prepared accepted rows and expose the same actions that preview showed.
+
+**Requirements:** R61–R63; AE47. **Dependencies:** U31, U32.
+
+**Files:** `core/staff_assets/manifest.py`, `core/staff_assets/intake.py`, `core/staff_assets/arrivals.py`, `core/account_identity.py`, `core/person_identity.py`, `core/management/commands/import_staff_manifest.py`, `tests/test_staff_library.py`, `tests/test_person_identity.py`, `tests/test_person_identity_corrections.py`.
+
+**Approach:** implement KTD16/KTD19/KTD21 for exact per-source timestamps/FKs, target Account creation, shared validation, stable claims and scoped enrollment suppression. Inventory the actual per-record transaction and callback effects in the preview. Keep existing caller defaults intact and exclude review-only rows from apply.
+
+**Test scenarios:**
+
+- Missing staging Account is created from saved native identity and attached to the correctly reused/new Person; ambiguous identity is held without an accountless substitute.
+- Direct Post/snapshot source links bind only to matching target rows; absent rows retain honest URL/excerpt provenance without false FKs.
+- Affiliation/evidence post-save signals, explicit after-commit callbacks and fresh-process catch-up cannot enroll solely evidence-only imports; mixed independent eligibility and pre-existing work stay unchanged, and the old path still enrolls as before.
+- Invalid later rows are found before apply; an interruption after one committed person resumes without duplicate role/source/company-chain rows.
+- Replaying the reviewed payload is a no-op for canonical rows and creates no collection work; a changed review timestamp alone cannot manufacture another role.
+
+**Verification:** the old importer and extraction paths pass their regression scenarios; preview/apply share validation and decisions rather than two approximations of the writes.
+
+### U34. Import the reviewed payload into staging and compare every record
+
+**Goal:** prove the staging records match the reviewed proposal.
+
+**Requirements:** R61–R63. **Dependencies:** U31 local review, U32–U33 verified, exact staging availability/identity.
+
+**Files:** existing method record, prepared manifest and task receipts under authoritative-root `.local/`, task plan delivery metadata; no new production importer.
+
+**Approach:** follow the existing staging delivery route for only the selected application changes; this task has no migrations. Bind the reviewed payload digest to the target revision, schema and resolved identities, then apply through the shared command. Read back all accepted identities, affiliations with existing role fields, BrandCompany links, Companies and source rows through the shared projection; compare field values and actions. Replay the same payload once to prove unchanged canonical counts. If target state changed materially after preview, regenerate the affected diff before applying it.
+
+**Test expectation:** no additional unit tests for the operational step; use U32–U33's completed tests and staging read-back evidence.
+
+**Verification:** report accepted/applied/held/failed counts by table and person, exact mismatches, replay counts and zero automatic collection work. Never report a partially imported cohort as complete. Do not refresh/replace the staging database or apply unrelated worktree migrations merely for convenience.
+
+### U35. Prepare the two destinations and shared paced-list runner
+
+**Goal:** make one reviewed allocation executable and resumable through existing OAuth transport.
+
+**Requirements:** R64–R66; AE48–AE49. **Dependencies:** U31 for the roster; U34 before live additions; peer recovery evidence and verified production-writer pacing cooperation before external execution.
+
+**Files:** `core/official_company_lists.py`, `core/official_company_lock.py`, a thin staff-list management command and local checkpoint adapter, `tests/test_official_company_list_sync.py`, `tests/test_staff_chatter_lists.py`, `tests/test_list_membership_reconciliation.py`, and the existing roster subplan.
+
+**Approach:** implement KTD22 without widening `OfficialCompanyListIntent` semantics. Share account-wide coordination with the active writer, preserve its hold and current credential logic, and produce the intended two-list table locally. Show original-65 inclusion separately until settled. Reuse complete-snapshot reconciliation; do not equate the old saved Call A snapshot with current membership.
+
+**Test scenarios:**
+
+- Cross-brand history, renamed handles, duplicate native IDs, new Call A overlap and balancing overrides yield one disclosed destination per eligible identity.
+- Wrong owner, public/wrong list, repeated page token, incomplete read or ambiguous create cannot reach an add.
+- Two runners targeting different lists cannot double the allowance; restart preserves attempted writes and next eligibility, including failed/time-out requests.
+- A 401 on the fifth list mutation may refresh the token but cannot dispatch a sixth mutation; exercise the real shared client with a fake HTTP transport, and retain existing callers' refresh behavior.
+- Covers AE49: timeout after successful add reconciles to confirmed without another POST; verified absence waits for the correct cooldown/hold state.
+- Existing Call A fixed-list guards and billing recovery remain intact; list coordination does not acquire the harvest writer lock.
+
+**Verification:** fake-client tests prove interruption/retry/pacing semantics; exact ownership/private-list preflight is deferred to the authorized live phase, not inferred from mocks.
+
+### U36. Populate and independently reconcile both private lists
+
+**Goal:** finish the selected memberships with a resumable record of every outcome.
+
+**Requirements:** R64–R66. **Dependencies:** U34–U35, reviewed list allocation, resolved original-65 inclusion for those additions, peer account readiness and shared coordination.
+
+**Files:** authoritative-root roster/allocation/checkpoint/receipts and the existing method/roster documentation; no new hosted scheduler.
+
+**Approach:** create or reconcile the two destinations, then run KTD22 batches with durable checkpoints. Continue through authorized resume sessions without altering source lists. If the account is unavailable, retain pending operations and report the exact cause rather than clearing another session's hold. After the last batch, independently read all pages of both lists and Call A, then reconcile requested/confirmed/already-present/skipped/unresolved identities.
+
+**Test expectation:** no extra unit tests beyond U35; final API membership read-back is the completion evidence.
+
+**Verification:** both exact destination IDs are private and owner-bound, accepted intended identities reconcile without unexplained omissions or overlap, and every unresolved operation is reported. Queue status or POST success alone is insufficient.
+
+---
+
+## Retained staff/job-history Verification Contract
+
+Use the permanent local PostgreSQL wrapper for implementation tests; do not create another test database or run tests against production. Confirm compatibility with the existing schema and coordinate exclusive access under the shared database operating note. No task migrations are introduced; do not silently reset or alter the shared schema.
+
+For U37–U42, prioritize `test_record_job_history`, new collection-adapter tests, `test_targeted_extraction`, `test_targeted_extraction_model_route`, `test_profile_snapshots`, and affected identity/affiliation/intake/caller-chain tests. Use `~/.local/bin/pushinweight-test-db pytest <affected test paths>` where PostgreSQL is required; the permanent wrapper and exclusive-use policy apply. The earlier branch/shared-schema mismatch must be rechecked rather than assumed fixed; no shared reset, clone or unrelated schema mutation is authorized. Tests listed below for X-list operation belong only to later U35/U36.
+
+For later broader work, run the meaningful affected suites: `test_record_job_history`, `test_staff_library`, `test_person_identity`, `test_person_identity_corrections`, `test_person_affiliations`, `test_targeted_extraction`, `test_staff_dossier`, relevant existing source/constraint tests, `test_official_company_list_sync`, `test_official_company_credentials`, `test_staff_chatter_lists`, and `test_list_membership_reconciliation`. Existing tests are regression coverage; add the named scenarios needed by the selected units. Include actual signal/transaction integration, not only mocked function calls.
+
+Local artifact validation covers all input dispositions, shared payload digest, source fidelity, date precision and working large-table search/filter behavior. Staging validation covers exact revision/database/schema, every accepted field/source relation, scoped side effects and one idempotent replay. List validation covers separate attempted/acknowledged/independently confirmed counts and complete final snapshots.
+
+This planning amendment claims no implementation tests, migrations, imports or paid provider calls. Its document/source checks are not runtime proof. Execution evidence belongs in the method/receipts. Reuse valid evidence after code review unless a relevant change invalidates it.
+
+---
+
+## Retained staff/job-history Definition of Done
+
+The U37–U42 local checkpoint requires the source/time/extraction/reconciliation regressions above, the frozen acceptance/sample review, and the full before/after preview with explicit gaps. It does not require paid history retrieval or staging application. All 1,083 inputs must be visible with full sources and proposed record actions, the exact accepted payload is identifiable, and the user can inspect the employment history before staging changes. An unresolved fraction is explicitly counted and cannot be called ingested.
+
+Database completion requires reviewed claims stored on staging, zero unexplained preview/read-back differences, no duplicate canonical rows on replay, and no automatic enrichment admission. List completion requires both private lists independently reconciled to the selected allocation with all remaining holds/omissions explicit. Do not conflate completion of one checkpoint with completion of all three.
+
+This subplan adds no table, column or migration. Shared old callers retain their tested behavior, experimental/dead implementation paths are removed, the method and charter/index point to the final scope, and no unrelated production change or resource was introduced.
+
+---
+
+## November 6 additional staff discovery from saved database evidence
+
+Owner requests two local candidate lists: six named labs (OpenAI, Anthropic, SpaceXSI/xAI, Google DeepMind, NVIDIA AI, Mistral), then the 21 enabled tracked brands. This bounded follow-up ends at local review. It authorizes database reads only; the broader staging target does not authorize an import, X-list edit or deployment here.
+
+Completed read-only search of saved Account biographies, profile snapshots and Post author biographies, plus local evaluation of the deployed SpecialEvent1 Boolean query on saved Post.text. The post query yields 1,297 matches from 5,584 broad candidates. Excluded the reviewed 65, the union of saved complete Call A membership and the database cache, and known official accounts; no fresh X-membership request was made. Current/former employment claims remain candidates, and parent-company-only matches do not establish model-team membership.
+
+The [two-list review](../analysis/2026-11-06-233000-additional-staff-candidates.html) now contains **304 five-lab candidates, 859 tracked-brand candidates, 80 in both, and 1,083 distinct accounts**. On November 7 the owner removed NVIDIA AI from the first table; all 147 NVIDIA candidates remain under NVIDIA AI / NeMo in the 21-brand table. Other lab affiliations are preserved, including people who also have NVIDIA history. Owner-requested November 7 reprint uses columns Profile picture, Name, Saved evidence, Handle, Bio/post source, Suspected affiliation. All saved evidence is printed in full. Search, brand filters, unchanged source text and embedded image decoding passed local Chromium checks. The same 1,083-person cohort has 1,080 saved names and 980 available pictures; missing names/images are labeled. No provider calls, database writes, runtime changes, new tables/fields or services. The method record carries the exact query, source counts and coverage limits. One extra @Zai_org historical Post-bio scan timed out; Account/snapshot coverage and the main post search completed. Chinese short-name supplements cover Account/snapshots, not a separate historical Post-bio rescan. Evidence and replay scripts remain at the authoritative root under `.local/2026-11-06-225852-staff-candidate-db-search/`.
+
+## November 6 record-job-history and list-task handoff
+
+Owner prioritizes work-function groups Research/GTM/Developer, with Management/Operations/Other as supported, plus independent technical involvement and explicit Unknown. All 65 people are reprinted locally with these distinctions and source links. Existing JobFunction catalogue reuse and absent affiliation technical-role storage are recorded for the later implementation; no schema or database changes.
+
+Owner review also requires semantic separation of job title, work description, department/division, team/product and function. Corrected the local cohort and recorded reuse of the existing extraction path, including its missing description mapping. No new LLM call, schema or database write.
+
+Local review findings: employer affiliations currently point to brands/discovery candidates, not directly to Company; catalog and employer-relationship mapping must be resolved before a staging import. Allen approves Brad Lightcap’s approximate August 2026 end month, displayed 20260800 with its dated tweet source. See the method for precision/confidence distinctions and unchanged production verification.
+
+Owner authorizes one-time employment-history collection for the approved 65 people. **Latest correction (2026-11-06T18:09:37+09:00): no production persistence; any database import must target staging.** This run ends with local evidence and [65 sourced biography cards](../analysis/2026-11-06-180725-chatter-people-sourced-resumes.html); no staging import performed. Priority is company affiliation, its date window, job titles, then supported affiliation location. Preserve uncertain dates using existing schema. [Method and execution record](../analysis/2026-11-06-171347-record-job-history-method.md) records `record-job-history` for later coding, proposed Person/account reuse, exact collection costs and the stopped production attempts. Read-only verification confirms no task data was saved to production. No schema/service change.
+
+List additions are handed to another session: API-only using existing `allenwlee` OAuth2, at most five additions per batch with about one hour between batches. No additions attempted here. Handoff: `/tmp/compound-engineering-501/ce-handoff/pushin-weight-v2-aff2eb37/2026-11-06-170528-chatter-list-api-additions-handoff.md`. Its later authorization supersedes the file-only stage below; current main-session scope is employment history, not X list writes.
+
+## November 5 standalone private-list inventory
+
+The owner selects a separately executable [private-list roster subplan](2026-11-05-231021-g2-chatter-private-list-roster-subplan.md). Current endpoint: pull all six lists into files, rearrange the proposed memberships and show locally. Keep the four source lists and Call A unchanged. Proposed `_for_chatter` membership is the union of source-list people and verified requested leaders **minus every Call A member**, regardless of database affiliation completeness. Copy only; no removals. No X membership change, application-data write, collection activation or deployment is authorized for this subplan. This overrides the earlier suggestion to include Call A staff with missing affiliations.
+
+Inventory completed November 6 through native browser accessibility reads and scrolling: Anthropic20, Gemini/DeepMind11, OpenAI35, spacexsi5, CallA223, destination0; every count matches X. There are no overlaps between the four source lists and CallA. Proposed destination65people =63source-list people +JensenHuang +elonmusk; DarioAmodei is already included. Eight company/product/community accounts remain in their source lists only. Original/proposed CSVs, per-list records, identity evidence, verification and local review are saved under `.local/2026-11-05-231021-chatter-list-roster/` at the authoritative root. Existing OAuth remains blocked (saved spend-cap refusal); no security setting, credential or X membership change was required. The broader staging delivery target does not grant X-write authority to this separate files-only task.
+
+## November 5 owner direction: collect known people before filtering
+
+Owner direction recorded 2026-11-05T18:49:25+09:00: stop trying to make the bare semantic query distinguish the speaker. For Chatter human-interest discovery, build/reuse a roster of AI founders and researchers with explicit X handles, retrieve posts by and about them through TwitterAPI, collect the matching posts and then filter. This replaces further semantic-prompt iteration as the active direction; it does not yet replace deployed behavior. Keep the broader human-interest eligibility (a key figure is involved, or a founder/researcher creates, reposts or responds to the content); internal employee-to-employee banter is not the only eligible material. Existing hourly Chatter cadence, shared harvester continuity, repair-first staging endpoint and compact retained evidence remain.
+
+The owner asks whether the private list used by CallA can be combined with @mentions. Code verifies that CallA is an advanced-search query using `(list:<x_monitor_list_id>)`, not the separate list-timeline endpoint. The current shared renderer has separate list-only and handles-only branches; it does not yet generate their combined union. TwitterAPI's own operator guide documents list/from/to/@, OR and parentheses, so the candidate query is `(list:<LIST_ID> OR @<HANDLE_1> OR @<HANDLE_2>)` plus one shared time window. This is a supported-syntax inference, not an executed combined-query result. Do not confuse OR union with requiring list authors to mention the handles. The list term selects posts authored by members; it does not automatically expand into mentions of all members. Enumerating/refeshing membership is a separate request family, reusable from saved membership where current enough. Pagination makes one logical query potentially many physical HTTP calls; long mention lists require the shared query-length/batching handling.
+
+Private-list evidence is mixed in age and wording: query_plan.py records historical private-list support, the G1 September30 browser capture identifies the configured list2067062923525275922as private, while the current reference calls it public. Current vendor docs do not guarantee arbitrary private-list access. Exact list-plus-mentions semantics must be checked with known member-authored and outside-author mention positives before treating this combination as verified. Do not change the list's visibility or silently fall back to global search. list_drift.py already documents silent unrelated results for invalid list IDs. No live request was sent during this investigation.
+
+Reuse candidates found: XClient.run_list_members, XClient.run_search_pages, query_plan.py's existing handle/list query branches, persisted TwitterListMembership and existing people/account/affiliation identities, and Chatter SourceSession collection capture/ingestion. Inspect the authoritative schema/migrations and actual readers/writers before implementing the roster/source change; this note proposes no new field/table and does not assert the current storage is implementation-ready. Reuse already harvested posts where coverage allows. @mentions cover explicit mentions; name-only references and quoted/replied-to posts need separately defined coverage, and list membership alone is not proof of founder/researcher status. Filtering must preserve source text, actor identity evidence, query/window provenance, duplicate counts and incomplete pagination state. No new service, resource, deployment, model filter, roster expansion or recurring query is configured in this pass.
+
+Sources checked: [TwitterAPI advanced search](https://docs.twitterapi.io/api-reference/endpoint/tweet_advanced_search), [operator guide](https://twitterapi.io/blog/twitter-advanced-search-guide), [list members](https://docs.twitterapi.io/api-reference/endpoint/get_list_members), [separate list timeline](https://docs.twitterapi.io/api-reference/endpoint/list_timeline). Existing paid budget remains$28.755618charged/reserved of$29; this read-only investigation cost no provider credits. Next scoped work is roster reuse and a concrete query/coverage design; no further semantic experiment is queued.
+
+## November 5 three human-moment queries
+
+Owner says “run all3” at 2026-11-05T18:38:47+09:00 after the prompt brainstorm. Execute the exact three proposed OpenAI/Anthropic queries for inside jokes/workplace stories, funny interviews/personal anecdotes and people joking about their own mistakes. They are experimental meanings, not proof of employee identity or a replacement production policy. Preserve same one-day2026-11-04to2026-11-05 window, limit10, model/media/token settings and separate mechanical one-search instruction. Three simultaneous HTTP requests; one actual semantic operation each, zero follow-ups/retries/other tools. Save every answer without another classification/report call.
+
+Reserve$0.15each/$0.45total within$0.456504remaining of$29. The lower per-request reservation is based on observed recent exact semantic requests costing$0.062874–$0.109992, not a new allowance or a hard provider cap. Carry all earlier unknown reservations unchanged. Reuse the existing private transport; only make its reservation constant read from this contract. No app/schema/DB/scheduler/Render/Graphics/deployment change. Same local comparison, newest result first. Private evidence:`/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-05-183847-chatter-three-moments-semantic`.
+
+Outcome complete 2026-11-05T18:40:01+09:00: all three HTTP requests started18:38:47JST; last completed18:39:06JST. Exact supplied queries/date/limit verified in one completed semantic operation each; zero follow-ups/retries/other tools. Inside-joke query:10posts,$0.068664,16.098seconds. Interview query:10,$0.071138,18.632seconds. Self-deprecating query:10,$0.072320,12.706seconds. Total$0.212122;30returned items/24unique cited post IDs. Pairwise shared IDs:1between queries1/2,2between1/3and4between2/3. All responses, full requests and exposed tool arguments saved; raw internal search bodies remain unavailable and no candidate quality approval is inferred.
+
+Same comparison HTML updated with newest three results first. Aggregate charged/reserved$28.755618of$29, remaining$0.244382; earlier unknown reservations unchanged. This experiment needed no additional model call for assembly/review and no application/DB/schema/scheduler/Render/Graphics/deployment changes. Private verification/report-build/budget receipts are in the experiment directory; local-delivery receipt follows copy/open verification. Bounded test complete.
+
+## November 5 two concurrent company and team queries
+
+Owner authorizes two more standalone semantic queries at 2026-11-05T18:27:48+09:00. Preserve exact supplied strings, including first-query newline and the two spaces after Minimax. Reuse the preceding mechanical one-search instruction with no added editorial text. Same from_date2026-11-04/to_date2026-11-05 and limit10, same model/settings. Launch two HTTP requests concurrently; validate exactly one completed semantic operation each and no follow-ups, retries or other tool types. Reuse the prior private request/stream/diagnostic function through an adapter, without changing historical harnesses. Existing media flags stay enabled, but extra tool calls remain outside this test.
+
+Reserve$0.25each/$0.50total against$0.601502remaining admission allowance. Record returned answers, exact tool arguments and usage; no classification or further research. Existing chart/history/report remain authoritative; latest result will be placed first in the same local comparison HTML. No app/DB/schema/scheduler/Render/deployment change. Private evidence:`/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-05-182748-chatter-two-team-semantic`.
+
+Outcome complete 2026-11-05T18:29:25+09:00: both HTTP requests started18:27:48JST and finished by18:28:06JST. Exactly one completed x_semantic_search each; exact query strings, dates and limit10 verified. No follow-ups/retries/other tools. OpenAI/Anthropic:9posts,$0.066568,13.275seconds. DeepMind/xAI/MetaAI/DeepSeek/Qwen/Minimax:10posts,$0.078430,17.815seconds. Total$0.144998;19unique cited post IDs with no cross-query overlap. Provider usage/citation counts agree with returned9/10items. These are retrieved candidates, not approved nominees; post content is preserved model-returned evidence, with raw internal search bodies unavailable.
+
+Same local comparison HTML now starts with both exact queries, all returned results, full requests and actual tool trace. Underfilled first search stays at9. Budget carry$28.543496charged/reserved of$29, with$0.456504remaining and earlier unknown reservations unchanged. No additional model call for processing/reporting. Private evidence, transport adapter, verification and report-build receipts remain in the experiment directory. No application, database, schema, scheduler, Graphics or deployment change; bounded experiment complete.
+
+## November 5 three concurrent bare semantic searches
+
+Owner direction at 2026-11-05T17:58:04+09:00: run the three supplied queries concurrently, one-day timeframe, semantic search only, no follow-ups. This bounded test supersedes the prior unrestricted observation method for this run only. Preserve each exact query, including its line breaks; the shared execution instruction only requests one semantic operation and all its results. No editorial additions, ranking/classification/report call, retry or search to fill an underfilled result is authorized. Query arguments use from_date 2026-11-04 / to_date 2026-11-05 and limit10; date precision is calendar dates, not a rolling timestamp filter. Existing media flags and model settings remain; extra tool use is outside the contract.
+
+Three HTTP requests start concurrently through the existing xAI Responses route. No direct semantic endpoint is available, so validate the actual tool trace rather than treating max_tool_calls as an enforced provider cap. Stop reading an offending request on an additional/nonsemantic tool; this cannot guarantee cancellation of provider work. Reserve $0.25 each, $0.75 total, within $0.851748 remaining admission allowance; unknown earlier reservations remain. Persist compact exact requests, exposed call arguments, returned answers and usage, not encrypted reasoning/raw envelopes. Same plan/review file; no app/DB/scheduler/Render/Graphics/deployment change. Private evidence: `/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-05-175804-chatter-three-bare-semantic`.
+
+Outcome completed 2026-11-05T18:02:50+09:00: all three HTTP requests started at17:59:36JST, last completed18:00:12JST (35.954seconds batch duration). Exact invocation traces confirm one completed x_semantic_search each, exact supplied query strings including line breaks, matching November4–5 date arguments and limit10. Zero follow-ups, retries or other tool calls. Query1 returned10posts/$0.077696/19.303s; Query2 returned10/$0.100310/35.954s; Query3 returned8/$0.072240/25.746s. Total $0.250246. The28returned items cite26unique post IDs; only Queries2and3 overlap, on2117915131774648541and2118079449967341746. This is post overlap, not story-level deduplication or nominee approval. No live verification/classification/report request was made.
+
+The model answers are preserved verbatim. Provider usage agrees with returned item/citation counts; raw internal result bodies remain unavailable. All query/date/limit checks passed; this observed compliance does not establish a hard provider cap. Updated the same comparison HTML with exact requests/trace and all results; original provider GMT timestamps are preserved in collapsed verbatim copies, while the readable view uses JST. New budget carry is$28.398498charged/reserved of$29, leaving$0.601502; earlier unknown reservations remain unchanged. Private `verification.json`, `report-build.json`, `combined-budget-carry-forward.json` and three call receipts are in the experiment directory. Application implementation and staging remain held.
+
+## November 5 process-design proposal: observe an uninterrupted discovery run
+
+**Execution authorized 2026-11-05T15:31:39+09:00:** owner says ok go to the one uninterrupted replay and one report-only call described below. Use the saved 29-call/20-result request unchanged, including its historical dates; no automatic retry or checkpoint loop. Reuse the previously approved, unused additional$5, for a cumulative$29 admission ceiling with earlier charged/reserved amounts retained. No application, database, scheduler or deployment action. Private record: `.local/2026-11-05-153139-chatter-uninterrupted-observation`. The earlier proposal-only statements describe the preceding planning turn.
+
+### Plain-English Summary
+
+The owner wants a repeatable Chatter process with more work done by code and fewer Grok calls. The next design question is how to observe the earlier successful interaction pattern without changing it through repeated stop/report/continue messages. This is a proposal only: the ended observation stays stopped, no new paid request is sent, and staging delivery remains held.
+
+Recommend one uninterrupted discovery request with the saved prompt and settings, while the caller quietly records exposed tool activity. Once discovery has finished, one optional report-only model request can describe its findings with all search tools removed. That second request cannot steer the already completed discovery. Asking for the report in the initial prompt would save that second model request, but it changes the task being measured. Neither method guarantees identical results or an identical call count against a live search service.
+
+### Uninterrupted replay outcome — 2026-11-05T15:50:13+09:00
+
+The owner-authorized discovery replay completed in 434.684 seconds. Request SHA256 `482b7ae049bf4ff71f31cc76604a212f0f5390e660003f5e1411f5e48dcfb627` matches the historical 29-call request exactly; prompt, date envelope, model/settings and original serialization were unchanged. No checkpoint or continuation message entered discovery. It produced one distinct Ram Altman episode again, with 65 X tool attempts plus one image open exposed as `web_search_call`: 34 semantic completed; 23 keyword (8 completed, 15 failed); 6 user searches completed; 2 thread fetches failed; image open completed. Total 49 completed / 17 failed. Usage reconciles to 48 successful X calls, 125 fetched posts and 8 profiles. Discovery cost $3.068904. Exact request replay did not reproduce the old call count or improve the story yield; these observations do not establish why every internal decision changed.
+
+**Report-format failure and repair:** the first report request received HTTP400: `A tool_choice was set on the request but no tools were specified.` This invalid combination was the caller's error. For this route, omit `tool_choice` when sending `tools: []`; do not reuse the proposed empty-tools/none combination. The original process exited after the rejection, losing encrypted discovery context that was intentionally only in memory. One explicit corrected report request was made from saved visible answer and actual trace, with this loss disclosed to Grok and the owner. No discovery was repeated. The repair completed in 107.464 seconds, with zero tool calls and cost $0.129160. It is a limited action audit, not the intended full-context reconstruction of each search's results. The future caller must preserve in-memory response output through a recoverable reporting failure; this does not authorize another discovery replay or persistence of large raw/encrypted bodies.
+
+The corrected report names all66call IDs exactly once and in order. Individual statuses match the API (49/17), but its `selection_notes` incorrectly says44completed/22failed; the review shows the machine counts and preserves the verbatim report. One `web_search_call` was labeled `web_search` in the report; actual arguments show an image `open_page`, not a new keyword web search. All per-call result contents/counts remain unknown.115global citation annotations have zero/zero offsets and are shown separately, not assigned to particular calls; those annotations were not included in the repaired report context.
+
+Two model requests completed, with one intervening request-format rejection: three physical HTTP requests, no automatic retry or research continuation, and one explicit report-format repair. Total provider-reported cost $3.198064; retain the rejected request's $0.90 reservation as unresolved rather than call it a known charge. Aggregate charged/reserved $28.148252 of $29 includes earlier unresolved reservations, not a settled invoice. The experiment is ended; no active caller or further call is authorized by this receipt. Same local HTML contains exact prompts, all66actual argument records, original discovery answer, report, conflicts and limitations. Private receipts and `verification.json` live in `.local/2026-11-05-153139-chatter-uninterrupted-observation/`. No app/schema/DB/scheduler/Render/deployment or Graphics change.
+
+### Saved baselines and evidence limits
+
+| Saved baseline | Requested output | Recorded X tool attempts | Reported cost | Saved final answer |
+| --- | --- | --- | --- | --- |
+| November 4 five-result industry moments | Five moments | 48: 10 semantic, 31 keyword, 4 thread, 3 user | $2.629060 | Five numbered entries, including repeated coverage of one episode |
+| November 4 twenty-result industry moments | Twenty moments | 29: 9 semantic, 19 keyword, 1 thread | $1.444912 | One distinct episode |
+
+Both exact requests survive in the authoritative root's `.local/2026-11-04-185619-human-interest-industry-moments/call.json` and `.local/2026-11-04-191943-chatter-industry-moments-20/call.json`. Do not silently substitute one for the other. The owner referred to the 29-call run; the five-result predecessor is shown to disambiguate the record, not to redefine the owner's quality judgment. Older wording is a historical comparison input only; it does not replace the current generic hourly brief.
+
+The saved 29-call trace can already be inspected without a new model call. It records queries and call IDs but not raw search results. The old `monitor/editorial/providers.py::search_activity` filters arguments and omits media calls; its thread row lost the identifier. Those omissions cannot be recovered from that saved filtered record. Do not treat final citations as a per-search result list.
+
+### Proposed observation contract
+
+1. Freeze the selected historical request, including its complete prompt, model, tool configuration and date window. Show any intentional differences before execution. Keeping the old window isolates that variable; a fresh window is a different comparison. Preserve the literal prompt, including any historical wording the owner later retired, only within this explicitly labeled experiment.
+2. Let that single discovery request complete. No intermediate messages, requested checkpoints, continuation loop or retries. Record every exposed native call's full arguments, call ID, observed sequence and status when supplied, plus final usage and response status. Separate attempted calls, successful usage and fetched items. Local event time is receipt time, not proof of exact upstream execution time.
+3. Produce a chronological action table from the actual trace in code. Proposed columns: step; tool; exact arguments/query; observed status; returned post IDs if actually available; links to final nominees; unknowns. A shared phrase or final citation alone does not prove which search supplied a post. Existing receipts are sufficient for a partial historical table with no paid call.
+4. If Grok's report is wanted, make exactly one request **after** discovery completes, carrying the returned conversation output in memory, with no tools available. Ask for observable actions and evidence outcomes: what each call retrieved if recoverable, what it added, which sources were retained or discarded, and remaining gaps. Require unknown where the information is unavailable; do not request a private reasoning transcript. Compare tool names, arguments and counts against the machine trace. Grok-reported results remain attributed summaries, not independently exposed raw results.
+5. Persist the compact action table, actual arguments/status/usage, final nominees and report. Do not save large raw result envelopes or encrypted reasoning. No new database storage, resources, scheduler or production behavior is selected by this design note.
+
+Official documentation confirms invocation visibility but says server-side tool outputs are not returned: [tool usage details](https://docs.x.ai/developers/tools/tool-usage-details). For a new run's one report-only continuation, keep `store:false` and return all `response.output` items, including encrypted reasoning, in memory as described in [xAI's best-practices guide](https://docs.x.ai/developers/model-capabilities/text/best-practices). This does not guarantee the model can reconstruct every hidden result. The old completed requests cannot be retroactively given state that was not retained.
+
+### Reuse findings for the eventual code-controlled workflow
+
+The first code review supports reusing `chatter_sources.py::SourceSession` and `x_monitor/x_client.py` for explicit keyword/ID retrieval and physical-call accounting; `chatter_history.py` for saved queries, source references and appearances; `chatter_discovery.py::attention` for measured counter changes; and the existing shared harvester classifier path described in U28. Deduplicate exact post IDs and stable known story links in code; leave ambiguous same-story judgments explicit rather than merging every post mentioning one person. Reuse current judgments and make any remaining editorial model work a bounded batch, not a search-planning loop.
+
+Do not finalize a fixed semantic-search count or claim a hard internal-call cap yet. The current hosted `x_search` route still owns internal dispatch; our earlier `max_tool_calls:1` tests did not enforce one operation. The existing Chatter application also still hard-codes 15-minute appearance slots, a two-hour competition board, a three-day semantic envelope, and up to two selector requests. Those are concrete integration changes to reconcile with the owner's hourly, short-prompt and minimal-call direction; they have not been fixed by the private experiments. Raw post count, distinct story count and qualifying nominee count remain separate. This note does not declare the final new workflow implementation-ready.
+
+## November 4 follow-up amendment: database coverage and shared classification
+
+### Plain-English Summary
+
+First, run the same keyword expression and time window against our stored Posts and TwitterAPI.io. Read every available TwitterAPI page and report how many distinct returned posts were already in our database before this test imported anything. A one-page sample cannot answer that question. Keep database-only matches, genuinely new IDs, duplicates and out-of-window returns separate.
+
+Then reuse the harvester's classification method, saved judgments and configured model for Chatter. The tracked configuration selects DeepSeek V4 Flash 0731 through DeepInfra. Derive source language and giant/rest membership from existing evidence where code can do it reliably. Avoid a second Chatter classification pipeline and its duplicate system message. Story classification and choosing an editorial lead remain distinct responsibilities; any remaining Step 5 model work must use the shared configured classifier route as well.
+
+Simplify the Grok discovery brief separately. The Grok request is still needed for the current hosted semantic-search route; its long system message is not an API requirement. Compare a shorter brief with the saved controls before selecting it. Finish with an uninterrupted staging cycle that produces complete candidate decisions and at least one real, served article, measuring the inherited five-minute target honestly.
+
+### Goal Capsule and precedence
+
+OWNER ENDS OBSERVATION (November5): after approving another$5,the owner asks why the loop exceeds historical calls and explicitly says we should end it ourselves. No request was sent after that approval; the additional$5isunused. All automatic continuations are ended, the pending checkpoint34proposal is cancelled, and no observer process is running. Retain32genuine reports/54tool attempts/two nominees as the final owner-ended research record; do not describe Grok as having finished. Historical examples used one HTTP request and30or48internal calls. The caller’s repeated continue messages created32research requests here, while Grok chased ten distinct stories and retried failures; its last completion_reason explicitly says eight qualifying stories remain missing. Keep the exact proposals/actual traces and failed setup separate for later review. No further paid call, fixed-N batch, reproduction implementation, staging or production action is authorized by this stop.
+
+Grok-led observation stopped at budget boundary, not research completion (November5): repaired run recorded32returned reports/checkpoints and54unique actual tool attempts:41keyword(22completed/19failed),3thread(allfailed),9semantic(allcompleted)and1video(completed). Grok retains2nominees and still proposes a Karpathy semantic search; exact next move is saved and unexecuted. Every proposal was recorded before continuation, with no Codex query edits. No max_tool_calls/max_turns/parallel override was sent; tool_choice required only real execution when the proposed move included a tool operation. Repaired research cost$3.000282; earlier invalid setup cost$0.053896for7reports with0actual calls, excluded from research evidence. Current-turn total$3.054178; aggregate charged/reserved$24.050188includes earlier unknown reservations. Final response exceeded remaining reservation by$0.050188; retain a larger admission buffer before future calls. No further request is running. Existing allowance is consumed; additional funds are not authorized. Full record/audit/report/next-move preparation at`.local/2026-11-05-143213-chatter-observe-grok-process-repaired/`. No production code/DB/scheduler/deployment change. Completion remains outstanding.
+
+Owner’s subsequent questions/proposal: exact internal X quota is unknown; all outer requests succeeded200while Grok reports429/error1015 on failed native calls. Cloudflare1015 indicates request-rate blocking, but the exact service and reset interval are unverified without raw headers. Semantic relevance weakness is distinct: all9semantic calls completed and each requested5results, so this run did not exercise a ten-result breadth ceiling. Owner suggests a fixed batch of N sequential semantic searches with small subject variations, then code assembly. Preserve as a proposed next comparison, not an already approved count, new paid batch, production filter or replacement of the unfinished observation.
+
+Historical owner directive — Grok-led process observation, subsequently ended by owner (November5): continue from the saved step1proposal, let Grok use as many internal tools and research checkpoints as it chooses, and automatically continue after recording precisely its proposed next move. Remove max_tool_calls, max_turns and parallel_tool_calls overrides, earlier one-call prompt instructions, forced semantic-query invariants, per-step owner-approval gates and Codex edits/vetoes of Grok proposals. These earlier experiment controls are retired for this observation; do not recreate them elsewhere. Keep the latest generic discovery brief unchanged, record exact proposals before continuation and complete actual tool arguments/results summaries/usage afterwards, and let Grok decide completion. Carry conversation outputs and encrypted reasoning in memory; avoid saving large raw tool-result bodies. No fixed checkpoint/call count. Existing$24aggregate allowance remains, with$20.996010charged/reserved before this observation; report a budget/transport stop honestly if it prevents completion. Review the finished record before implementing reproduction in our code; no app/DB/scheduler/deployment change is selected now. Private observation directory:`.local/2026-11-05-142804-chatter-observe-grok-process/`.
+
+First evaluate-after-call step completed (November5): exactly1semantic call confirmed by full tool metadata, stream event and usage;8posts,20.973seconds,$0.062874. Query:`AI industry memes humor jokes funny posts by founders researchers`,limit10,min_score_threshold0.1. Latest discovery brief unchanged; approved workflow is a separate user message. Grok stopped and proposed a keyword call; no continuation was executed. No clearly established qualifying nominees; AI/HCI meme commentary is uncertain and repeats an earlier test. Do not adopt Grok’s low-engagement rejection as policy; no numerical threshold was selected. Its proposed keyword query introduces a media-only filter and ungrouped OR; retain as unapproved. Step state and full argument/usage metadata live in`.local/2026-11-05-132850-chatter-evaluate-after-one-call/`; same HTML updated. Aggregate charged/reserved$20.996010of existing$24includes earlier unknown reservations. This proves observed one-call compliance only, not provider-enforced control. Return control to the caller for review before any next operation; this turn runs step1only. Preserve results for continuation. The reusable protocol does not introduce an owner-approval gate for every step.
+
+Evaluate-after-every-call workflow approved (owner yes, November5): preserve the generic discovery brief and send the approved one-call/evaluate/pause instructions as a separate user message. Grok chooses its next X operation/query, executes one operation, returns every result with identities/links, candidate assessment and exact proposed next call, then waits for the caller’s next message. The overall ten-story target must not trigger extra operations within one step. Inspect actual native trace, including media calls, before continuing; prompt compliance is not a provider-enforced limit. Owner’s latest yes authorizes the first such step using remaining existing$24allowance; this supersedes the previous one-test exclusion only for this newly requested step and adds no funds. One HTTP request, no automatic retry or proposed-next-call execution. Exact request/instructions and complete tool-argument/usage metadata are saved in`.local/2026-11-05-132850-chatter-evaluate-after-one-call/`.
+
+Plain-prompt/max_tool_calls1 comparison completed (November5): one owner-authorized HTTP request used the earlier successful plain user-message structure, latest generic human-interest prompt unchanged, max_tool_calls1/max_turns1/parallel_tool_callsfalse,160000output allowance and both media flags. Completed in155.985seconds,$1.311932. Trace has30unique attempted X calls:22semantic,3keyword,4user,1thread; all30native tool-input completion events reconcile to these IDs. Provider usage reports27Xcalls,91posts and6profiles; the three-call trace/usage difference is retained and unassigned, not asserted to be three confirmed failures. max_tool_calls1 did not cap internal operations. Returned answer has10numbered items with repeated coverage of the same RAM episode; no ten-distinct-valid-story success is claimed. Outbound date bounds are retained, but Grok chose older internal query dates; complete source-window compliance was not independently checked. Existing diagnostic helper retains selected arguments and drops the thread-fetch identifier. Same local HTML updated with prompt, answer,30-call trace and evidence. No retry or further paid call. Aggregate charged/reserved$20.933136under this one test’s$24admission ceiling includes earlier unresolved reservations; unused extension does not authorize other tests. Private evidence:`.local/2026-11-05-114842-chatter-plain-prompt-max-tools-one/`. Application/DB/scheduler/deployment remain unchanged.
+
+Current plain-prompt comparison authorized (owner reply yes, November5): owner adds$4for this one prepared request, making its aggregate admission ceiling$24. Earlier$19.621204charged/reserved history remains unchanged. Unused extension does not authorize other tests or retries. Execute request`.local/2026-11-05-114842-chatter-plain-prompt-max-tools-one/request.json`once with generic user prompt verbatim and max_tool_calls1. Let Grok choose internal searches as in the earlier successful plain-prompt structure; the previous forced-query and prompt-only one-semantic instructions are intentionally absent for this comparison. Count actual calls and report cost; no hard-cap claim until supported by evidence. Application and deployment remain held.
+
+Historical preparation for the now-completed plain-prompt cap comparison (November5): exact request was prepared at`.local/2026-11-05-114842-chatter-plain-prompt-max-tools-one/request.json`,not sent. Reuse the past successful plain user-message structure with the latest generic hourly prompt,`max_tool_calls:1`,`max_turns:1`,`parallel_tool_calls:false`,160000output allowance and existing media/date settings; remove the JSON task wrapper and forced internal semantic query. Observe all internal call types. One HTTP attempt, no automatic retries. Remaining recorded allowance is$0.378796under the owner’s original$20aggregate limit, including unresolved reservations; the comparable earlier request cost$2.62906. Additional$4allowance requested before dispatch; preparation provides no new spending authority. Latest generic prompt is unchanged.
+
+Native-call cap investigation (November5): one adversarial Grok4.7 Responses request set`max_tool_calls:1`while requesting three sequential semantic searches with limit1each. HTTP200 returned three actual semantic calls, usage`x_search_calls:3`,two posts,$0.0329in15.586seconds. The parameter does not enforce an internal X-call cap on this route. Current official Markdown request schema documents`max_turns`but places`max_tool_calls`only in the response schema; the SDK/protobuf request has no per-call maximum. Output limits exclude reasoning/function calls; monthly team spending limits are not per-response operation limits. A true code-enforced counter requires controllable search execution; no supported direct native semantic endpoint was found. Do not wrap opaque`x_search`and claim its internal work is bounded. Generic editorial prompt and application remain unchanged; native hard-cap requirement remains unresolved. Evidence:`.local/2026-11-05-114233-chatter-max-tool-calls-probe/assessment.json`. Aggregate charged/reserved$19.621204of$20,with prior unknown reservations retained.
+
+Latest generic-prompt test (November5): exact query verified, one semantic operation, nine returned posts,50.949seconds,$0.102558. Initial echo-only request performed zero searches and cost$0.01009; total$0.112648. Ten distinct qualifying stories were not established: most results are news/tool lists, two belong to one roundup, and one meme-commentary author’s role remains unverified. Existing local report updated; `.local/2026-11-05-113200-chatter-generic-hourly-execute/` holds receipts. Aggregate charged/reserved$19.588304of$20 includes unresolved reservations. No further search, application change or deployment.
+
+- **Generic hourly discovery (owner correction, November 5):** use the four-paragraph generic prompt below verbatim as the actual semantic query. It targets current AI-industry human-interest stories, with no named example or example-specific instructions. Chatter discovery remains every60minutes, separate from shared15-minute harvesting; request10results from one semantic operation and return every retrieved post honestly. Ten raw posts do not prove ten distinct qualifying stories. Keep operational execution controls outside the query; no follow-up search to fill the count, invented engagement threshold or mandatory complete reply chain. Retain media understanding flags in the request JSON. This isolated rerun does not deploy a scheduler change.
+
+- **Single-search execution contract (owner clarification, November 4):** each standalone human-interest discovery test is one semantic search, not one unrestricted Grok research request. Keep the locked industry-moments content prompt. The HTTP `x_search` bundle exposes multiple internal methods; `max_turns:1`, `parallel_tool_calls:false`, and prompt-only counts do not establish an enforced single-search cap. Before describing this route as a one-search implementation, verify a supported single-semantic operation or effective server-side enforcement and its returned trace. “Find20” is an output target, not a provider retrieval limit; report the supported/actual result count without unrequested research loops. The29-call and48-call standalone experiments are diagnostic failures of this execution contract, not the selected production process. The owner subsequently orders FIX THEN RERUN: restore an explicit single-retrieval JSON task with the locked industry-moments wording as its exact semantic query; return retrieved candidates without further research to meet the story-count target. Strictly validate exactly one semantic trace item, provider x_search_calls=1, unchanged query, matching row count and unique post IDs; a mismatch fails the run. Report the actual supported result count rather than dispatch another call to fill20. This validated-request contract does not claim an undocumented provider-side hard cap.
+
+- **Selected human-interest prompt (current, November 5):** the owner rejects a query shaped around an example and requests a generic prompt reusable every hour. This replaces the November4 industry-moments wording, including its display-name/handle and media-use prose. The existing media-enabled request settings remain selected. Preserve this literal prompt; the model-related lane is unchanged. Record actual internal X tool counts and usage, with no claim of a verified provider-side spending cap.
+
+#### Current generic hourly human-interest prompt — count10
+
+```text
+Find the top 10 current human-interest stories in the AI industry: memes, humor, images, videos, jokes and community exchanges.
+
+Each must involve a key AI industry figure, or content created, reposted or responded to by an AI founder or researcher.
+
+Prioritize what people are actively sharing and reacting to worldwide, including fresh activity around existing stories. Exclude generic AI-generated entertainment without an AI-industry connection.
+
+Return 10 distinct stories, each with a brief description and links to the relevant X posts.
+```
+
+- **Latest exact prompt correction (owner-directed, November 4):** the model-related text is restored verbatim from the first displayed two-call proposal, beginning “Significant AI model releases and developments”; remove the subsequently added “original Chatter brief” / New York Post self-referential prose. The former human-interest text beginning “AI and LLM industry-related memes, humor and viral videos” is superseded by the owner-locked industry-moments prompt above. Canonical literal strings are in the existing `next-run-semantic-lanes.json`; do not paraphrase, expand or add framing when printing or constructing the next request. This supersedes the intervening broad-news restoration. The model-related lane’s five-per-call setting remains; the latest human-interest standalone test uses the locked plain prompt and20requested results. Preserve date/media/token settings and the aggregate allowance.
+- **Latest next-run discovery shape (owner-directed, November 4): two semantic calls, five nominees each.** Call1(`model_related`) uses the exact previously displayed “Significant AI model releases and developments” query, with its literal text frozen by the latest correction above; call2(`human_interest`) uses the owner's exact “AI and LLM industry-related memes, humor and viral videos” text, without extra prose. These are two discovery lanes, independent of the existing source-language/giant-rest publication pools. Each is a separate concise JSON-only Grok request with one semantic-search tool turn, the same frozen day−1→day0/cutoff, requested160000max_output_tokens and both image/video understanding flags=true. This supersedes the earlier single-semantic-call and hidden50/100nominee-pool/top10truncation requirements for the next test. Each call returns its five actual source-backed nominations; preserve an explicit shortfall if evidence is insufficient. Deduplicate the combined development list with the existing identity/source rules, then order by latest verified supporting-post publication date; no extra refill/search is implied. Reuse the shared discovery builder/validator/provider-call/collection/history/accounting path and existing call-to-consideration relationships; make that path lane-aware instead of cloning a second pipeline. Account both calls once under the same remaining aggregate$20allowance. The last isolated tests remain local-only; this selection does not authorize a production write or deployment. Task drafts are saved in `.local/2026-11-04-152753-chatter-amendment-test/next-run-semantic-lanes.json`.
+- Prior pool/storage discussion (superseded count proposal, retained storage facts): the previous50pool/top10return experiment is retired by the two-call/five-each direction above. Only nominees actually returned can become per-story history. The normal application already persists every valid returned nominee before publication selection; isolated tests have so far saved local receipts without app DB writes. No50-nominee output-cap increase or all50-persistence variant is required by the current next-test shape.
+- Next-test recency ordering (owner-directed, November 4): sort candidates **descending by the latest verified publication timestamp among that nominee's supporting primary/discussion posts**, for the merged two five-nominee discovery lists. Use original Post.created_at within the selected discovery window and exact cycle cutoff; fetched/observed/generated times must not substitute for publication time. Require the returned source references to include the newest supporting post used for that order, verify it via the existing lookup path and derive the timestamp from existing post fields rather than add redundant persistence. An older development may qualify through fresh discussion. Equal timestamps retain the existing editorial order with a stable identity tie-break; undated evidence stays explicitly unknown and never receives an invented current timestamp. This ranks observed freshness, not total conversation volume or proven sustained heat; retain the existing source/newsworthiness qualification and rank-independent consecutive-period history contract. No hidden larger pool or audit prerequisite is selected by the current two-call shape. This is the selected experiment's ordering, not an unreviewed permanent replacement of publication selection.
+- Prior nominee-count experiment (superseded): targets100andthen50withtop10returned were discussed; the current owner direction is two semantic calls returningfiveeach. Retire hidden-pool targets, schema-cap increases and one-semantic-per-cycle test obligations that existed only for those older experiments.
+- Latest next-run prompt/media direction (owner-directed, November 4): **send one concise JSON task/output specification, with no separate system message or broad context dump.** This next-test override supersedes the earlier abbreviated-reporter-brief experiment; do not recreate the removed prose under another key or restore that brief as a prerequisite. Retain only the precise search task/query, selected time bounds/cutoff, the current five-nominee-per-lane target and required output structure/identities. Persisted application history remains intact, but the bulky prior context is omitted from this test prompt. Set both **`tools[0].enable_image_understanding: true`** and **`tools[0].enable_video_understanding: true`** on the same x_search tool. Retire this next test's old “images remain uninspected” / “no image/video inspection requested” prompt clauses; allow useful visual findings while preserving honest inspection evidence. These changes concern discovery understanding, not Graphics generation. Preserve max_turns1 per request, the requested160,000output ceiling, day−1→day0/cutoff and $20aggregate allowance. Existing prompt builders must omit the system item for this selected test rather than send a context-filled replacement. No live call or deployment is selected by saving these settings.
+- Next-run Grok output allowance (owner-directed, November 4): set **`max_output_tokens: 160000`** for the next semantic-discovery test, replacing 16,384 for that call. Use the latest nominee-pool/output-count instruction above; retain the selected day−1→day0/cutoff window and aggregate $20 allowance. The current shared `Route` validator caps all routes at65,536; next-run preparation must handle this narrowly for the xAI/Grok route, preserving other providers/roles and recording the exact outbound value rather than silently clamping it. The owner-selected isolated two-lane requests confirmed HTTP200 acceptance of160,000 for each request; this does not remove the application Route cap or prove app integration. Preserve the exact outbound value in the amendment implementation; provider acceptance and application integration remain separate checks. Report any future rejection without an unapproved fallback or blind resend. Detailed experiment evidence stays in the existing local walkthrough and private test receipts.
+- Next-run owner direction (November 4): restrict semantic discovery/context to **day −1 through the actual cycle cutoff on day 0**, replacing the earlier three-day context range for that test. The earlier5–10worthwhile-stories instruction explained the previous eight nominations; the latest next-test shape is two calls returningfiveeach, as recorded above. Express the allowed calendar dates with the xAI API's UTC, end-exclusive semantics (from the previous UTC date through day 0 using next-date `to_date`), give Grok the precise cycle cutoff, and independently validate retrieved source timestamps. Saved history may remain memory; it does not authorize older discovery evidence or manufacture fresh appearances. Do not make another call merely to apply this note; deployment remains held.
+- Latest owner checkpoint (November 4): **test the amended workflow first and show the results locally in the same step-by-step format.** This run ends with that review artifact; hold implementation shipping and deployment. Retain staging as the later delivery target and the original aggregate $20 allowance. The owner additionally authorized one discovery resend with a much abbreviated version of the original Grok prompt; preserve the failed attempt and charge both attempts to that same allowance.
+- Active follow-up scope: **U26–U30**. Existing U18–U25 describe the retained repair/integration baseline; do not rebuild them. This amendment supersedes their one-page diagnostic limit and separate Grok Step 5 classifier/selector route where they conflict with the new owner decisions.
+- Current baseline to reconcile at execution: feature/staging candidate `963ba4b6e1394b39ff7e6c22b177ed984f6eba98`. Recheck remote changes, service occupancy and effective configuration before implementation or delivery; do not take another session's resources.
+- The comparison measures coverage; it does not automatically switch discovery to database-only search, change production harvest queries or choose an overlap threshold on the owner's behalf.
+- Endpoint remains **staging**, using the existing web/headline worker/broker. Production Post reads for the coverage comparison are read-only; no production imports, classifier activation, cron changes or deployment are selected. Graphics stays in its cast-reference workflow.
+- This authoring pass changes the plan and review document only. The implementation is for the subsequent LFG run.
+- Continue the original **$20 aggregate validation allowance**. The last saved estimate was $0.251048 used; reconcile the real ledger before spending. The prior two-cycle test set is historical, not a new veto on the owner-requested comparison and follow-up verification. Use the remaining dollar ceiling and a frozen acceptance set; do not silently invent another two-cycle stop or reset the allowance by stage/provider/day.
+
+### Product Contract additions
+
+C-R18. For the next Step 2 comparison, evaluate one frozen Boolean keyword expression and identical explicit time bounds against the existing application Post corpus and TwitterAPI.io. Identify the database/environment and baseline time. Report the unique API IDs already present before test ingestion and those absent, with both counts and a percentage whose denominator is stated.
+
+C-R19. The comparison has **no arbitrary page or result-count ceiling**. Continue the provider's cursor until it declares exhaustion. Keep normal page size, per-request timeout, explicit on-demand credentials, budget admission, transport/error reporting and cursor-progress protection. A budget/error/nonprogress stop is an incomplete comparison with preserved counts; it must not be reported as exhaustive. This is a diagnostic exception, not an instruction to make every routine fifteen-minute cycle unbounded.
+
+C-R20. Reuse the harvester's configured classification method, model, transport/profile, batching, validation, source/corpus fingerprints, cache and provenance. Preserve the normal harvest taxonomy and two-role behavior. Valid existing judgments incur no duplicate classification call. Step 5 must not retain a separate hard-coded Grok classification or ranking model.
+
+C-R21. Remove the redundant Chatter-specific classification system message by using the shared method and deterministic derived tags. Review whether any separate Step 5 system message is still necessary after this change. Preserve the shared classifier's own required instructions and the locked editorial selection behavior; do not merely relocate the complete old prompt into another message and call that simplification.
+
+C-R22. Keep the review document grounded in the historical trial: show the complete saved semantic answer, original requests and all twenty keyword hits. Distinguish hidden raw tool results from retained model output, and historical behavior from the amended workflow. Publication/source correctness, independent pools/locales, rank-independent persistence and the existing first-text target remain required.
+
+### Key Technical Decisions
+
+KTD-C9. **Compare before ingestion** (session-settled: user-directed — chosen over assuming external results are new: the owner wants to measure existing database coverage). Use `Post.tweet_id` for identity, `Post.created_at` for publication-window eligibility, and verified first-ingestion evidence (`Post.fetched_at` is currently `auto_now_add`) or a compact pre-test ID cohort for baseline membership. Do not pause active harvest or hold a long database snapshot across network pagination. The old twenty posts have already been saved by the earlier trial, so their presence now cannot prove they existed before that trial.
+
+KTD-C10. **Reuse the harvester's existing pagination** (session-settled: user-directed — chosen over adding a new Chatter page loop or new unlimited mode). `x_monitor/x_client.py` already provides lazy `run_search_pages` / `_iter_search_pages`, the aggregate `_walk_search`, cursor handling, `has_more`/truncation metadata and `can_start_page` admission. The one-page restriction came from the Chatter caller. Reuse the harvester's existing method, caller-configuration and continuation/admission solution; do not redesign the client or invent `None` semantics its current numeric parameters do not support. Configure the comparison's existing page/result/execution envelopes from the actual test allowance so routine `max_pages=1`, `max_results=20`, other routine caller envelopes (including 100 pages/2,000 results) or per-cycle request/item ceilings do not become an arbitrary stopping point. If an existing execution slice ends while the provider has more, continue through the existing cursor mechanism within the remaining allowance; do not declare exhaustion. Record each physical attempt and its billable raw units.
+
+KTD-C11. **Shared classifier, configured task** (session-settled: user-directed — chosen over a parallel Chatter classifier/model). Reuse `build_classifier_client_from_env`, `classify_batch_pragmatics_full`, the existing post-enrichment claim/publish path and matching saved classification judgments. If the current seam cannot accept Chatter's task/guard context, extract the smallest common executor and configure its callers; sharing only a vendor client while duplicating batching/validation/accounting is insufficient. Preserve the existing harvester's default behavior.
+
+KTD-C12. **Source tags and lead choice are different outputs.** The harvester's two-role post/brand judgments do not already contain Chatter's complete story-level lead decision. Source-language dominance uses original-source language, never the English translation. Giant/rest uses the configured group list and source-supported primary subject/affiliation; a roundup's incidental giant mention must not move every development into giant. Clearly identified untracked non-giant subjects may be rest without inventing a Brand approval requirement. Keep unresolved identity unknown. Once tags are available, the existing six-pool ranking/finalization receives them as facts; remove model-generated duplicate `candidate_tags`. Any model-assisted ranking uses the shared classifier factory/effective model and a minimal configured task contract.
+
+KTD-C13. **Minimize prompts without deleting behavior.** Discovery retains the xAI/Grok request and existing search tracking. Test a smaller discovery brief against the saved candidate/recall controls. For Step 5, use code and existing judgments first; reuse the classifier's existing instructions for classification and retain only independently necessary editorial instructions once for ranking. Count both classifier roles, ranking calls and any required shared translation in cost/latency; one logical classification batch is not necessarily one physical request.
+
+### Source and storage map
+
+The authoritative source is `core/models.py` with its migration history. `Post` already owns tweet identity, original text/language, publication and first-fetch timestamps; `PostEnrichmentState` owns claim/stage state; `PostBrandClassificationState` and `PostBrandClassificationJudgment` own versioned per-post/per-brand interpretations and their evidence. Existing `OriginalContent` consideration/source/pool fields own Chatter's development-level tags and decisions. Existing `OriginalContentCall`, collection request/attempt records and enrichment budget adapters own execution/accounting. **Additions planned: 0 tables, 0 columns, 0 JSON columns; retirements: 0 tables.** No new Render resource is needed. Reassess storage only if implementation exposes a concrete unmet record meaning; do not hide a new entity in an unvalidated JSON field.
+
+Reuse exact-current judgments only when input source/context, catalog, contract/taxonomy, prompt and model/profile match; source availability or an old `classified` flag alone is insufficient. Derive candidate tags from those judgments plus frozen candidate-specific evidence. Reference existing judgment/call identities in the existing strictly validated task/consideration payload where necessary; do not copy complete classification responses into every story or locale. A physical call has one billing owner. The Chatter trial adapter must include all new shared-classifier/translation/ranking requests in the aggregate allowance without charging them again as duplicate calls in a second ledger. Retain no new full raw provider envelopes or encrypted reasoning.
+
+### Parent Chatter Implementation Units
+
+### U26. Compare Step 2 database coverage with complete provider pagination
+
+**Dependencies:** retained U21/U22 storage and source capture; no new semantic search is required merely to exercise the saved keyword expression.
+**Files:** `monitor/editorial/chatter_sources.py`, `monitor/editorial/chatter_accounting.py`, existing collection capture/state adapters, a narrow comparison command/helper under `monitor/management/commands/`, `tests/test_x_client.py`, `tests/test_cycle_tip_sweep.py`, proposed `tests/test_chatter_overlap_comparison.py`. Reuse `x_monitor/x_client.py` and the existing Chatter/harvester caller path; no new client pagination API or shared-composer repair is selected by this test. The comparison must preserve the existing Chatter caller's whole-query parentheses.
+**Design:** fix the exact query, time window, database identity and baseline time before either search.
+
+**Verified isolated-test defect; application attribution corrected:** the Chatter caller at baseline `963ba4b6` already passes `f"({query})"` to `run_search_pages`. The isolated comparison harness bypassed this existing wrapping and supplied a top-level OR list directly. Its paired control (20/20 after-cutoff ungrouped versus20/20 in-window grouped) proves that test construction defect, not a missing fix in the normal Chatter caller. Retire the previously proposed shared query-composer repair arising from this diagnosis; reuse the existing caller composition in the comparison, and pin that outbound query shape with a fake provider. The 19-page set and1-of-56overlap remain historical observations; the corrected full comparison still needs a new completed run against its saved/frozen baseline. The syntax check is not an exhaustive corrected census. Receipts: `.local/2026-11-04-152753-chatter-amendment-test/time-filter-controls.json`.
+ Use the application's current Post corpus read-only for the database side; identify stale/staging copies explicitly. Query original `Post.text` using the recorded Boolean query's supported operators and the same publication bounds. Reuse an existing matcher if its semantics fit; otherwise constrain the comparison matcher to the recorded grammar and disclose differences from the provider's index/tokenization. Do not claim identical search engines.
+
+Freeze compact baseline membership before the test writes any fetched Post; use a short read plus existing first-ingestion evidence, verifying writer behavior, rather than a production pause or a long transaction. Gather all provider pages through the **already existing harvester/XClient pagination method**, configured for the test without an arbitrary page/result stopping point. Keep the lazy request/admission boundary and existing cursor continuation; a new parallel pagination loop or unsupported unlimited-parameter mode is unnecessary. Stream compact IDs, per-page receipts and necessary source evidence; deduplicate derived totals while preserving physical raw counts and duplicates. Report raw/unique/in-window/out-of-window returns, API IDs already present before ingestion, new IDs, overlap percentage, independent DB-match/API intersection and DB-only matches. An API hit may already exist in the DB while its text fails the local matcher; distinguish that from a genuinely missing Post. Write no provider result to the comparison corpus before membership is measured.
+
+**Regression net / test scenarios:** more than six provider pages are consumed through exhaustion; duplicate IDs and boundary hits count once in unique totals; out-of-window/null-date posts remain separate; an empty denominator is N/A; records inserted by this test cannot become preexisting; concurrent live inserts have an explicit baseline rule; mismatched text-matcher results do not become missing IDs; repeated cursors/auth/error/budget stops preserve partial evidence and never claim completion. Exercise the actual command-to-client-to-receipt path with a fake provider; never run tests against production.
+**Verification:** a complete comparison report identifies the source DB/window/query, physical page/call totals, exact membership sets and financial total, or explicitly reports the limiting failure/remaining cursor. No arbitrary one-page or result cap remains in this diagnostic route.
+
+### U27. Evaluate and select a smaller discovery brief
+
+**Dependencies:** saved request/reply evidence and frozen historical controls; U26's coverage result informs query design but is not a license to narrow languages/subjects.
+**Files:** `config/editorial_chatter_chain/prompts.json`, `monitor/editorial/chatter_discovery.py`, `monitor/editorial/providers.py`, `tests/test_chatter_discovery.py`, `tests/test_chatter_provider.py`.
+**Design:** separate the actual semantic tool query from the surrounding system/user instructions. Remove duplicated selection/copy rules from discovery only where the retained contract still covers them. Keep new and continuing stories, rank-independent repeated appearance, important low-volume/source-backed releases, uncertainty, numeric source IDs, saved-search history, time boundaries, the one combined keyword query and strict task output. Version changed prompts; never silently reinterpret an old completed call under a new prompt or resend it.
+**Regression net / test scenarios:** existing Wang/OpenCode and saved release/ordinary-story controls retain coverage; memory alone is not rediscovery; actual search activity is required; keyword execution uses code; candidate sources and uncertainty survive partial failures; malformed/unknown output is held. Compare prompt bytes/tokens, actual query/tool count, missed desired stories, complete nominations, elapsed time and cost. Shorter text alone is not success.
+**Verification:** the chosen brief has a saved rationale and measured evidence against the unchanged acceptance set. Preserve the current brief if the smaller one loses required behavior; record remaining deficiencies without inventing new editorial policy.
+
+### U28. Reuse the harvester's classification path and configured model
+
+**Dependencies:** retained typed source/consideration storage; may proceed independently of U27 after effective-route preflight.
+**Files:** `monitor/cycle.py` post-fetch seams, `monitor/enrichment_worker.py`, `monitor/enrichment_queue.py`, `monitor/classification_persistence.py`, `x_monitor/attribution.py`, `x_monitor/reattribute.py`, `x_monitor/classifier_0731_prompts.py`, `x_monitor/config.py`, `monitor/editorial/chatter_chain.py`, `monitor/editorial/chatter_inputs.py`; `tests/test_classify_batch_pragmatics_full.py`, `tests/test_u18a_classifier_contract_v4.py`, `tests/test_enrichment_worker.py`, proposed `tests/test_chatter_classifier_reuse.py`.
+**Design:** first load the effective classifier config through `load_config`; the tracked route is `deepseek-ai/DeepSeek-V4-Flash-0731`, DeepInfra's OpenAI-compatible endpoint and request profile `deepseek_0731`, with reasoning disabled by the selected classifier. Runtime overrides and credential availability must be verified, not inferred from this file. Explicit validation uses the existing on-demand DeepInfra credential route; never borrow another spending track or silently fall back.
+
+Reuse valid persisted judgments first. For pending/stale/new Posts, invoke the shared claim/translation/classification/publication facade for the bounded Chatter-owned cohort, with the same configured client/model, source catalog and parsers. Use `process_enrichment_batch` / the existing claim-batch seam rather than `CycleRunner.run`; this must not harvest, move collection cursors or refresh unrelated metrics. Configure a caller accounting/dispatch adapter so both physical classifier roles and any required literal translation remain inside the Chatter validation scope and shared concurrency limits. Keep normal harvest/backfill default contracts and live-operation continuity unchanged. Derive source-language/group tags using frozen story-specific evidence; do not treat generic Stage 1 product/sentiment labels as a lead-selection result.
+**Regression net / test scenarios:** an exact saved judgment makes zero new classification requests; stale source/catalog/model identity uses the shared path; captured outbound requests use the harvester factory/model/profile; existing two-role/missing-sibling behavior remains unchanged; untranslated source language never becomes EN because a translation is EN; several developments sharing one multi-brand post retain their own primary-subject groups; unknown metrics/affiliations are not invented. Assert that Chatter's targeted classification does not dispatch harvest, unrelated synthesis, cron or metrics work, and every physical call is admitted/accounted once.
+**Verification:** the real caller path reuses the configured harvester method, cache, provenance and guards. No parallel Chatter classifier/model default or new database/resource is introduced.
+
+### U29. Remove duplicate Step 5 tagging and minimize editorial input
+
+**Dependencies:** U28; U27 supplies the separately selected discovery contract.
+**Files:** `monitor/editorial/chatter_chain.py`, `monitor/editorial/chatter_inputs.py`, `monitor/editorial/chatter_discovery.py`, `monitor/editorial/config.py`, `config/editorial_chatter_chain/prompts.json`, staging editorial profile; `tests/test_chatter_chain.py`, `tests/test_chatter_discovery.py`, proposed `tests/test_chatter_classifier_reuse.py` and existing publication/pool tests.
+**Design:** make classification facts an input to lead ranking. Remove the bespoke Chatter classification system message and the request for the selector to regenerate every candidate's tags. Preserve the shared classifier's necessary role prompts. Derive all resolvable language/group tags in code from existing evidence; unknowns remain explicit. Any residual model-assisted lead ranking uses the same effective classifier model/provider factory with a minimal configured task contract and the existing shared Chatter call/publication accounting. Retain the six-pool editorial criteria, mandatory release consideration, incumbent/keep behavior and frozen-source requirements once; do not delete them because the old prompt combined multiple responsibilities. Do not transplant them into Stage 1 taxonomy output. Replace the hard-coded Grok selector route without changing Grok semantic acquisition or locale writer/voice selection.
+
+Use versioned strict output validation with exact candidate/pool identities and complete eligible rankings. Unknown or omitted required decisions remain held; do not guess missing labels from prose or disable the check that caught call 3616. Existing code-keep remains eligible only under its audited freshness/equivalence rules. Reconstruct historical completed requests from their frozen builder/version or report them incompatible; a new schema cannot silently change an old paid reply.
+**Regression net / test scenarios:** every usable candidate receives a complete code/shared-classifier tag without a duplicate tagging request; missing/extra/foreign ranking refs are rejected; the saved 4-of-27 response stays a historical rejected case rather than being patched by guessing; all six pools and low-volume releases are covered; pending classifier work preserves last-good serving; provider/model routing follows the single harvester configuration; independent locale/no-art and stale/late publication rules still pass. Pin the request composition so the entire old system message is not merely copied into the user message.
+**Verification:** Step 5's classification is actually reused, its remaining model route matches the harvester, and required editorial behavior survives with a smaller complete input/output contract. Routine harvester behavior remains unchanged.
+
+### U30. Verify the amended normal workflow and deliver staging
+
+**Dependencies:** U26–U29 and retained U25 delivery controls.
+**Files:** the same plan, walkthrough and private execution receipts; existing queue/CLI/config/readers; affected classification, source, publication and browser regression modules.
+**Design:** freeze the named historical controls and positive/negative source/identity cases before live evaluation. Reconcile the aggregate budget and provider readiness. Reuse saved paid responses and unaffected UI/performance evidence; run the affected shared-harvester/Chatter integration checks on the permanent shared local test database. Use the normal Chatter start callback and existing Celery queue for finite fresh staging validation; preserve the original cycle start/cutoff, record all calls/pages and model/tool usage, and never force a winner from unsupported evidence. A healthy empty evaluation is a valid operational outcome but does not supply the required positive-publication proof.
+
+Deliver the reviewed exact candidate through the existing non-forced staging route and observe both web and headline-worker runtime revisions, compatible migrations and actual restricted web-serving readers. Observe at least one genuine locale publication with frozen citations, independent remaining locales and optional artwork, plus first-reader latency. Record misses honestly and repair their measured cause within scope/remaining allowance; do not reset clocks or introduce a minimum discovery streak to make a test look healthy. Reuse paid complete calls, never blindly resend ambiguous requests. Keep detailed progress in execution receipts and own ON/OFF coordination entries, not unit status checkboxes here.
+**Regression net / test scenarios:** real queue-to-shared-classifier-to-lead-to-writer-to-reader path; finite workflow disable/provider failure; duplicate/stale tasks cannot rebill or republish; real positive source membership; 300-second timing and delay-notice behavior; same-source/different-event grouping; existing per-brand/Pulse, harvest classification and metrics/cursor invariants.
+**Verification:** exact staging revision and positive served text are evidenced, total spend is reconciled, comparison completeness is accurately qualified, remaining defects are recorded and no production collection was interrupted. A first-text time above 300 seconds remains a reported performance defect, not a passed timing check.
+
+### Verification Contract and Definition of Done
+
+- U26 reports matching and baseline-membership sets separately, all physical page/duplicate counts, exact query/window/DB identity, budget use and whether provider exhaustion was reached. Never call a budget/error-truncated census complete.
+- U28/U29 use the harvester's effective model/method and required shared contracts, with no separate Grok Step 5 tagger. Existing saved judgments are reused only when version/fingerprint compatible; live harvest behavior is protected by caller-level regressions.
+- U27's simplification and U29's prompt removal preserve the locked selection/source/language/history rules. No new table, column, JSON column, Render resource or source-response archive is introduced by this amendment.
+- Use the existing `pushinweight-test-db` wrapper for affected PostgreSQL tests; never create/restore a second full test database or use production as a test target. At implementation, include `tests/test_chatter_chain.py`, `tests/test_chatter_sources.py`, `tests/test_chatter_history.py`, `tests/test_chatter_discovery.py`, `tests/test_chatter_provider.py`, `tests/test_classify_batch_pragmatics_full.py`, `tests/test_u18a_classifier_contract_v4.py`, `tests/test_enrichment_worker.py`, `tests/test_x_client.py`, the new comparison/reuse modules and applicable existing publication/pool tests. Reuse unrelated verified UI/performance checks until relevant inputs change.
+- Staging delivery requires the new candidate on both existing services, a positive real-provider publication observed by the real serving reader, and measured original-start-to-first-text latency. An open PR, source push, all-none selector reply, fake-provider publication or successful health endpoint alone does not satisfy this definition.
+- Evidence is the saved trial/requests in the [walkthrough](../analysis/2026-11-04-140202-chatter-steps-and-27-candidates.html), the prior private G2 execution receipts at the authoritative repository, and the traced source paths above. The current xAI documentation lists handle/date filters but no hard language-filter parameter for semantic search. Prompting for a language is a preference, not a demonstrated API guarantee; no language-restriction change is selected here. Keep the existing global discovery and source-language evidence checks. [xAI X Search parameters](https://docs.x.ai/developers/tools/x-search).
 
 ## November 3 active continuation
 
@@ -154,7 +1583,7 @@ Local delivery verified: new Google Chrome tab on `allenwlee`, review copy `/Use
 Host/delivery receipt: `/Users/fuchitalee/.local/state/show-on-local/sessions/01a19fa3-6a92-7c81-80bd-8603b5d99d52.json`; source and execution host remain `fuchitalee`.
 Repair-first staging and the single $20 validation allowance remain selected; this review makes no paid call or application/database mutation.
 
-### Goal Capsule
+### Parent Chatter Goal Capsule
 
 - Objective: readers receive current, source-supported Chatter, with independent locale availability and durable explanations for keep/replace/no-story decisions.
 - Means: repair the current caller first; then integrate the existing tested stage contracts and semantic discovery with the shared OriginalContent storage.
@@ -209,7 +1638,7 @@ The cancelled experimental crons stay cancelled.
 The existing worker/broker is retained for this repair and integration scope.
 Independent text publication and evaluation-only senior review carry forward prior explicit owner decisions.
 
-### Planning Contract
+### Parent Chatter Planning Contract
 
 #### Ownership and handoff
 
@@ -455,6 +1884,8 @@ The owner explicitly approves the scoped scheduled-key exception on November4 in
 
 ### U22. Connect semantic intake, release admission and six-pool selection
 
+The former November 4 prompt-simplification note is now the executable U26–U30 amendment near the top of this same plan. It governs the next iteration; the implementation map below is retained baseline context.
+
 #### November4 implementation reconciliation
 
 Integrate main's affiliation trigger fix through `0221_affiliation_trigger_column_permissions`; `0222_merge_chatter_and_affiliation_permissions` joins it with the existing Chatter `0220` extension, adding no schema objects. `0223_chatter_collection_operation` extends the existing sealed operation registry without adding schema objects. The migration regression populates the common `0219` ancestor, restores the combined `0224` graph, and proves that the previous ORM can still insert after the additive migration. The new reason column retains its empty-string database default for that rollout overlap. Keep the 23-field/eight-table map and zero table/JSON additions.
@@ -530,7 +1961,7 @@ Recent-search briefings include completed provider attempts whose subsequent dis
 **Test scenarios:** legacy repair with new chain off; new chain on; workflow disabled; provider unavailable; broker/worker interruption; rollback with preserved published content.
 **Verification:** the endpoint is the selected revision observed on staging with scoped activation proof. No production promotion is selected. Record spend, latency distribution/misses and remaining provider/schema gaps; keep the worktree for staging-only delivery.
 
-### Verification Contract
+### Parent Chatter Verification Contract
 
 Use `~/.local/bin/pushinweight-test-db pytest <scoped test files> -q` from the integrated compatible Chatter worktree.
 The wrapper holds the existing database lock and refuses pending/incompatible migrations; coordinate explicit schema changes before testing.
@@ -542,7 +1973,7 @@ Use saved responses and deterministic transports for regression tests.
 Live validation has a $20 total owner allowance across both checkpoints. Freeze cases and rubric first, retain sent/ambiguous reservations, admit only calls that fit the remaining conservative allowance, and stop paid validation on exhaustion. No per-phase reset or automatic top-up. Zero calls have been charged to this new allowance in this planning pass.
 Staging smoke/replay/provider calls belong to the $20 validation allowance, including any temporary scheduled proof; do not leave paid staging validation running beyond its finite scope or allowance. The no-daily-cutoff policy describes routine operation, not an exemption from this trial ceiling. Provider capability/funding, exact latency and staging activation are execution observations, not passed checks in this plan.
 
-### Definition of Done
+### Parent Chatter Definition of Done
 
 1. Valid Chatter candidates survive invalid siblings without weakening evidence validation.
 2. Provider and review failures have accurate, useful outcomes; review is advisory for Chatter.
@@ -1036,7 +2467,7 @@ Final local regression evidence:74collector tests and69Face Matcher tests pass. 
 - **Stops:** the amended stop table (CS-KTD15) and the done predicate (CS-KTD5).
 - **Execution profile:** CS-U1–CS-U8 are interactive implementation work. CS-U9 is the unattended run. The run ends at a report and hand-back. Merging kept changes and Graphics Editor integration (U14/U14a) are later owner decisions.
 
-#### Product Contract
+#### Parent Chatter Product Contract
 
 ##### Summary
 
@@ -1106,7 +2537,7 @@ Long agent runs in this project also stall on needless stops: invented ceilings,
   - reconciling loop results into the living audit;
   - pre-collecting pending roster people.
 
-#### Planning Contract
+#### Parent Chatter Planning Contract
 
 ##### Key Technical Decisions
 
@@ -1421,7 +2852,7 @@ How the driver decides at the end of a round (CS-KTD5, CS-KTD10, CS-KTD13):
   - `docs/solutions/developer-experience/running-the-pipeline-effectively.md`
   - `docs/solutions/workflow-issues/2026-09-25-203900-authorized-release-blocked-by-inherited-gates.md`
 
-#### Implementation Units
+#### Parent Chatter Implementation Units
 
 ##### CS-U1. Snapshot the collector baseline on a local loop branch
 
@@ -1862,7 +3293,7 @@ The loop checkout is a separate local clone under the machine-local loop worktre
 - The shared repository's refs, tags and config are unchanged, and the loop clone still has no remote.
 - The report has been delivered and observed open.
 
-#### Verification Contract
+#### Parent Chatter Verification Contract
 
 | Gate | Command or check | When |
 | --- | --- | --- |
@@ -1878,7 +3309,7 @@ The loop checkout is a separate local clone under the machine-local loop worktre
 
 Waived or unrun checks are reported as "not run", never as passed.
 
-#### Definition of Done
+#### Parent Chatter Definition of Done
 
 - CS-R1–CS-R3 are met and the report is delivered. Otherwise, the report names the stop row or limit that ended the loop, with the slowest remaining stage and the owner decision block.
 - Every reported number traces to a driver receipt. Measured facts and agent claims sit in separate sections.
@@ -2132,7 +3563,7 @@ Spend counts toward the shared ceiling.
 
 > **Outcome — 2026-11-01 (owner-directed run):** The owner dropped the SB-U7 11/12 gate (the check died with its foreground session at 06:55 Oct 31, not on a ceiling), ordered the queue run continuously with below-bar people recorded rather than halting, and ordered no push/deploy/DB/R2 for this run. All 48 were attempted in tmux: **12 complete, 36 incomplete**. Spend: $2.73 model, 262 searches, $1.68 Apify, about 5 h running time (the 12 h was applied as running time; `--hours` offset for the Oct 30 wall-clock start). A 12:55 same-failure stop on three "Model could not establish a trusted named reference" results was reclassified as a person outcome (collector `5fdfb4a`) and the batch resumed. Owner order: D52 handle-only accounts resolved from their own X display name, bio, linked site and posts with the source recorded, X profile image kept as a still (collector `3e64197`); Ryan Lee, Carol Lin, Licheng Liu and Yuxuan Zhang were searched (all incomplete; the first three kept their X photo as an A/A− still), Cara and Lou have no documented name. Shared collector checkout unchanged. Report: `docs/analysis/2026-11-01-145126-g2-cast-batch-48-report.html`. Not committed or pushed per the owner's no-push instruction.
 
-#### Verification Contract
+#### Parent Chatter Verification Contract
 
 | Gate | Check | When |
 |---|---|---|
@@ -2143,7 +3574,7 @@ Spend counts toward the shared ceiling.
 | Spend | Model ledger, SerpApi receipts and the Apify meter within $8 / 320 / $8 | Before each person |
 | Remote | `git ls-remote` equals the local HEAD for both branches | After every push |
 
-#### Definition of Done
+#### Parent Chatter Definition of Done
 
 - All 48 people have a record of `complete` or `incomplete` with a reason, or the batch stopped on a named run-wide stop with the remaining people listed.
 - The audit HTML is regenerated, and the batch report has been delivered.
@@ -2309,7 +3740,7 @@ This is the authoritative execution order; U-number order is not a requirement t
 
 **Image failure and deadlines:** the normal happy path publishes article plus actual final image. Preserve the earlier nonblocking rule: use a factual source crop, approved identity template or deterministic text-led branded image when a generation is unavailable or past its configured deadline, and give that actual fallback to copyediting. Do not fabricate a person/provider or a completed asset. Even a fallback-storage/render failure remains a post-creation finding rather than withholding an otherwise ready story; record the missing-image condition explicitly. Keep later artwork or copy changes as traceable revisions with correct review coverage, never silently attach a mismatched image or let old work replace a newer lead. Per-stage deadlines, call/retry/spend ceilings and fallback thresholds are configuration to set before test/rollout, with actual behavior exercised in M2.
 
-## Definition of Done
+## Parent Chatter Definition of Done
 
 - M1 genuinely supports quick model/prompt swapping for every stage and locale, stage-only versus connected/fresh replay, first-output preservation, exact request/source/checkpoint inspection, comparisons and repeatable export. Current test templates are not a built platform.
 - M2 proves the whole chain with actual database/media/worker interfaces in isolation. Considered/passed-over/selected subjects and source memberships survive with no fake finished texts; requested locale texts/citations, actual calls and final image/credit/layer relationships are queryable and read back correctly. Zero new/retired tables remains the selected schema approach; necessary fields/constraints/writers/readers are implemented, not merely described in JSON.
@@ -5702,7 +7133,7 @@ Pulse acknowledged C001 in P004; Chatter read and acknowledged P003/P004 and the
 own plan; this plan's existing requirements/exhibits/appendix remain unchanged.
 <!-- END G2 PULSE PARALLEL COORDINATION -->
 
-## Goal Capsule
+## Parent Chatter Goal Capsule
 
 - **Objective:** First deliver rapid per-stage/connected model testing, then deliver a deployed end-to-end Chatter article/image chain with durable subject/candidate, locale, source, call and media persistence, 15-minute evaluation/two-hour competition, incumbent retention and scrollable history.
 - **Means:** Audit and reuse existing production/replay features; build a thin test runner around shared target-stage/provider/render functions and frozen inputs, then integrate the chosen configuration with the existing OC and media records and deployed serving paths.
@@ -5712,7 +7143,7 @@ own plan; this plan's existing requirements/exhibits/appendix remain unchanged.
 
 ---
 
-## Product Contract
+## Parent Chatter Product Contract
 
 ### Summary
 
@@ -5877,7 +7308,7 @@ AE1–AE6 below remain reference examples for the earlier foundation and preserv
 
 ---
 
-## Planning Contract
+## Parent Chatter Planning Contract
 
 **Earlier technical proposal:** the following audit, storage design, exhibits and U5–U12 are preserved from the universal SummaryEngine plan. They are reference pending reconciliation with the current owner decisions. Do not infer a new SummaryRun migration, a common runtime pipeline or Pulse implementation authority from retaining this material.
 
@@ -6772,7 +8203,7 @@ These rules guide the later integrations and the foundation's compatibility fixt
 
 ---
 
-## Implementation Units
+## Parent Chatter Implementation Units
 
 ### U13. Unified OC consideration and source lifecycle (future implementation)
 
@@ -7032,7 +8463,7 @@ Extend the existing Grok adapter from text-only generation to documented JSON mu
 
 ---
 
-## Verification Contract
+## Parent Chatter Verification Contract
 
 No application tests or provider experiments run during this design-recording pass. Current document verification checks R18–R53/AE7–AE38 consistency, unchanged earlier exhibits/appendix, authoritative coordination and exact local-copy delivery. Existing fictional schema/browser evidence remains valid for the unchanged storage walkthrough; this memory/attention amendment changes the Markdown plan only and does not claim new UI or runtime verification.
 
@@ -8226,31 +9657,22 @@ implementation at the side-thread workspace gate. Deployment remains pending.
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
 
-This block is generated guidance. Do not edit it directly. Correct durable facts in `.ollija/project.yaml` or this template, then rerun `ollija annotate-plan`. Current explicit owner instructions govern this task. Record exceptions below and reflect route changes in metadata; removed requirements must not return through another checklist.
+Generated by `ollija annotate-plan`; do not edit between the markers. Delivery policy lives in `AGENTS.md` under "Plans and delivery". Project facts (host, repository, branches, environments, URLs and blueprints) live in `.ollija/project.yaml`. Record owner exceptions under Delivery Exceptions below.
 
-### Resolved locations
-
-- Authoritative host: `fuchitalee`
-- Authoritative repository: `/Users/fuchitalee/development/pushin-weight-v2`
-- Ollija release worktree area: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees`
-- Active worktree: `/Users/fuchitalee/.codex/worktrees/8955/pushin-weight-v2`
-- Plan: `/Users/fuchitalee/.codex/worktrees/8955/pushin-weight-v2/docs/plans/2026-10-09-064803-feat-g2-round2-voices-plan.md`
+- Plan: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-chatter-integration-20261119/docs/plans/2026-10-09-064803-feat-g2-round2-voices-plan.md`
+- Branch: `feat/g2-chatter-integration-20261119`
 - Change: `feat-g2-round2-voices-2026-10-09-064803`
-- Branch: `feat/g2-chatter-20261103`
-- Staging branch and blueprint: `staging`, `/Users/fuchitalee/.codex/worktrees/8955/pushin-weight-v2/render-staging.yaml`
-- Production branch and blueprint: `main`, `/Users/fuchitalee/.codex/worktrees/8955/pushin-weight-v2/render.yaml`
-- Staging URL: `https://pushinweight-staging-web.onrender.com`
-- Production URL: `https://pushinweight-web.onrender.com`
+- Active worktree: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-chatter-integration-20261119`
+- Workflow: `chatter-repair-and-integration`
+- Delivery target: `staging`
+- Route: `staged`
+- Owner selection recorded: `true`
 
 ### Placement
 
 This worktree is inside the Ollija release worktree area. Reuse it for the whole change. Do not create a second worktree or plan for this branch.
 
-### Delivery scope
-
-- Workflow: `chatter-repair-and-integration`
-- Delivery target: `staging`
-- Owner selection recorded: `true`
+### Delivery steps
 
 1. Complete implementation and the plan's verification contract.
 2. Run the configured focused checks:
@@ -8261,19 +9683,12 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
 
-### Failure handling
-
-- Complete applicable, unwaived checks for the selected route. A waived check is waived, never passed. Owner-selected direct production does not require staging.
-- Product defects return to the parent implementation workflow; repeat only checks invalidated by the fix. Environment failures require repairing the environment, not a new source commit. Retry only after a relevant fact changes.
-- SSH, shell, environment, or multi-machine failures use the repository infra/multi-machine skill first.
-- The change ledger is advisory; do not validate or enforce it.
-- Never force-remove a worktree. Retain staging-only, failed, dirty, locked,
-  noncanonical, or candidate-mismatched worktrees for diagnosis or later
-  delivery.
-- Do not run an endless retry loop or start a persistent Ollija process.
+Occupied staging: if a staged route finds `staging` in use by an unrelated release while production is authorized, follow the occupied-staging default in `AGENTS.md`.
 <!-- END OLLIJA DELIVERY GUIDE -->
 
 ## Delivery Exceptions
+
+November4 follow-up owner direction: the named Step2 database/TwitterAPI comparison must paginate to provider exhaustion without a one-page or arbitrary result-count cap. Configure its collection envelope for the actual remaining financial allowance rather than inheriting routine per-cycle ceilings. This authorizes the follow-up test beyond the historical two-cycle set while retaining the original aggregate $20 and on-demand purposes; it does not make routine production collection unbounded. Step5 reuses the existing harvester classification method/effective model, with no parallel Grok tagger or duplicate Chatter classification system message. The planning amendment itself grants no production deployment or pause.
 
 November4: the owner approves Chatter keyword searches and source lookups on the existing headline worker using `TWITTERAPI_IO_SCHEDULED_API_KEY`, as a scoped exception to the AGENTS `run_cycle` credential restriction. Use on-demand purpose for explicit validation, with the unchanged aggregate $20 limit.
 
@@ -10346,3 +11761,10 @@ CHEN Deli reached the three-pass ceiling. Two source-attributed stills remain sa
 FAN Linxi completed after a credit-only second pass. The first pass selected two stills and a real short clip and passed framing review, but a model-supplied creator quote failed exact-source validation. The recovery kept the media fixed, marked the original creator unestablished where the supplied sources did not establish one, retained publisher/source credit and completed the pack. HA David and LEE Honglak are the next bounded first-pass cases. Ha's first call encountered cross-source ownership; the collector now demotes that verdict to an unverified candidate with an audit receipt and resumes from cached physical calls. Omitted verdicts are likewise explicitly unverified. The focused provider tests pass. These changes concern the standalone research collector and local evidence only; they add zero database tables or columns, no production writes, no deployment and no new recurring collection.
 
 The resumed HA David first pass completed with two attributed stills and a real source clip. The saved-file review accepted framing, while grading the wide and soft clip D+ for visual usefulness; keep that limitation attached to the pack. The cross-source verdict was demoted and cached physical calls were counted once. LEE Honglak's first pass reviewed 26 original candidates plus Xiaohongshu gap candidates but selected no verified asset. Its case remains in progress after one pass, with a targeted named-portrait/source-corroboration gap recorded; no automatic extra recovery is implied by the three-pass ceiling. The living cost audit at `docs/analysis/2026-10-23-180418-g2-cast-living-cost-audit.html` now shows 12 complete, three incomplete, one in progress and 51 pending within the 67-person queue. The research collector used zero database tables or columns in this trial; all new evidence remains local.
+
+
+## November 6 single Chatter-list addition
+
+Recorded 2026-11-06T17:35:32.473992+09:00. Owner requests one handle added to `_for_chatter` (`2118336781666206206`) using the proven `allenwlee` OAuth2 route, then reports $10.43 available credit. This is a one-account operational continuation of the reviewed roster, superseding its file-only endpoint for this test. API only; no browser. Use first approved still-eligible handle, exact owner/list checks, complete Call A/destination membership reads, max one list-add POST and independent readback. Preserve source lists, Call A and employment-history task. The saved blocked credential is historical evidence, not a fresh billing determination. Diagnose client binding, saved revision and reason before at most one guarded recovery/refresh; stop on a fresh refusal or uncertain renewal. Do not change billing, replay official-company intents, add a scheduler or deploy. Receipt directory: `/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-05-231021-chatter-list-roster/single-add-2026-11-06-173532`. No tables/columns added or retired.
+
+**Single-add outcome — 2026-11-06T17:40:31.362112+09:00:** Existing owner refresh succeeded HTTP200, encrypted credential revision26→27. Fresh owner/private-list preflight succeeded on deployed6bd4b15f with inspected client hashes unchanged. Resolved `@hilbertspaess`/Jacob Coxon to `2013902543974465536`; complete CallA223 read excluded him and destination was empty. Exactly one POST at 2026-11-06T17:38:44.355531+09:00 returned HTTP200. Operator receipt formatter then raised AttributeError (POST data object treated as member array); no POST retry. Independent GET-only follow-up at 2026-11-06T17:39:36.489986+09:00 confirmed destination exactly1 member, that target. Result: one attempted/one independently confirmed; POST payload acknowledgement not captured. One refresh and11GETs total; actual billing not measured. Original automated credential hold restored as `blocked` at revision27, preserving new tokens and all existing CallA intents; this is an intentional operational hold, not a new X refusal. No scheduler or broader batch started. Earliest future batch under handed-off hourly pacing: 2026-11-06T18:38:44.355531+09:00. Exact receipts and result: `/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-05-231021-chatter-list-roster/single-add-2026-11-06-173532`. Requested one-account endpoint complete.
