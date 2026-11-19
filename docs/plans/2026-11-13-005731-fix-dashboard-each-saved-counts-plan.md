@@ -956,3 +956,58 @@ measurement. All twelve fixture input hashes and this condition are recorded;
 the original budgets, workloads and exact repeated-shape guard remain intact.
 The third repair attempt is the bounded final fixture repair round, not a pass
 until its actual performance result is clean.
+
+
+### First staging candidate and measured refresh fallback (November20 JST)
+
+Candidate `aaa15a5f570ad34a131467088d6cbfc780d199af` includes G2 repair
+`d8365419` and passed575tests plus303subtests; required PostgreSQL284,
+skipped0/errors0. Each38 and homepage5191 obligations were clean. Sealed
+performance attempt `d17d5c0b35a33f761d42c5cb` is clean for this exact candidate,
+with the unchanged six workloads/budgets, two repetitions each, and fixture
+digest `1bbef5ee292b5939aa673bef3de69a123c886b6fcc0528979bee3648effafc3f`.
+The terminal translation-failure fixture is preview-only and preserves ready
+synthesis/classification; it restores actual SVG/cache coverage without polls.
+All three earlier invalid attempts remain invalid, including the third attempt
+whose shape passed but whose expected sprite was absent.
+
+All seven unsuspended staging app/jobs services reached this SHA. Owner and
+serving connections independently confirmed `pushinweight_staging`, the correct
+roles, Django5.2.19/psycopg3.3.9, and migrations0228/0231. Anonymous access still
+redirects to login. Production main remains `9ed25df7`; no production service,
+collection schedule, provider or G2 run26/credential/reservation was changed.
+
+The first actual Each refresh hit the unchanged90-second SQL cap
+(90.169794s); the MV remains unpopulated and its publication unavailable. This
+is not a successful activation. The plan's U2 grouped-join build alternative is
+now required: additive0232 will replace only the MV build, preserve the ordinary
+source view/readers, physical values/indexes/grants and invalidation semantics,
+and require same-snapshot row parity plus initial/concurrent refresh timing.
+No ordinary table is added or retired. G2's lane is released during this local
+repair; any new reviewed staging descendant must be merged before the next push.
+
+The installed Render2.22 interactive SSH wrapper also buffered completed command
+receipts and returned success for remote failure. A private checksum-verified
+Render2.30 binary is used for scripted probes, without changing the shared CLI.
+The retained90-second receipt establishes the database failure independently of
+that transport issue. Staging completion remains pending the grouped build and
+its reviewed, measured activation; no DONE claim is made here.
+
+
+The grouped0232 build and focused tests are ready:52 PostgreSQL tests and37
+subtests passed, required skips0/errors0; drift and Ruff checks pass. Physical
+fixture parity covers all20column types/collations/nullability and10adversarial
+historical rows, with bidirectional binary row differences0/0. Fixture refresh
+0.00654s initial/0.00530s concurrent is not a scale result. The ordinary source
+view/OID and source triggers remain unchanged. Both migration directions create
+an unpublished empty copy; publication requires a successful native refresh.
+
+Review found and repaired one grant-replay issue: PostgreSQL object GRANTED BY
+requires the current role. Migration0232 now preflights owner and grantors before
+DROP; unsupported foreign owners/delegated grants fail without changing the old
+OID, access, rows or valid publication. Supported owner-issued table/column
+rights and grant options are restored exactly, including removal of accidental
+new creation-default grants. This is not a permission-normalization operation.
+Actual staging compatibility must be checked before rollout. Independent scoped
+review has no remaining findings; receipt is
+`/tmp/compound-engineering-501/ce-code-review/20261119-215522-613f15bc/followup-grouped-build-review.json`.
