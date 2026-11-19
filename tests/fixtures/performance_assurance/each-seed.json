@@ -55,7 +55,7 @@
     {
       "id": "combined-seeder",
       "path": "tests/each_performance_fixture.py",
-      "sha256": "e664a1cd7b0124e880936394e371a1a40a5b730a23ae9441153f2a9c20d767e4"
+      "sha256": "f73708a631fe327d0e1f6007f18af8b2d7285349fa3165ce98cb19e45d7677e5"
     },
     {
       "id": "harvest-coverage-seeder",
@@ -103,6 +103,29 @@
       ],
       "purpose": "Create complete typed EN/ZH/JA synthesis while preserving the existing base English and Chinese visible commentary verbatim; normal feed observers remain enabled.",
       "expected_status": "ready"
+    },
+    {
+      "id": "terminal-translation-failure",
+      "writer": "core.models.PostEnrichmentState.objects.create",
+      "record": {
+        "post_id": "u3-post-0",
+        "translation_requested": true,
+        "translation_status": "failed",
+        "translation_attempts": 3,
+        "translation_first_attempt_at": "captured_preview_seed_time",
+        "translation_last_attempt_at": "captured_preview_seed_time",
+        "translation_next_attempt_at": null,
+        "translation_error_code": "fixture_terminal_translation_failure",
+        "classification_status": "succeeded",
+        "classification_attempts": 1,
+        "classification_first_attempt_at": "captured_preview_seed_time",
+        "classification_last_attempt_at": "captured_preview_seed_time",
+        "classification_next_attempt_at": null
+      },
+      "inputs": [
+        "combined-seeder"
+      ],
+      "purpose": "Render the terminal failed-stop glyph for the unchanged declared immutable processing-sprite cache expectation; no polling state is introduced."
     },
     {
       "id": "each",
@@ -183,5 +206,28 @@
     "other_calls": "Delegate all other property calls with original receiver, arguments, priority and return value.",
     "invalid_input": "Remove documentElement and throw; declared interaction targets become unavailable.",
     "unchanged": "No rounding, phase freezing, metric/guard rewriting, performance.now patch, animation disabling, or production asset change."
+  },
+  "fixture_conditions": {
+    "terminal_translation_failure": {
+      "purpose": "Retain the already-declared processing-glyph sprite cache workload on a visible base post without pending work or polling.",
+      "policy": "Synthetic terminal-failure preview/test condition only; no production retry policy or persisted production data is changed.",
+      "record": {
+        "post_id": "u3-post-0",
+        "translation_requested": true,
+        "translation_status": "failed",
+        "translation_attempts": 3,
+        "translation_first_attempt_at": "captured_preview_seed_time",
+        "translation_last_attempt_at": "captured_preview_seed_time",
+        "translation_next_attempt_at": null,
+        "translation_error_code": "fixture_terminal_translation_failure",
+        "classification_status": "succeeded",
+        "classification_attempts": 1,
+        "classification_first_attempt_at": "captured_preview_seed_time",
+        "classification_last_attempt_at": "captured_preview_seed_time",
+        "classification_next_attempt_at": null
+      },
+      "preserved": "All synthesis remains locale-complete and ready; existing successful PostBrandClassificationState records and chart values are untouched.",
+      "work": "No pending enrichment state, active claims, active synthesis demands or provider calls."
+    }
   }
 }

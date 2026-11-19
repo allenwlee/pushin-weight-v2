@@ -186,11 +186,27 @@ def test_each_candidate_preserves_four_workloads_and_measures_rich_each_legend()
         "returns": "captured_preview_seed_time", "inputs": ["combined-seeder"],
     }
     recipe = {step["id"]: step for step in seed_recipe["recipe"]}
-    assert list(recipe) == ["general-clock", "base", "base-synthesis", "each", "general", "general-closed-job", "harvest-coverage"]
+    assert list(recipe) == ["general-clock", "base", "base-synthesis", "terminal-translation-failure", "each", "general", "general-closed-job", "harvest-coverage"]
     assert recipe["base"]["call"] == "tests.v22_support.seed_real_home_orm(tests.v22_support.fixture_from_oracle())"
     assert recipe["base-synthesis"]["for_each"] == 'post in Post.objects.filter(tweet_id__startswith="u3-post-")'
     assert recipe["base-synthesis"]["call"] == 'tests.general_helpers.saved_commentary(post, texts={"en": post.commentary_en, "zh-cn": post.commentary_zh_cn, "ja": f"保存されたテスト用解説 {post.pk}"})'
     assert recipe["base-synthesis"]["expected_status"] == "ready"
+    terminal = seed_recipe["fixture_conditions"]["terminal_translation_failure"]
+    assert terminal["record"] == recipe["terminal-translation-failure"]["record"]
+    assert recipe["terminal-translation-failure"]["writer"] == "core.models.PostEnrichmentState.objects.create"
+    assert terminal["record"] == {
+        "post_id": "u3-post-0", "translation_requested": True,
+        "translation_status": "failed", "translation_attempts": 3,
+        "translation_first_attempt_at": "captured_preview_seed_time",
+        "translation_last_attempt_at": "captured_preview_seed_time",
+        "translation_next_attempt_at": None,
+        "translation_error_code": "fixture_terminal_translation_failure",
+        "classification_status": "succeeded", "classification_attempts": 1,
+        "classification_first_attempt_at": "captured_preview_seed_time",
+        "classification_last_attempt_at": "captured_preview_seed_time",
+        "classification_next_attempt_at": None,
+    }
+    assert "preview/test condition only" in terminal["policy"]
     assert recipe["each"]["call"] == "tests.each_area_fixture.seed_each_area_orm(json.loads(each_manifest))"
     assert recipe["each"]["expected_return"] == 62
     assert recipe["general-clock"]["assign"] == "tests.general_helpers.NOW = captured_preview_seed_time"

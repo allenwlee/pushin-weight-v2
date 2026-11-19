@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from django.utils import timezone
 
-from core.models import Post
+from core.models import Post, PostEnrichmentState
 from tests import general_helpers
 from tests.each_area_fixture import seed_each_area_orm
 from tests.test_chart_harvest_coverage import record_harvest
@@ -39,6 +39,20 @@ def seed_each_performance_orm(*, now=None):
                 "zh-cn": post.commentary_zh_cn,
                 "ja": f"保存されたテスト用解説 {post.pk}",
             })
+        # Terminal fixture condition keeps the declared processing-sprite cache
+        # workload present without pending work, polling, or changing synthesis.
+        PostEnrichmentState.objects.create(
+            post_id="u3-post-0", translation_requested=True,
+            translation_status=PostEnrichmentState.Status.FAILED,
+            translation_attempts=3,
+            translation_first_attempt_at=anchor, translation_last_attempt_at=anchor,
+            translation_next_attempt_at=None,
+            translation_error_code="fixture_terminal_translation_failure",
+            classification_status=PostEnrichmentState.Status.SUCCEEDED,
+            classification_attempts=1,
+            classification_first_attempt_at=anchor, classification_last_attempt_at=anchor,
+            classification_next_attempt_at=None,
+        )
         seed = json.loads((ROOT / "tests/fixtures/ui_assurance/each-fixture.json").read_text())
         assert seed_each_area_orm(seed) == 62
         contract = json.loads((ROOT / "tests/fixtures/general_feed_contract.json").read_text())
