@@ -1,5 +1,6 @@
 """Real PostgreSQL constraints and typed-only checkpoint/continuation evidence."""
 
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -22,20 +23,29 @@ from core.models import (
     Post,
 )
 from core.provider_batches import record_post_membership
+from tests.collection_document_fixtures import historical_models
 from tests.test_backfill_collection import ready_job
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
 @pytest.fixture
-def scope(request):
-    if "migration_rehearsal_schema" in request.fixturenames:
+def scope(request, monkeypatch):
+    historical = "migration_rehearsal_schema" in request.fixturenames
+    if historical:
         request.getfixturevalue("migration_rehearsal_schema")
-    job = ready_job()
-    claim = claim_job(job.pk, invocation_id="typed-page-fixture", manual_authorized=True, typed=True)
-    import_scope_checkpoints(claim, definition_sha256=job.definition_sha256,
-                             scopes=job.scope["units"], provenance={"format": "fixture"}, typed=True)
-    return CollectionScopeRun.objects.get(run_id=claim.run_id, scope_kind="x_query")
+    with historical_models() if historical else nullcontext():
+        if historical:
+            from django.apps import apps
+
+            # Migration-state models omit this Python-only typed cursor reader.
+            reader = apps.get_model("core", "CollectionScopeRun").recorded_cursors
+            monkeypatch.setattr(CollectionScopeRun, "recorded_cursors", reader, raising=False)
+        job = ready_job()
+        claim = claim_job(job.pk, invocation_id="typed-page-fixture", manual_authorized=True, typed=True)
+        import_scope_checkpoints(claim, definition_sha256=job.definition_sha256,
+                                 scopes=job.scope["units"], provenance={"format": "fixture"}, typed=True)
+        yield CollectionScopeRun.objects.get(run_id=claim.run_id, scope_kind="x_query")
 
 
 def test_ordered_grouped_checkpoint_preserves_duplicates_and_null_vs_empty_ids(scope):

@@ -163,7 +163,9 @@ def test_dispatch_invocation_budget_stops_before_second_job(settings):
     calls = []
     budget = invocation_budget(
         httpx.Client(
-            transport=httpx.MockTransport(lambda r: httpx.Response(200, json={}))
+            transport=httpx.MockTransport(lambda r: httpx.Response(200, json={
+                "id": "lab/model", "downloads": 1, "downloadsAllTime": 1, "likes": 0,
+            }))
         ),
         requests=1,
         max_bytes=10000,
@@ -172,11 +174,13 @@ def test_dispatch_invocation_budget_stops_before_second_job(settings):
     def execute(obj, decision, child):
         calls.append(obj.pk)
         child.hf_counts("lab/model")
-        claim = claim_job(obj.pk, now=NOW)
-        return finish_run(claim, status="success", request_count=1, now=NOW)
+        claim = claim_job(obj.pk, now=NOW, typed=True)
+        return finish_run(claim, status="success", request_count=1, now=NOW,
+                          typed=True, physical_accounting_complete=False)
 
     rows = dispatch_due(budget=budget, now=NOW, execute=True, executor=execute)
     assert calls == [job.pk] and budget.remaining == 0
+    assert job.runs.get().status == "success"
     assert rows[-1]["reason"] == "invocation_budget_exhausted"
 
 

@@ -23,14 +23,42 @@ from core.models import (
     TimeZone,
 )
 from core.source_metric_projection import configure_source_statistics, evidence_rows
+from tests.collection_document_fixtures import (
+    documents,
+    historical_models,
+    observation_values,
+    replace_documents,
+)
 from tests.test_source_metric_projection import CAPTURED, configured, project
 
-pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
 
 @pytest.fixture(autouse=True)
 def seed_utc_timezone():
     TimeZone.objects.get_or_create(pk="UTC")
+
+
+@pytest.fixture
+def historical_selection_models(migration_rehearsal_schema, monkeypatch):
+    from django.apps import apps
+
+    from core import source_vocabulary
+
+    product_type_code = apps.get_model("core", "Product").product_type_code
+    with historical_models():
+        from core.models import Product
+
+        # Migration-state models omit Python properties; keep the actual typed
+        # catalogue reader used by the shared taxonomy fixture.
+        monkeypatch.setattr(Product, "product_type_code", product_type_code, raising=False)
+        # The resolver's catalogue dispatch stores model classes inside a dict,
+        # beyond the direct module bindings handled by the shared fixture.
+        for catalogue, model in source_vocabulary.CATALOGUES.items():
+            monkeypatch.setitem(source_vocabulary.CATALOGUES, catalogue,
+                                Product._meta.apps.get_model("core", model._meta.model_name))
+        TimeZone.objects.get_or_create(pk="UTC")
+        yield
 
 
 def selection_contract():
@@ -59,15 +87,21 @@ def historical_captures():
         observations.append(CollectionObservation.objects.create(
             run=run, source_subject_kind="repository", source_identifier=raw["id"],
             observed_at=CAPTURED + timedelta(seconds=index),
-            listing={**raw, "downloadsAllTime": "invalid", "trendingScore": 1.5},
-            source_metadata={} if fields is None else {"numeric_fields": fields},
+            **observation_values(
+                listing={**raw, "downloadsAllTime": "invalid", "trendingScore": 1.5},
+                source_metadata={} if fields is None else {"numeric_fields": fields},
+            ),
             observation_key=digest(["selection", index]),
         ))
     return job, contract, observations
 
 
+@pytest.mark.parametrize("migration_rehearsal_schema", [
+    ("core", "0222_backfill_retry_policy_versions"),
+], indirect=True)
+@pytest.mark.usefixtures("historical_selection_models")
 @pytest.mark.parametrize("archived", [False, True])
-def test_bounded_copy_and_full_three_state_parity_preserve_exact_versions(archived):
+def test_bounded_copy_and_full_three_state_parity_preserve_exact_versions(archived, migration_rehearsal_schema):
     from core.collection_capture import archive_legacy
 
     job, contract, observations = historical_captures()
@@ -120,11 +154,13 @@ def test_archived_replay_uses_typed_selection_with_identical_projection_identity
     # Only provider evidence remains in the archive. The selection is operational
     # state and its original meaning must now come from the typed relationship.
     selected.legacy_archive = archive_legacy({
-        "listing": selected.listing, "dimensions": {}, "source_metadata": {},
+        "listing": documents(selected)["listing"], "dimensions": {}, "source_metadata": {},
     })
-    selected.listing, selected.dimensions, selected.source_metadata = {}, {}, {"numeric_fields": []}
-    selected.save(update_fields=["legacy_archive", "listing", "dimensions", "source_metadata"])
+    selected.save(update_fields=["legacy_archive"])
     selected.refresh_from_db()
+    assert numeric_fields(selected, legacy_metadata={"numeric_fields": []}) == [
+        "downloadsAllTime", "trendingScore",
+    ]
     assert list(evidence_rows(contract, "hf", selected)) == before
     monkeypatch.setattr(httpx, "Client", lambda *a, **kw: pytest.fail("provider called during replay"))
     first = project(contract, "hf", [selected], key="typed-field-replay")
@@ -145,7 +181,8 @@ def test_saved_replay_skips_typed_empty_selection_after_old_metadata_clear(monke
     capture_job, contract, observations = historical_captures()
     project_hf_numeric_job_pins_batch()
     project_hf_numeric_selections_batch()
-    CollectionObservation.objects.filter(pk__in=[row.pk for row in observations]).update(source_metadata={})
+    for observation in observations:
+        replace_documents(observation, source_metadata={})
     job = register_job(
         job_key="typed-selection-cli-replay", source=capture_job.source,
         purpose="metric", operation="collect_metrics", mode="historical", contract=contract,
@@ -167,8 +204,7 @@ def test_saved_replay_skips_typed_empty_selection_after_old_metadata_clear(monke
 def test_bad_historical_selection_refuses_entire_batch(fields):
     _, _, observations = historical_captures()
     selected = observations[-1]
-    selected.source_metadata = {"numeric_fields": fields}
-    selected.save(update_fields=["source_metadata"])
+    replace_documents(selected, source_metadata={"numeric_fields": fields})
     project_hf_numeric_job_pins_batch()
     with pytest.raises(ValueError, match="invalid HF numeric field selection"):
         project_hf_numeric_selections_batch()
@@ -241,8 +277,8 @@ def test_real_hf_resume_keeps_first_invalid_optional_field_after_json_clear(monk
     assert numeric_fields(detail) == ["downloadsAllTime"]
     documents = observation_object_documents(detail)
     detail.legacy_archive = archive_legacy(dict(zip(("listing", "dimensions", "source_metadata"), documents)))
-    detail.source_metadata = {}
-    detail.save(update_fields=["legacy_archive", "source_metadata"])
+    detail.save(update_fields=["legacy_archive"])
+    assert not hasattr(type(detail), "source_metadata")
     CollectionRun.objects.filter(job=job, status="running").update(
         lease_expires_at=timezone.now() - timedelta(seconds=1),
     )

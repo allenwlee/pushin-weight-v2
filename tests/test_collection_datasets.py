@@ -5,6 +5,7 @@ from django.db import IntegrityError, transaction
 
 from core.collection_datasets import dataset_code, resolve_dataset
 from core.collection_state import checkpoint_scope, claim_job
+from core.data_source_backfill_upgrade import EXPAND
 from core.models import (
     CollectionJob,
     CollectionObservation,
@@ -12,12 +13,25 @@ from core.models import (
     DataSource,
     SourceDataset,
 )
+from tests.collection_document_fixtures import historical_models
 from tests.test_collection_jobs import ready
 
-pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    pytest.mark.requires_postgres,
+]
 
 
-def test_dataset_identity_is_source_qualified_and_sql_enforced():
+@pytest.fixture
+def historical_projection_schema(migration_rehearsal_schema):
+    # The one-time copy reads the real pre-retirement columns in this schema.
+    with historical_models():
+        yield
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [EXPAND], indirect=True)
+@pytest.mark.usefixtures("historical_projection_schema")
+def test_dataset_identity_is_source_qualified_and_sql_enforced(migration_rehearsal_schema):
     job = ready()
     other = DataSource.objects.create(id="arena", name="Arena", source_type="benchmark")
     first = resolve_dataset(job.source_id, {"dataset_id": "publisher/archive"})
@@ -54,7 +68,9 @@ def test_dataset_identity_is_source_qualified_and_sql_enforced():
         CollectionRun.objects.filter(pk=claim.run_id).update(job=other_job)
 
 
-def test_archive_scope_keeps_dataset_on_its_captured_observation():
+@pytest.mark.parametrize("migration_rehearsal_schema", [EXPAND], indirect=True)
+@pytest.mark.usefixtures("historical_projection_schema")
+def test_archive_scope_keeps_dataset_on_its_captured_observation(migration_rehearsal_schema):
     job = ready()
     claim = claim_job(job.pk)
 
@@ -99,7 +115,9 @@ def test_publication_dataset_does_not_reclassify_the_host_as_source():
     assert resolve_dataset("arena", metadata).source_id == "arena"
 
 
-def test_dataset_copy_handles_every_owner_and_archive_only_run_metadata():
+@pytest.mark.parametrize("migration_rehearsal_schema", [EXPAND], indirect=True)
+@pytest.mark.usefixtures("historical_projection_schema")
+def test_dataset_copy_handles_every_owner_and_archive_only_run_metadata(migration_rehearsal_schema):
     from core.collection_capture import archive_legacy
     from core.collection_storage_migration import project_source_datasets_batch
     from core.models import CollectionScopeRun
@@ -134,7 +152,9 @@ def test_dataset_copy_handles_every_owner_and_archive_only_run_metadata():
         project_source_datasets_batch("observation")
 
 
-def test_dataset_verification_does_not_create_missing_identities():
+@pytest.mark.parametrize("migration_rehearsal_schema", [EXPAND], indirect=True)
+@pytest.mark.usefixtures("historical_projection_schema")
+def test_dataset_verification_does_not_create_missing_identities(migration_rehearsal_schema):
     from core.collection_storage_migration import project_source_datasets_batch
 
     job = ready()

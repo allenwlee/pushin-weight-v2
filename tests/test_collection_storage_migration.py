@@ -24,6 +24,7 @@ from core.collection_capture import (
 )
 from core.collection_state import claim_job
 from core.models import CollectionObservation, CollectionRun, CollectionScopeRun
+from tests.collection_document_fixtures import historical_models
 from tests.test_collection_jobs import ready
 from tests.test_hf_catalog_retirement import RETIRED, denied_retirement_columns
 
@@ -37,6 +38,12 @@ def detached_collection_models():
         assert retired.isdisjoint(field.name for field in model._meta.fields)
 
 
+@pytest.fixture
+def historical_archive_models(migration_rehearsal_schema):
+    with historical_models():
+        yield
+
+
 def execution(*, purpose="catalog"):
     job = ready(purpose=purpose)
     claim = claim_job(job.pk, typed=True, manual_authorized=purpose == "content")
@@ -46,6 +53,7 @@ def execution(*, purpose="catalog"):
 
 
 @pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
+@pytest.mark.usefixtures("historical_archive_models")
 def test_archive_sweep_includes_null_phase_legacy_scope_beside_typed_scope(migration_rehearsal_schema):
     from core.collection_storage_migration import archive_legacy_batch
 
