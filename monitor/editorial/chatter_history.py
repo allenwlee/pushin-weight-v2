@@ -340,12 +340,23 @@ def appearance_history(development, cutoff, *, periods=8, observed_at=None, lane
     evidence, lower_bound, consecutive, known = [], 0, True, True
     for slot in slots:
         run = runs.get(slot)
-        if hourly and run and run.discovery_state == "complete" and run.discovery_observed:
-            from .chatter_trends import read_ranked_batch
+        if hourly and run and run.discovery_state == "complete":
+            from .chatter_trends import (
+                _headlines,
+                _saved_observation,
+                checkpoint,
+                read_ranked_batch,
+            )
 
             try:
-                batch = read_ranked_batch(run.pk)
-                run.discovery_observed = datetime.fromisoformat(batch["observed_at"]) <= observed_at
+                state = checkpoint(run)
+                if state.phase == "empty":
+                    _, saved = _saved_observation(run, state)
+                    run.discovery_observed = (not _headlines(saved) and state.observation.http_status == 200
+                                              and state.observation.headline_count == 0 and state.observation.observed_at <= observed_at)
+                else:
+                    batch = read_ranked_batch(run.pk)
+                    run.discovery_observed = datetime.fromisoformat(batch["observed_at"]) <= observed_at
             except (ValueError, KeyError, OriginalContentCall.DoesNotExist):
                 run.discovery_observed = False
         state = "unknown"
@@ -367,15 +378,19 @@ def appearance_history(development, cutoff, *, periods=8, observed_at=None, lane
             "periods": evidence}
 
 
-def competition_board(cutoff, *, limit=200):
+def competition_board(cutoff, *, limit=200, lane="semantic-v1"):
     if type(limit) is not int or not 1 <= limit <= 200:
         raise ValueError("board limit exceeded")
+    if lane not in {"semantic-v1", "personalized-trends-v1"}:
+        raise ValueError("unknown Chatter history lane")
+    scope = "chatter:personalized-trends:v1" if lane == "personalized-trends-v1" else SCOPE
+    kinds = ["personalized_trend", "release"] if lane == "personalized-trends-v1" else ["semantic_shortlist", "keyword_only", "release"]
     return list(history_query().filter(
-        run__workflow_key=WORKFLOW, run__scope_key=SCOPE, run__discovery_state="complete",
+        run__workflow_key=WORKFLOW, run__scope_key=scope, run__discovery_state="complete",
         run__facts_as_of__lte=cutoff, run__facts_as_of__gt=cutoff - timedelta(hours=2),
         attempted_at__lte=cutoff,
         development__isnull=False, consideration_state__isnull=False,
-        appearance_kind__in=["semantic_shortlist", "keyword_only", "release"],
+        appearance_kind__in=kinds,
     ).annotate(recent_rank=Window(
         expression=RowNumber(), partition_by=[F("development_id")],
         order_by=[F("run__facts_as_of").desc(), F("pk").desc()],

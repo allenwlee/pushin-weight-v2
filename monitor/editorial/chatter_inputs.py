@@ -65,6 +65,7 @@ def _selection_packet(run, cfg):
     prior = (
         OriginalContentRun.objects.filter(
             workflow_key=WORKFLOW,
+            scope_key=run.scope_key,
             discovery_state="complete",
             facts_as_of__lt=run.facts_as_of,
         )
@@ -82,6 +83,8 @@ def _selection_packet(run, cfg):
             for s in row.consideration_sources.all()
         ]
         evidence = [sources[identity] for identity in identities]
+        roles = {s.post_id or f"dossier-source:{s.dossier_source_id}": s.usage for s in row.consideration_sources.all()}
+        current_evidence = [source for source in evidence if roles[source["id"]] == "consideration"] if run.scope_key == "chatter:personalized-trends:v1" else evidence
         ref = str(row.development_id)
         candidates.append(
             {
@@ -89,13 +92,19 @@ def _selection_packet(run, cfg):
                 "subject_label": row.selection.get("subject", "Saved development"),
                 "discovery_note": row.selection.get("angle", ""),
                 "post_ids": identities,
-                "eligible": bool(identities),
+                "eligible": any(s.usage == "consideration" for s in row.consideration_sources.all()),
                 "required_release_refs": [str(row.development.event_dossier_id)]
                 if row.development.event_dossier_id
                 else [],
                 "evidence": evidence,
+                **({"original_headlines": row.selection.get("original_headlines", []),
+                    "source_identities": row.selection.get("source_identities", []),
+                    "source_usages": roles,
+                    "gathering": "ranking is a gathering lead; only supplied source passages are evidence"}
+                   if run.scope_key == "chatter:personalized-trends:v1" else {}),
                 "persistence": appearance_history(
-                    row.development, run.facts_as_of, observed_at=observed_at
+                    row.development, run.facts_as_of, observed_at=observed_at,
+                    lane="personalized-trends-v1" if run.scope_key == "chatter:personalized-trends:v1" else "semantic-v1"
                 ),
             }
         )
@@ -103,7 +112,7 @@ def _selection_packet(run, cfg):
             {
                 "measurement_ref": "measurement:" + ref,
                 "candidate_ref": ref,
-                **attention(evidence, previous),
+                **attention(current_evidence, previous),
             }
         )
         languages.append(
@@ -112,7 +121,7 @@ def _selection_packet(run, cfg):
                 "candidate_ref": ref,
                 "sources": [
                     {"source_id": s["id"], "language": s["source_language"]}
-                    for s in evidence
+                    for s in current_evidence
                 ],
             }
         )
@@ -149,6 +158,7 @@ def _selection_packet(run, cfg):
             ),
             "lookup_omitted": run.outcome.get("lookup_omitted", 0),
             "all_x_totals": "unknown",
+            **({"gathering": run.outcome.get("gathering")} if run.scope_key == "chatter:personalized-trends:v1" else {}),
         },
     }
     requested = run.outcome.get("history_coverage", {}).get("history_requests", [])

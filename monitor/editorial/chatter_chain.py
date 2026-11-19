@@ -121,15 +121,17 @@ def _incumbents():
     return selected
 
 
-def _history(cutoff):
-    rows = competition_board(cutoff)
+def _history(cutoff, *, lane="semantic-v1"):
+    rows = competition_board(cutoff, lane=lane)
+    scope = "chatter:personalized-trends:v1" if lane == "personalized-trends-v1" else SCOPE
+    stage = "trends-ranking-v1" if lane == "personalized-trends-v1" else "discovery"
     incumbents = _incumbents()
     by_development = {str(row.development_id): row for row in rows}
     by_development.update({str(row.development_id): row for row in incumbents.values()})
     recent = list(
         OriginalContentRun.objects.filter(
             workflow_key=WORKFLOW,
-            scope_key=SCOPE,
+            scope_key=scope,
             facts_as_of__lt=cutoff,
         )
         .only("pk", "facts_as_of", "discovery_state")
@@ -138,7 +140,7 @@ def _history(cutoff):
     discovery_states = {run.pk: run.discovery_state for run in recent}
     searches = []
     for call in OriginalContentCall.objects.filter(
-        run__in=recent, stage="discovery", state="completed"
+        run__in=recent, stage=stage, state="completed"
     ).only("response_payload", "run_id"):
         reply = call.response_payload or {}
         data = reply.get("data", {})
@@ -189,6 +191,14 @@ def _borrow(run, previous):
 
 @transaction.atomic
 def _consider(run, story, pitch, source_ids, kind, call, position=None):
+    if kind == "personalized_trend":
+        from .chatter_trends import read_ranked_batch
+
+        batch = read_ranked_batch(run.pk)
+        member = next((lead for lead in batch["leads"] if lead["rank"] == position), None)
+        if (call.pk != batch["rank_call_id"] or member is None
+                or pitch.get("headline_ids") != member["headline_ids"]):
+            raise ValueError("personalized trend membership mismatch")
     story = EditorialStory.objects.select_for_update().get(pk=story.pk)
     revision = (
         OriginalContent.objects.filter(story_id=story.pk).aggregate(n=Max("revision"))[
@@ -211,12 +221,18 @@ def _consider(run, story, pitch, source_ids, kind, call, position=None):
             "revision": revision,
             "consideration_state": "pending",
             "appearance_kind": kind,
-            "discovery_call": call if kind == "semantic_shortlist" else None,
+            "discovery_call": call if kind in {"semantic_shortlist", "personalized_trend"} else None,
             "shortlist_position": position,
             "selection": pitch,
         },
     )
-    if not created and kind == "semantic_shortlist" and row.appearance_kind != kind:
+    if not created and kind in {"semantic_shortlist", "personalized_trend"} and row.appearance_kind != kind:
+        if kind == "personalized_trend":
+            for source in row.consideration_sources.all():
+                identity = source.post_id or f"dossier-source:{source.dossier_source_id}"
+                if identity not in source_ids and source.usage == "consideration":
+                    source.usage = "background"
+                    source.save(update_fields=["usage"])
         row.appearance_kind, row.discovery_call, row.shortlist_position = (
             kind,
             call,
@@ -261,7 +277,12 @@ def run_chatter(envelope, *, cfg=None, transport=None, x_client=None, enqueue=en
         else:
             run, _ = reserve_due_slot(envelope["source_cycle_id"], datetime.fromisoformat(envelope["cutoff"]),
                                        cfg=cfg, purpose=envelope["credential_purpose"])
-        return discover_trends(run.pk, cfg=cfg, transport=transport)
+        result = discover_trends(run.pk, cfg=cfg, transport=transport)
+        if result["status"] in {"ranked", "empty"}:
+            from .chatter_gathering import gather_trends
+
+            return gather_trends(run.pk, cfg=cfg, x_client=x_client, enqueue=enqueue)
+        return result
     if not shared_storage():
         raise ValueError("Chatter workflow requires shared content storage")
     if envelope.get("schema_version") != 1 or envelope.get("dry_run") is not False:
@@ -333,7 +354,12 @@ def resume_chatter_discovery(
     from .chatter_trends import TRENDS_SCOPE, discover_trends
 
     if run.scope_key == TRENDS_SCOPE:
-        return discover_trends(run.pk, cfg=cfg, transport=transport)
+        result = discover_trends(run.pk, cfg=cfg, transport=transport)
+        if result["status"] in {"ranked", "empty"}:
+            from .chatter_gathering import gather_trends
+
+            return gather_trends(run.pk, cfg=cfg, x_client=x_client, enqueue=enqueue, resume=True)
+        return result
     configured = cfg is not None
     cfg = _saved_config(run, cfg)
     if cfg is None:
@@ -616,7 +642,7 @@ def select_chatter(run_id, *, cfg=None, transport=None, enqueue=enqueue):
         prior = (
             OriginalContentRun.objects.filter(
                 workflow_key=WORKFLOW,
-                scope_key=SCOPE,
+                scope_key=run.scope_key,
                 discovery_state="complete",
                 facts_as_of__lt=run.facts_as_of,
             )
@@ -776,7 +802,7 @@ def select_chatter(run_id, *, cfg=None, transport=None, enqueue=enqueue):
                 "decision_call_id": decision_call.pk,
                 "decision_mode": "audited_code_keep" if reuse else "model",
             }
-            if not selected and not any(
+            if not selected and not run.outcome.get("gathering_incomplete") and not any(
                 not row["eligible"] for row in payload["candidates"]
             ):
                 current.outcome["healthy_at"] = timezone.now().isoformat()

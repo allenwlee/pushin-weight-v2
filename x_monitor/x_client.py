@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any
 
@@ -402,41 +402,46 @@ class XClient:
     def _iter_search_pages(
         self,
         query: str,
-        max_results: int,
+        max_results: int | None,
         *,
-        max_pages: int = 5,
+        max_pages: int | None = 5,
         max_per_page: int = 20,
         since_time: int | None = None,
         cursor: str | None = None,
     ) -> Iterator[SearchPage]:
         """Yield normalized pages without fetching the next page early."""
 
-        n_returned = 0
-        for page_number in range(1, max(1, max_pages) + 1):
-            if n_returned >= max_results:
+        n_returned, page_number = 0, 0
+        seen_cursors = {cursor} if cursor else set()
+        seen_ids = set()
+        while max_pages is None or page_number < max(1, max_pages):
+            if max_results is not None and n_returned >= max_results:
                 return
+            page_number += 1
+            remaining = None if max_results is None else max_results - n_returned
             params: dict[str, Any] = {
                 "query": query,
                 "queryType": "Latest",
-                "limit": min(max_per_page, max_results - n_returned),
+                "limit": max_per_page if remaining is None else min(max_per_page, remaining),
             }
-            # NB: do NOT add a URL-side time-filter param here — TwitterAPI.io
-            # silently drops unknown URL params on advanced_search. The time
-            # floor is injected into the query string as an inline
-            # `since_time:<n>` operator, handled in run_search before we get
-            # here. See docs/debug/2026-07-14-160222-call-state-not-persisting.md
-            # for the API test that proved the URL-param form is ignored.
+            # Bounds belong inside the query: URL-side time parameters are ignored.
             if cursor:
                 params["cursor"] = cursor
             data = self._get(SEARCH_PATH, params)
-            page = search_page_from_response(
-                data, page_number=page_number, max_results=max_results - n_returned,
+            page = search_page_from_response(data, page_number=page_number, max_results=remaining)
+            ids = {identity for identity in page.raw_post_ids if identity}
+            stalled = page.has_more and (
+                page.next_cursor in seen_cursors or bool(ids) and ids <= seen_ids
             )
+            if stalled:
+                page = replace(page, continuation_invalid=True)
             n_returned += len(page.items)
+            seen_ids.update(ids)
             yield page
-            if n_returned >= max_results or not page.has_more or page.clipped:
+            if (max_results is not None and n_returned >= max_results) or not page.has_more or page.clipped or page.continuation_invalid:
                 return
             cursor = page.next_cursor
+            seen_cursors.add(cursor)
 
     def _walk_search(
         self,
@@ -507,10 +512,10 @@ class XClient:
     def run_search_pages(
         self,
         query: str,
-        max_results: int = 50,
+        max_results: int | None = 50,
         since: str | None = None,
         *,
-        max_pages: int = 5,
+        max_pages: int | None = 5,
         max_per_page: int = 20,
         since_time: int | None = None,
         until_time: int | None = None,
@@ -524,6 +529,9 @@ class XClient:
             since_time=since_time,
             until_time=until_time,
         )
+        from .queries import assert_under_length_cap
+
+        assert_under_length_cap(effective_query)
         return self._iter_search_pages(
             effective_query,
             max_results,

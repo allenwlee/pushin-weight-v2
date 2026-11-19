@@ -358,7 +358,7 @@ def test_compact_source_projection_has_closed_versioned_replay(fault):
     if fault == "extra":
         value["profile"] = {}
     elif fault == "version":
-        value["schema_version"] = 2
+        value["schema_version"] = 3
     elif fault == "missing":
         value.pop("tweets")
     elif fault == "missing_version":

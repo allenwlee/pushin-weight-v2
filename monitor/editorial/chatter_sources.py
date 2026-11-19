@@ -3,6 +3,8 @@
 import hashlib
 import json
 import re
+import time
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Literal
@@ -10,6 +12,8 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -74,6 +78,7 @@ class CompactPost(BaseModel):
     in_reply_to_username: str | None
     in_reply_to_user_id: str | None
     media_urls: list[str] = Field(max_length=8)
+    mentioned_account_ids: list[str] = Field(default_factory=list, max_length=100)
 
 
 class ProjectionGap(BaseModel):
@@ -84,7 +89,7 @@ class ProjectionGap(BaseModel):
 
 class CompactSourceReply(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     projection_kind: Literal["chatter-source-reply-v1"]
     tweets: list[CompactPost]
     gaps: list[ProjectionGap]
@@ -100,10 +105,12 @@ class CompactSourceReply(BaseModel):
 
 
 def compact_source_reply(rows, decoded):
+    from x_monitor.tweet_entities import mention_id
+
     from .evidence import safe_source_image
 
     selected, gaps = [], []
-    fields = set(CompactPost.model_fields) - {"quoted_created_at", "quoted_author_id", "quoted_media_urls", "media_urls"}
+    fields = set(CompactPost.model_fields) - {"quoted_created_at", "quoted_author_id", "quoted_media_urls", "media_urls", "mentioned_account_ids"}
     for index, raw in enumerate(rows):
         try:
             normalized = _normalize_tweet(raw)
@@ -112,6 +119,7 @@ def compact_source_reply(rows, decoded):
                     ("retweet_count", "retweetCount"), ("quote_count", "quoteCount")):
                 measured = raw.get(provider_key)
                 item[normalized_key] = measured if type(measured) is int and measured >= 0 else None
+            item["mentioned_account_ids"] = list(dict.fromkeys(identity for entry in (normalized.get("entities") or {}).get("user_mentions", []) if (identity := mention_id(entry))))[:100]
             quote = raw.get("quoted_tweet") or {}
             item["quoted_created_at"] = quote.get("createdAt") or quote.get("created_at")
             item["quoted_author_id"] = str((quote.get("author") or {}).get("id") or "") or None
@@ -123,8 +131,29 @@ def compact_source_reply(rows, decoded):
             selected.append(CompactPost.model_validate(item))
         except (ValueError, TypeError, AttributeError):
             gaps.append(ProjectionGap(ordinal=index))
-    return CompactSourceReply(schema_version=1, projection_kind="chatter-source-reply-v1", tweets=selected, gaps=gaps,
+    return CompactSourceReply(schema_version=2, projection_kind="chatter-source-reply-v1", tweets=selected, gaps=gaps,
         has_next_page=decoded.get("has_next_page"), next_cursor=decoded.get("next_cursor")).model_dump(mode="json")
+
+
+def compact_post_wire(row):
+    """Reconstitute only captured source fields for the existing normalizer."""
+    value = {"id": row["id"], "text": row["text"], "createdAt": row["created_at"], "lang": row["lang"],
+             "author": {"id": row["author_id"], "userName": row["author_handle"]},
+             "extendedEntities": row.get("extended_entities"),
+             "entities": {"user_mentions": [{"id_str": identity} for identity in row.get("mentioned_account_ids", [])]},
+             "isQuote": row["is_quote"], "isRetweet": row["is_retweet"], "isReply": row["is_reply"],
+             "inReplyToId": row["in_reply_to_id"], "inReplyToUserId": row["in_reply_to_user_id"],
+             "inReplyToUsername": row["in_reply_to_username"]}
+    for key, field in (("likeCount", "like_count"), ("replyCount", "reply_count"),
+                       ("retweetCount", "retweet_count"), ("quoteCount", "quote_count")):
+        if row[field] is not None:
+            value[key] = row[field]
+    if row["quoted_status_id"]:
+        value["quoted_tweet"] = {"id": row["quoted_status_id"], "text": row["quoted_text"],
+            "createdAt": row["quoted_created_at"],
+            "author": {"id": row["quoted_author_id"], "userName": row["quoted_author_handle"]},
+            "extendedEntities": {"media": [{"media_url_https": url} for url in row["quoted_media_urls"]]}}
+    return value
 
 
 class SourceSession:
@@ -144,11 +173,13 @@ class SourceSession:
                 "Chatter source calls require an explicit credential purpose"
             )
         self.run, self.cfg = run, cfg
+        self.started_monotonic = time.monotonic()
+        self.purpose = purpose
         self.ranked_lane = run.scope_key == "chatter:personalized-trends:v1"
         self._transport = transport or https_request
         self.policy_reader = policy_reader
         self.rates = load_pricing(repo_root=settings.BASE_DIR)
-        self.client = client or XClient.from_env(purpose)
+        self.client = client or (XClient(api_key="") if self.ranked_lane else XClient.from_env(purpose))
         self.client.max_retries = 0
         self.client.timeout_s = cfg.chatter.source_timeout_seconds
         self.client.max_response_bytes = 2_000_000
@@ -190,10 +221,10 @@ class SourceSession:
                 if mode == "recurring"
                 else "manual",
                 "interval_seconds": (3600 if self.ranked_lane else 900) if mode == "recurring" else None,
-                "max_requests": cfg.chatter.source_request_limit,
+                "max_requests": None if self.ranked_lane else cfg.chatter.source_request_limit,
                 "max_bytes": 8_000_000,
                 "max_seconds": 600,
-                "max_items": 200,
+                "max_items": None if self.ranked_lane else 200,
             },
         )
         self.last_receipt_at = None
@@ -338,6 +369,37 @@ class SourceSession:
         self.last_request, self.last_receipt_at = request, request.received_at
         return value
 
+    def search_pages(self, query):
+        """Replay exact captured requests through the shared paginator before new I/O."""
+        from x_monitor.twitterapi_credentials import require_twitterapi_api_key
+
+        original_get = self.client._get
+
+        def get(path, params):
+            endpoint = self.client.base_url + path + ("?" + urlencode(params) if params else "")
+            saved = list(self.captured_requests().filter(endpoint_url=endpoint))
+            if saved:
+                if len(saved) != 1 or saved[0].transport_outcome != "received" or saved[0].http_status != 200:
+                    raise BudgetHeld("saved source send requires reconciliation")
+                reply = self.captured_reply(saved[0])
+                if reply["gaps"]:
+                    raise ValueError("saved source projection has gaps")
+                return {"tweets": [compact_post_wire(row) for row in reply["tweets"]],
+                        "has_next_page": reply["has_next_page"], "next_cursor": reply["next_cursor"]}
+            if not self.client.api_key:
+                self.client.api_key = require_twitterapi_api_key(self.purpose)
+            return original_get(path, params)
+
+        self.client._get = get
+        try:
+            for page in self.client.run_search_pages(query, max_results=None, max_pages=None):
+                if self.last_receipt_at:
+                    page = replace(page, received_at=self.last_receipt_at, items=[
+                        {**item, "_api_received_at": self.last_receipt_at.isoformat()} for item in page.items])
+                yield page
+        finally:
+            self.client._get = original_get
+
     def scope(self, name, query=None, *, tool=False, start=None, end=None):
         query_row = save_query(query) if query else None
         call = OriginalContentCall.objects.filter(
@@ -366,6 +428,15 @@ class SourceSession:
         return scope
 
     def start(self, path, params):
+        if time.monotonic() - self.started_monotonic >= 600:
+            raise BudgetHeld("Chatter source execution deadline exhausted")
+        if self.ranked_lane:
+            used = CollectionRequest.objects.filter(attempt__run_id=self.claim.run_id).aggregate(total=Sum(Coalesce("response_bytes", 2_000_000)))["total"] or 0
+            remaining = 8_000_000 - used
+            if remaining <= 0:
+                raise BudgetHeld("Chatter source byte allowance exhausted")
+            self.client.max_response_bytes = min(2_000_000, remaining)
+            self.client.timeout_s = min(self.cfg.chatter.source_timeout_seconds, max(1, int(600 - (time.monotonic() - self.started_monotonic))))
         if self.policy_reader and not self.policy_reader().chatter.enabled:
             raise BudgetHeld("Chatter disabled before source dispatch")
         model = path == "https://api.x.ai/v1/responses"
@@ -393,7 +464,8 @@ class SourceSession:
                 ).exists():
                     raise BudgetHeld("saved source request already captured; replay required")
                 if (
-                    CollectionRequest.objects.filter(
+                    not self.ranked_lane
+                    and CollectionRequest.objects.filter(
                         attempt__run_id=self.claim.run_id
                     ).count()
                     >= self.cfg.chatter.source_request_limit
@@ -411,8 +483,13 @@ class SourceSession:
                     amount = admit(
                         self.cfg, self.cfg.chatter.source_request_reservation_usd
                     )
+                attempt = CollectionAttempt.objects.select_for_update().get(pk=self.claim.attempt_id)
+                if self.ranked_lane:
+                    # Reserve this admitted physical send, not a fixed page quota.
+                    attempt.reserved_requests = attempt.requests.count() + 1
+                    attempt.save(update_fields=["reserved_requests"])
                 request = begin_request(
-                    CollectionAttempt.objects.get(pk=self.claim.attempt_id),
+                    attempt,
                     scope,
                     endpoint_url=endpoint_url,
                     method="POST" if model else "GET",
@@ -568,13 +645,36 @@ class SourceSession:
                 defaults={"ordinal": 0, "observed_at": self.last_receipt_at},
             )
 
+    def source_items(self, items):
+        """Restore captured quote clocks/identities before qualification and ingestion."""
+        compact = {}
+        if self.ranked_lane and self.last_request and self.last_request.archive_id:
+            compact = {row["id"]: row for row in self.captured_reply(self.last_request)["tweets"]}
+        return [{**item, **compact.get(str(item.get("id") or ""), {})} for item in items]
+
     def ingest(self, items):
         from monitor.cycle import persist_x_post
 
         snapshot = self.run.__class__.objects.get(pk=self.run.pk).snapshot
         existing = validated_packet(snapshot)["sources"] if snapshot else {}
         projected = []
-        for item in items:
+        for item in self.source_items(items):
+            quote_id = item.get("quoted_status_id")
+            if self.ranked_lane and quote_id and item.get("quoted_text") and item.get("quoted_created_at"):
+                quote, _ = persist_x_post({
+                    "id": quote_id, "text": item["quoted_text"], "created_at": item["quoted_created_at"],
+                    "author_id": item.get("quoted_author_id") or "",
+                    "author_handle": item.get("quoted_author_handle") or "",
+                    "extended_entities": {"media": [{"media_url_https": url} for url in item.get("quoted_media_urls", [])]},
+                })
+                if quote and quote.pk not in existing and quote.text and quote.created_at and quote.created_at < self.run.facts_as_of:
+                    quote.refresh_from_db(fields=["native_author_id"])
+                    source = project_post(quote, receipt_at=self.last_receipt_at)
+                    source["images"] = item.get("quoted_media_urls", [])
+                    source["counters"].update({name: None for name in ("likes", "replies", "reposts", "quotes")})
+                    projected.append(source)
+                    existing[quote.pk] = source
+
             identity = str(item.get("id") or "")
             if identity in existing or not re.fullmatch(r"[0-9]{1,25}", identity):
                 continue
@@ -625,7 +725,13 @@ class SourceSession:
                 or post.created_at > self.run.facts_as_of
             ):
                 continue
+            if self.ranked_lane:
+                post.refresh_from_db(fields=["native_author_id"])
             source = project_post(post, receipt_at=self.last_receipt_at)
+            if self.ranked_lane:
+                source["images"] = [entry["media_url_https"] for entry in (item.get("extended_entities") or {}).get("media", []) if entry.get("media_url_https")]
+                if item.get("quoted_created_at") and source["quoted_post_id"] not in existing:
+                    source["stored_quote"] = ""
             source["counters"].update(
                 self.metric_presence.get(
                     identity,
