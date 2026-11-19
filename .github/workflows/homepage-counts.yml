@@ -62,7 +62,7 @@ jobs:
           tests/test_home_v22_feed_row_shape.py tests/test_home_v22_filter_pills.py
           tests/test_home_v22_topbar_layout.py tests/test_render_headline_topology.py
           tests/test_dashboard_each.py tests/test_dashboard_each_browser.py
-          tests/test_each_chart_facts.py tests/test_each_chart_facts_migrations.py
+          tests/test_each_chart_facts.py tests/test_each_chart_facts_migrations.py tests/test_each_chart_facts_grouped_build.py
           tests/test_each_request_budget.py tests/test_each_request_isolation.py
           tests/test_each_connection_budget.py tests/test_each_headline_browser.py
           tests/test_each_performance_fixture.py
