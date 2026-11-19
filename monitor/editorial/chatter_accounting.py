@@ -331,7 +331,7 @@ def call_once(run, stage, kind, ceiling, cfg, send, *, request_metadata=None):
         raise
     actual = completed_text_cost(reply, metadata)
     provenance = None
-    if stage == "trends-ranking-v1":
+    if metadata["provider"] == "openrouter.ai":
         # A token-rate calculation is an estimate, never a reported OpenRouter charge.
         from .graphics_generation import reported_cost_usd
 
