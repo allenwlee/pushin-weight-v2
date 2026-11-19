@@ -23,7 +23,8 @@ def replace_constraint(schema_editor, kinds):
         f'CHECK ("appearance_kind" IS NULL OR "appearance_kind" IN ({allowed})) NOT VALID',
     )
     try:
-        # This scan holds a writer-compatible lock in its own transaction.
+        # Forward validation scans with a writer-compatible lock. Reversal's
+        # outer transaction retains its fail-fast exclusive lock until commit.
         execute(
             'ALTER TABLE "original_content" VALIDATE CONSTRAINT "ck_oc_appearance_kind_next"'
         )
@@ -46,7 +47,16 @@ def forwards(apps, schema_editor):
 
 
 def backwards(apps, schema_editor):
-    replace_constraint(schema_editor, LEGACY_KINDS)
+    # A NOT VALID check already rejects new writes. Never commit the narrower
+    # guard before validation: cancellation must retain the wider constraint.
+    # Refuse active writers immediately and bound validation under this lock.
+    with transaction.atomic(using=schema_editor.connection.alias):
+        schema_editor.execute("SET LOCAL lock_timeout = '5s'")
+        schema_editor.execute("SET LOCAL statement_timeout = '5s'")
+        schema_editor.execute(
+            'LOCK TABLE "original_content" IN ACCESS EXCLUSIVE MODE NOWAIT'
+        )
+        replace_constraint(schema_editor, LEGACY_KINDS)
 
 
 class Migration(migrations.Migration):
