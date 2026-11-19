@@ -67,6 +67,7 @@ def test_shadow_scrub_preserves_dossier_sources_linked_to_catalog_observations()
     assert source.collection_observation_id == observation.pk
 
 
+@pytest.mark.django_db(transaction=True)
 def test_shadow_scrub_clears_login_accounts_without_erasing_correction_performers():
     from pathlib import Path
 
