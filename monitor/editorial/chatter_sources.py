@@ -321,7 +321,7 @@ class SourceSession:
 
     def captured_requests(self):
         """Saved compact evidence for gathering to replay before new I/O."""
-        return CollectionRequest.objects.filter(attempt__run_id=self.claim.run_id).select_related("archive").order_by("started_at", "pk")
+        return CollectionRequest.objects.filter(attempt__run_id=self.claim.run_id).select_related("archive", "attempt").order_by("started_at", "pk")
 
     def captured_reply(self, request):
         if (request.attempt.run_id != self.claim.run_id or request.archive is None
@@ -330,15 +330,13 @@ class SourceSession:
         value = CompactSourceReply.model_validate(read_document(request.archive)).model_dump(mode="json")
         if len(value["tweets"]) + len(value["gaps"]) != request.raw_count:
             raise ValueError("compact source projection count changed")
-        normalized = []
         for row in value["tweets"]:
             self.metric_presence[row["id"]] = {key: row[field] for key, field in (
                 ("likes", "like_count"), ("replies", "reply_count"), ("reposts", "retweet_count"), ("quotes", "quote_count"))}
             media = row.pop("media_urls")
             row["extended_entities"] = {"media": [{"media_url_https": url} for url in media]}
-            normalized.append(row)
         self.last_request, self.last_receipt_at = request, request.received_at
-        return {**value, "tweets": normalized}
+        return value
 
     def scope(self, name, query=None, *, tool=False, start=None, end=None):
         query_row = save_query(query) if query else None

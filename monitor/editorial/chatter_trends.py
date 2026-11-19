@@ -20,7 +20,7 @@ from django.db import transaction
 from django.utils import timezone
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
-from core.collection_capture import begin_request, finish_request, read_document
+from core.collection_capture import begin_request, finish_request
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import checkpoint_scope, claim_job, finish_run
 from core.models import (
@@ -41,7 +41,7 @@ from monitor.original_content import advisory_lock, digest, shared_storage
 from .chatter_accounting import admit, call_once
 from .chatter_history import WORKFLOW, locked_run, validated_packet
 from .config import EditorialConfig, load_editorial_config
-from .providers import json_call, request_payload
+from .providers import json_call, request_fingerprint, request_payload
 from .voices import load_bound_voices
 
 TRENDS_SCOPE = "chatter:personalized-trends:v1"
@@ -278,14 +278,15 @@ def _saved_observation(run, state):
     if receipt is None:
         raise ValueError("official observation missing")
     request = CollectionRequest.objects.select_related("archive", "attempt__run").get(pk=receipt.request_id)
+    body = bytes(request.archive.body) if request.archive is not None else None
     if (request.attempt.run.content_run_id != run.pk or request.endpoint_url != OFFICIAL_ENDPOINT
             or request.http_method != "GET" or request.request_config != "personalized-trends-v1"
             or request.transport_outcome != "received" or request.http_status != receipt.http_status
             or request.received_at != receipt.observed_at or request.archive is None
             or request.archive.content_sha256 != receipt.archive_sha256
-            or hashlib.sha256(bytes(request.archive.body)).hexdigest() != receipt.archive_sha256):
+            or hashlib.sha256(body).hexdigest() != receipt.archive_sha256):
         raise ValueError("official receipt ownership changed")
-    return request, read_document(request.archive) if receipt.http_status == 200 else None
+    return request, json.loads(body) if receipt.http_status == 200 else None
 
 
 def _official_job(run, state):
@@ -409,8 +410,9 @@ def read_ranked_batch(run_id):
         raise ValueError("official batch changed")
     cfg = EditorialConfig.model_validate(run.config_snapshot["editorial"])
     body = request_payload(cfg.chatter.ranking, ranking_request(headlines))
+    _, request_hash = request_fingerprint(body)
     call = OriginalContentCall.objects.get(pk=state.rank_call_id, run=run, stage=RANK_STAGE, state="completed")
-    if (call.request_packet != body or call.request_hash != hashlib.sha256(json.dumps(body, ensure_ascii=False).encode()).hexdigest()
+    if (call.request_packet != body or call.request_hash != request_hash
             or call.response_hash != digest(call.response_payload)):
         raise ValueError("saved ranking identity changed")
     reply = validate_rank_reply(call.response_payload)
@@ -482,10 +484,11 @@ def discover_trends(run_id, *, cfg=None, transport=None, official_get=None, toke
             return {"status": "empty", "run_id": run.pk}
         request = ranking_request(headlines)
         expected = request_payload(cfg.chatter.ranking, request)
+        _, request_hash = request_fingerprint(expected)
         prior = OriginalContentCall.objects.filter(run=run, stage=RANK_STAGE).first()
         if prior:
             if (prior.state != "completed" or prior.request_packet != expected
-                    or prior.request_hash != hashlib.sha256(json.dumps(expected, ensure_ascii=False).encode()).hexdigest()
+                    or prior.request_hash != request_hash
                     or prior.response_hash != digest(prior.response_payload)):
                 raise ValueError("ranking_send_requires_reconciliation")
             reply = validate_rank_reply(prior.response_payload)

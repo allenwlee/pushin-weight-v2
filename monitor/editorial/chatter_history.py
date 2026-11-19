@@ -264,7 +264,8 @@ def attach_sources(content, source_ids, *, fence, usage="consideration"):
     return existing
 
 
-def read_sources(content, *, usage=None):
+def read_source_memberships(content, *, usage=None):
+    """Return each frozen passage with the membership whose ownership was checked."""
     snapshot = OriginalContentRun.objects.values_list("snapshot", flat=True).get(pk=content.run_id)
     packet = {"sources": resolved_sources(snapshot)}
     source_refs = validated_packet(snapshot).get("source_refs", {})
@@ -282,8 +283,12 @@ def read_sources(content, *, usage=None):
         origin = source_refs.get(key, {}).get("run_id")
         if row.snapshot_run_id != origin:
             raise ValueError("consideration source owner mismatch")
-        result.append(source)
+        result.append((row, source))
     return result
+
+
+def read_sources(content, *, usage=None):
+    return [source for _, source in read_source_memberships(content, usage=usage)]
 
 
 @transaction.atomic

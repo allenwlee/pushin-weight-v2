@@ -1,7 +1,6 @@
 """One bounded Graphics phase at a time, resumed from persisted records."""
 
 import hashlib
-import json
 import os
 from decimal import Decimal
 from pathlib import Path
@@ -37,6 +36,7 @@ from monitor.trend_narrative_lifecycle import (
 from .config import load_editorial_config
 from .graphics_contracts import (
     bind_copy_contract,
+    copy_writer_route,
     load_pack,
     normalize_treatments,
     validate_copy_fact_ids,
@@ -61,6 +61,7 @@ from .persistence import (
     fail_graphics_presend_call,
     reserve_graphics_call,
 )
+from .providers import request_fingerprint, text_reservation
 
 
 def _owned(run, owner, fence):
@@ -75,9 +76,9 @@ def _stage_call(run_id, stage):
 
 def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport=None,
                     configured_daily_limit=None, references=(), expected_review=None):
-    body = json.dumps(request['body'], ensure_ascii=False)
+    encoded, request_hash = request_fingerprint(request['body'])
+    body = encoded.decode()
     packet = {'schema_version': 'graphics-request/v1', 'request_json': body}
-    request_hash = hashlib.sha256(body.encode()).hexdigest()
     if references:
         packet, request_hash = create_request_recipe(request['body'], references)
     is_image = stage in {'I-A', 'I-B'}
@@ -90,9 +91,7 @@ def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport
     }[route['endpoint']]
     ceiling = '0.15' if is_image else '0.25'
     if route:
-        input_cost = Decimal(len(body.encode()) + 1024) * Decimal(str(route['input_usd_per_million']))
-        output_cost = Decimal(route['max_output_tokens']) * Decimal(str(route['output_usd_per_million']))
-        ceiling = (input_cost + output_cost) / Decimal(1_000_000)
+        ceiling = text_reservation(copy_writer_route(route), encoded)
 
     def reserve(saved_packet, saved_hash):
         return reserve_graphics_call(
