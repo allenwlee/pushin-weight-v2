@@ -52,6 +52,17 @@ None.
 
 # Each dashboard saved counts, request isolation and chart presentation
 
+## Current execution status — 2026-11-20 03:20 JST
+
+Staging revision `1a842e821f0a0693f60a1f583faabdc9acdf9453` is deployed on all
+seven active services and its388,692-row saved view is published. **U8 staging
+validation has failed:** the actual concurrent refresh hit its90sstatement
+limit, and144successful chart responses measured p95=4.214s/max=8.909s versus
+required≤1.5s/<5s. Do not describe this as complete or promote it. The accepted
+visuals passed all six live width/locale cases. Full staging row-parity failed during a database recovery event; the bounded
+all-live matrix was left unperformed after that incident. Neither is passed.
+Production remains outside this task's authorization.
+
 ## Plain-English Summary
 
 **End state.** The `/dashboard/each` chart for any tracked model opens in about
@@ -1161,3 +1172,119 @@ passed70tests plus37subtests, including64requiredPG with0skips/errors. The
 against unchanged source identities, and the performance fixture remains byte
 identical to b86 with digest1bbef5ee...effafc3f. The new SQL regression is included
 in both continuous-integration and the candidate gate's focused test list.
+
+
+### Initial-fill budget interpretation and storage diagnosis (November20 JST)
+
+0234 is observed on all seven staging services at1a842e821f0a0693f60a1f583faabdc9acdf9453.
+Its initial REFRESH failed at90.395s; a second instrumented90.101s attempt also
+rolled back. The stored MV body itself executes in37.791s/388,692rows; binary
+serialization takes43.475s for about108MiB output. A transaction-local temporary
+heap took41.448s/105,914,368bytes; a task-owned durable diagnostic heap took
+68.781s/105,635,840bytes. Both diagnostic heap transactions were rolled back,
+leaving no additional table or source writes. This demonstrates substantial
+storage-path cost beyond SELECT; these sequential samples do not attribute
+all remaining time to one component. Wait samples show execution and IO; no
+index-progress samples were exposed, which alone does not prove index rebuild
+was never reached. No further algorithm variant is justified by these results.
+
+Contract correction: KTD2's initial-or-concurrent90s threshold triggers the
+grouped-build alternative, already applied. After that it explicitly retains
+CONCURRENTLY≤90s, as does U2. KTD6 uses a120sdefault; it does not impose a separate
+90sinitial maximum. The later execution note requiring initial/concurrent90s
+and the shared Each90sdefinition were stricter implementation assumptions, not
+an owner-selected initial service limit. Independent plan-contract review
+confirmed this reading. A staging-only operator call may therefore use120s
+**only while the MV is unpopulated**, through the same dataclass definition,
+advisory lock, source barrier, native REFRESH and atomic publication function.
+No persisted setting or product definition changes: normal Each maintenance
+remains90s. Measure actual initial duration, then execute actual concurrent
+refresh under90s and exact snapshot parity. A skipped refresh cannot pass;
+a concurrent timeout remains a failed gate and must be reported.
+
+
+### Staging close-out — November20 JST: deployed, validation failed
+
+Exact product revision **1a842e821f0a0693f60a1f583faabdc9acdf9453** is observed
+live on all seven active staging services. The feature and staging branches were
+both verified at that revision before this documentation-only close-out. The
+combined candidate retains G2's reviewed8a943b14 descendant and held trial state.
+This is a staging review deployment, **not completed U8 verification**. The plan's
+stop-on-failed-gate rule applies; do not promote or mark this run DONE.
+
+- Initial fill: **102.607570s**, within the separately bounded120s operator
+  bootstrap. Normal product maintenance remains90s.388,692rows occupy
+  138,665,984bytes including both indexes. Publication source/published generation
+  is0/0, clean; cutoff2026-11-18 09:00JST. Both source indexes, both MV indexes,
+  all32invalidation triggers and both serving SELECT grants were verified.
+- Actual concurrent refresh: **failed**. The database log identifies
+  `REFRESH MATERIALIZED VIEW CONCURRENTLY each_brand_post_facts` canceled by its
+  statement timeout at03:02:41.704JST. The comparison after that statement never
+  ran. No longer concurrent cap was attempted.
+- Real HTTPS: **144/144chart responses200** over Meta/DeepSeek,8tabs,7/30/365days,
+  Asia/Tokyo and3rounds. Median1.272s,p95=4.214s,max=8.909s; initial Meta page4.581s.
+  These **fail** p95≤1.5s/max<5s. The largest DeepSeek windows dominate the slow
+  cases. Cache/database state was not flushed; first-observed is not claimed to
+  be a guaranteed cold database. Existing staging review-clock configuration was
+  preserved. These are existing staging-data measurements, not production proof.
+- Live browser: **6/6cases passed** at1440/390px ×en/zh_cn/ja. Physical stacks,
+  exact payload values, colors, left legend, local pin/mode/unpin, no additional
+  chart requests and tracked Meta→NVIDIA ordering passed. Screenshots contain
+  chart/pills only. Background feed/demand requests were restricted, so this is
+  not a complete background-feed or external OAuth-flow test. An earlier probe
+  used unsupported`zh-cn`, causing locale mismatch; that failed artifact remains
+  retained. Canonical`zh_cn` passed without changing product code/assertions.
+- Authentication/recovery: existing owner reused, no account created. The short
+  test session was deleted and local policy file removed. Anonymous Each returns
+  302to`/accounts/login/`. Native web-role cold connection0.402s, forced timeout
+  0.061s with discard, fresh connection0.532s passed before the later DB incident.
+  No web WORKER TIMEOUT/Traceback matched03:03–03:10:42JST runtime logs; this
+  limited observation is not a future stability guarantee.
+
+**Staging database incident and remaining correctness evidence.** A separate
+read-only comparison of the published MV and original source used full row text
+and bidirectionalEXCEPTALL. At03:14:48.165JST PostgreSQL logged its backend3282239
+killed bysignal9; log continuation identifies this exact comparison query. All
+backend processes reinitialized, and the server accepted connections again at
+03:14:52.062JST (observed recovery window about3.9s). The logs do not explicitly
+report out-of-memory, so its cause remains unproven. No planned pause, manual
+restart, restore or resource change was performed. Production collection was
+not targeted. No further load test followed this incident.
+
+A fresh web-serving-role SELECT1/metadata check succeeded in0.183s afterward,
+with`pg_is_in_recovery=false`, MV populated and publication still0/0/clean.
+The diagnostic durable heap is absent; both earlier diagnostic heap transactions
+were rolled back. This proves readiness and persistence of the committed saved
+copy; it does **not** establish full source parity. Full staging row parity is
+**incomplete**, and the real all-live matrix is **unperformed** after the incident.
+Native normal/adversarial source parity still passes, but is not relabeled as a
+full388,692-row staging comparison.
+
+Fresh SQL/migration verification is70tests+37subtests,64required PostgreSQL
+executed/0skipped/0errors, with drift/lint/whitespace clean. The40Ollija tests
+passed. b86's full628test/303subtest/335requiredPG result, Each38/home5191 browser
+obligations and sealed performance attempt`ce78cbff83af62c6aec10a71` are reused
+only for byte-identical source/assets/dependencies/fixtures. They remain measured
+atb86, not at1a842e82. Target psycopg3.3.9/Django5.2.19 was used. The independent
+0234review has zero actionable findings and exact source hashes in
+`followup-signal-aggregation-review.json` beside the prior scoped receipts.
+
+Before continuation, inspect the actual concurrent refresh phases and worst
+365-day grouping queries with bounded measurements. Repair the failed refresh
+and latency gates without changing chart semantics. Redesign the full-cohort
+parity check to retain every row and20column attributes without repeating the
+failed heavy comparison; inspect its plan/resource requirements before execution.
+Then complete the serving-role all-live matrix and rerun affected acceptance
+checks. No claim is made that a hardware upgrade is required or authorized.
+
+Private evidence root:`.local/2026-11-19-each-saved-counts/`; authoritative aggregate
+receipt:`staging-closeout.json`, with live timings, browser evidence, database
+incident correlation and post-incident health. G2's run26/call3618, OAuth and held
+reservation were not modified. Staging harvest and synthesis remain suspended
+as found; no service, schedule or provider configuration changed. The owned
+local preview stopped; branch-specific fixture databases and the canonical
+staging worktree are retained for continuation. No production mutation occurred.
+
+This close-out is a documentation-only feature-branch commit. Staging stays at
+verified product revision1a842e82; failed acceptance checks do not authorize
+promotion or another deployment.
