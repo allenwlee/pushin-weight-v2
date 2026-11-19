@@ -116,6 +116,21 @@ def rewrite_home_html(payload: bytes) -> bytes:
     return rewritten.encode("utf-8")
 
 
+
+def inject_fixture_bootstrap(payload: bytes, bootstrap: bytes) -> bytes:
+    """Add declared fixture bytes before page scripts; leave raw shape measurable."""
+    if not isinstance(bootstrap, bytes) or not 0 < len(bootstrap) <= 16_384:
+        raise ValueError("fixture bootstrap must be bounded nonempty bytes")
+    source = bootstrap.decode("utf-8")
+    if "</script" in source.lower():
+        raise ValueError("fixture bootstrap contains a script closing tag")
+    if payload.count(b"<head>") != 1:
+        raise ValueError("fixture bootstrap requires exactly one head")
+    return payload.replace(
+        b"<head>", b'<head><script data-pw-performance-fixture-bootstrap>' + bootstrap + b"</script>", 1,
+    )
+
+
 def _loopback_origin(value: str) -> str:
     parsed = urlsplit(value)
     if parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.port is None:
@@ -137,9 +152,13 @@ class LocalPreviewServer:
         upstream_origin: str = UPSTREAM_ORIGIN,
         host: str = LISTEN_HOST,
         port: int = LISTEN_PORT,
+        fixture_bootstrap: bytes | None = None,
     ) -> None:
         if host != LISTEN_HOST:
             raise ValueError("local preview listener must bind 127.0.0.1")
+        if fixture_bootstrap is not None:
+            inject_fixture_bootstrap(b"<head></head>", fixture_bootstrap)
+        self.fixture_bootstrap = fixture_bootstrap
         self.assets = assets
         self.upstream_origin = _loopback_origin(upstream_origin)
         self._server = http.server.ThreadingHTTPServer((host, port), self._handler())
@@ -153,6 +172,7 @@ class LocalPreviewServer:
     def _handler(self) -> type[http.server.BaseHTTPRequestHandler]:
         assets = self.assets
         upstream_origin = self.upstream_origin
+        fixture_bootstrap = self.fixture_bootstrap
 
         class Handler(http.server.BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
@@ -211,6 +231,12 @@ class LocalPreviewServer:
                                 self.send_error(
                                     502, "local-preview home rewrite rejected"
                                 )
+                                return
+                        if fixture_bootstrap is not None and include_body and content_type.lower().startswith("text/html"):
+                            try:
+                                body = inject_fixture_bootstrap(body, fixture_bootstrap)
+                            except (UnicodeDecodeError, ValueError):
+                                self.send_error(502, "local-preview fixture bootstrap rejected")
                                 return
                         self.send_response(response.status)
                         for name in (

@@ -61,6 +61,16 @@
       "id": "harvest-coverage-seeder",
       "path": "tests/test_chart_harvest_coverage.py",
       "sha256": "fcf4f81a1702d00cc9377d682eadaa0123c9a5acd6d999b5f7d26ba01179b4fb"
+    },
+    {
+      "id": "ping-delay-bootstrap",
+      "path": "tests/fixtures/performance_assurance/ping-delay-bootstrap.js",
+      "sha256": "054b1e2f19d3ab329c90bf05a9224f742d38aa178960512c08006699b5e5fca7"
+    },
+    {
+      "id": "preview-transport",
+      "path": "tests/ui_assurance/local_preview.py",
+      "sha256": "7682162897688c0a8dfd8a82ea6d30045139f8b6c30278c91674122887697a3b"
     }
   ],
   "recipe": [
@@ -155,5 +165,23 @@
     "inputs": [
       "combined-seeder"
     ]
+  },
+  "fixture_bootstrap": {
+    "input": "ping-delay-bootstrap",
+    "sha256": "054b1e2f19d3ab329c90bf05a9224f742d38aa178960512c08006699b5e5fca7",
+    "transport_input": "preview-transport",
+    "injection": "Opted-in loopback HTML only: inline script as the first child of head, before deferred application scripts. Its added HTML, DOM node and execution cost remain in the measurement.",
+    "target": "CSSStyleDeclaration.prototype.setProperty(--pw-ping-delay, value, priority)",
+    "numeric_lexeme_width": 40,
+    "raw_max_characters": 42,
+    "maximum_numeric_digits": 40,
+    "phase_ms": [
+      -2250,
+      0
+    ],
+    "transformation": "Insert ASCII zeroes immediately after the original sign until the numeric lexeme has fixed width. Preserve every original mantissa/fraction/exponent character and ms suffix; require Object.is numeric equality, including negative zero.",
+    "other_calls": "Delegate all other property calls with original receiver, arguments, priority and return value.",
+    "invalid_input": "Remove documentElement and throw; declared interaction targets become unavailable.",
+    "unchanged": "No rounding, phase freezing, metric/guard rewriting, performance.now patch, animation disabling, or production asset change."
   }
 }

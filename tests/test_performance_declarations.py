@@ -153,7 +153,7 @@ def test_each_candidate_preserves_four_workloads_and_measures_rich_each_legend()
     seed_recipe = json.loads((root / each["fixture"]["path"]).read_text())
     assert seed_recipe["schema_version"] == "pushinweight.performance-seed/v1"
     inputs = {item["id"]: item for item in seed_recipe["inputs"]}
-    assert len(inputs) == len(seed_recipe["inputs"]) == 10
+    assert len(inputs) == len(seed_recipe["inputs"]) == 12
     assert {key: item["path"] for key, item in inputs.items()} == {
         "base-oracle": "docs/ideation/mockups/06-tier1-composed.v22-master.html",
         "base-fixture": "tests/golden/v22_mockup_fixture.json",
@@ -165,9 +165,22 @@ def test_each_candidate_preserves_four_workloads_and_measures_rich_each_legend()
         "general-seeder": "tests/general_helpers.py",
         "combined-seeder": "tests/each_performance_fixture.py",
         "harvest-coverage-seeder": "tests/test_chart_harvest_coverage.py",
+        "ping-delay-bootstrap": "tests/fixtures/performance_assurance/ping-delay-bootstrap.js",
+        "preview-transport": "tests/ui_assurance/local_preview.py",
     }
     for item in inputs.values():
         assert item["sha256"] == hashlib.sha256((root / item["path"]).read_bytes()).hexdigest(), item["path"]
+    bootstrap = seed_recipe["fixture_bootstrap"]
+    assert bootstrap["input"] == "ping-delay-bootstrap"
+    assert bootstrap["sha256"] == inputs["ping-delay-bootstrap"]["sha256"]
+    assert bootstrap["transport_input"] == "preview-transport"
+    assert bootstrap["target"] == "CSSStyleDeclaration.prototype.setProperty(--pw-ping-delay, value, priority)"
+    assert bootstrap["numeric_lexeme_width"] == bootstrap["maximum_numeric_digits"] == 40
+    assert bootstrap["raw_max_characters"] == 42
+    assert bootstrap["phase_ms"] == [-2250, 0]
+    assert "execution cost remain in the measurement" in bootstrap["injection"]
+    assert "Object.is" in bootstrap["transformation"] and "negative zero" in bootstrap["transformation"]
+    assert "Remove documentElement and throw" in bootstrap["invalid_input"]
     assert seed_recipe["entrypoint"] == {
         "call": "tests.each_performance_fixture.seed_each_performance_orm(now=captured_preview_seed_time)",
         "returns": "captured_preview_seed_time", "inputs": ["combined-seeder"],

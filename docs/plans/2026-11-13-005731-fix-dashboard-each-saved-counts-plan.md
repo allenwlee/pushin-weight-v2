@@ -935,3 +935,24 @@ test-clock condition are in `tests/fixtures/performance_assurance/each-seed.json
 Two PostgreSQL reader regressions passed, confirming ready content and unchanged
 helper defaults. No invalid attempt is labelled clean; the exact final candidate
 must still pass the unchanged repeated-shape and performance checks.
+
+The second attempt `11c62a604f2a1cc551ffcee9` truthfully remained invalid:
+polling stopped, but the homepage's existing live beacon serialized
+`performance.now()%2250` into five variable-length inline CSS values. Actual DOM
+captures isolated the remaining119,520→119,525byte difference to those values
+(with equal-width CSRF values). This was not an application latency finding.
+
+Independent review approved a declared, opt-in loopback fixture bootstrap that
+pads only `--pw-ping-delay` numeric text to a fixed width. It preserves every
+original digit/exponent and exact numeric value, including negative zero; it
+does not round, alter production assets, freeze metric clocks or stop animation.
+Other native CSS calls retain their receiver, priority and return. Unexpected
+input removes the fixture document and throws, so declared interactions fail.
+Two real-route browser tests plus six invalid-input subtests passed; computed
+delays matched native CSS, real animation/performance clocks advanced, and added
+visible text/elements still changed raw shape. Twenty-two stateless transport
+and declaration checks passed. The inline bootstrap overhead remains in the
+measurement. All twelve fixture input hashes and this condition are recorded;
+the original budgets, workloads and exact repeated-shape guard remain intact.
+The third repair attempt is the bounded final fixture repair round, not a pass
+until its actual performance result is clean.
