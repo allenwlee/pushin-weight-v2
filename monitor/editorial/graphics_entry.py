@@ -19,7 +19,7 @@ from monitor.original_content import (
 )
 
 from .chatter_history import WORKFLOW as CHATTER_WORKFLOW
-from .chatter_history import read_sources
+from .chatter_history import read_source_memberships
 from .graphics_contracts import copy_writer_route
 from .voices import Voice
 
@@ -97,12 +97,12 @@ def _chatter_evidence(content, run, locale):
             raise ValueError('invalid saved voice')
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError('invalid saved Chatter writer binding') from exc
-    sources = read_sources(content)
-    rows = list(content.consideration_sources.order_by('position'))
-    if not sources or not any(row.usage == 'consideration' for row in rows):
+    memberships = read_source_memberships(content)
+    if not memberships or not any(row.usage == 'consideration' for row, _ in memberships):
         raise ValueError('selected Chatter story lacks considered sources')
+    sources = [source for _, source in memberships]
     facts, identities = [], []
-    for number, (source, row) in enumerate(zip(sources, rows, strict=True), 1):
+    for number, (row, source) in enumerate(memberships, 1):
         created = source['created_at']
         if created is not None and parse_datetime(created) > run.facts_as_of:
             raise ValueError('selected source snapshot is beyond the evidence cutoff')

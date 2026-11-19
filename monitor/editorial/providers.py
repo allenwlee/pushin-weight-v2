@@ -173,10 +173,26 @@ def search_activity(decoded):
     return activity
 
 
+def request_fingerprint(body):
+    """Keep sent and reconstructed requests on the same UTF-8 wire format."""
+    encoded = json.dumps(body, ensure_ascii=False).encode()
+    return encoded, hashlib.sha256(encoded).hexdigest()
+
+
+def text_reservation(route, encoded, *, image_count=0):
+    input_bound = len(encoded) + 1024 + (
+        image_count * route.image_token_ceiling if route.vision else 0
+    )
+    return (
+        Decimal(input_bound) * Decimal(str(route.input_usd_per_million))
+        + Decimal(route.max_output_tokens) * Decimal(str(route.output_usd_per_million))
+    ) / Decimal(1_000_000)
+
+
 def json_call(assessment, stage, route, request, cfg, *, transport=None, reservation=None):
     transport = transport or https_request
     body = request_payload(route, request)
-    encoded = json.dumps(body, ensure_ascii=False).encode()
+    encoded, request_hash = request_fingerprint(body)
     schema_bytes = len(
         json.dumps(request.get("response_schema", {}), ensure_ascii=False).encode()
     )
@@ -185,19 +201,7 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None, reserva
     if len(encoded) > cfg.max_packet_bytes + cfg.max_schema_bytes + 30000:
         raise ValueError("provider input cap exceeded")
     # UTF-8 byte count conservatively bounds textual tokens, plus framing and image reserve.
-    input_bound = (
-        len(encoded)
-        + 1024
-        + (
-            len(request.get("images", [])) * route.image_token_ceiling
-            if route.vision
-            else 0
-        )
-    )
-    ceiling = (
-        Decimal(input_bound) * Decimal(str(route.input_usd_per_million))
-        + Decimal(route.max_output_tokens) * Decimal(str(route.output_usd_per_million))
-    ) / Decimal(1_000_000)
+    ceiling = text_reservation(route, encoded, image_count=len(request.get("images", [])))
     if route.endpoint == "https://api.x.ai/v1/responses":
         # Responses max_output_tokens excludes reasoning/tool tokens; it is not a cost cap.
         ceiling = Decimal(str(request["reservation_usd"]))
@@ -206,7 +210,7 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None, reserva
         raise ValueError("configured provider credential missing")
 
     diagnostics = {
-        "request_sha256": hashlib.sha256(encoded).hexdigest(),
+        "request_sha256": request_hash,
         "request_profile": route.request_profile,
         "timeout_seconds": route.timeout_seconds,
     }
@@ -366,7 +370,7 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None, reserva
         cfg,
         send,
         request_metadata={
-            "request_hash": hashlib.sha256(encoded).hexdigest(),
+            "request_hash": request_hash,
             "request_packet": body,
             "input_reference": request.get("input_reference"),
             "provider": urlsplit(route.endpoint).hostname,
