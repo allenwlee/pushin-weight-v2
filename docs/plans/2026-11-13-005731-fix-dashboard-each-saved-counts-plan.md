@@ -1106,3 +1106,58 @@ and insert comparisons meet the5%/2ms limits; language's relative figure exceeds
 5%, so this is not labelled a universal5% pass. Its measured absolute increase
 is27microseconds. These fixture results do not certify production throughput.
 Evidence: `cover-index-publish-overhead.json` in the private task evidence root.
+
+
+### Signal aggregation after the indexed staging refresh (November20 JST)
+
+Candidate `b86bcd6ab11e36224e58aa88ea9bc24869f8f2c2` passed628tests plus303subtests,
+including335required PostgreSQL checks with zero skips/errors. Each38 and
+homepage5191 browser obligations passed. Its exact sealed performance attempt
+`ce78cbff83af62c6aec10a71` is clean, using psycopg3.3.9/Django5.2.19 and fixture
+digest `1bbef5ee292b5939aa673bef3de69a123c886b6fcc0528979bee3648effafc3f`.
+All seven staging services reached b86; the actual initial Each refresh still
+expired at90.296959s. It rolled back and did not publish an empty copy.
+
+Both source indexes built online beforehand: cover23,846,912bytes and sparse
+wide8192bytes. At unchanged default memory the full indexed SELECT measured
+72.765789s for388,692rows. A scoped8MiB diagnostic measured71.086118s, only2.31%
+better, and was rejected; no product/global memory setting changed. No VACUUM,
+writer pause, provider request, resource upgrade or production mutation occurred.
+
+One further SQL variant was frozen before measurement, with acceptance requiring
+at least20% improvement and exact source/physical parity. It combines three
+signal aggregations and two joins into one grouped signal path. Singleton
+post-type and uniform raw-brand cases use min/max facts; multiple post types or
+mixed binary spellings retain the original ordered correlated logic. Blank,
+NULL, conflicting sentiment, case-insensitive identity and Unicode semantics
+remain exact. The ordinary authoritative source view and all other dimensions
+are unchanged. Two adversarial native cohorts have0missing/0extra rows with all
+20physical column attributes equal. At default memory and the natural planner,
+the same full staging cohort measured38.599240s (about47% faster). This is a
+SELECT measurement, not yet a successful REFRESH claim.
+
+Additive0234 freezes accepted SQLSHA256
+`44cc964d723f1224afb906288d2bbe92bc7ee209bf98c2d48179f17ee7435960` and uses0232's
+reviewed atomic MV replacement, publication withdrawal, owner/ACL preservation
+and two MV indexes. Reverse restores0233's exact body. No ordinary table, JSON
+column, model, runtime reader, UI asset, dependency or fixture input changes.
+Native migration/parity regressions and actual staging initial/concurrent90s
+refresh, full source comparison, HTTP and browser checks must verify this revision.
+
+Reuse b86's full UI and sealed performance evidence only while every named
+source identity, asset, dependency and fixture input remains byte-identical.
+That lab evidence remains explicitly measured at b86; do not relabel it with the
+0234 commit SHA or claim another full candidate gate ran. Fresh native and live
+staging evidence will bind the SQL migration and deployed revision. Evidence is
+under `.local/2026-11-19-each-saved-counts/` (private, untracked), including
+`staging-signal-variant.json`, `signal-variant-acceptance.json` and the native
+fixture parity report. Final activation remains pending until observed.
+
+
+0234 verification: the new native suite passed3/3 required PostgreSQL tests;
+the integrated facts, migration, index, dashboard and evidence-binding suite
+passed70tests plus37subtests, including64requiredPG with0skips/errors. The
+40Ollija workflow tests also passed. Each/General/Chatter declarations validate
+against unchanged source identities, and the performance fixture remains byte
+identical to b86 with digest1bbef5ee...effafc3f. The new SQL regression is included
+in both continuous-integration and the candidate gate's focused test list.

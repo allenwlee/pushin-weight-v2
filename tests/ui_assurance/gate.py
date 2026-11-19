@@ -39,6 +39,7 @@ FOCUSED_TESTS = [
     "tests/test_each_chart_facts_migrations.py",
     "tests/test_each_chart_facts_grouped_build.py",
     "tests/test_each_facts_cover_index.py",
+    "tests/test_each_signal_aggregation.py",
     "tests/test_chatter_pool_browser.py",
     "tests/test_dashboard_each.py",
     "tests/test_dashboard_each_browser.py",
