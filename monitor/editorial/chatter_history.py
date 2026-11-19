@@ -1,7 +1,7 @@
 """Frozen evidence, query versions and queryable Chatter consideration history."""
 
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Annotated, Literal
 
 from django.db import transaction
@@ -306,7 +306,7 @@ def save_query(text, *, development=None):
     return query
 
 
-def appearance_history(development, cutoff, *, periods=8, observed_at=None):
+def appearance_history(development, cutoff, *, periods=8, observed_at=None, lane="semantic-v1"):
     if type(periods) is not int or not 1 <= periods <= 96:
         raise ValueError("history period limit exceeded")
     # Keep the board anchored to its source cycle even when a queue crosses a
@@ -314,22 +314,35 @@ def appearance_history(development, cutoff, *, periods=8, observed_at=None):
     observed_at = observed_at or cutoff
     if observed_at < cutoff:
         raise ValueError("history observation precedes its cycle")
-    slots = [interval_start(cutoff) - timedelta(minutes=15 * index) for index in range(periods)]
+    if lane not in {"semantic-v1", "personalized-trends-v1"}:
+        raise ValueError("unknown Chatter history lane")
+    hourly = lane == "personalized-trends-v1"
+    scope, stage, kind = ("chatter:personalized-trends:v1", "trends-ranking-v1", "personalized_trend") if hourly else (SCOPE, "discovery", "semantic_shortlist")
+    anchor = cutoff.replace(minute=0, second=0, microsecond=0) if hourly else interval_start(cutoff)
+    slots = [anchor - timedelta(minutes=(60 if hourly else 15) * index) for index in range(periods)]
     runs = {run.interval: run for run in OriginalContentRun.objects.filter(
-        workflow_key=WORKFLOW, scope_key=SCOPE, interval__in=slots, facts_as_of__lte=cutoff,
+        workflow_key=WORKFLOW, scope_key=scope, interval__in=slots, facts_as_of__lte=cutoff,
     ).annotate(discovery_observed=Exists(OriginalContentCall.objects.filter(
-        run_id=OuterRef("pk"), workflow_key=WORKFLOW, stage="discovery",
+        run_id=OuterRef("pk"), workflow_key=WORKFLOW, stage=stage,
         state="completed", completed_at__lte=observed_at,
     )))}
     appearances = {row.run_id: row for row in OriginalContent.objects.filter(
         development=development, run_id__in=[run.pk for run in runs.values()],
         attempted_at__lte=observed_at, discovery_call__completed_at__lte=observed_at,
-        appearance_kind="semantic_shortlist", discovery_call__state="completed",
+        appearance_kind=kind, discovery_call__state="completed", discovery_call__stage=stage,
         discovery_call__run_id=F("run_id"), discovery_call__workflow_key=WORKFLOW,
     )}
     evidence, lower_bound, consecutive, known = [], 0, True, True
     for slot in slots:
         run = runs.get(slot)
+        if hourly and run and run.discovery_state == "complete" and run.discovery_observed:
+            from .chatter_trends import read_ranked_batch
+
+            try:
+                batch = read_ranked_batch(run.pk)
+                run.discovery_observed = datetime.fromisoformat(batch["observed_at"]) <= observed_at
+            except (ValueError, KeyError, OriginalContentCall.DoesNotExist):
+                run.discovery_observed = False
         state = "unknown"
         candidate = None
         if run and run.discovery_state == "complete" and run.discovery_observed:

@@ -66,7 +66,9 @@ class ChatterWorkflow(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     enabled: bool = False
     activated_at: AwareDatetime | None = None
+    discovery_lane: Literal["semantic-v1", "personalized-trends-v1"] = "semantic-v1"
     discovery: Route | None = None
+    ranking: Route | None = None
     selector: Route | None = None
     trial: ChatterTrial | None = None
     max_call_usd: float = Field(default=5, gt=0, le=20)
@@ -82,11 +84,20 @@ class ChatterWorkflow(BaseModel):
 
     @model_validator(mode="after")
     def validate_routes(self):
-        if self.enabled and any(
-            route is None or route.endpoint != "https://api.x.ai/v1/responses"
-            for route in (self.discovery, self.selector)
-        ):
-            raise ValueError("Chatter requires explicit Grok Responses discovery and selection routes")
+        if self.enabled:
+            required = (self.discovery, self.selector) if self.discovery_lane == "semantic-v1" else (self.selector,)
+            if any(route is None or route.endpoint != "https://api.x.ai/v1/responses" for route in required):
+                raise ValueError("Chatter requires explicit Grok Responses discovery and selection routes")
+            if self.discovery_lane == "personalized-trends-v1" and (
+                self.ranking is None
+                or self.ranking.endpoint != "https://openrouter.ai/api/v1/chat/completions"
+                or self.ranking.model != "openai/gpt-6-sol"
+                or self.ranking.reasoning != "medium"
+                or self.ranking.max_output_tokens != 8192
+                or self.ranking.request_profile is not None
+                or self.ranking.vision
+            ):
+                raise ValueError("personalized trends require the accepted GPT ranking route")
         if self.trial and self.trial.carry_usd > self.trial.limit_usd:
             raise ValueError("Chatter carry-forward exceeds trial allowance")
         return self

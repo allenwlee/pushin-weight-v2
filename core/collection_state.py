@@ -1008,7 +1008,19 @@ def checkpoint_scope(
         from core.collection_datasets import resolve_dataset
 
         if typed:
-            if scope_kind in {"chatter_search", "chatter_tool"}:
+            if scope_kind == "chatter_trends":
+                require(
+                    run.job.source_id == "x" and run.job.purpose == "content"
+                    and run.job.operation == "chatter_search" and run.content_run_id is not None
+                    and run.content_run.workflow_key == "chatter-discovery"
+                    and run.content_run.scope_key == "chatter:personalized-trends:v1"
+                    and run.job.definition.get("options", {}).get("workflow_version") == "personalized-trends-v1"
+                    and scope_key == "personalized-trends-v1"
+                    and ownership == {"content_run_id": run.content_run_id}
+                    and projection_contract is None and resource_observation is None,
+                    "personalized trends scope requires its sealed authored-run ownership",
+                )
+            elif scope_kind in {"chatter_search", "chatter_tool"}:
                 require(
                     run.job.source_id == "x" and run.job.purpose == "content"
                     and run.job.operation == "chatter_search" and run.content_run_id is not None
@@ -1016,10 +1028,19 @@ def checkpoint_scope(
                     and set(ownership) == {"query_id", "content_call_id"},
                     "Chatter scope requires its typed authored-run ownership",
                 )
+                call_stage = "discovery"
+                if run.content_run.scope_key == "chatter:personalized-trends:v1":
+                    from monitor.editorial.chatter_trends import read_ranked_batch
+
+                    batch = read_ranked_batch(run.content_run_id)
+                    require(ownership["content_call_id"] == batch["rank_call_id"],
+                            "Chatter source scope differs from saved ranking")
+                    call_stage = "trends-ranking-v1"
                 require(
                     type(ownership["content_call_id"]) is int
                     and OriginalContentCall.objects.filter(pk=ownership["content_call_id"],
-                        run_id=run.content_run_id, stage="discovery").exists()
+                        run_id=run.content_run_id, stage=call_stage,
+                        **({"state": "completed"} if call_stage == "trends-ranking-v1" else {})).exists()
                     and (ownership["query_id"] is None or type(ownership["query_id"]) is int
                          and SearchQuery.objects.filter(pk=ownership["query_id"], query_id__startswith="chatter:").exists()),
                     "Chatter scope query or call belongs to another execution",
