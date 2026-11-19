@@ -8,15 +8,30 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from django.db import connection
+from django.db import connection, transaction
 from django.db.migrations.loader import MigrationLoader
 
 from core.collection_jobs import register_job, set_job_state
 from core.collection_scheduling import collection_authority, take_collection_authority
 from core.models import DataSource
 from tests.collection_bridge_fixture import HASHES
+from tests.collection_document_fixtures import historical_models
 
-pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
+pytestmark = [
+    pytest.mark.requires_postgres,
+    pytest.mark.django_db(transaction=True),
+    pytest.mark.parametrize("migration_rehearsal_schema", [
+        ("core", "0114_collection_latest_attempt_pointer"),
+    ], indirect=True),
+]
+
+
+@pytest.fixture(autouse=True)
+def additive_deploy_schema(migration_rehearsal_schema):
+    # The0092 image was compatible with this additive rollout, before JSON
+    # retirement. Rehearse the real schema with each image's own ORM field set.
+    with historical_models():
+        yield
 
 
 @pytest.fixture
@@ -101,9 +116,8 @@ def test_copy_keeps_previous_dispatcher_authority_and_unrelated_metadata(previou
     source.metadata = {**source.metadata, "unrelated": {"preserve": True}}
     source.save(update_fields=["metadata"])
     migration = import_module("core.migrations.0106_collection_schedule_data")
-    from django.apps import apps
-
-    migration.forward(apps, SimpleNamespace(connection=connection))
+    with transaction.atomic():
+        migration.forward(DataSource._meta.apps, SimpleNamespace(connection=connection))
     source.refresh_from_db()
     assert previous.scheduling.collection_authority(source, "inventory:compat") == str(job.pk)
     assert collection_authority(source, "inventory:compat") == str(job.pk)
@@ -143,11 +157,10 @@ def copying_before_bridge_install():
 
 
 def replay_copy():
-    from django.apps import apps
-
-    import_module("core.migrations.0106_collection_schedule_data").forward(
-        apps, SimpleNamespace(connection=connection)
-    )
+    with transaction.atomic():
+        import_module("core.migrations.0106_collection_schedule_data").forward(
+            DataSource._meta.apps, SimpleNamespace(connection=connection)
+        )
 
 
 def test_final_copy_reconciles_a_legacy_takeover_during_build(previous):

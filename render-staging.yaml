@@ -191,6 +191,11 @@ services:
           type: worker
           name: pushinweight-staging-headlines
           envVarKey: OPENROUTER_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: OPENAI_API_KEY
       - key: XAI_API_KEY_PW
         fromService:
           type: worker
@@ -284,6 +289,11 @@ services:
           type: worker
           name: pushinweight-staging-headlines
           envVarKey: OPENROUTER_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: OPENAI_API_KEY
       - key: XAI_API_KEY_PW
         fromService:
           type: worker

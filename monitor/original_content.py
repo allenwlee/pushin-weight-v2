@@ -27,6 +27,33 @@ WORKFLOWS = {"chatter": "social-brief", "pulse": "development-report"}
 LOCALES = frozenset({"en", "zh-cn", "ja"})
 
 
+def chatter_pool(source_locale, editorial_group):
+    """Canonical database identity; publication language is a separate choice."""
+    locales = {"en": "en", "ja": "ja", "zh-cn": "zh-CN"}
+    source = locales.get(source_locale.casefold()) if isinstance(source_locale, str) else None
+    if source is None or editorial_group not in {"giant", "rest"}:
+        raise ValueError("invalid Chatter pool")
+    return source, editorial_group
+
+
+def featured_scope(workflow, locale, *, source_locale=None, editorial_group=None):
+    if source_locale is None and editorial_group is None:
+        return f"featured:{workflow}:{locale}"
+    if workflow != WORKFLOWS["chatter"]:
+        raise ValueError("only Chatter supports source pools")
+    source, group = chatter_pool(source_locale, editorial_group)
+    return f"featured:{workflow}:{source.casefold()}:{group}:{locale}"
+
+
+def publication_scope(content, locale):
+    pool = (
+        {"source_locale": content.source_locale_id, "editorial_group": content.editorial_group}
+        if content.source_locale_id is not None and content.editorial_group is not None
+        else {}
+    )
+    return featured_scope(content.workflow_key, locale, **pool)
+
+
 def shared_storage():
     mode = os.environ.get("ORIGINAL_CONTENT_STORAGE", "legacy")
     if mode not in {"legacy", "shared"}:
@@ -101,9 +128,16 @@ def citation_values(sources, *, legacy=False):
     values = []
     seen = set()
     for source in sources:
-        key = str(source.get("post_id") or source.get("id") or "")
-        key = key.removeprefix("x:")
-        if not key or key in seen:
+        dossier_id = source.get("dossier_source_id")
+        if dossier_id is not None:
+            if type(dossier_id) is not int or dossier_id < 1 or source.get("post_id"):
+                raise ValueError("invalid dossier citation identity")
+            post_id = None
+            key = ("dossier", dossier_id)
+        else:
+            post_id = str(source.get("post_id") or source.get("id") or "").removeprefix("x:")
+            key = ("post", post_id)
+        if (not dossier_id and not post_id) or key in seen:
             if key in seen:
                 continue
             raise ValueError("citation has no post identity")
@@ -111,7 +145,8 @@ def citation_values(sources, *, legacy=False):
         projected = any(k in source for k in ("original_text", "text", "excerpt"))
         values.append(
             {
-                "post_id": key,
+                "post_id": post_id,
+                "dossier_source_id": dossier_id,
                 "position": len(values),
                 "url_snapshot": safe_source_url(source.get("url")),
                 "author_label_snapshot": source.get("author_handle")
@@ -127,9 +162,19 @@ def citation_values(sources, *, legacy=False):
                 else "writing_packet",
             }
         )
-    found = set(Post.objects.filter(pk__in=seen).values_list("pk", flat=True))
-    if found != seen:
-        raise ValueError("missing cited posts: " + ",".join(sorted(seen - found)))
+    posts = {key for kind, key in seen if kind == "post"}
+    found = set(Post.objects.filter(pk__in=posts).values_list("pk", flat=True))
+    if found != posts:
+        raise ValueError("missing cited posts: " + ",".join(sorted(posts - found)))
+    dossiers = {key for kind, key in seen if kind == "dossier"}
+    if dossiers:
+        from core.models import EventDossierSource
+
+        found = set(EventDossierSource.objects.filter(
+            pk__in=dossiers, collection_observation__isnull=False
+        ).values_list("pk", flat=True))
+        if found != dossiers:
+            raise ValueError("dossier citation requires an existing document source")
     return values
 
 
@@ -138,6 +183,10 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
     with transaction.atomic():
         run = OriginalContentRun.objects.select_for_update().get(pk=content.run_id)
         row = OriginalContent.objects.select_for_update().get(pk=content.pk)
+        if row.run_id != run.pk:
+            raise ValueError("stale content owner")
+        if row.consideration_state is not None and (fence is None or legacy):
+            raise ValueError("new Chatter publication requires a current fence and producing call")
         if fence is not None and (
             run.fence != fence
             or run.execution_state != "running"
@@ -145,8 +194,16 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
             or run.lease_until <= timezone.now()
         ):
             raise ValueError("stale content fence")
-        if row.status != "prepared":
+        append_locale = (
+            row.workflow_key == WORKFLOWS["chatter"]
+            and row.consideration_state == "selected"
+            and row.development_id is not None
+            and row.status == "approved"
+        )
+        if row.status != "prepared" and not append_locale:
             raise ValueError("saved content is immutable")
+        if row.consideration_state is not None and row.consideration_state != "selected":
+            raise ValueError("only selected consideration can publish")
         locales = [text["locale"] for text in texts]
         if (
             not locales
@@ -165,6 +222,27 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
             values = citation_values(spec.get("sources", []), legacy=legacy)
             if row.workflow_key in WORKFLOWS.values() and not values:
                 raise ValueError("editorial output requires citations")
+            from monitor.editorial.graphics_chatter import source_for_run
+
+            source_owner = source_for_run(run) if run.workflow_key == "graphics-package" else None
+            if row.consideration_state is not None or source_owner is not None:
+                from monitor.editorial.chatter_history import read_sources
+
+                owner = source_owner or row
+
+                expected = {
+                    (source["post_id"], source["dossier_source_id"]): source
+                    for source in citation_values(read_sources(owner, usage=None if source_owner else "consideration"))
+                }
+                owners = {(source.post_id, source.dossier_source_id): (source.snapshot_run_id or owner.run_id) if source_owner else source.snapshot_run_id
+                          for source in owner.consideration_sources.all()}
+                for value in values:
+                    source = expected.get((value["post_id"], value["dossier_source_id"]))
+                    if source is None or any(
+                        source[key] != val for key, val in value.items() if key != "position"
+                    ):
+                        raise ValueError("citation does not match a considered source")
+                    value["snapshot_run_id"] = owners[(value["post_id"], value["dossier_source_id"])]
             producer = spec.get("producing_call")
             if not legacy:
                 if producer is None:
@@ -177,6 +255,26 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
                     or producer.kind != "text"
                 ):
                     raise ValueError("producing call does not match saved text")
+            existing = row.localized_texts.filter(locale=spec["locale"]).first()
+            if existing is not None:
+                source_fields = [
+                    "post_id", "dossier_source_id", "position", "url_snapshot",
+                    "author_label_snapshot", "source_hash", "hash_basis",
+                ]
+                if row.consideration_state is not None or source_owner is not None:
+                    source_fields.append("snapshot_run_id")
+                saved_sources = list(existing.sources.order_by("position").values(*source_fields))
+                if not append_locale or (
+                    existing.headline != spec["headline"]
+                    or existing.secondary != spec["byline"]
+                    or existing.body != spec.get("body", "")
+                    or existing.producing_call_id != producer.pk
+                    or existing.provenance != spec.get("provenance", {})
+                    or saved_sources != values
+                ):
+                    raise ValueError("saved content is immutable")
+                results.append(existing)
+                continue
             text = OriginalContentText.objects.create(
                 narrative=row,
                 locale=spec["locale"],
@@ -204,9 +302,10 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
                     setattr(row, f"secondary_{suffix}", text.secondary)
         row.save()
         if selected_scope:
+            expected_scope = publication_scope(row, results[0].locale)
             if (
                 len(results) != 1
-                or selected_scope != f"featured:{row.workflow_key}:{results[0].locale}"
+                or selected_scope != expected_scope
             ):
                 raise ValueError("invalid featured selection scope")
             advisory_lock("selection:" + selected_scope)

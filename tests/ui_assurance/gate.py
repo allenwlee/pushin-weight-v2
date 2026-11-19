@@ -9,12 +9,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests.ui_assurance.evidence import build_evidence
 from tests.ui_assurance.each import (
     EVIDENCE_PATH as EACH_EVIDENCE_PATH,
+)
+from tests.ui_assurance.each import (
     RUNTIME_PATH as EACH_RUNTIME_PATH,
+)
+from tests.ui_assurance.each import (
     assess_each_runtime,
 )
+from tests.ui_assurance.evidence import build_evidence
 
 ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE_RELATIVE_PATH = Path(".ollija/tmp/ui-assurance-evidence.json")
@@ -31,6 +35,7 @@ FOCUSED_TESTS = [
     "tests/test_each_connection_budget.py",
     "tests/test_each_request_isolation.py",
     "tests/test_each_headline_browser.py",
+    "tests/test_chatter_pool_browser.py",
     "tests/test_dashboard_each.py",
     "tests/test_dashboard_each_browser.py",
     "tests/test_each_assurance.py",

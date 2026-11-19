@@ -898,3 +898,19 @@ feed-poll counter, mock-wrapper evidence isolation, and concurrently revised
 performance fixture test. That run is not labelled green. The final combined
 candidate gate, exact staging SHA, view publication, scale measurements and
 staging browser proof are still pending; no deployment completion is claimed.
+
+### Staging integration checkpoint
+
+Local integration preserves G2 staging revision
+`d4c8d0769e88bdff4efbbe2e41e5c9cb625a1239` and current main alongside Each
+commit `7d15706e`. Empty migration `0231_merge_each_and_chatter` joins the
+existing staging0230 graph with Each0228; no peer migration is reversed.
+`makemigrations --check --dry-run` reports no changes. The combined backend
+suite passed137checks (required PostgreSQL85/skipped0/errors0). Five additional
+real caller tests passed for scheduled state-before-Post locking, repeated
+profile observation, shared Chatter source ingestion/quotes, and nonblocking
+cycle dispatch. All102X-client checks passed; relevant current-main functions
+are AST-identical after conflict resolution. Main's retry/translation handling
+and G2's credential/ingestion behavior are both retained. The merged gate keeps
+G2's Chatter browser tests as well as Each's new coverage. Staging is still held
+by G2 at this checkpoint; only the local feature branch has changed.

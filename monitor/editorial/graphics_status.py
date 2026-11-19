@@ -4,19 +4,16 @@ from core.models import (
     OriginalContent,
     OriginalContentCall,
     OriginalContentRun,
-    OriginalContentSelection,
 )
 from monitor.original_content import digest
+
+from .graphics_chatter import published_text
 
 
 def graphics_status(run_id):
     run = OriginalContentRun.objects.get(pk=run_id, workflow_key='graphics-package')
     content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
-    locale = run.snapshot['request']['locale']
-    selected = OriginalContentSelection.objects.filter(
-        scope_key=f'featured:{content.workflow_key}:{locale}', text__narrative__run=run,
-    ).select_related('text').first()
-    text = selected.text if selected else content.localized_texts.first()
+    text = published_text(run, content)
     call = OriginalContentCall.objects.filter(run=run, request_identity=f'graphics:{run.pk}:E1').first()
     skipped = run.decisions.get('graphics_skipped_stages', {})
     status = {'run_id': run.pk, 'execution_state': run.execution_state,

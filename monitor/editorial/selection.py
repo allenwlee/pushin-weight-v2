@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from .contracts import Decisions
+from .contracts import Decisions, filter_candidates
 from .grounding import GROUNDING_INSTRUCTIONS, validate_claim_audit, validate_support
 
 EDITOR_INSTRUCTIONS = (
@@ -106,6 +106,17 @@ def validate_decisions(raw, packet):
         if event.visual_essential and not event.source_image_url:
             raise ValueError("essential image unavailable")
     return result
+
+
+def validate_candidates(raw, packet):
+    """Salvage independent valid nominations without changing strict validators."""
+    def validate(entry):
+        return validate_decisions({"events": [entry]}, packet).events[0]
+
+    accepted, rejected = filter_candidates(
+        raw, validate, stage="validation", invalid_reason="invalid_candidate_evidence"
+    )
+    return Decisions(events=accepted), rejected
 
 
 def aged_priority(importance, occurred_at, now, cfg):

@@ -1,7 +1,6 @@
 """One bounded Graphics phase at a time, resumed from persisted records."""
 
 import hashlib
-import json
 import os
 from decimal import Decimal
 from pathlib import Path
@@ -21,13 +20,12 @@ from core.models import (
     OriginalContent,
     OriginalContentCall,
     OriginalContentRun,
-    OriginalContentSelection,
     PersonMedia,
     StaffMediaObject,
 )
 from core.staff_assets.graphics_references import read_graphics_references
 from core.staff_assets.media import store_image
-from monitor.original_content import WORKFLOWS, advisory_lock, digest
+from monitor.original_content import WORKFLOWS, digest, publication_scope
 from monitor.trend_narrative_lifecycle import (
     fail_trend_narrative_provider_call,
     mark_trend_narrative_provider_call_ambiguous,
@@ -35,7 +33,15 @@ from monitor.trend_narrative_lifecycle import (
 )
 
 from .config import load_editorial_config
+from .graphics_chatter import (
+    accounting_config,
+    published_text,
+    record_ready,
+    source_for_run,
+)
 from .graphics_contracts import (
+    bind_copy_contract,
+    copy_writer_route,
     load_pack,
     normalize_treatments,
     validate_copy_fact_ids,
@@ -58,8 +64,10 @@ from .persistence import (
     CapacityHeld,
     complete_graphics_call,
     fail_graphics_presend_call,
+    graphics_budget_lock,
     reserve_graphics_call,
 )
+from .providers import request_fingerprint, text_reservation
 
 
 def _owned(run, owner, fence):
@@ -74,20 +82,28 @@ def _stage_call(run_id, stage):
 
 def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport=None,
                     configured_daily_limit=None, references=(), expected_review=None):
-    body = json.dumps(request['body'], ensure_ascii=False)
+    encoded, request_hash = request_fingerprint(request['body'])
+    body = encoded.decode()
     packet = {'schema_version': 'graphics-request/v1', 'request_json': body}
-    request_hash = hashlib.sha256(body.encode()).hexdigest()
     if references:
         packet, request_hash = create_request_recipe(request['body'], references)
     is_image = stage in {'I-A', 'I-B'}
     per_run = run.config_snapshot['per_story_usd']
     daily = run.config_snapshot['daily_usd']
+    route = request.get('writer_route') if stage == 'C1' else None
+    provider = ('xai' if is_image else 'openrouter') if route is None else {
+        'https://openrouter.ai/api/v1/chat/completions': 'openrouter',
+        'https://api.openai.com/v1/chat/completions': 'openai',
+    }[route['endpoint']]
+    ceiling = '0.15' if is_image else '0.25'
+    if route:
+        ceiling = text_reservation(copy_writer_route(route), encoded)
 
     def reserve(saved_packet, saved_hash):
         return reserve_graphics_call(
             run=run, stage=stage, kind='media' if is_image else 'text', request_hash=saved_hash,
-            request_packet=saved_packet, provider='xai' if is_image else 'openrouter', model=request['body']['model'],
-            ceiling='0.15' if is_image else '0.25', owner=claim.owner, lease_seconds=160,
+            request_packet=saved_packet, provider=provider, model=request['body']['model'],
+            ceiling=ceiling, owner=claim.owner, lease_seconds=max(160, request['timeout'] + 20),
             workflow_key=content.workflow_key, per_run_limit=per_run, daily_limit=daily,
             configured_daily_limit=configured_daily_limit, review=stage == 'E1',
         )
@@ -113,11 +129,11 @@ def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport
                 name = storage.save(name, ContentFile(image))
         # Acquire the budget lock before the run lock, matching reservation order.
         with transaction.atomic():
-            advisory_lock(f'content-budget:editorial:{call.budget_day}')
+            graphics_budget_lock(call.budget_scope, call.budget_day)
             current = OriginalContentRun.objects.select_for_update().get(pk=run.pk)
             if not _owned(current, claim.owner, claim.fence):
                 return False
-            cost = reported_cost_usd('xai' if is_image else 'openrouter', usage)
+            cost = reported_cost_usd(provider, usage)
             completed = complete_graphics_call(call.pk, owner=claim.owner, fence=call.claim_fence,
                 response_hash=digest(payload), response_payload=payload, actual_usd=cost)
             if not completed:
@@ -236,7 +252,7 @@ def _save_sources(run, content, claim, discovery, search, credentials, configure
                 if not isinstance(group, dict) or group.get('query') != query or not isinstance(group.get('results'), list):
                     raise ValueError('Search result does not match reserved query')
                 with transaction.atomic():
-                    advisory_lock(f'content-budget:editorial:{call.budget_day}')
+                    graphics_budget_lock(call.budget_scope, call.budget_day)
                     current = OriginalContentRun.objects.select_for_update().get(pk=run.pk)
                     if not _owned(current, claim.owner, claim.fence):
                         raise ValueError('Search claim expired')
@@ -315,14 +331,19 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                  configured_daily_limit=None, search=None):
     """Advance one persisted phase without retrying a sent provider request."""
     owner = owner or f'graphics-{uuid4()}'
-    claim = claim_package(run_id, owner=owner, lease_seconds=180)
+    selected = OriginalContentRun.objects.get(pk=run_id).snapshot.get('request', {})
+    route = selected.get('writer_route')
+    lease_seconds = max(180, route['timeout_seconds'] + 40) if route else 180
+    claim = claim_package(run_id, owner=owner, lease_seconds=lease_seconds)
     if claim is None:
         return {'state': 'busy', 'next_action': None}
     try:
         run = OriginalContentRun.objects.get(pk=run_id)
         content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
         saved = run.snapshot['request']
+        early_copy = accounting_config(run) is not None
         pack = load_pack(Path(settings.BASE_DIR) / 'config/editorial_prompts/editorial-creative-roles-v1.json')
+        pack = bind_copy_contract(pack, saved['handoff'])
         credentials = os.environ if keys is None else keys
         config = load_editorial_config()
         if config.enabled:
@@ -332,11 +353,11 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
         if c1 is None:
             if 'C1' in run.decisions.get('graphics_skipped_stages', {}):
                 return {'state': 'unavailable', 'stage': 'C1', 'next_action': None}
-            key = credentials.get('OPENROUTER_API_KEY', '')
+            key = credentials.get(route['key_env'] if route else 'OPENROUTER_API_KEY', '')
             if not key:
                 _skip_stage(run, claim, 'C1', 'credential_unavailable')
                 return {'state': 'credential_unavailable', 'stage': 'C1', 'next_action': None}
-            request = build_text_request(pack, 'C1', saved['handoff'])
+            request = build_text_request(pack, 'C1', saved['handoff'], writer_route=route)
             try:
                 outcome = _run_text_stage(run, content, claim, 'C1', request, key, pack,
                                           transport=transport, configured_daily_limit=configured_daily_limit)
@@ -345,8 +366,12 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             except BudgetHeld:
                 _skip_stage(run, claim, 'C1', 'budget_or_capacity_unavailable')
                 return {'state': 'budget_or_capacity_unavailable', 'stage': 'C1', 'next_action': None}
-            return {'state': outcome['state'], 'stage': 'C1',
-                    'next_action': 'advance' if outcome['state'] == 'completed' else None}
+            result = {'state': outcome['state'], 'stage': 'C1',
+                      'next_action': 'advance' if outcome['state'] == 'completed' else None}
+            if outcome['state'] == 'completed' and early_copy:
+                text = _publish_chatter_copy(run, content, claim, pack)
+                result['text_id'] = text.pk
+            return result
         if c1.state != 'completed':
             return {'state': c1.state, 'stage': 'C1', 'next_action': None}
         if c1.response_hash != digest(c1.response_payload):
@@ -356,6 +381,12 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             validate_copy_fact_ids(c1.response_payload, saved['handoff']['fact_items'])
         except (SchemaValidationError, ValueError, TypeError, KeyError):
             return _invalid_saved(run, claim, 'C1', 'invalid_saved_response')
+        if early_copy:
+            if content.status == 'prepared':
+                _publish_chatter_copy(run, content, claim, pack)
+                content.refresh_from_db()
+            else:
+                record_ready(content.localized_texts.get(locale=saved['locale']))
         g0 = _stage_call(run_id, 'G0')
         if g0 is None and 'G0' in run.decisions.get('graphics_skipped_stages', {}):
             g0 = SimpleNamespace(state='skipped', response_payload={})
@@ -442,10 +473,12 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                 validate_stage_output(pack, 'G1', normalized)
             except (SchemaValidationError, ValueError, TypeError, KeyError):
                 return _invalid_saved(run, claim, 'G1', 'invalid_saved_response')
+        if early_copy and g1.state in {'failed', 'ambiguous', 'skipped'}:
+            _skip_stage(run, claim, 'I-A', 'treatment_unavailable')
         picture = ContentPicture.objects.filter(run=run, provenance__role='still',
             provenance__candidate_id='A', provenance__content_id=str(content.pk), state='complete').first()
         image_call = _stage_call(run_id, 'I-A')
-        if content.status == 'prepared' and g1.state == 'completed' and image_call is None and 'I-A' not in run.decisions.get('graphics_skipped_stages', {}):
+        if (content.status == 'prepared' or early_copy) and g1.state == 'completed' and image_call is None and 'I-A' not in run.decisions.get('graphics_skipped_stages', {}):
             key = credentials.get('XAI_API_KEY_PW', '')
             if key:
                 try:
@@ -462,9 +495,11 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                     outcome = {'state': 'budget_or_capacity_unavailable'}
                 if outcome['state'] in {'completed', 'failed', 'ambiguous'}:
                     return {'state': outcome['state'], 'stage': 'I-A', 'next_action': 'advance'}
+            if early_copy:
+                _skip_stage(run, claim, 'I-A', 'credential_or_budget_unavailable')
             # No credential or budget: publish the already saved copy below.
         if content.status == 'prepared':
-            scope = f'featured:{content.workflow_key}:{saved["locale"]}'
+            scope = publication_scope(content, saved['locale'])
             try:
                 with transaction.atomic():
                     text = publish_primary(content=content, producer=c1, pack=pack, sources=saved['sources'],
@@ -483,6 +518,12 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             return {'state': 'published', 'stage': 'publication', 'text_id': text.pk,
                     'next_action': 'advance' if fallback_due else ('video' if picture else 'review'),
                     'review_due': not fallback_due and not picture}
+        if early_copy and picture and picture.text_id is None:
+            text = content.localized_texts.get(locale=saved['locale'])
+            picture.text = text
+            picture.content_kind = 'chatter'
+            picture.content_id = str(text.public_id)
+            picture.save(update_fields=['text', 'content_kind', 'content_id'])
         failed_job = ContentPicture.objects.filter(run=run, provenance__schema_version='graphics-video-job/v1',
             provenance__candidate_id='A', state='failed').first()
         video_call = _stage_call(run_id, 'V1')
@@ -513,7 +554,7 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                 reserve_picture = ContentPicture.objects.filter(run=run, provenance__role='still',
                     provenance__candidate_id='B', provenance__content_id=str(content.pk), state='complete').first()
                 primary_text = content.localized_texts.get(locale=saved['locale'])
-                scope = f'featured:{content.workflow_key}:{saved["locale"]}'
+                scope = publication_scope(content, saved['locale'])
                 text = publish_fallback(primary_text=primary_text, failure_call=failure_call,
                     reserve_picture=reserve_picture, pack=pack, sources=saved['sources'],
                     selected_scope=scope, fence=claim.fence, video_job=failed_job if failure_call == video_call and failed_job else None)
@@ -528,6 +569,24 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
         release_package(run_id, owner=claim.owner, fence=claim.fence)
 
 
+def _publish_chatter_copy(run, content, claim, pack):
+    source_for_run(run)
+    producer = _stage_call(run.pk, 'C1')
+    try:
+        text = publish_primary(content=content, producer=producer, pack=pack,
+            sources=run.snapshot['request']['sources'],
+            selected_scope=publication_scope(content, run.snapshot['request']['locale']), fence=claim.fence)
+    except ValueError as exc:
+        if str(exc) != 'stale featured publication':
+            raise
+        # Retain immutable older copy for pinned/history readers, without changing
+        # the newer pool pointer when this package completes late.
+        text = publish_primary(content=content, producer=producer, pack=pack,
+            sources=run.snapshot['request']['sources'], fence=claim.fence)
+    record_ready(text)
+    return text
+
+
 def review_step(run_id, *, owner=None, keys=None, transport=None, configured_daily_limit=None):
     """Record one advisory review of the saved edition; never gate publication."""
     owner = owner or f'graphics-review-{uuid4()}'
@@ -540,8 +599,7 @@ def review_step(run_id, *, owner=None, keys=None, transport=None, configured_dai
             return {'state': 'waiting_for_media'}
         run = OriginalContentRun.objects.get(pk=run_id)
         content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
-        selected = OriginalContentSelection.objects.filter(scope_key=f'featured:{content.workflow_key}:{run.snapshot["request"]["locale"]}', text__narrative__run=run).select_related('text').first()
-        text = selected.text if selected else content.localized_texts.first()
+        text = published_text(run, content)
         if not text:
             return {'state': 'not_published'}
         prior = _stage_call(run_id, 'E1')
@@ -600,8 +658,7 @@ def pending_action(run_id):
     if 'attention' in run.decisions.get('graphics_skipped_stages', {}):
         return None
     content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
-    selected = OriginalContentSelection.objects.filter(scope_key=f'featured:{content.workflow_key}:{run.snapshot["request"]["locale"]}', text__narrative__run=run).select_related('text').first()
-    text = selected.text if selected else content.localized_texts.first()
+    text = published_text(run, content)
     if text is None:
         if 'C1' in run.decisions.get('graphics_skipped_stages', {}):
             return None
@@ -613,6 +670,19 @@ def pending_action(run_id):
             return None
         return {'action': 'advance'}
     skipped = run.decisions.get('graphics_skipped_stages', {})
+    if accounting_config(run) is not None:
+        for stage in ('G0', 'G1', 'I-A'):
+            call = _stage_call(run_id, stage)
+            if call is None and stage not in skipped:
+                return {'action': 'advance'}
+            if call and call.state not in {'completed', 'failed', 'ambiguous'}:
+                return None
+        if 'graphics_source_search' not in run.decisions:
+            return {'action': 'advance'}
+        still = ContentPicture.objects.filter(run=run, provenance__role='still',
+            provenance__candidate_id='A', state='complete').first()
+        if still and still.text_id is None:
+            return {'action': 'advance'}
     a_call = _stage_call(run_id, 'I-A')
     b_call = _stage_call(run_id, 'I-B')
     video_a = _stage_call(run_id, 'V1')

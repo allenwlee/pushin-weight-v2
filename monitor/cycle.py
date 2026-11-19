@@ -2091,6 +2091,11 @@ def _upsert_post(
     return post, created
 
 
+def persist_x_post(raw):
+    """Shared normalized Post/account ingestion for harvest and owned source lookups."""
+    return _upsert_post(raw, account=_upsert_account(raw))
+
+
 def _persist_attribution(
     post: Post,
     brand_ids: list[str],
@@ -5075,6 +5080,10 @@ class CycleRunner:
             f"-{uuid.uuid4().hex[:8]}"
         )
         started_at = cycle_started_at
+        # Queue at the original cycle start; slow collection must not consume
+        # Chatter's first-text deadline. Dispatch owns configuration/broker isolation.
+        from monitor.editorial.dispatch import dispatch_chatter_cycle
+        dispatch_chatter_cycle(run_id, cycle_started_wall, kind=self.cycle_kind, dry_run=self.dry_run)
         deadline = self.cfg.harvest.start_deadline()
         if self._cycle_started_monotonic is not None:
             deadline = self.cfg.harvest.start_deadline(monotonic=lambda: t0)

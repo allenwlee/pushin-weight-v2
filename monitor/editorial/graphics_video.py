@@ -19,7 +19,7 @@ from core.models import (
     OriginalContentSelection,
     OriginalContentText,
 )
-from monitor.original_content import WORKFLOWS, advisory_lock, digest
+from monitor.original_content import WORKFLOWS, advisory_lock, digest, publication_scope
 from monitor.trend_narrative_lifecycle import (
     fail_trend_narrative_provider_call,
     mark_trend_narrative_provider_call_ambiguous,
@@ -32,6 +32,7 @@ from .graphics_artifacts import (
     VIDEO_TERMINAL_FAILURES,
     validate_still,
 )
+from .graphics_chatter import accounting_config
 from .graphics_contracts import load_pack, normalize_treatments
 from .graphics_generation import (
     MAX_INPUT_BYTES,
@@ -63,18 +64,19 @@ def _store(storage=None):
 
 
 def _current(text):
-    scope = f'featured:{text.narrative.workflow_key}:{text.locale}'
+    scope = publication_scope(text.narrative, text.locale)
     pointer = OriginalContentSelection.objects.filter(scope_key=scope).first()
     return pointer is None or pointer.text_id == text.pk
 
 
-def _selected(run_id, text_id, storage):
+def _selected(run_id, text_id, storage, *, existing_job=False):
     text = OriginalContentText.objects.select_related('narrative__run').get(pk=text_id)
     if text.narrative.run_id != run_id or text.narrative.status != 'approved' or not text.public_id:
         raise ValueError('video requires published text in the selected run')
     source, candidate = _source_content(text)
     track = next((name for name, workflow in WORKFLOWS.items() if workflow == source.workflow_key), None)
-    if not track or not _current(text):
+    owns_saved_job = existing_job and accounting_config(text.narrative.run) is not None
+    if not track or (not owns_saved_job and not _current(text)):
         raise ValueError('video text is not the current selection')
     stills = []
     for picture in ContentPicture.objects.filter(run_id=run_id, text=text, content_kind=track,
@@ -262,7 +264,7 @@ def poll_video_job(picture_id, *, api_key=None, transport=https_request, fetch=N
     if not preview.text_id:
         raise ValueError('invalid pending video job')
     try:
-        text, source, candidate, track, still = _selected(preview.run_id, preview.text_id, storage)
+        text, source, candidate, track, still = _selected(preview.run_id, preview.text_id, storage, existing_job=True)
     except (ValueError, TypeError, KeyError, OSError):
         # Missing/corrupt input cannot justify another submission. Stop boundedly;
         # retaining the published text/still is safer than an endless poison poll.
@@ -350,11 +352,12 @@ def poll_video_job(picture_id, *, api_key=None, transport=https_request, fetch=N
         if current.state != 'pending' or current.poll_count != fence:
             return {'state': 'stale', 'job_id': str(current.pk), 'run_id': current.run_id, 'reschedule': False}
         current.poll_lease_until = None
-        scope = f'featured:{current.text.narrative.workflow_key}:{current.text.locale}'
+        scope = publication_scope(current.text.narrative, current.text.locale)
         advisory_lock('selection:' + scope)
         pointer = OriginalContentSelection.objects.select_for_update().filter(scope_key=scope).first()
         selected_still = ContentPicture.objects.select_for_update().get(pk=still.pk)
-        if ((pointer is not None and pointer.text_id != current.text_id)
+        owns_saved_job = accounting_config(source.run) is not None
+        if ((not owns_saved_job and pointer is not None and pointer.text_id != current.text_id)
                 or selected_still.state != 'complete' or selected_still.text_id != current.text_id
                 or (selected_still.generated_storage_name, selected_still.generated_sha256,
                     selected_still.provenance) != still_identity):
