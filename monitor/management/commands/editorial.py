@@ -144,7 +144,13 @@ class Command(BaseCommand):
                     stages = []
                     while pending:
                         stage, arguments = pending.pop(0)
-                        if stage == "select":
+                        if stage == "gather":
+                            from monitor.editorial.chatter_gathering import (
+                                gather_trends,
+                            )
+
+                            stages.append(gather_trends(*arguments, cfg=cfg, enqueue=queue))
+                        elif stage == "select":
                             stages.append(select_chatter(*arguments, cfg=cfg, enqueue=queue))
                         elif stage == "write":
                             stages.append(write_chatter(*arguments, cfg=cfg, enqueue=queue))

@@ -76,8 +76,16 @@ def test_observation_to_rank_gather_select_copy_still_video_and_advisory(
                         lambda **values: dispatches.append(values) or True)
     no_rank_resend = Mock(side_effect=AssertionError("saved ranking must be reused"))
     with django_capture_on_commit_callbacks(execute=True):
-        gathered = run_chatter(envelope_for(source_run), cfg=cfg, transport=no_rank_resend,
-                               enqueue=lambda *values: queued.append(values))
+        result = run_chatter(envelope_for(source_run), cfg=cfg, transport=no_rank_resend,
+                             enqueue=lambda *values: queued.append(values))
+    assert result["status"] == "gather_queued"
+    assert queued == [("gather", source_run.pk)]
+    monkeypatch.setattr("monitor.editorial.chatter_chain.load_editorial_config", lambda: cfg)
+    monkeypatch.setattr("monitor.editorial.chatter_chain.enqueue", lambda *values: queued.append(values))
+    stage, *arguments = queued.pop(0)
+    from monitor.tasks import chatter_stage
+    with django_capture_on_commit_callbacks(execute=True):
+        gathered = chatter_stage.run(stage, *arguments)
         assert queued == []
     assert gathered["status"] == "discovered"
     assert queued == [("select", source_run.pk)]

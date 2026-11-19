@@ -1,6 +1,7 @@
 """Ranked trends gather actual sources before the existing editorial selector."""
 
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -88,7 +89,8 @@ def test_recipe_uses_original_members_and_freezes_exact_window(ranked):
     recipe = compile_recipe(lead, run.facts_as_of)
     assert recipe["schema_version"] == 1
     assert recipe["original_headlines"] == ["Original headline 1"]
-    assert "invented" not in recipe["query"] and "999" not in recipe["query"]
+    search_terms = recipe["query"].split(" since_time:", 1)[0]
+    assert "invented" not in search_terms and "999" not in search_terms
     assert recipe["query"].endswith(
         f" since_time:{int((run.facts_as_of - timedelta(hours=24)).timestamp())} until_time:{int(run.facts_as_of.timestamp())}"
     )
@@ -129,7 +131,65 @@ def source_response(rows, *, more=False, cursor=None):
     )
 
 
-def test_shared_pagination_partial_prefix_quotes_and_saved_sibling(ranked, monkeypatch):
+@pytest.mark.parametrize("ranked", [1], indirect=True)
+@pytest.mark.parametrize("delayed_at", ["scope", "budget", "shorter_database_lease"])
+def test_source_finalization_headroom_is_rechecked_after_blocking_work(
+    ranked, monkeypatch, delayed_at,
+):
+    from core.models import (
+        CollectionAttempt,
+        CollectionRequest,
+        OriginalContentCall,
+        OriginalContentRun,
+    )
+    from monitor.editorial import chatter_sources
+    from monitor.editorial.chatter_accounting import spent
+    from monitor.editorial.chatter_gathering import compile_recipe
+    from monitor.editorial.chatter_sources import SourceSession
+    from monitor.editorial.chatter_trends import read_ranked_batch
+    from monitor.editorial.persistence import BudgetHeld
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient
+
+    run, cfg = ranked
+    recipe = compile_recipe(read_ranked_batch(run.pk)["leads"][0], run.facts_as_of)
+    client = XClient(api_key="fixture-only", max_retries=0)
+    send = Mock(return_value=source_response([]))
+    monkeypatch.setattr(client, "_get_bounded", send)
+    session = SourceSession(run, cfg, purpose=TwitterApiCredentialPurpose.ON_DEMAND, client=client)
+    attempt = CollectionAttempt.objects.get(pk=session.claim.attempt_id)
+    reserved_before = attempt.reserved_requests
+    spend_before = spent(cfg)
+    model_count_before = OriginalContentCall.objects.filter(run=run).count()
+    clock = [run.lease_until - timedelta(seconds=181)]
+    monkeypatch.setattr(chatter_sources, "timezone", SimpleNamespace(now=lambda: clock[0]))
+    if delayed_at == "shorter_database_lease":
+        clock[0] = timezone.now()
+        OriginalContentRun.objects.filter(pk=run.pk).update(
+            lease_until=clock[0] + timedelta(seconds=179))
+    else:
+        target = session if delayed_at == "scope" else chatter_sources
+        name = "scope" if delayed_at == "scope" else "admit"
+        original = getattr(target, name)
+
+        def delay(*args, **kwargs):
+            result = original(*args, **kwargs)
+            clock[0] = run.lease_until - timedelta(seconds=179)
+            return result
+
+        monkeypatch.setattr(target, name, delay)
+    with pytest.raises(BudgetHeld, match="source finalization headroom reached"):
+        next(session.search_pages(recipe["query"]))
+    send.assert_not_called()
+    assert not CollectionRequest.objects.filter(attempt__run_id=session.claim.run_id).exists()
+    attempt.refresh_from_db()
+    assert attempt.reserved_requests == reserved_before
+    assert spent(cfg) == spend_before
+    assert OriginalContentCall.objects.filter(run=run).count() == model_count_before
+
+
+@pytest.mark.parametrize("stop", ["timeout", "finalization"])
+def test_shared_pagination_partial_prefix_quotes_and_saved_sibling(ranked, monkeypatch, stop):
     from core.models import CollectionRequest
     from monitor.editorial.chatter_gathering import gather_trends
     from monitor.editorial.chatter_history import read_source_memberships
@@ -166,13 +226,18 @@ def test_shared_pagination_partial_prefix_quotes_and_saved_sibling(ranked, monke
             # All recipes are durably saved before the source request starts.
             run.refresh_from_db()
             assert len(run.outcome["gathering"]["leads"]) == 2
+            if stop == "finalization":
+                monkeypatch.setattr("monitor.editorial.chatter_sources.timezone", SimpleNamespace(
+                    now=lambda: run.lease_until - timedelta(seconds=179)))
             return source_response([raw], more=True, cursor="next")
         raise TimeoutError("fixture dropped second page")
 
     monkeypatch.setattr(client, "_get_bounded", response)
     result = gather_trends(run.pk, cfg=cfg, x_client=client)
     assert result["status"] == "discovered", result
-    assert len(seen) == 2 and seen[1]["cursor"] == "next"
+    assert len(seen) == (1 if stop == "finalization" else 2)
+    if stop == "timeout":
+        assert seen[1]["cursor"] == "next"
     assert "since_time:" in seen[0]["query"] and "until_time:" in seen[0]["query"]
     assert len(seen[0]["query"].encode()) <= 512
     rows = list(OriginalContent.objects.filter(run=run).order_by("shortlist_position"))
@@ -195,7 +260,7 @@ def test_shared_pagination_partial_prefix_quotes_and_saved_sibling(ranked, monke
         CollectionRequest.objects.filter(
             attempt__run__content_run=run, endpoint_url__contains="advanced_search"
         ).count()
-        == 2
+        == (1 if stop == "finalization" else 2)
     )
     assert (
         rows[0].selection["source_identities"][0]["release_evidence"]["state"]
@@ -308,10 +373,15 @@ def test_recipe_expands_saved_multiword_aliases_without_unrelated_brand_facts():
 
 
 @pytest.mark.parametrize("ranked", [1], indirect=True)
-def test_production_entry_continues_to_existing_six_pool_selector(ranked, monkeypatch, django_capture_on_commit_callbacks):
+@pytest.mark.parametrize("resume", [False, True])
+def test_production_entry_continues_to_existing_six_pool_selector(ranked, monkeypatch, django_capture_on_commit_callbacks, resume):
     import json
 
-    from monitor.editorial.chatter_chain import run_chatter, select_chatter
+    from monitor.editorial.chatter_chain import (
+        resume_chatter_discovery,
+        run_chatter,
+        select_chatter,
+    )
     from monitor.editorial.chatter_trends import envelope_for
     from tests.test_chatter_chain import wire
     from tests.test_chatter_discovery import selection
@@ -328,14 +398,22 @@ def test_production_entry_continues_to_existing_six_pool_selector(ranked, monkey
     queued = []
     ranker = Mock(side_effect=AssertionError("completed ranking must be reused"))
     with django_capture_on_commit_callbacks(execute=True):
-        result = run_chatter(
-            envelope_for(run),
+        result = (resume_chatter_discovery if resume else run_chatter)(
+            run.pk if resume else envelope_for(run),
             cfg=cfg,
             transport=ranker,
             enqueue=lambda *args: queued.append(args),
         )
-    assert result["status"] == "discovered", result
+    assert result["status"] == "gather_queued", result
     ranker.assert_not_called()
+    assert queued == ([("gather", run.pk, True)] if resume else [("gather", run.pk)])
+    assert not OriginalContent.objects.filter(run=run).exists()
+    monkeypatch.setattr("monitor.editorial.chatter_chain.load_editorial_config", lambda: cfg)
+    monkeypatch.setattr("monitor.editorial.chatter_chain.enqueue", lambda *args: queued.append(args))
+    stage, *arguments = queued.pop(0)
+    from monitor.tasks import chatter_stage
+    with django_capture_on_commit_callbacks(execute=True):
+        assert chatter_stage.run(stage, *arguments)["status"] == "discovered"
     assert queued == [("select", run.pk)]
     requests = []
 

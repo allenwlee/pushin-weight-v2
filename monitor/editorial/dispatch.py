@@ -223,9 +223,13 @@ def recover_chatter_starts(*, cfg=None, task=None, limit=4):
 def dispatch_chatter_stage(stage, *args):
     from monitor.tasks import chatter_stage
 
-    if stage not in {"select", "write", "review", "resume-discovery"}:
-        raise ValueError("unsupported Chatter stage")
-    priority = 0 if stage in {"select", "resume-discovery"} else 9 if stage == "review" else 3 if args[-1] == "en" else 6
+    priorities = {"select": 0, "resume-discovery": 0, "gather": 0, "review": 9}
+    if stage == "write":
+        priority = 3 if args[-1] == "en" else 6
+    else:
+        if stage not in priorities:
+            raise ValueError("unsupported Chatter stage")
+        priority = priorities[stage]
     transaction.on_commit(lambda: _send(chatter_stage, [stage, *args], priority=priority))
 
 
