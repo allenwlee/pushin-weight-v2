@@ -98,6 +98,115 @@ def spent(cfg):
     return total
 
 
+def linked_graphics_runs(run):
+    """Read only source-verified producing runs; caller JSON grants no link."""
+    from .graphics_chatter import source_for_run
+
+    linked = []
+    for package in OriginalContentRun.objects.filter(
+        workflow_key="graphics-package", snapshot__request__run_id=run.pk,
+    ).order_by("pk"):
+        source = source_for_run(package)
+        if source is None or source.run_id != run.pk:
+            raise ValueError("Graphics package does not belong to this Chatter run")
+        linked.append(package)
+    return linked
+
+
+def chatter_call_report(run_id):
+    """Report linked physical requests once, without treating estimates as bills."""
+    from .chatter_trends import OFFICIAL_ENDPOINT, _saved_observation, checkpoint
+    from .graphics_generation import reported_cost_usd
+
+    run = OriginalContentRun.objects.get(pk=run_id, workflow_key=WORKFLOW)
+    packages = linked_graphics_runs(run)
+    owners = [run.pk, *(package.pk for package in packages)]
+    counts = dict.fromkeys(("official_x", "official_x_refresh", "source", "ranker", "selector", "graphics"), 0)
+    totals = {key: Decimal(0) for key in ("billed_usd", "estimated_usd", "reserved_usd", "reserved_only_usd")}
+    unknown = reserved_only = 0
+    rows = []
+    model_ids = set()
+
+    def add(identity, category, physical, state, reservation, *, billed=None, estimate=None, **details):
+        nonlocal unknown, reserved_only
+        if physical:
+            counts[category] += 1
+            unknown += int(billed is None)
+        elif state == "reserved" and reservation is not None:
+            reserved_only += 1
+            totals["reserved_only_usd"] += reservation
+        if billed is not None:
+            totals["billed_usd"] += billed
+        else:
+            totals["reserved_usd"] += reservation or Decimal(0)
+        if estimate is not None:
+            totals["estimated_usd"] += estimate
+        rows.append({"identity": identity, "category": category, "physical": physical,
+            "state": state, "billing_state": "reported" if billed is not None else "estimated" if estimate is not None else "unknown" if physical else "reserved",
+            "billed_usd": str(billed) if billed is not None else None,
+            "estimated_usd": str(estimate) if estimate is not None else None,
+            "reserved_usd": str(reservation) if reservation is not None else None, **details})
+
+    for call in OriginalContentCall.objects.filter(run_id__in=owners).order_by("pk"):
+        model_ids.add(call.pk)
+        category = "graphics" if call.run_id != run.pk else "ranker" if call.stage == "trends-ranking-v1" else "selector"
+        billed = estimate = None
+        receipt = call.provenance.get("graphics_billing_receipt", {})
+        if receipt:
+            if (receipt.get("schema_version") != "graphics-billing-receipt/v1"
+                    or receipt.get("provider") != call.provider or receipt.get("unit") not in {"usd", "usd_ticks_1e-10"}):
+                raise ValueError("invalid saved Graphics billing receipt")
+            billed = Decimal(receipt["amount"])
+            if receipt["unit"] == "usd_ticks_1e-10":
+                billed /= Decimal(10_000_000_000)
+            money(billed)
+        elif call.provenance.get("billing_kind") == "reported":
+            payload = call.response_payload
+            if not isinstance(payload, dict) or call.response_hash != digest(payload):
+                raise ValueError("invalid saved Chatter billing response")
+            provider = "openrouter" if call.provider == "openrouter.ai" else call.provider
+            billed = reported_cost_usd(provider, {"cost": payload.get("usage", {}).get("provider_reported_cost_usd")})
+            if billed is None:
+                raise ValueError("missing saved Chatter reported charge")
+        elif call.actual_usd is not None:
+            # Older native responses store token-rate calculations in this
+            # column. Without a reported receipt these remain estimates.
+            estimate = call.actual_usd
+        elif call.provenance.get("estimated_usd") is not None:
+            estimate = money(call.provenance["estimated_usd"])
+        add(f"model:{call.pk}", category, call.sent_at is not None, call.state,
+            call.reserved_usd, billed=billed, estimate=estimate,
+            run_id=call.run_id, stage=call.stage, provider=call.provider)
+
+    requests = CollectionRequest.objects.filter(
+        Q(attempt__run__content_run_id__in=owners)
+        | Q(scope_uses__scope_run__run__content_run_id__in=owners)
+    ).filter(receipt_kind="physical").distinct().order_by("pk")
+    for request in requests:
+        if request.endpoint_url == "https://api.x.ai/v1/responses" and request.scope_run.content_call_id in model_ids:
+            # Native discovery mirrors the model transport in the collection
+            # ledger. Its OriginalContentCall already owns that physical send.
+            continue
+        official = request.endpoint_url == OFFICIAL_ENDPOINT
+        add(f"collection:{request.pk}", "official_x" if official else "source",
+            request.started_at is not None, request.transport_outcome, request.reserved_usd,
+            estimate=None if official else request.estimated_usd, endpoint=request.endpoint_url)
+
+    if run.scope_key == "chatter:personalized-trends:v1":
+        state = checkpoint(run)
+        if state.observation:
+            request, _ = _saved_observation(run, state)
+            for ordinal in range(state.observation.credential_refresh_requests):
+                add(f"official-refresh:{request.pk}:{ordinal + 1}", "official_x_refresh", True,
+                    "recorded_attempt", None)
+    counts["total"] = sum(counts.values())
+    return {"run_id": run.pk, "execution_state": run.execution_state, "outcome": run.outcome,
+        "graphics_run_ids": [package.pk for package in packages], "physical_calls": counts,
+        "charges": {**{key: str(value) for key, value in totals.items()},
+                    "unknown_charge_calls": unknown, "reserved_only_calls": reserved_only},
+        "calls": rows}
+
+
 def admit(cfg, ceiling):
     ceiling = money(ceiling)
     if ceiling <= 0 or ceiling > money(cfg.chatter.max_call_usd):

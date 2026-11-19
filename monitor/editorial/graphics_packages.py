@@ -85,13 +85,18 @@ def materialize_package(request):
             run=run, workflow_key=source.workflow_key, output_key='graphics-primary/v1',
             defaults={'subject_key': source.subject_key, 'story_id': source.story_id,
                       'revision': source.revision, 'occurred_at': source.occurred_at,
+                      'development_id': source.development_id, 'source_locale_id': source.source_locale_id,
+                      'editorial_group': source.editorial_group,
                       'importance': source.importance, 'fingerprint': source.fingerprint,
                       'brand_id': source.brand_id, 'brand_key_snapshot': source.brand_key_snapshot,
                       'selection': deepcopy(source.selection), 'status': 'prepared',
                       'attempted_at': source.attempted_at, 'provenance': provenance},
         )
         if not made and (output.story_id != source.story_id or output.provenance != provenance
-                         or output.selection != source.selection):
+                         or output.selection != source.selection
+                         or output.development_id != source.development_id
+                         or output.source_locale_id != source.source_locale_id
+                         or output.editorial_group != source.editorial_group):
             raise ValueError('existing Graphics output differs from selected story')
         return run, output
 

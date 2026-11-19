@@ -42,7 +42,7 @@ def ranked(monkeypatch, request):
 
 @pytest.mark.parametrize("ranked", [1], indirect=True)
 def test_saved_source_satisfies_lead_without_constructing_network_client(
-    ranked, monkeypatch
+    ranked, monkeypatch, django_capture_on_commit_callbacks
 ):
     def fail(run, stage, exc):
         raise exc
@@ -61,9 +61,10 @@ def test_saved_source_satisfies_lead_without_constructing_network_client(
     )
     client = Mock()
     queued = []
-    result = gather_trends(
-        run.pk, cfg=cfg, x_client=client, enqueue=lambda *args: queued.append(args)
-    )
+    with django_capture_on_commit_callbacks(execute=True):
+        result = gather_trends(
+            run.pk, cfg=cfg, x_client=client, enqueue=lambda *args: queued.append(args)
+        )
     assert result["status"] == "discovered", result
     row = OriginalContent.objects.get(run=run, appearance_kind="personalized_trend")
     assert row.discovery_call_id == run.outcome["trends"]["rank_call_id"]
@@ -307,7 +308,7 @@ def test_recipe_expands_saved_multiword_aliases_without_unrelated_brand_facts():
 
 
 @pytest.mark.parametrize("ranked", [1], indirect=True)
-def test_production_entry_continues_to_existing_six_pool_selector(ranked, monkeypatch):
+def test_production_entry_continues_to_existing_six_pool_selector(ranked, monkeypatch, django_capture_on_commit_callbacks):
     import json
 
     from monitor.editorial.chatter_chain import run_chatter, select_chatter
@@ -326,12 +327,13 @@ def test_production_entry_continues_to_existing_six_pool_selector(ranked, monkey
     )
     queued = []
     ranker = Mock(side_effect=AssertionError("completed ranking must be reused"))
-    result = run_chatter(
-        envelope_for(run),
-        cfg=cfg,
-        transport=ranker,
-        enqueue=lambda *args: queued.append(args),
-    )
+    with django_capture_on_commit_callbacks(execute=True):
+        result = run_chatter(
+            envelope_for(run),
+            cfg=cfg,
+            transport=ranker,
+            enqueue=lambda *args: queued.append(args),
+        )
     assert result["status"] == "discovered", result
     ranker.assert_not_called()
     assert queued == [("select", run.pk)]

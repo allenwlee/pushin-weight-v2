@@ -101,6 +101,7 @@ def _chatter_evidence(content, run, locale):
     if not memberships or not any(row.usage == 'consideration' for row, _ in memberships):
         raise ValueError('selected Chatter story lacks considered sources')
     sources = [source for _, source in memberships]
+    by_post = {row.post_id: (row, source) for row, source in memberships if row.post_id}
     facts, identities = [], []
     for number, (row, source) in enumerate(memberships, 1):
         created = source['created_at']
@@ -135,14 +136,28 @@ def _chatter_evidence(content, run, locale):
             ('local_parent', 'parent', 'P', 'parent_author_handle', 'parent_post_id'),
         ]:
             if source[field]:
-                facts.append({**common, 'fact_id': f'F{number:02}-{suffix}',
-                              'supporting_passage': source[field], 'speaker': source[speaker],
-                              'speaker_id': None,
-                              'attributed_post_id': source[post_id] or None, 'source_role': role,
-                              # Embedded evidence has no separate date in FrozenPacket.
-                              'created_at': None,
-                              'attribution_gaps': ['passage_date_unavailable']
-                              + ([] if source[speaker] else ['speaker_unavailable'])})
+                linked = by_post.get(source[post_id])
+                passage_matches = linked and linked[1]['original_text'].startswith(source[field])
+                speaker_conflict = linked and source[speaker] and linked[1]['author_handle'] and source[speaker].casefold() != linked[1]['author_handle'].casefold()
+                fact = {**common, 'fact_id': f'F{number:02}-{suffix}',
+                        'supporting_passage': source[field], 'speaker': source[speaker],
+                        'speaker_id': None, 'attributed_post_id': source[post_id] or None,
+                        'source_role': role, 'created_at': None,
+                        'attribution_gaps': ['passage_date_unavailable']
+                        + ([] if source[speaker] else ['speaker_unavailable'])}
+                if passage_matches and not speaker_conflict:
+                    owner, original = linked
+                    fact.update(source_kind=original['kind'], source_id=original['id'],
+                        source_post_id=owner.post_id, source_refs=[original['url']],
+                        snapshot_hash=owner.source_hash, snapshot_run_id=owner.snapshot_run_id,
+                        source_usage=owner.usage, observed_at=original['observed_at'],
+                        source_language=original['source_language'], created_at=original['created_at'],
+                        speaker=original['author_handle'], speaker_id=original['author_id'],
+                        attribution_gaps=([] if original['created_at'] else ['passage_date_unavailable'])
+                        + ([] if original['author_handle'] or original['author_id'] else ['speaker_unavailable']))
+                elif linked:
+                    fact['attribution_gaps'].append('linked_source_conflict')
+                facts.append(fact)
     return sources, facts, voice, route, {
         'schema_version': 'graphics-chatter-source/v1', 'source_content_id': content.pk,
         'source_run_id': run.pk, 'development_id': str(content.development_id),

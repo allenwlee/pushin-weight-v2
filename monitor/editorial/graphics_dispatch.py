@@ -43,8 +43,10 @@ def require_shared_media():
         if local:
             raise RuntimeError(f'Graphics shared media unavailable: {alias} uses local filesystem storage')
 
-def _enqueue(task, args, *, queue, countdown=0):
+def _enqueue(task, args, *, queue, countdown=0, limits=None):
     options = {'args': args, 'queue': queue, 'expires': 900, 'retry': False}
+    if limits:
+        options.update(limits)
     if countdown:
         options['countdown'] = countdown
     try:
@@ -55,9 +57,35 @@ def _enqueue(task, args, *, queue, countdown=0):
     return True
 
 
+def _creation_limits(run_id):
+    """Keep native C1 settlement inside its request and package leases."""
+    from core.models import OriginalContentCall, OriginalContentRun
+
+    from .graphics_contracts import copy_writer_route
+
+    snapshot = OriginalContentRun.objects.filter(
+        pk=run_id, workflow_key='graphics-package',
+    ).values_list('snapshot', flat=True).first()
+    route = (snapshot or {}).get('request', {}).get('writer_route')
+    if route is None:
+        return {}
+    call = OriginalContentCall.objects.filter(request_identity=f'graphics:{run_id}:C1').values(
+        'state', 'sent_at',
+    ).first()
+    if call and (call['state'] != 'reserved' or call['sent_at'] is not None):
+        return {}
+    timeout = copy_writer_route(route).timeout_seconds
+    # The saved C1 request claim lasts timeout+20s and its package timeout+40s.
+    # Leave settlement time after the provider deadline and before either lease.
+    return {'soft_time_limit': max(145, timeout + 10), 'time_limit': max(150, timeout + 15)}
+
+
 def dispatch_creation(*, run_id, content_id=None):
     from monitor.tasks import advance_graphics_package
 
+    limits = _creation_limits(run_id)
+    if limits:
+        return _enqueue(advance_graphics_package, [run_id], queue=CREATION_QUEUE, limits=limits)
     return _enqueue(advance_graphics_package, [run_id], queue=CREATION_QUEUE)
 
 
@@ -154,6 +182,12 @@ def _recovery_loop():
         while not _stop.is_set():
             try:
                 close_old_connections()
+                from .dispatch import recover_chatter_starts
+
+                try:
+                    recover_chatter_starts()
+                except Exception:
+                    logger.exception('Chatter start recovery scan failed')
                 reconcile_due()
             except Exception:
                 logger.exception('Graphics recovery scan failed')
