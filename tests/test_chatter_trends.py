@@ -57,7 +57,8 @@ def start(cfg):
 
 def discover(run, cfg, response=None, transport=None):
     from monitor.editorial.chatter_trends import discover_trends
-    store = SimpleNamespace(access_token=lambda: "fixture-only", revision=7, redactions=set())
+    store = SimpleNamespace(access_token=lambda: "fixture-only", check_access_expiry=lambda: None,
+                            revision=7, redactions=set())
     official = Mock(return_value=response or official_response())
     ranker = transport or Mock(return_value=rank_wire())
     return discover_trends(run.pk, cfg=cfg, official_get=official, token_store=store,
@@ -113,6 +114,79 @@ def test_official_archive_and_one_exact_rank_request_replay_without_credentials(
     monkeypatch.delenv("OPENROUTER_API_KEY")
     again, _, _ = discover(run, configured, transport=Mock(side_effect=AssertionError("resend")))
     assert again["status"] == "ranked" and official.call_count == ranker.call_count == 1
+
+
+def test_discovery_uses_the_encrypted_access_only_credential_without_refresh(configured, monkeypatch):
+    import time
+
+    from cryptography.fernet import Fernet
+
+    from core.official_company_credentials import OwnerTokenStore
+    from monitor.editorial.chatter_trends import discover_trends
+
+    monkeypatch.setenv("PUSHINWEIGHT_X_LIST_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("PUSHINWEIGHT_X_LIST_CLIENT_ID", "fixture-client")
+    monkeypatch.setenv("PUSHINWEIGHT_X_LIST_ACCESS_ONLY", "true")
+    monkeypatch.delenv("PUSHINWEIGHT_X_LIST_CLIENT_SECRET", raising=False)
+    OwnerTokenStore.from_env().provision(access_token="snapshot-access", expires_at=time.time() + 600)
+    run = start(configured)
+    official = Mock(return_value=official_response())
+    result = discover_trends(run.pk, cfg=configured, official_get=official, transport=Mock(return_value=rank_wire()))
+    assert result["status"] == "ranked", result
+    assert official.call_args.kwargs["headers"]["Authorization"] == "Bearer snapshot-access"
+    assert CollectionRequest.objects.get(attempt__run__content_run=run).http_status == 200
+
+
+@pytest.mark.parametrize("expires_during_preparation", [False, True])
+def test_expired_snapshot_stops_before_http_without_a_request_or_reservation(
+    configured, monkeypatch, expires_during_preparation,
+):
+    import time
+
+    from cryptography.fernet import Fernet
+
+    from core.models import CollectionRun, OfficialCompanyOwnerCredential
+    from core.official_company_credentials import OwnerTokenStore
+    from monitor.editorial import chatter_trends
+    from monitor.editorial.chatter_accounting import spent
+
+    monkeypatch.setenv("PUSHINWEIGHT_X_LIST_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("PUSHINWEIGHT_X_LIST_CLIENT_ID", "fixture-client")
+    monkeypatch.setenv("PUSHINWEIGHT_X_LIST_ACCESS_ONLY", "true")
+    monkeypatch.delenv("PUSHINWEIGHT_X_LIST_CLIENT_SECRET", raising=False)
+    expiry = time.time() + 600
+    OwnerTokenStore.from_env().provision(access_token="snapshot-access", expires_at=expiry)
+    owner = OfficialCompanyOwnerCredential.objects.get()
+    before = (bytes(owner.encrypted_tokens), owner.revision, owner.status, owner.updated_at)
+    clock = [expiry - 1 if expires_during_preparation else expiry + 1]
+    monkeypatch.setattr("core.official_company_credentials.time.time", lambda: clock[0])
+    if expires_during_preparation:
+        save = chatter_trends._save
+
+        def expire_after_request_preparation(*args, **kwargs):
+            result = save(*args, **kwargs)
+            if kwargs.get("phase") == "observing":
+                assert CollectionRequest.objects.filter(attempt__run__content_run=args[0]).exists()
+                clock[0] = expiry + 1
+            return result
+
+        monkeypatch.setattr(chatter_trends, "_save", expire_after_request_preparation)
+    run = start(configured)
+    prior_spend = spent(configured)
+    official, ranker = Mock(return_value=official_response()), Mock(return_value=rank_wire())
+    result = chatter_trends.discover_trends(run.pk, cfg=configured,
+                                           official_get=official, transport=ranker)
+    assert result == {"status": "held", "run_id": run.pk, "error_code": "owner_access_expired"}
+    official.assert_not_called()
+    ranker.assert_not_called()
+    assert not CollectionRequest.objects.filter(attempt__run__content_run=run).exists()
+    assert not CollectionRun.objects.filter(content_run=run).exists()
+    assert not OriginalContentCall.objects.filter(run=run).exists()
+    assert spent(configured) == prior_spend
+    owner.refresh_from_db()
+    assert (bytes(owner.encrypted_tokens), owner.revision, owner.status, owner.updated_at) == before
+    run.refresh_from_db()
+    assert run.outcome["trends"]["error_code"] == "owner_access_expired"
 
 
 @pytest.mark.parametrize("ids", [[1, 1], [1], [1, 3], [True, 2]])
@@ -232,7 +306,8 @@ def test_official_timeout_has_one_unknown_receipt_and_never_refetches(configured
     from monitor.editorial.chatter_trends import discover_trends
 
     run = start(configured)
-    store = SimpleNamespace(access_token=lambda: "fixture", revision=7, redactions=set())
+    store = SimpleNamespace(access_token=lambda: "fixture", check_access_expiry=lambda: None,
+                            revision=7, redactions=set())
     official = Mock(side_effect=TimeoutError("fixture uncertain official send"))
     assert discover_trends(run.pk, cfg=configured, token_store=store, official_get=official)["status"] == "held"
     assert discover_trends(run.pk, cfg=configured, token_store=store, official_get=official)["status"] == "held"
@@ -377,7 +452,8 @@ def test_scheduled_hours_reuse_one_job_with_distinct_execution_receipts(configur
 
     cfg = configured.model_copy(update={"chatter": configured.chatter.model_copy(update={"trial": None})})
     at = timezone.now().replace(minute=1, second=0, microsecond=0)
-    store = SimpleNamespace(access_token=lambda: "fixture", revision=7, redactions=set())
+    store = SimpleNamespace(access_token=lambda: "fixture", check_access_expiry=lambda: None,
+                            revision=7, redactions=set())
     official, ranker = Mock(return_value=official_response()), Mock(return_value=rank_wire())
     runs = []
     for offset in (0, 1):

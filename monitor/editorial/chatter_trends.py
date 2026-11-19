@@ -362,6 +362,7 @@ def _observe(run, state, *, token_store, official_get):
         request.reserved_usd = admit(run_config, run_config.chatter.source_request_reservation_usd)
         request.save(update_fields=["reserved_usd"])
         state = _save(run, state, phase="observing")
+        store.check_access_expiry()
     try:
         response = (official_get or requests.get)(OFFICIAL_ENDPOINT, headers={"Authorization": "Bearer " + token},
             params=OFFICIAL_PARAMS, timeout=20, allow_redirects=False, stream=True)
