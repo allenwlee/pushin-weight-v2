@@ -3,6 +3,7 @@
 import json
 import subprocess
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -20,7 +21,7 @@ from core.models import (
 )
 from monitor.editorial.chatter_chain import run_chatter, select_chatter
 from monitor.editorial.chatter_trends import envelope_for
-from monitor.editorial.config import load_editorial_config
+from monitor.editorial.config import EditorialConfig, load_editorial_config
 from monitor.editorial.graphics_packages import claim_package, release_package
 from monitor.editorial.graphics_pipeline import (
     advance_step,
@@ -44,8 +45,12 @@ from tests.test_graphics_chatter_adapter import copy_result
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
+@pytest.mark.parametrize("selector_provider,reported_cost", [
+    ("xai", None), ("openrouter", "0.12345"), ("openrouter", None),
+])
 def test_observation_to_rank_gather_select_copy_still_video_and_advisory(
     monkeypatch, editorial_storage, tmp_path, django_capture_on_commit_callbacks,
+    selector_provider, reported_cost,
 ):
     monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", "shared")
     monkeypatch.setenv("OPENROUTER_API_KEY", "fixture-only")
@@ -60,6 +65,10 @@ def test_observation_to_rank_gather_select_copy_still_video_and_advisory(
                    if not key.startswith("chatter:") or key == "chatter:en"},
         "locale_routes": {}, "public_enabled": True,
     })
+    if selector_provider == "openrouter":
+        cfg = cfg.model_copy(update={"chatter": cfg.chatter.model_copy(
+            update={"selector": cfg.chatter.ranking})})
+    cfg = EditorialConfig.model_validate(cfg.model_dump(mode="json"))
     source_run = start(cfg)
     ranked, official, ranker = discover(
         source_run, cfg, official_response(1), Mock(return_value=rank_wire(1)),
@@ -92,15 +101,36 @@ def test_observation_to_rank_gather_select_copy_still_video_and_advisory(
     no_rank_resend.assert_not_called()
 
     def selector(_url, _key, body, **_kwargs):
-        supplied = json.loads(body["input"][1]["content"])
+        messages = body["input"] if selector_provider == "xai" else body["messages"]
+        supplied = json.loads(messages[1]["content"])
         reply = selection(supplied["candidates"][0])
         reply["candidate_tags"][0].update(
             group_policy_ref=supplied["giant_group_policy"]["policy_ref"],
             group_evidence_post_ids=[post.pk],
         )
-        return wire(reply)
+        if selector_provider == "xai":
+            return wire(reply)
+        assert _url == cfg.chatter.ranking.endpoint and body["model"] == cfg.chatter.ranking.model
+        assert "tools" not in body and body["provider"]["allow_fallbacks"] is False
+        return 200, json.dumps({"model": body["model"], "choices": [{
+            "finish_reason": "stop", "message": {"content": json.dumps(reply)}}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 100,
+                      **({"cost": reported_cost} if reported_cost is not None else {})}}).encode()
 
     assert select_chatter(source_run.pk, cfg=cfg, transport=selector)["status"] == "selected"
+    if selector_provider == "openrouter":
+        from monitor.editorial.chatter_accounting import chatter_call_report
+
+        call = source_run.provider_calls.get(stage="selector:0")
+        reported = reported_cost is not None
+        assert call.actual_usd == (Decimal(reported_cost) if reported else None)
+        assert call.provenance["billing_kind"] == ("reported" if reported else "unknown")
+        receipt = next(row for row in chatter_call_report(source_run.pk)["calls"]
+                       if row.get("stage") == "selector:0")
+        assert receipt["billed_usd"] == (reported_cost if reported else None)
+        assert receipt["billing_state"] == ("reported" if reported else "estimated")
+        if not reported:
+            assert call.provenance["estimated_usd"] is not None
     output = OriginalContent.objects.get(output_key="graphics-primary/v1")
     package = output.run
     assert len(dispatches) == 1

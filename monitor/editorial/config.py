@@ -88,9 +88,15 @@ class ChatterWorkflow(BaseModel):
     @model_validator(mode="after")
     def validate_routes(self):
         if self.enabled:
-            required = (self.discovery, self.selector) if self.discovery_lane == "semantic-v1" else (self.selector,)
-            if any(route is None or route.endpoint != "https://api.x.ai/v1/responses" for route in required):
-                raise ValueError("Chatter requires explicit Grok Responses discovery and selection routes")
+            if self.discovery_lane == "semantic-v1":
+                if any(route is None or route.endpoint != "https://api.x.ai/v1/responses"
+                       for route in (self.discovery, self.selector)):
+                    raise ValueError("Chatter requires explicit Grok Responses discovery and selection routes")
+            elif self.selector is None or (
+                self.selector.endpoint != "https://api.x.ai/v1/responses"
+                and self.selector != self.ranking
+            ):
+                raise ValueError("Chatter selection route must use Grok or its accepted personalized ranking route")
             if self.discovery_lane == "personalized-trends-v1" and (
                 self.ranking is None
                 or self.ranking.endpoint != "https://openrouter.ai/api/v1/chat/completions"
