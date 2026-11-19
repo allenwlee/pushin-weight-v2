@@ -11,7 +11,7 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 import requests
@@ -65,7 +65,7 @@ class ClosedDocument(BaseModel):
 class Headline(ClosedDocument):
     headline_id: int = Field(ge=1)
     trend_name: str = Field(min_length=1, max_length=6000)
-    post_count: int | None = Field(default=None, ge=0)
+    post_count: Annotated[int, Field(ge=0)] | Annotated[str, Field(min_length=1, max_length=80)] | None = None
     category: str | None = None
     trending_since: str | None = None
 
