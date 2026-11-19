@@ -113,6 +113,17 @@ def linked_graphics_runs(run):
     return linked
 
 
+def _model_category(call, source_run_id):
+    if call.run_id != source_run_id:
+        return "graphics"
+    if re.fullmatch(r"selector:[0-9]+", call.stage):
+        return "selector"
+    if re.fullmatch(r"writer:[1-9][0-9]*:[a-zA-Z-]+", call.stage):
+        return "writer"
+    return {"trends-ranking-v1": "ranker", "discovery": "discovery",
+            "advisory": "review", "review": "review"}.get(call.stage, "other_model")
+
+
 def chatter_call_report(run_id):
     """Report linked physical requests once, without treating estimates as bills."""
     from .chatter_trends import OFFICIAL_ENDPOINT, _saved_observation, checkpoint
@@ -149,7 +160,8 @@ def chatter_call_report(run_id):
 
     for call in OriginalContentCall.objects.filter(run_id__in=owners).order_by("pk"):
         model_ids.add(call.pk)
-        category = "graphics" if call.run_id != run.pk else "ranker" if call.stage == "trends-ranking-v1" else "selector"
+        category = _model_category(call, run.pk)
+        counts.setdefault(category, 0)
         billed = estimate = None
         receipt = call.provenance.get("graphics_billing_receipt", {})
         if receipt:

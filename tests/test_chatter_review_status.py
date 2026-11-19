@@ -16,7 +16,7 @@ from monitor.editorial.chatter_sources import SourceSession
 from tests.test_chatter_accounting import metadata
 from tests.test_chatter_review_recovery import selected_package
 from tests.test_chatter_trends import configured as configured  # noqa: PLC0414
-from tests.test_original_content_consideration import producer
+from tests.test_original_content_consideration import consideration, producer
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
@@ -78,3 +78,38 @@ def test_status_refuses_a_forged_producing_link(configured):
     package.save(update_fields=["snapshot"])
     with pytest.raises(ValueError):
         chatter_call_report(run.pk)
+
+
+def test_default_status_classifies_saved_legacy_model_stages_without_inflating_selectors(configured, monkeypatch):
+    sources = [consideration(), consideration()]
+    sends = []
+    for source in sources:
+        for stage in ("discovery", "selector:0", f"writer:{source.pk}:en", "advisory", "future-stage"):
+            send = Mock(return_value={"data": {}, "usage": {"estimated_cost": "0.012"}})
+            call_once(source.run, stage, "text", 1, configured, send, request_metadata=metadata())
+            # Reading completed native work must keep the same physical identity.
+            call_once(source.run, stage, "text", 1, configured, send, request_metadata=metadata())
+            sends.append(send)
+    monkeypatch.setattr("monitor.management.commands.editorial.load_editorial_config", lambda: configured)
+    stdout = StringIO()
+    call_command("editorial", "status", stdout=stdout)
+    reports = {report["run_id"]: report for report in json.loads(stdout.getvalue())["chatter"]}
+    assert reports.keys() == {source.run_id for source in sources}
+    for source in sources:
+        report = reports[source.run_id]
+        by_stage = {row["stage"]: row["category"] for row in report["calls"]}
+        assert by_stage == {
+            "discovery": "discovery", "selector:0": "selector",
+            f"writer:{source.pk}:en": "writer", "advisory": "review", "future-stage": "other_model",
+        }
+        assert report["physical_calls"] == {
+            "official_x": 0, "official_x_refresh": 0, "source": 0,
+            "ranker": 0, "selector": 1, "graphics": 0,
+            "discovery": 1, "writer": 1, "review": 1, "other_model": 1, "total": 5,
+        }
+        assert Decimal(report["charges"]["billed_usd"]) == 0
+        assert Decimal(report["charges"]["estimated_usd"]) == Decimal("0.06")
+        assert Decimal(report["charges"]["reserved_usd"]) == 5
+        assert report["charges"]["unknown_charge_calls"] == 5
+        assert report["charges"]["reserved_only_calls"] == 0
+    assert all(send.call_count == 1 for send in sends)
