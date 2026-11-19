@@ -5,13 +5,20 @@ import json
 import re
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Literal
 from urllib.parse import urlencode
 
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from core.collection_capture import begin_request, finish_request
+from core.collection_capture import (
+    archive_document,
+    begin_request,
+    finish_request,
+    read_document,
+)
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import checkpoint_scope, claim_job, fenced_run, finish_run
 from core.models import (
@@ -28,7 +35,7 @@ from monitor.original_content import digest
 from scripts.harvest_cost.pricing import load_pricing, rates_to_dict
 from x_monitor.provider_http import https_request
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
-from x_monitor.x_client import XClient
+from x_monitor.x_client import XClient, _normalize_tweet
 
 from .chatter_accounting import admit, money
 from .chatter_history import (
@@ -39,6 +46,85 @@ from .chatter_history import (
     validated_packet,
 )
 from .persistence import BudgetHeld
+
+
+class CompactPost(BaseModel):
+    """Only evidence used by ingestion/frozen sources; no account profile payload."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    id: str = Field(pattern=r"^[0-9]{1,25}$")
+    text: str = Field(max_length=6000)
+    created_at: str | None
+    lang: str | None
+    author_id: str
+    author_handle: str
+    like_count: int | None = Field(ge=0)
+    reply_count: int | None = Field(ge=0)
+    retweet_count: int | None = Field(ge=0)
+    quote_count: int | None = Field(ge=0)
+    quoted_status_id: str | None
+    quoted_text: str | None = Field(max_length=6000)
+    quoted_author_handle: str | None
+    quoted_author_id: str | None
+    quoted_created_at: str | None
+    quoted_media_urls: list[str] = Field(max_length=8)
+    is_quote: bool | None
+    is_retweet: bool | None
+    is_reply: bool | None
+    in_reply_to_id: str | None
+    in_reply_to_username: str | None
+    in_reply_to_user_id: str | None
+    media_urls: list[str] = Field(max_length=8)
+
+
+class ProjectionGap(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    ordinal: int = Field(ge=0)
+    code: Literal["invalid_source_projection"] = "invalid_source_projection"
+
+
+class CompactSourceReply(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    schema_version: Literal[1]
+    projection_kind: Literal["chatter-source-reply-v1"]
+    tweets: list[CompactPost]
+    gaps: list[ProjectionGap]
+    has_next_page: bool | None
+    next_cursor: str | None
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def integer_version(cls, value):
+        if type(value) is not int:
+            raise ValueError("integer projection version required")
+        return value
+
+
+def compact_source_reply(rows, decoded):
+    from .evidence import safe_source_image
+
+    selected, gaps = [], []
+    fields = set(CompactPost.model_fields) - {"quoted_created_at", "quoted_author_id", "quoted_media_urls", "media_urls"}
+    for index, raw in enumerate(rows):
+        try:
+            normalized = _normalize_tweet(raw)
+            item = {key: normalized.get(key) for key in fields}
+            for normalized_key, provider_key in (("like_count", "likeCount"), ("reply_count", "replyCount"),
+                    ("retweet_count", "retweetCount"), ("quote_count", "quoteCount")):
+                measured = raw.get(provider_key)
+                item[normalized_key] = measured if type(measured) is int and measured >= 0 else None
+            quote = raw.get("quoted_tweet") or {}
+            item["quoted_created_at"] = quote.get("createdAt") or quote.get("created_at")
+            item["quoted_author_id"] = str((quote.get("author") or {}).get("id") or "") or None
+            item["quoted_media_urls"] = [entry["media_url_https"] for entry in (quote.get("extendedEntities") or {}).get("media", [])
+                if isinstance(entry, dict) and safe_source_image(entry.get("media_url_https"))][:8]
+            extended = normalized.get("extended_entities") or {}
+            item["media_urls"] = [entry["media_url_https"] for entry in extended.get("media", [])
+                if isinstance(entry, dict) and safe_source_image(entry.get("media_url_https"))][:8]
+            selected.append(CompactPost.model_validate(item))
+        except (ValueError, TypeError, AttributeError):
+            gaps.append(ProjectionGap(ordinal=index))
+    return CompactSourceReply(schema_version=1, projection_kind="chatter-source-reply-v1", tweets=selected, gaps=gaps,
+        has_next_page=decoded.get("has_next_page"), next_cursor=decoded.get("next_cursor")).model_dump(mode="json")
 
 
 class SourceSession:
@@ -58,6 +144,7 @@ class SourceSession:
                 "Chatter source calls require an explicit credential purpose"
             )
         self.run, self.cfg = run, cfg
+        self.ranked_lane = run.scope_key == "chatter:personalized-trends:v1"
         self._transport = transport or https_request
         self.policy_reader = policy_reader
         self.rates = load_pricing(repo_root=settings.BASE_DIR)
@@ -76,7 +163,7 @@ class SourceSession:
         )
         options = {
             "credential_purpose": purpose.value,
-            "workflow_version": "chatter-v1",
+            "workflow_version": "chatter-trends-sources-v1" if self.ranked_lane else "chatter-v1",
             "pricing_sha256": digest(rates_to_dict(self.rates)),
         }
         source, _ = DataSource.objects.get_or_create(
@@ -102,7 +189,7 @@ class SourceSession:
                 "schedule_driver": "external_render_cron"
                 if mode == "recurring"
                 else "manual",
-                "interval_seconds": 900 if mode == "recurring" else None,
+                "interval_seconds": (3600 if self.ranked_lane else 900) if mode == "recurring" else None,
                 "max_requests": cfg.chatter.source_request_limit,
                 "max_bytes": 8_000_000,
                 "max_seconds": 600,
@@ -115,7 +202,9 @@ class SourceSession:
         if resume:
             self.claim = self._resume(job, purpose)
             return
-        if CollectionRun.objects.filter(content_run=run).exists():
+        if CollectionRun.objects.filter(content_run=run).exclude(
+            job__job_key__startswith="chatter-personalized-trends:"
+        ).exists():
             raise BudgetHeld("Chatter source execution already recorded; do not resend")
         if job.state == "paused":
             set_job_state(job.pk, "ready")
@@ -134,8 +223,10 @@ class SourceSession:
     def _resume(self, job, purpose):
         current = locked_run(self.run.pk, self.run.fence)
         job = CollectionJob.objects.select_for_update().get(pk=job.pk)
-        execution = CollectionRun.objects.select_for_update().get(content_run=current)
+        execution = CollectionRun.objects.select_for_update().get(content_run=current, job=job)
         requests = list(CollectionRequest.objects.filter(attempt__run=execution))
+        if self.ranked_lane:
+            return self._resume_ranked(current, execution, requests, job, purpose)
         call = OriginalContentCall.objects.get(run=current, stage="discovery")
         if (
             current.discovery_state != "failed"
@@ -198,10 +289,61 @@ class SourceSession:
         self.last_request, self.last_receipt_at = requests[0], requests[0].received_at
         return claim
 
+    def _resume_ranked(self, current, execution, requests, job, purpose):
+        from .chatter_trends import read_ranked_batch
+
+        batch = read_ranked_batch(current.pk)
+        if (execution.completed_at is None or execution.status not in {"failed", "partial", "success"}
+                or execution.attempts.exclude(credential_purpose=purpose.value).exists()
+                or any(row.transport_outcome != "received" or row.http_status != 200
+                       or row.archive_id is None or row.scope_run.content_call_id != batch["rank_call_id"]
+                       for row in requests)):
+            raise BudgetHeld("saved Chatter source requests require reconciliation")
+        for request in requests:
+            # Validate retained compact evidence before reopening a source job.
+            if request.archive.encoding != "selected-json-canonical-v1":
+                raise BudgetHeld("saved Chatter source projection is unavailable")
+            projected = CompactSourceReply.model_validate(read_document(request.archive))
+            if len(projected.tweets) + len(projected.gaps) != request.raw_count:
+                raise BudgetHeld("saved Chatter source projection count changed")
+        current.fence += 1
+        current.save(update_fields=["fence", "updated_at"])
+        execution.completed_at, execution.status, execution.execution_state = None, "partial", "yielded"
+        execution.save(update_fields=["completed_at", "status", "execution_state", "updated_at"])
+        claim = claim_job(job.pk, invocation_id=f"chatter:{current.pk}:source-recovery:{current.fence}",
+                          continue_from=execution.pk, manual_authorized=True, typed=True)
+        CollectionAttempt.objects.filter(pk=claim.attempt_id).update(credential_purpose=purpose.value)
+        self.run.fence = current.fence
+        if requests:
+            self.last_request = max(requests, key=lambda row: row.received_at)
+            self.last_receipt_at = self.last_request.received_at
+        return claim
+
+    def captured_requests(self):
+        """Saved compact evidence for gathering to replay before new I/O."""
+        return CollectionRequest.objects.filter(attempt__run_id=self.claim.run_id).select_related("archive").order_by("started_at", "pk")
+
+    def captured_reply(self, request):
+        if (request.attempt.run_id != self.claim.run_id or request.archive is None
+                or request.archive.encoding != "selected-json-canonical-v1"):
+            raise ValueError("compact source capture ownership mismatch")
+        value = CompactSourceReply.model_validate(read_document(request.archive)).model_dump(mode="json")
+        if len(value["tweets"]) + len(value["gaps"]) != request.raw_count:
+            raise ValueError("compact source projection count changed")
+        normalized = []
+        for row in value["tweets"]:
+            self.metric_presence[row["id"]] = {key: row[field] for key, field in (
+                ("likes", "like_count"), ("replies", "reply_count"), ("reposts", "retweet_count"), ("quotes", "quote_count"))}
+            media = row.pop("media_urls")
+            row["extended_entities"] = {"media": [{"media_url_https": url} for url in media]}
+            normalized.append(row)
+        self.last_request, self.last_receipt_at = request, request.received_at
+        return {**value, "tweets": normalized}
+
     def scope(self, name, query=None, *, tool=False, start=None, end=None):
         query_row = save_query(query) if query else None
         call = OriginalContentCall.objects.filter(
-            run=self.run, stage="discovery"
+            run=self.run, stage="trends-ranking-v1" if self.ranked_lane else "discovery"
         ).first()
         ownership = {
             "query_id": query_row.pk if query_row else None,
@@ -247,6 +389,11 @@ class SourceSession:
         with transaction.atomic():
             locked_run(self.run.pk, self.run.fence)
             with fenced_run(self.claim):
+                endpoint_url = path if model else self.client.base_url + path + ("?" + urlencode(params) if params else "")
+                if self.ranked_lane and CollectionRequest.objects.filter(
+                    attempt__run_id=self.claim.run_id, endpoint_url=endpoint_url
+                ).exists():
+                    raise BudgetHeld("saved source request already captured; replay required")
                 if (
                     CollectionRequest.objects.filter(
                         attempt__run_id=self.claim.run_id
@@ -269,11 +416,7 @@ class SourceSession:
                 request = begin_request(
                     CollectionAttempt.objects.get(pk=self.claim.attempt_id),
                     scope,
-                    endpoint_url=path
-                    if model
-                    else self.client.base_url
-                    + path
-                    + ("?" + urlencode(params) if params else ""),
+                    endpoint_url=endpoint_url,
                     method="POST" if model else "GET",
                     requested_start_at=scope.requested_start_at,
                     requested_end_at=scope.requested_end_at,
@@ -325,6 +468,12 @@ class SourceSession:
                     0
                 )  # The model ledger owns this physical request's entire bill.
             elif rows is not None:
+                if self.ranked_lane:
+                    projection = compact_source_reply(rows, decoded)
+                    saved.archive = archive_document(
+                        json.dumps(projection, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode(),
+                        encoding="selected-json-canonical-v1", capture_kind="chatter_source_projection",
+                    )
                 credits = max(
                     Decimal(str(self.rates.call_floor_credits)),
                     len(rows) * Decimal(str(self.rates.tweet_credits)),

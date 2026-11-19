@@ -74,7 +74,10 @@ def _saved_config(run, cfg):
     if not current.chatter.enabled:
         return None
     saved = EditorialConfig.model_validate(run.config_snapshot["editorial"])
-    if run.workflow_version != digest(prompts()):
+    from .chatter_trends import TRENDS_SCOPE, workflow_version
+
+    expected = workflow_version() if run.scope_key == TRENDS_SCOPE else digest(prompts())
+    if run.workflow_version != expected:
         raise ValueError("Chatter prompt version changed during this run")
     return saved
 
@@ -246,6 +249,19 @@ def run_chatter(envelope, *, cfg=None, transport=None, x_client=None, enqueue=en
     cfg = cfg or load_editorial_config()
     if not cfg.chatter.enabled:
         return {"status": "disabled"}
+    if cfg.chatter.discovery_lane == "personalized-trends-v1":
+        from .chatter_trends import discover_trends, envelope_for, reserve_due_slot
+
+        if envelope.get("schema_version") != 1 or envelope.get("dry_run") is not False:
+            return {"status": "ineligible"}
+        if envelope.get("run_id"):
+            run = OriginalContentRun.objects.get(pk=envelope["run_id"])
+            if envelope != envelope_for(run):
+                raise ValueError("Chatter due-slot envelope changed")
+        else:
+            run, _ = reserve_due_slot(envelope["source_cycle_id"], datetime.fromisoformat(envelope["cutoff"]),
+                                       cfg=cfg, purpose=envelope["credential_purpose"])
+        return discover_trends(run.pk, cfg=cfg, transport=transport)
     if not shared_storage():
         raise ValueError("Chatter workflow requires shared content storage")
     if envelope.get("schema_version") != 1 or envelope.get("dry_run") is not False:
@@ -314,6 +330,10 @@ def resume_chatter_discovery(
 ):
     """Explicitly continue a held reply; never send the discovery request again."""
     run = OriginalContentRun.objects.get(pk=run_id, workflow_key=WORKFLOW)
+    from .chatter_trends import TRENDS_SCOPE, discover_trends
+
+    if run.scope_key == TRENDS_SCOPE:
+        return discover_trends(run.pk, cfg=cfg, transport=transport)
     configured = cfg is not None
     cfg = _saved_config(run, cfg)
     if cfg is None:

@@ -47,13 +47,22 @@ def request_payload(route, request):
         else:
             body["text"] = {"format": {"type": "json_object"}}
         return body
+    messages = [{"role": "user", "content": content}]
+    if "system" in request:
+        messages.insert(0, {"role": "system", "content": request["system"]})
+    elif not (
+        request.get("packet_version") == "chatter-trends-ranking-v1"
+        and route.endpoint == "https://openrouter.ai/api/v1/chat/completions"
+        and route.model == "openai/gpt-6-sol"
+        and route.reasoning == "medium"
+        and route.max_output_tokens == 8192
+        and not images
+    ):
+        raise ValueError("system instructions required outside accepted Chatter ranking")
     body = {
         "model": route.model,
         "max_tokens": route.max_output_tokens,
-        "messages": [
-            {"role": "system", "content": request["system"]},
-            {"role": "user", "content": content},
-        ],
+        "messages": messages,
         "response_format": {"type": "json_object"},
     }
     if route.endpoint == "https://api.openai.com/v1/chat/completions":
@@ -239,6 +248,12 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None, reserva
             raise ProviderReplyError("malformed_provider_response", diagnostics)
         diagnostics.update(response_diagnostics(decoded))
         kept = diagnostics["usage"]
+        if request.get("packet_version") == "chatter-trends-ranking-v1":
+            from .graphics_generation import reported_cost_usd
+
+            cost = reported_cost_usd("openrouter", decoded.get("usage"))
+            if cost is not None:
+                kept["provider_reported_cost_usd"] = str(cost)
         diagnostics["model_matches_config"] = decoded.get("model") == route.model
         if decoded.get("model") != route.model:
             raise ProviderReplyError("served_model_mismatch", diagnostics)
@@ -319,6 +334,8 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None, reserva
             "model": decoded["model"],
             "diagnostics": diagnostics,
         }
+        if request.get("packet_version") == "chatter-trends-ranking-v1":
+            reply["schema_version"] = 1
         if route.endpoint == "https://api.x.ai/v1/responses":
             reply["search_activity"] = activity
         if request.get("allow_partial_events") and stage.startswith("editor"):

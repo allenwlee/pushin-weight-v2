@@ -88,6 +88,16 @@ reviewer:
   timeout_seconds: 300
 chatter:
   enabled: false
+  discovery_lane: personalized-trends-v1
+  ranking:
+    model: openai/gpt-6-sol
+    endpoint: https://openrouter.ai/api/v1/chat/completions
+    key_env: OPENROUTER_API_KEY
+    reasoning: medium
+    max_output_tokens: 8192
+    timeout_seconds: 180
+    input_usd_per_million: 2.5
+    output_usd_per_million: 10
   discovery: &id001
     model: grok-4.7
     endpoint: https://api.x.ai/v1/responses

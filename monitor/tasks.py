@@ -468,6 +468,10 @@ def _start_graphics_reconciler(**kwargs):
     from monitor.editorial.graphics_dispatch import start_reconciler
 
     start_reconciler()
+    # A one-time wake-up reuses the existing worker and harvest clock, no beat.
+    from monitor.editorial.dispatch import recover_chatter_starts
+
+    recover_chatter_starts()
 
 
 @worker_shutdown.connect(weak=False)

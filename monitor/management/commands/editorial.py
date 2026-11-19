@@ -29,6 +29,9 @@ class Command(BaseCommand):
         parser.add_argument("--picture-id")
         parser.add_argument("--execute", action="store_true")
         parser.add_argument("--chatter-run", type=int, help="Resume saved Chatter stages without resending ambiguous calls")
+        parser.add_argument("--chatter-trial-scope", help="Reconciled existing validation budget identity")
+        parser.add_argument("--chatter-trial-limit-usd", type=float)
+        parser.add_argument("--chatter-trial-carry-usd", type=float, help="Reconciled charges/reservations already consumed")
 
     def handle(self, *args, **options):
         cfg = load_editorial_config()
@@ -83,12 +86,27 @@ class Command(BaseCommand):
                         "--execute is required for provider-capable work"
                     )
                 if action == "chatter":
+                    trial_values = [options[key] for key in ("chatter_trial_scope", "chatter_trial_limit_usd", "chatter_trial_carry_usd")]
+                    if any(value is not None for value in trial_values):
+                        if any(value is None for value in trial_values):
+                            raise CommandError("Supply scope, limit and reconciled carry together")
+                        from monitor.editorial.config import EditorialConfig
+
+                        data = cfg.model_dump(mode="json")
+                        data["chatter"]["trial"] = dict(zip(("scope", "limit_usd", "carry_usd"), trial_values))
+                        cfg = EditorialConfig.model_validate(data)
                     if cfg.chatter.trial is None:
                         raise CommandError("The private Chatter tester requires a finite trial profile")
+                    if cfg.chatter.discovery_lane == "personalized-trends-v1" and not options["chatter_run"]:
+                        from monitor.editorial.dispatch import dispatch_chatter_due_slot
+
+                        result = dispatch_chatter_due_slot("operator-chatter:" + cutoff.isoformat(), cutoff, cfg=cfg, purpose="on-demand")
+                        self.stdout.write(json.dumps(result, default=str, ensure_ascii=False))
+                        return
                     from core.models import OriginalContentRun
                     from monitor.editorial.chatter_chain import (
-                        review_chatter,
                         resume_chatter_discovery,
+                        review_chatter,
                         run_chatter,
                         select_chatter,
                         write_chatter,

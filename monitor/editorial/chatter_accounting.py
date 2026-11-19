@@ -73,9 +73,13 @@ def spent(cfg):
         output_field=DecimalField(),
     )
     total = calls.aggregate(total=Sum(cost))["total"] or Decimal(0)
-    requests = CollectionRequest.objects.filter(
-        scope_run__run__content_run_id__in=calls.values("run_id")
+    frozen_scope = Q(config_snapshot__editorial__chatter__trial__scope=scope)
+    if scope == "chatter":
+        frozen_scope = Q(config_snapshot__editorial__chatter__trial=None)
+    owners = OriginalContentRun.objects.filter(
+        Q(pk__in=calls.values("run_id")) | (Q(workflow_key=WORKFLOW) & frozen_scope)
     )
+    requests = CollectionRequest.objects.filter(scope_run__run__content_run__in=owners)
     cost = Case(
         When(estimated_usd__isnull=False, then=F("estimated_usd")),
         default=F("reserved_usd"),
@@ -121,6 +125,12 @@ def call_once(run, stage, kind, ceiling, cfg, send, *, request_metadata=None):
             if prior.request_hash != metadata["request_hash"]:
                 raise BudgetHeld("Chatter request identity changed")
             if prior.state == "completed":
+                if stage == "trends-ranking-v1":
+                    from .chatter_trends import validate_rank_reply
+
+                    if prior.response_hash != digest(prior.response_payload):
+                        raise BudgetHeld("saved ranking response identity changed")
+                    return validate_rank_reply(prior.response_payload)
                 return prior.response_payload
             raise BudgetHeld("Chatter stage already sent; reconciliation required")
         amount = admit(cfg, ceiling)
@@ -182,6 +192,10 @@ def call_once(run, stage, kind, ceiling, cfg, send, *, request_metadata=None):
             raise BudgetHeld("Chatter claim conflict")
     try:
         reply = send()
+        if stage == "trends-ranking-v1":
+            from .chatter_trends import validate_rank_reply
+
+            reply = validate_rank_reply(reply)
     except Exception as exc:
         code = exc.code if isinstance(exc, ProviderReplyError) else type(exc).__name__
         if not re.fullmatch(r"[a-zA-Z0-9_:-]{1,64}", code):
@@ -195,10 +209,21 @@ def call_once(run, stage, kind, ceiling, cfg, send, *, request_metadata=None):
         )
         raise
     actual = completed_text_cost(reply, metadata)
+    provenance = None
+    if stage == "trends-ranking-v1":
+        # A token-rate calculation is an estimate, never a reported OpenRouter charge.
+        from .graphics_generation import reported_cost_usd
+
+        actual_reported = reported_cost_usd("openrouter", {"cost": reply.get("usage", {}).get("provider_reported_cost_usd")})
+        provenance = {"schema_version": 1, "billing_kind": "reported" if actual_reported is not None else "unknown",
+                      "estimated_usd": str(actual) if actual is not None else None}
+        actual = money(actual_reported) if actual_reported is not None else None
     with transaction.atomic():
         advisory_lock("content-budget:" + budget_scope(cfg))
         # Report the full observed cost, including an unexpected overage.
-        OriginalContentCall.objects.filter(pk=call.pk).update(actual_usd=actual)
+        OriginalContentCall.objects.filter(pk=call.pk).update(
+            actual_usd=actual, **({"provenance": provenance} if provenance is not None else {})
+        )
         completed = complete_trend_narrative_provider_call(
             call.pk,
             owner=owner,
