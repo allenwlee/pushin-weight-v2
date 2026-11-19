@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+
 import pytest
 from django.db.models.deletion import ProtectedError
 
@@ -269,6 +271,8 @@ def test_ambiguous_profile_candidate_routes_to_profile_extractor_without_images(
                     "end_date": None,
                     "end_date_precision": "unknown",
                     "confidence": 0.8,
+                    "source_profile_snapshot_id": snapshot.pk,
+                    "source_quote": "Researcher @Anthropic",
                 }
             ]
         }
@@ -290,6 +294,9 @@ def test_ambiguous_profile_candidate_routes_to_profile_extractor_without_images(
     assert "Researcher @Anthropic" in request_text
     assert "profile.jpg" not in request_text
     assert "badge.jpg" not in request_text
+    extracted = PersonBrandAffiliationEvidence.objects.get(extraction_method="structured_text")
+    assert extracted.source_profile_snapshot_id == snapshot.pk
+    assert extracted.evidence_text == "Researcher @Anthropic"
 
 
 def test_invalid_choice_fails_atomically_and_records_sanitized_attempt():
@@ -1790,3 +1797,115 @@ def test_targeted_work_defers_before_transport_when_cycle_deadline_is_too_low():
     assert provider_called is False
     assert result.deferred_roles == ("event_extraction",)
     assert TargetedExtractionState.objects.count() == 0
+
+
+def test_personnel_extraction_receives_publication_and_collection_clocks():
+    import json
+    from datetime import datetime
+
+    post = _post("personnel-clock", text="Joining Anthropic next month")
+    post.created_at = datetime(2026, 8, 15, 3, 0, tzinfo=UTC)
+    post.save(update_fields=["created_at"])
+    requests = []
+
+    def provider(system, user, model, max_tokens):
+        requests.append(json.loads(user))
+        return {"records": []}
+
+    result = run_targeted_extractions(
+        post=post,
+        post_types={"personnel_changes"},
+        config=_config(),
+        calls={"personnel_change_extraction": provider},
+        max_calls=1,
+    )
+    assert result.calls_made == 1
+    assert requests[0]["source_published_at"] == post.created_at.isoformat()
+    assert requests[0]["source_observed_at"] == post.fetched_at.isoformat()
+
+
+def test_personnel_extraction_keeps_responsibility_and_enriches_empty_fields():
+    from django.db import transaction
+
+    from core.targeted_extraction import _persist_personnel
+
+    post = _post("personnel-description", text="I lead strategic research on the Research team at Anthropic.")
+    record = {"person_name": "Anna Wang", "person_handle": "a_nnawang", "brand_id": "anthropic", "organization_name": "Anthropic", "affiliation_type": "employment", "status": "current", "start_date_precision": "unknown", "end_date_precision": "unknown"}
+    with transaction.atomic():
+        _persist_personnel(post, [record], "first")
+        _persist_personnel(post, [{**record, "description": "Leads strategic research", "team": "Research"}], "second")
+    affiliation = PersonBrandAffiliation.objects.get()
+    assert affiliation.description == "Leads strategic research"
+    assert affiliation.team == "Research"
+    with transaction.atomic():
+        _persist_personnel(post, [{**record, "description": "Conflicting description", "team": "Different"}], "third")
+    affiliation.refresh_from_db()
+    assert affiliation.description == "Leads strategic research"
+    assert affiliation.team == "Research"
+
+
+def test_profile_extraction_rejects_quote_from_unrelated_snapshot():
+    from django.db import transaction
+
+    from core.targeted_extraction import _persist_profile_personnel
+
+    post = _post("profile-quote-check", text="Unrelated post")
+    snapshot = AccountProfileSnapshot.objects.create(account=post.author, profile_hash="d" * 64, first_observed_at=post.fetched_at, last_observed_at=post.fetched_at, first_source_kind="post", first_source_post=post, description="Researcher at Anthropic", present_fields=["description"])
+    record = {"person_name": "Anna Wang", "person_handle": "a_nnawang", "brand_id": "anthropic", "organization_name": "Anthropic", "source_profile_snapshot_id": snapshot.pk, "source_quote": "Invented work"}
+    with pytest.raises(ValueError, match="quote"), transaction.atomic():
+        _persist_profile_personnel(post, [record], "test")
+    assert not PersonBrandAffiliation.objects.exists()
+
+
+def test_same_version_enrichment_preserves_both_extraction_payloads():
+    from core.geolocation_evidence import source_evidence
+    from core.targeted_extraction import _persist_personnel
+
+    post = _post("same-version-enrichment", text="Research at Anthropic")
+    original = {"person_name": "Anna Wang", "person_handle": "a_nnawang", "brand_id": "anthropic", "organization_name": "Anthropic", "status": "current"}
+    enriched = {**original, "description": "Research"}
+    _persist_personnel(post, [original], "same-version")
+    _persist_personnel(post, [enriched], "same-version")
+    _persist_personnel(post, [enriched], "same-version")
+    rows = list(PersonBrandAffiliationEvidence.objects.filter(source_post=post))
+    assert len(rows) == 2
+    payloads = [source_evidence(row).extracted_claim_data for row in rows]
+    assert original in payloads and enriched in payloads
+
+
+def test_profile_extraction_rejects_irrelevant_quote_despite_brand_in_post():
+    from core.targeted_extraction import _persist_profile_personnel
+
+    post = _post("profile-irrelevant-quote", text="Anthropic announced news")
+    snapshot = AccountProfileSnapshot.objects.create(account=post.author, profile_hash="e" * 64, first_observed_at=post.fetched_at, last_observed_at=post.fetched_at, first_source_kind="post", first_source_post=post, description="Researcher at Anthropic", present_fields=["description"])
+    record = {"person_name": "Anna Wang", "person_handle": "a_nnawang", "brand_id": "anthropic", "organization_name": "Anthropic", "source_profile_snapshot_id": snapshot.pk, "source_quote": "Researcher"}
+    with pytest.raises(ValueError, match="source evidence"):
+        _persist_profile_personnel(post, [record], "test")
+
+
+def test_profile_prompt_does_not_date_bio_using_old_post():
+    from core.targeted_extraction import _prompts
+
+    post = _post("profile-time-context", text="Old post")
+    system, _ = _prompts("profile_affiliation_extraction", post)
+    assert "Do not use the post publication time to date a profile" in system
+    assert "relative employment dates unknown" in system
+
+
+def test_personnel_relative_date_request_cache_changes_with_source_date():
+    from datetime import UTC, datetime
+
+    post = _post("relative-date-cache", text="Joining Anthropic next month")
+    post.created_at = datetime(2026, 8, 15, tzinfo=UTC)
+    post.save(update_fields=["created_at"])
+    requests = []
+    def provider(system, user, model, max_tokens):
+        requests.append(user)
+        return {"records": []}
+    kwargs = {"post": post, "post_types": {"personnel_changes"}, "config": _config(), "calls": {"personnel_change_extraction": provider}, "max_calls": 1}
+    assert run_targeted_extractions(**kwargs).calls_made == 1
+    assert run_targeted_extractions(**kwargs).calls_made == 0
+    post.created_at = datetime(2026, 9, 15, tzinfo=UTC)
+    post.save(update_fields=["created_at"])
+    assert run_targeted_extractions(**kwargs).calls_made == 1
+    assert len(requests) == 2 and requests[0] != requests[1]

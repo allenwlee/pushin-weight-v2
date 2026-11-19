@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 import hashlib
 import json
 import logging
@@ -91,6 +92,17 @@ TargetedCall = Callable[[str, str, str, int], Mapping[str, Any] | str]
 
 _URL_PATTERN = re.compile(r"https?://[^\s<>\"']+")
 _MAX_RECORDS_PER_RESPONSE = 100
+PERSONNEL_FIELD_EVIDENCE_SCHEMA = "personnel-field-evidence/v1"
+_PERSONNEL_FIELD_EVIDENCE_VERSIONS = {
+    "personnel-change-extraction-v3",
+    "profile-affiliation-extraction-v3",
+}
+_PERSONNEL_EVIDENCE_FIELDS = {
+    "person_name", "person_handle", "brand_id", "organization_name",
+    "organization_handle", "affiliation_type", "title_raw", "title_normalized",
+    "department", "team", "job_function", "description", "seniority",
+    "employment_type", "status", "start_date", "end_date",
+}
 
 _ROLE_PROMPT_SPECS = {
     "event_extraction": """
@@ -147,7 +159,7 @@ biographies, employee spotlights, and unchanged roles do not qualify. Fields:
 person_name, person_handle, brand_id, organization_name, organization_handle,
 affiliation_type (employment, founder, advisor, board_member, contractor,
 ambassador, creator_partner, affiliate, investor, community, or other),
-title_raw, title_normalized, department, team, job_function, seniority,
+title_raw, title_normalized, department, team, job_function, description, seniority,
 employment_type, status (current, former, future, or unknown), start_date,
 start_date_precision (day, month, year, or unknown), end_date,
 end_date_precision, and confidence. Keep an unstated effective date null with
@@ -172,10 +184,12 @@ Fields: person_name, person_handle, brand_id, organization_name,
 organization_handle, affiliation_type (employment, founder, advisor,
 board_member, contractor, ambassador, creator_partner, affiliate, investor,
 community, or other), title_raw, title_normalized, department, team,
-job_function, seniority, employment_type, status (current, former, future, or
+job_function, description, seniority, employment_type, status (current, former, future, or
 unknown), start_date, start_date_precision (day, month, year, or unknown),
-end_date, end_date_precision, and confidence. Keep unstated effective dates
-null with unknown precision.
+end_date, end_date_precision, source_profile_snapshot_id, source_quote, and confidence.
+For every record cite the supplied profile snapshot ID and an exact quote from
+its description or profile biography. Keep unstated effective dates null with
+unknown precision.
 """,
 }
 
@@ -1037,11 +1051,263 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
     return written, evidence, candidates
 
 
+def _personnel_source_packet(post, snapshot=None):
+    """Return only exact fields from the selected source and its own clocks."""
+    if snapshot is None:
+        entries = {
+            "text": post.text,
+            "quoted_text": post.quoted_text,
+            "author_name": post.author_name,
+            "author_handle": post.author_handle,
+        }
+        return {
+            f"post:{post.pk}:{field}": {
+                "text": value,
+                "source_kind": "post" if field != "quoted_text" else "quoted_post_text",
+                "published_at": post.created_at.isoformat()
+                if post.created_at and field == "text"
+                else None,
+                "observed_at": post.fetched_at.isoformat() if post.fetched_at else None,
+            }
+            for field, value in entries.items()
+            if isinstance(value, str) and value
+        }
+    entries = {
+        "description": snapshot.description,
+        "profile_bio_text": snapshot.profile_bio_text,
+        "display_name": snapshot.display_name,
+        "handle": snapshot.handle,
+    }
+    return {
+        f"profile:{snapshot.pk}:{field}": {
+            "text": value,
+            "source_kind": "profile_snapshot",
+            "published_at": None,
+            "observed_at": snapshot.first_observed_at.isoformat(),
+            "last_observed_at": snapshot.last_observed_at.isoformat(),
+        }
+        for field, value in entries.items()
+        if field in snapshot.present_fields and isinstance(value, str) and value
+    }
+
+
+def _personnel_field_evidence(post, snapshot, record):
+    """Validate exact cited spans; semantic interpretation remains pending review."""
+    allowed_record_fields = _PERSONNEL_EVIDENCE_FIELDS | {
+        "start_date_precision",
+        "end_date_precision",
+        "confidence",
+        "source_profile_snapshot_id",
+        "source_quote",
+        "field_evidence",
+    }
+    if set(record) - allowed_record_fields:
+        raise ValueError("Unknown modern personnel record fields")
+    payload = record.get("field_evidence")
+    if (
+        not isinstance(payload, Mapping)
+        or set(payload) != {"schema", "fields"}
+        or payload.get("schema") != PERSONNEL_FIELD_EVIDENCE_SCHEMA
+        or not isinstance(payload.get("fields"), Mapping)
+    ):
+        raise ValueError("Personnel field evidence requires the versioned schema")
+    fields = payload["fields"]
+    if any(
+        not isinstance(record.get(key), str)
+        or not record[key].strip()
+        or record[key].strip().casefold() == "unknown"
+        for key in ("person_name", "organization_name", "affiliation_type")
+    ):
+        raise ValueError(
+            "Modern personnel records require an explicit person, organization and affiliation type"
+        )
+    required = {
+        key
+        for key in _PERSONNEL_EVIDENCE_FIELDS
+        if record.get(key) not in (None, "", "unknown")
+    }
+    required.update({"person_name", "organization_name", "affiliation_type"})
+    if set(fields) != required:
+        raise ValueError("Personnel evidence must cover exactly the populated fields")
+    sources = _personnel_source_packet(post, snapshot)
+    normalized = {}
+    for field, claims in fields.items():
+        if not isinstance(claims, list) or not 1 <= len(claims) <= 10:
+            raise ValueError("Personnel field evidence requires one or more sources")
+        normalized[field] = []
+        for claim in claims:
+            if not isinstance(claim, Mapping) or set(claim) != {
+                "source_key",
+                "span",
+                "basis",
+            }:
+                raise ValueError("Invalid personnel field evidence claim")
+            key, span, basis = claim["source_key"], claim["span"], claim["basis"]
+            if not isinstance(key, str) or key not in sources:
+                raise ValueError(
+                    "Personnel field evidence source does not match the selected source"
+                )
+            if (
+                not isinstance(span, str)
+                or not span
+                or len(span) > 5000
+                or span not in sources[key]["text"]
+            ):
+                raise ValueError(
+                    "Personnel field evidence span must match exact source text"
+                )
+            if not isinstance(basis, str) or basis not in {"explicit", "inferred"}:
+                raise ValueError(
+                    "Personnel field evidence basis must be explicit or inferred"
+                )
+            if basis == "explicit" and field in {
+                "person_name",
+                "person_handle",
+                "organization_name",
+                "organization_handle",
+                "title_raw",
+                "title_normalized",
+                "department",
+                "team",
+                "job_function",
+                "description",
+                "seniority",
+            }:
+                value = str(record[field]).strip().removeprefix("@").casefold()
+                if value not in span.casefold():
+                    raise ValueError(
+                        "Explicit personnel field value is not present in its cited span"
+                    )
+            if basis == "explicit" and field in {"start_date", "end_date"}:
+                value = str(record[field])
+                parts = value.split("-")
+                if (
+                    len(parts) not in (1, 2, 3)
+                    or not parts[0].isdigit()
+                    or parts[0] not in span
+                ):
+                    raise ValueError(
+                        "Explicit personnel date year is not present in its cited span"
+                    )
+                if len(parts) > 1:
+                    try:
+                        month = int(parts[1])
+                        names = (calendar.month_name[month], calendar.month_abbr[month])
+                    except (IndexError, ValueError):
+                        raise ValueError("Invalid explicit personnel date") from None
+                    lower = span.casefold()
+                    if not any(
+                        name and name.casefold() in lower for name in names
+                    ) and not re.search(rf"(?<!\d)0?{month}(?:\D|$)", span):
+                        raise ValueError(
+                            "Explicit personnel date month is not present in its cited span"
+                        )
+                if len(parts) > 2 and not re.search(
+                    rf"(?<!\d)0?{int(parts[2])}(?:\D|$)", span
+                ):
+                    raise ValueError(
+                        "Explicit personnel date day is not present in its cited span"
+                    )
+            if (
+                field in {"start_date", "end_date"}
+                and basis == "inferred"
+                and not sources[key]["published_at"]
+            ):
+                raise ValueError(
+                    "Inferred personnel dates require source publication time"
+                )
+            if field in {"start_date", "end_date"} and basis == "inferred":
+                published = datetime.fromisoformat(sources[key]["published_at"])
+                if published.day <= 2 or published.day >= 28:
+                    raise ValueError(
+                        "Relative personnel date crosses an uncertain time-zone boundary"
+                    )
+                lower = span.casefold()
+                offsets = [
+                    offset
+                    for phrase, offset in (
+                        ("next month", 1),
+                        ("this month", 0),
+                        ("last month", -1),
+                    )
+                    if phrase in lower
+                ]
+                if len(offsets) == 1:
+                    month_index = published.year * 12 + published.month - 1 + offsets[0]
+                    expected = f"{month_index // 12:04d}-{month_index % 12 + 1:02d}"
+                elif not offsets and field == "start_date":
+                    # A departure to join the named organization supports an
+                    # inferred arrival; its semantics remain pending review.
+                    names = "|".join(calendar.month_name[1:])
+                    organization = re.escape(str(record["organization_name"]).strip())
+                    match = re.search(
+                        rf"\bleft\s+[^.?!,;]+?\s+in\s+({names})\s+to\s+join\s+{organization}\b",
+                        span,
+                        flags=re.IGNORECASE,
+                    )
+                    if match is None:
+                        raise ValueError(
+                            "Inferred personnel date needs a supported relative month"
+                        )
+                    month = list(calendar.month_name).index(match.group(1).capitalize())
+                    year = published.year - (month > published.month)
+                    expected = f"{year:04d}-{month:02d}"
+                else:
+                    raise ValueError(
+                        "Inferred personnel date needs a supported relative month"
+                    )
+                if (
+                    record[field] != expected
+                    or record.get(field + "_precision") != "month"
+                ):
+                    raise ValueError(
+                        "Inferred personnel date differs from its source publication month"
+                    )
+            normalized[field].append(
+                {
+                    "source_key": key,
+                    "span": span,
+                    "basis": basis,
+                    **{k: v for k, v in sources[key].items() if k != "text"},
+                }
+            )
+    return {
+        "schema": PERSONNEL_FIELD_EVIDENCE_SCHEMA,
+        "fields": normalized,
+        "validation": "exact_span_verified_semantics_pending_review",
+    }
+
+
 @transaction.atomic
 def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: str):
     written = evidence = candidates = 0
     brand_context = _brand_evidence_context(post)
     for record in records:
+        source_snapshot = None
+        source_quote = None
+        snapshot_id = record.get("source_profile_snapshot_id")
+        if snapshot_id is not None:
+            if type(snapshot_id) is not int or snapshot_id <= 0:
+                raise ValueError("Invalid profile snapshot identity")
+            source_snapshot = post.profile_snapshots.filter(pk=snapshot_id, account_id=post.author_id).first()
+            source_quote = _text(record.get("source_quote"), required=True)
+            if source_snapshot is None or not any(source_quote in (value or "") for value in (source_snapshot.description, source_snapshot.profile_bio_text)):
+                raise ValueError("Profile source quote or identity does not match")
+            quote_context = _BrandEvidenceContext(
+                source_text=unicodedata.normalize("NFKC", source_quote).casefold(),
+                attributed_brand_ids=set(),
+                resolved={},
+            )
+            if record.get("brand_id"):
+                if _known_brand(quote_context, record["brand_id"]) is None:
+                    raise ValueError("Profile quote does not support brand")
+            else:
+                organization = _text(record.get("organization_name"), required=True)
+                if unicodedata.normalize("NFKC", organization).casefold() not in quote_context.source_text:
+                    raise ValueError("Profile quote does not support organization")
+        stored_record = dict(record)
+        if version in _PERSONNEL_FIELD_EVIDENCE_VERSIONS or "field_evidence" in record:
+            stored_record["field_evidence"] = _personnel_field_evidence(post, source_snapshot, record)
         person_name = _text(record.get("person_name"), required=True) or ""
         brand, candidate, candidate_created = _brand_or_candidate(
             post, record, brand_context
@@ -1145,6 +1411,7 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
                 "department": _text(record.get("department")),
                 "team": _text(record.get("team")),
                 "job_function": _text(record.get("job_function")),
+                "description": _text(record.get("description")),
                 "seniority": _text(record.get("seniority")),
                 "employment_type": _text(record.get("employment_type")),
                 "status": status,
@@ -1158,17 +1425,39 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
             },
         )
         require_claim_owner(affiliation, person)
+        if not created:
+            affiliation = PersonBrandAffiliation.objects.select_for_update().get(pk=affiliation.pk)
+            require_claim_owner(affiliation, person)
+            if affiliation.review_status != "rejected" and not affiliation.superseded_at and not affiliation.superseded_by_id:
+                updates = {}
+                for field in ("title_normalized", "department", "team", "job_function", "description", "seniority", "employment_type"):
+                    candidate_value = _text(record.get(field))
+                    if candidate_value and not getattr(affiliation, field):
+                        updates[field] = candidate_value
+                if updates:
+                    PersonBrandAffiliation.objects.filter(pk=affiliation.pk).update(**updates)
         written += int(created)
-        evidence_hash = _hash(
-            {"claim": claim_identity, "post": str(post.pk), "version": version}
-        )
+        evidence_identity = {"claim": claim_identity, "post": str(post.pk), "version": version}
+        if source_snapshot is not None:
+            evidence_identity.update(snapshot=source_snapshot.pk, quote=source_quote)
+        evidence_hash = _hash(evidence_identity)
+        previous_evidence = PersonBrandAffiliationEvidence.objects.filter(
+            affiliation=affiliation, evidence_hash=evidence_hash
+        ).first()
+        if previous_evidence is not None:
+            previous_payload = AffiliationClaimEvidence.objects.filter(
+                pk=previous_evidence.pk
+            ).values_list("extracted_claim_data", flat=True).first()
+            if previous_payload != stored_record:
+                evidence_hash = _hash({**evidence_identity, "record": stored_record})
         _row, evidence_created = PersonBrandAffiliationEvidence.objects.get_or_create(
             affiliation=affiliation,
             evidence_hash=evidence_hash,
             defaults={
-                "source_post": post,
-                "evidence_text": (post.text or "")[:5000],
-                "observed_at": post.fetched_at,
+                "source_post": post if source_snapshot is None else None,
+                "source_profile_snapshot": source_snapshot,
+                "evidence_text": (post.text or "")[:5000] if source_snapshot is None else source_quote,
+                "observed_at": post.fetched_at if source_snapshot is None else source_snapshot.first_observed_at,
                 "extraction_method": "structured_text",
                 "extraction_model": None,
                 "extraction_prompt_version": version,
@@ -1177,9 +1466,15 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
             },
         )
         if evidence_created:
-            write_source_evidence(_row, extracted_claim_data=dict(record))
+            write_source_evidence(_row, extracted_claim_data=stored_record)
         evidence += int(evidence_created)
     return written, evidence, candidates
+
+
+def _persist_profile_personnel(post: Post, records: list[Mapping[str, Any]], version: str):
+    if any(record.get("source_profile_snapshot_id") is None for record in records):
+        raise ValueError("Profile extraction requires a sourced snapshot")
+    return _persist_personnel(post, records, version)
 
 
 def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
@@ -1708,7 +2003,7 @@ _PERSISTERS = {
     "opportunity_extraction": _persist_opportunities,
     "job_listing_extraction": _persist_jobs,
     "personnel_change_extraction": _persist_personnel,
-    "profile_affiliation_extraction": _persist_personnel,
+    "profile_affiliation_extraction": _persist_profile_personnel,
     "model_release_extraction": _persist_product_release_reports,
 }
 
@@ -1736,7 +2031,7 @@ def _parse_response(
     }
 
 
-def _prompts(role: str, post: Post) -> tuple[str, str]:
+def _prompts(role: str, post: Post, *, version: str | None = None) -> tuple[str, str]:
     source_kind = (
         "ambiguous profile observation"
         if role == "profile_affiliation_extraction"
@@ -1764,6 +2059,21 @@ def _prompts(role: str, post: Post) -> tuple[str, str]:
             "redirect_resolution": False,
         },
     }
+    if role in {"personnel_change_extraction", "profile_affiliation_extraction"}:
+        payload["source_published_at"] = post.created_at.isoformat() if post.created_at else None
+        payload["source_observed_at"] = post.fetched_at.isoformat() if post.fetched_at else None
+        if role == "personnel_change_extraction":
+            system += (
+                " Interpret relative employment dates using the source publication time, "
+                "not the later collection time; if the necessary time is missing, "
+                "leave the effective date unknown."
+            )
+        else:
+            system += (
+                " A profile observation time is not its publication or effective time. "
+                "Do not use the post publication time to date a profile. Leave relative "
+                "employment dates unknown unless the profile supplies an actual anchor."
+            )
     if role == "profile_affiliation_extraction":
         snapshots = post.profile_snapshots.order_by("account_id", "id").values(
             "id",
@@ -1771,13 +2081,15 @@ def _prompts(role: str, post: Post) -> tuple[str, str]:
             "display_name",
             "description",
             "profile_bio_text",
+            "first_observed_at",
+            "last_observed_at",
             "affiliate_target_username",
             "affiliate_label_description",
             "affiliate_label_type__code",
             "affiliate_display_type__code",
         )
         payload["profile_observations"] = [
-            {key.removesuffix("__code"): value for key, value in row.items()}
+            {key.removesuffix("__code"): value.isoformat() if key in {"first_observed_at", "last_observed_at"} and value else value for key, value in row.items()}
             for row in snapshots
         ]
         payload["profile_movements"] = [
@@ -1789,6 +2101,28 @@ def _prompts(role: str, post: Post) -> tuple[str, str]:
             }
             for movement in post.profile_movement_candidates.order_by("id")
         ]
+    if version in _PERSONNEL_FIELD_EVIDENCE_VERSIONS and role in {
+        "personnel_change_extraction",
+        "profile_affiliation_extraction",
+    }:
+        sources = _personnel_source_packet(post)
+        if role == "profile_affiliation_extraction":
+            sources = {}
+            for snapshot in post.profile_snapshots.filter(
+                account_id=post.author_id
+            ).order_by("id"):
+                sources.update(_personnel_source_packet(post, snapshot))
+        payload["field_evidence_sources"] = sources
+        system += (
+            " For every populated personnel field, return field_evidence with schema "
+            '"personnel-field-evidence/v1" and fields mapping each field name to a '
+            'nonempty list of {"source_key":...,"span":...,"basis":...}. '
+            "The span must be copied exactly from the matching supplied source, and "
+            "basis is explicit or inferred. Use only the same selected source for "
+            "one record. Cite person_name, organization_name and affiliation_type. "
+            "Unknown values stay null; do not cite fields that are not populated. "
+            "Do not infer dates from profile capture time or quoted-post time."
+        )
     user = json.dumps(
         payload,
         ensure_ascii=False,
@@ -1883,7 +2217,7 @@ def run_targeted_extractions(
             failed.append(role)
             continue
         role_config = config.roles[role]
-        system, user = _prompts(role, post)
+        system, user = _prompts(role, post, version=role_config.prompt_version)
         content_identity = _hash(
             {
                 "post": str(post.pk),

@@ -23,7 +23,7 @@ from core.models import (
     PostTranslationText,
 )
 from monitor.post_enrichment import commentary_is_distinct, present_text
-from x_monitor.translator import normalize_lang_detected
+from x_monitor.translator import normalize_lang_detected, post_source_language
 
 SUPPORTED_CONTENT_LOCALES = ("en", "zh-cn", "ja")
 
@@ -532,6 +532,9 @@ def read_post_content_many(
             if translation is not None
             else _legacy_literal(post)
         )
+        # The current source is authoritative even when a cached translation
+        # is incomplete or belongs to an older version of the post.
+        literal.update(source_literal(post))
         rich = (
             {row.locale: row.text for row in synthesis.texts.all()}
             if synthesis is not None
@@ -559,11 +562,25 @@ def read_post_content_many(
     return projections
 
 
+def source_literal(post: Post) -> dict[str, str]:
+    """Return source text only when the detected language identifies the locale."""
+    source = _literal_text(post.text)
+    raw = str(post_source_language(post.lang_detected, post.lang) or "").strip().lower().replace("_", "-")
+    language = normalize_lang_detected(raw)
+    if source is None:
+        return {}
+    if language in {"en", "ja"}:
+        return {language: source}
+    # The normalizer maps generic 'zh' to Hans. That inference is not
+    # sufficient to assert the source uses simplified Chinese.
+    if raw in {"zh-hans", "zh-cn"}:
+        return {"zh-cn": source}
+    return {}
+
+
 def _legacy_literal(post: Post) -> dict[str, str]:
     values = {"en": post.text_en, "zh-cn": post.text_zh_cn}
-    language = normalize_lang_detected(post.lang_detected)
-    if language == "ja" and present_text(post.text):
-        values["ja"] = post.text
+    values.update(source_literal(post))
     return {
         locale: value
         for locale, raw in values.items()

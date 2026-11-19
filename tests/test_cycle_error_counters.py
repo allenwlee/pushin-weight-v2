@@ -64,7 +64,7 @@ def test_commentary_normalization_treats_translator_sentinel_as_missing():
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
 def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeypatch):
-    """Production post-fetch wiring owns state and Django flag persistence."""
+    """Legacy compatibility writer still owns state and flag persistence."""
     _django_setup()
     from core.models import (
         Brand,
@@ -78,7 +78,7 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     )
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
-    from x_monitor.config import Config
+    from x_monitor.config import Config, LlmConfig
 
     post = Post.objects.create(tweet_id="post-fetch-success", text="DeepSeek release")
     brand = Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
@@ -88,7 +88,7 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     PostTypeKey.objects.get_or_create(key="releases_updates")
     SentimentKey.objects.get_or_create(key="neutral")
     NationalismKey.objects.get_or_create(key="none")
-    PostEnrichmentState.objects.create(post=post)
+    PostEnrichmentState.objects.create(post=post, translation_requested=True)
     UnsanctionedFlagKey.objects.get_or_create(key="scam")
     client = object()
     translator_calls = []
@@ -131,7 +131,10 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
         classify,
     )
 
-    runner = CycleRunner(cfg=Config(enabled_models=["deepseek"], daily_ceiling=100))
+    runner = CycleRunner(cfg=Config(
+        enabled_models=["deepseek"], daily_ceiling=100,
+        llm=LlmConfig(literal_translation_v2_enabled=False),
+    ))
     counters = runner._run_post_fetch([], run_id="run-flags")
 
     state = PostEnrichmentState.objects.get(post=post)
@@ -146,6 +149,7 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
             "post_id": post.pk,
             "lane": "carryover",
             "translation_status": PostEnrichmentState.Status.SUCCEEDED,
+            "translation_requested": True,
             "classification_status": PostEnrichmentState.Status.SUCCEEDED,
             "output_complete": True,
         }
@@ -168,6 +172,73 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
+def test_profile_capture_uses_page_receipt_not_later_persistence_clock(monkeypatch):
+    _django_setup()
+    from datetime import UTC, datetime, timedelta
+
+    from monitor import cycle
+    from x_monitor.config import Config
+
+    received = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
+    seen = []
+    monkeypatch.setattr(cycle, "capture_post_profile_snapshot", lambda **kw: seen.append(kw))
+    runner = cycle.CycleRunner(cfg=Config(enabled_models=["deepseek"], daily_ceiling=100))
+    runner._clock = lambda: received + timedelta(hours=1)
+    item = {
+        "id": "receipt-clock-test",
+        "author_id": "receipt-clock-author",
+        "author_handle": "receiptclock",
+        "text": "Saved post",
+        "created_at": received.isoformat(),
+        "_api_received_at": received.isoformat(),
+        "brand_ids": [],
+        "mentions": [],
+        "classifications": {},
+    }
+    inserted, _, _, failed = runner._persist_items([item])
+    assert (inserted, failed) == (1, 0)
+    assert len(seen) == 1 and seen[0]["observed_at"] == received
+    assert runner._profile_receipt_time({}) is None
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_refetched_post_captures_changed_profile_at_each_page_receipt():
+    _django_setup()
+    from datetime import UTC, datetime, timedelta
+
+    from core.models import AccountProfileSnapshot
+    from monitor.cycle import CycleRunner
+    from x_monitor.config import Config
+
+    received = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
+    runner = CycleRunner(cfg=Config(enabled_models=["deepseek"], daily_ceiling=100))
+    item = {
+        "id": "987654321",
+        "author_id": "987654",
+        "author_handle": "receiptprofile",
+        "author_description": "First profile",
+        "_author_present_fields": ["author_handle", "author_description"],
+        "text": "Saved post",
+        "created_at": received.isoformat(),
+        "_api_received_at": received.isoformat(),
+        "brand_ids": [],
+        "mentions": [],
+        "classifications": {},
+    }
+    assert runner._persist_items([dict(item)])[3] == 0
+    second_time = received + timedelta(hours=1)
+    item.update(author_description="Changed profile", _api_received_at=second_time.isoformat())
+    assert runner._persist_items([dict(item)])[3] == 0
+    snapshots = list(AccountProfileSnapshot.objects.filter(account__author_id="987654").order_by("first_observed_at"))
+    assert [(row.description, row.first_observed_at) for row in snapshots] == [
+        ("First profile", received),
+        ("Changed profile", second_time),
+    ]
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
 def test_persistence_marker_flows_to_current_cycle_post_fetch_evidence(monkeypatch):
     _django_setup()
     from datetime import timedelta
@@ -177,7 +248,7 @@ def test_persistence_marker_flows_to_current_cycle_post_fetch_evidence(monkeypat
     from core.models import PostEnrichmentState
     from monitor.cycle import CycleRunner
     from x_monitor import attribution, reattribute, translator
-    from x_monitor.config import Config
+    from x_monitor.config import Config, LlmConfig
 
     cutoff = timezone.now() - timedelta(seconds=1)
     item = {
@@ -190,13 +261,19 @@ def test_persistence_marker_flows_to_current_cycle_post_fetch_evidence(monkeypat
         "mentions": [],
         "classifications": {},
     }
-    cfg = Config(enabled_models=["deepseek"], daily_ceiling=100)
+    cfg = Config(
+        enabled_models=["deepseek"], daily_ceiling=100,
+        llm=LlmConfig(literal_translation_v2_enabled=False),
+    )
     runner = CycleRunner(cfg=cfg)
     inserted, updated, _attributed, failed = runner._persist_items([item])
     assert (inserted, updated, failed) == (1, 0, 0)
     assert item["_db_inserted"] is True
     assert item["_persisted_post_id"] == item["id"]
 
+    # Translation is now requested explicitly; retain coverage of the legacy
+    # compatibility writer here. The plaintext caller has its own regression net.
+    PostEnrichmentState.objects.filter(post_id=item["id"]).update(translation_requested=True)
     client = object()
     translator_call = {}
     classifier_call = {}
@@ -263,11 +340,14 @@ def test_missing_clients_degrade_only_when_durable_work_exists(monkeypatch):
     from core.models import Post, PostEnrichmentState
     from monitor.cycle import CycleRunner
     from x_monitor import reattribute
-    from x_monitor.config import Config
+    from x_monitor.config import Config, LlmConfig
 
     monkeypatch.setattr(reattribute, "build_translator_client_from_env", lambda cfg: None)
     monkeypatch.setattr(reattribute, "build_anthropic_client_from_env", lambda cfg: None)
-    cfg = Config(enabled_models=["deepseek"], daily_ceiling=100)
+    cfg = Config(
+        enabled_models=["deepseek"], daily_ceiling=100,
+        llm=LlmConfig(literal_translation_v2_enabled=False),
+    )
 
     empty_runner = CycleRunner(cfg=cfg)
     empty = empty_runner._run_post_fetch([], run_id="run-empty")
@@ -275,7 +355,7 @@ def test_missing_clients_degrade_only_when_durable_work_exists(monkeypatch):
     assert empty_runner._errors == []
 
     post = Post.objects.create(tweet_id="post-fetch-missing", text="DeepSeek")
-    PostEnrichmentState.objects.create(post=post)
+    PostEnrichmentState.objects.create(post=post, translation_requested=True)
     work_runner = CycleRunner(cfg=cfg)
     work = work_runner._run_post_fetch([], run_id="run-missing")
 

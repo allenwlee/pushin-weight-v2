@@ -329,3 +329,16 @@ def test_unknown_import_closure_rejects_active_or_unverified_work(native, blocke
     with pytest.raises(BatchAdmissionError):
         _close_unknown(native, call, receipt)
     assert list(OriginalContentCall.objects.order_by("pk").values()) == before
+
+
+def test_classifier_replay_does_not_require_unrequested_translation(native):
+    provider, ids = _rejected_packet(native)
+    from core.models import PostTranslationArtifact
+    PostTranslationArtifact.objects.filter(post_id='native-1').delete()
+    PostEnrichmentState.objects.filter(pk='native-1').update(translation_requested=False, translation_status='pending')
+    sent = provider.sent
+    assert _replay(native, ids)['replayed'] == ['native-1']
+    state = PostEnrichmentState.objects.get(pk='native-1')
+    assert state.classification_status == 'succeeded'
+    assert not state.translation_requested and state.translation_status == 'pending'
+    assert provider.sent == sent

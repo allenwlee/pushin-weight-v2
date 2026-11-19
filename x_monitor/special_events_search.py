@@ -13,14 +13,17 @@ RUN_LANES = dict(
     zip(CALL_IDS, ("special-events/general", "special-events/releases"), strict=True)
 )
 
-GENERAL_QUERY = (
-    '(("I\'ve joined" OR "I joined" OR "I left" OR "我加入" OR "我离开" OR 出任 OR 换帅 OR に入社 OR を退職) '
-    '(AI OR LLM OR OpenAI OR Anthropic) OR "I\'ve joined" '
-    '(@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai) OR '
-    '("we\'re hiring" OR "currently hiring" OR 招聘 OR 募集中) (engineer OR researcher) OR '
-    '("we\'ll be at" OR 登壇) ("AI conference" OR summit) OR '
-    '("applications open" OR "apply by" OR 申请) (hackathon OR fellowship) (AI OR LLM))'
+GENERAL_QUERY_CLAUSES = (
+    (
+        '("I\'ve joined" OR "I joined" OR "I left" OR "我加入" OR "我离开" OR 出任 OR 换帅 OR に入社 OR を退職) '
+        '(AI OR LLM OR OpenAI OR Anthropic)'
+    ),
+    '"I\'ve joined" (@OpenAI OR @AnthropicAI OR @GoogleDeepMind OR @deepseek_ai)',
+    '("we\'re hiring" OR "currently hiring" OR 招聘 OR 募集中) (engineer OR researcher)',
+    '("we\'ll be at" OR 登壇) ("AI conference" OR summit)',
+    '("applications open" OR "apply by" OR 申请) (hackathon OR fellowship) (AI OR LLM)',
 )
+GENERAL_QUERY = "(" + " OR ".join(GENERAL_QUERY_CLAUSES) + ")"
 RELEASE_QUERY = (
     "((introducing OR announce OR announcing OR announced OR release OR released OR releasing OR "
     'launch OR launched OR launching OR "is here" OR available OR arrived OR "open weights" OR '

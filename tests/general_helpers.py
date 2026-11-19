@@ -61,7 +61,7 @@ def classified_post(
     return post
 
 
-def saved_commentary(post, *, current=True, revision="one"):
+def saved_commentary(post, *, current=True, revision="one", texts=None):
     artifact = PostSynthesisArtifact.objects.create(
         post=post,
         input_context_fingerprint=sha256(revision.encode()).hexdigest(),
@@ -73,10 +73,11 @@ def saved_commentary(post, *, current=True, revision="one"):
         started_at=NOW - timedelta(hours=2),
         completed_at=NOW - timedelta(hours=1),
     )
-    for locale, text in [
-        ("en", "Normalized commentary"),
-        ("zh-cn", "已保存的评论"),
-        ("ja", "保存された解説"),
-    ]:
+    values = texts if texts is not None else {
+        "en": "Normalized commentary",
+        "zh-cn": "已保存的评论",
+        "ja": "保存された解説",
+    }
+    for locale, text in values.items():
         PostSynthesisText.objects.create(artifact=artifact, locale=locale, text=text)
     return artifact

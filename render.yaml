@@ -27,6 +27,10 @@ services:
         value: 3.12.0
       - key: DEBUG
         value: "False"
+      - key: TRUST_RENDER_CLIENT_IP
+        value: "True"
+      - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
+        value: "True"
       - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
         value: production
       - key: ALLOWED_HOSTS
@@ -587,7 +591,7 @@ services:
     plan: starter
     schedule: "7,22,37,52 * * * *"
     buildCommand: ./build.sh
-    startCommand: python manage.py refresh_home_counts
+    startCommand: python manage.py refresh_materializations
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0

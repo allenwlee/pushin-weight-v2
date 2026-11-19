@@ -857,17 +857,24 @@ class XClient:
             str(tweet["id"]): {
                 key: int(tweet[provider_key])
                 for key, provider_key in (
-                    ("quote_count", "quoteCount"), ("retweet_count", "retweetCount"),
-                    ("reply_count", "replyCount"), ("like_count", "likeCount"),
-                    ("view_count", "viewCount"), ("bookmark_count", "bookmarkCount"),
-                ) if tweet.get(provider_key) is not None
+                    ("quote_count", "quoteCount"),
+                    ("retweet_count", "retweetCount"),
+                    ("reply_count", "replyCount"),
+                    ("like_count", "likeCount"),
+                    ("view_count", "viewCount"),
+                    ("bookmark_count", "bookmarkCount"),
+                )
+                if tweet.get(provider_key) is not None
             }
             for tweet in self._tweets_by_ids(tweet_ids)
         }
 
     def get_posts_by_ids(self, tweet_ids: list[str]) -> dict[str, dict[str, Any]]:
-        """Original source text and attribution through the same bounded lookup."""
-        return {str(tweet["id"]): _normalize_tweet(tweet) for tweet in self._tweets_by_ids(tweet_ids)}
+        """Source text and attribution through the existing bounded ID lookup."""
+        return {
+            str(tweet["id"]): _normalize_tweet(tweet)
+            for tweet in self._tweets_by_ids(tweet_ids)
+        }
 
     def _tweets_by_ids(self, tweet_ids):
         ids = [str(t) for t in tweet_ids if t]

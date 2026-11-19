@@ -11,6 +11,8 @@ from django.db import transaction
 
 from core.models import Account, Post, TwitterListMembership
 from core.profile_snapshots import (
+    ProfileHistoryConflict,
+    ProfileSourceConflict,
     build_brand_reference_index,
     classify_affiliation_signals,
     persist_affiliation_candidates,
@@ -63,6 +65,12 @@ class Command(BaseCommand):
             "snapshots_created": 0,
             "snapshots_changed": 0,
             "snapshots_unchanged": 0,
+            "held_observations": (
+                list(checkpoint.get("held_observations", []))
+                if checkpoint is not None and options["after_author_id"] is None
+                else []
+            ),
+            "hold_detection_complete": not options["dry_run"],
             "candidate_counts": {
                 "staff": 0,
                 "community": 0,
@@ -92,6 +100,7 @@ class Command(BaseCommand):
                 "snapshots_unchanged",
             ):
                 report[key] += account_report[key]
+            report["held_observations"].extend(account_report["held_observations"])
             for key, value in account_report["candidate_counts"].items():
                 report["candidate_counts"][key] += value
             for key, value in account_report["call_a"].items():
@@ -112,6 +121,7 @@ class Command(BaseCommand):
             "snapshots_created": 0,
             "snapshots_changed": 0,
             "snapshots_unchanged": 0,
+            "held_observations": [],
             "candidate_counts": {
                 "staff": 0,
                 "community": 0,
@@ -179,14 +189,33 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             for observed_at, source_kind, post, observation in observations:
-                snapshot, created, changed = record_profile_snapshot(
-                    account=account,
-                    observation=observation,
-                    observed_at=observed_at,
-                    source_kind=source_kind,
-                    source_post=post,
-                    source_run=(COMMAND_VERSION if post is None else None),
-                )
+                try:
+                    snapshot, created, changed = record_profile_snapshot(
+                        account=account,
+                        observation=observation,
+                        observed_at=observed_at,
+                        source_kind=source_kind,
+                        source_post=post,
+                        source_run=(COMMAND_VERSION if post is None else None),
+                        reject_ambiguous_history=True,
+                    )
+                except ProfileHistoryConflict as exc:
+                    result["held_observations"].append(
+                        {
+                            "account_id": account.author_id,
+                            "source_kind": source_kind,
+                            "source_post_id": str(post.pk) if post else None,
+                            "observed_at": observed_at.isoformat(),
+                            "reason": "unrepresented_profile_source"
+                            if isinstance(exc, ProfileSourceConflict)
+                            else "ambiguous_profile_interval",
+                            "profile_hash": observation.profile_hash,
+                            "present_fields": list(observation.present_fields),
+                            "profile_data": observation.profile_data,
+                            "raw_profile_payload": observation.raw_profile_payload,
+                        }
+                    )
+                    continue
                 result["snapshots_created"] += int(created)
                 result["snapshots_changed"] += int(changed)
                 result["snapshots_unchanged"] += int(not created)

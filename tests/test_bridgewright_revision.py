@@ -36,3 +36,11 @@ def test_revision_header_is_scoped_to_reader_pages(monkeypatch):
     assert home["X-Bridgewright-Revision"] == "c" * 40
     assert general["X-Bridgewright-Revision"] == "c" * 40
     assert "X-Bridgewright-Revision" not in static
+
+
+def test_each_response_binds_its_revision_for_candidate_measurements(monkeypatch):
+    monkeypatch.setenv('RENDER_GIT_COMMIT', 'e' * 40)
+    middleware = BridgewrightRevisionMiddleware(lambda request: HttpResponse('ok'))
+    for path in ('/dashboard/each', '/dashboard/each/'):
+        response = middleware(RequestFactory().get(path))
+        assert response['X-Bridgewright-Revision'] == 'e' * 40

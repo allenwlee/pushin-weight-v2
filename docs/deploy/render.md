@@ -39,6 +39,31 @@ unchanged SHA to `main` after staging passes. The workflow confirms the
 configured Render services and health route for that candidate. A green build
 alone is not sufficient evidence of the intended deployment identity.
 
+### Saved chart facts refresh
+
+The existing `pushinweight-home-counts` cron runs
+`python manage.py refresh_materializations` at `7,22,37,52 * * * *`.
+It refreshes `home.brand_time_counts.v1` and `each.brand_post_facts.v1`
+independently and prints one JSON object keyed by those dataset keys. Each value
+has `status` (`refreshed`, `skipped`, `busy`, `changed` or `unavailable`), with
+`cutoff` and `generation` when supplied by the lifecycle. A raised dataset error
+is reported as `unavailable` with its exception class; the other dataset is still
+attempted and the command exits nonzero. It makes no provider calls.
+
+The homepage retains its existing 120-second refresh limit. Each facts use a
+90-second limit and a cutoff at the start of yesterday in UTC. Advancing that
+cutoff first tries short `SHARE MODE NOWAIT` locks on its source tables, up to
+ten attempts separated by 200 milliseconds. The successful barrier commits
+before counting; a busy source leaves the prior publication intact and the
+next cron tick retries. This operation never pauses or reschedules collection.
+A historical correction dirties the saved prefix until a successful refresh;
+readers combine the still-valid prefix with current source facts.
+
+After applying the schema to staging, invoke the same command manually on the
+staging jobs service before checking the saved-facts read path. No staging
+count cron is added. Inspect both dataset results and publication state rather
+than treating a successful job process as proof of both refreshed datasets.
+
 ### Database credentials and migrations
 
 Web services use the dedicated `pushinweight_web_serving` database login and
@@ -594,11 +619,13 @@ ordinary page query remains available while the view is unpopulated or invalid.
 Populate it through the service's managed database configuration:
 
 ```bash
-python manage.py refresh_home_counts
+python manage.py refresh_materializations
 ```
 
-The command emits JSON with `status` equal to `refreshed`, `skipped`, `busy`,
-`changed`, or `unavailable`. `changed` means a source write overlapped counting
+The command emits JSON keyed by `home.brand_time_counts.v1` and
+`each.brand_post_facts.v1`, with an independent result for each dataset. Each
+result has `status` equal to `refreshed`, `skipped`, `busy`, `changed`, or
+`unavailable`. `changed` means a source write overlapped counting
 and the whole refresh was rolled back; retry at the next poll. A missing
 lifecycle row is repaired in a separate short transaction only when existing
 source writers have finished. A busy source or another refresher causes a
@@ -640,8 +667,22 @@ independent.
 After activation, verify real homepage switches to 30 days and one year return
 200 before the browser timeout, replace every associated projection, and log no
 JavaScript errors. Inspect the maintenance JSON and publication fields after a
-scheduled poll. If the release causes incorrect counts or source-write failures,
-roll back the application revision and suspend only the new count-maintenance
-job. The previous application can use the additive schema. Keep source data and
-existing harvest schedules intact; schema reversal is a separate controlled
-operation after consumers no longer use the view.
+scheduled poll. For incorrect publication or a web-reader regression, roll back
+the application revision; the previous application can use the additive schema.
+Keep source data and existing harvest schedules intact. Do not suspend collection
+or enrichment to stabilize a verification cohort.
+
+An application rollback leaves the database triggers installed. It therefore
+does not repair a confirmed trigger-side source-write failure. Migration
+`0228_each_chart_facts` has a transactional reverse operation that removes only
+the Each triggers, functions, views and its own lifecycle row. First move web
+readers and refresh callers to the compatible prior application and let
+in-flight candidate readers finish. Rehearse reversal on staging with active
+writers and a `2s` lock timeout; a busy attempt must abort rather than queue
+behind writers. Inspect the migration graph before choosing the reverse target:
+on a merged graph, `migrate core 0227` can also reverse unrelated migrations and
+is not a safe generic rollback command. Use the reviewed Each-only reverse SQL
+inside one bounded transaction, then reconcile its migration record explicitly.
+Verify source writes and the homepage publication remain healthy. Production
+schema reversal requires its own explicit release authority; a staging rehearsal
+does not authorize it.

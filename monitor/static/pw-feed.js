@@ -100,7 +100,8 @@
     var synthesis = result.synthesis || {};
     var literal = result.literal || {};
     if (text) {
-      var selectedKey = text.getAttribute('data-translation-selected') === '1'
+      var selectedKey = text.getAttribute('data-translation-selected') === '1' ||
+        text.getAttribute('data-layer-selected-by-user') === '1'
         ? text.getAttribute('data-layer-key') : null;
       if (typeof result.language_undetected === 'boolean') {
         text.setAttribute('data-language-display', result.language_display || '');
@@ -1231,10 +1232,10 @@
   function translationLabel(status) {
     var locale = currentLocale();
     var labels = locale === 'ja' || locale === 'ja-JP'
-      ? { pending: '翻訳中…', ready: '翻訳を表示', failed: '翻訳を再試行', deferred: '後でもう一度お試しください', not_requested: '翻訳' }
+      ? { pending: '翻訳中…', ready: '翻訳を表示', failed: '翻訳を再試行', deferred: '後でもう一度お試しください', unsupported: '翻訳は利用できません', unavailable: '翻訳は利用できません', not_requested: '翻訳' }
       : locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans'
-        ? { pending: '翻译中…', ready: '显示翻译', failed: '重试翻译', deferred: '请稍后再试', not_requested: '翻译' }
-        : { pending: 'Translating…', ready: 'Show translation', failed: 'Retry translation', deferred: 'Try again later', not_requested: 'Translate' };
+        ? { pending: '翻译中…', ready: '显示翻译', failed: '重试翻译', deferred: '请稍后再试', unsupported: '无法翻译', unavailable: '无法翻译', not_requested: '翻译' }
+        : { pending: 'Translating…', ready: 'Show translation', failed: 'Retry translation', deferred: 'Try again later', unsupported: 'Translation unavailable', unavailable: 'Translation unavailable', not_requested: 'Translate' };
     return labels[status] || labels.not_requested;
   }
 
@@ -1252,6 +1253,7 @@
     if (button) {
       button.textContent = translationLabel(status);
       button.setAttribute('aria-busy', status === 'pending' ? 'true' : 'false');
+      button.disabled = status === 'unsupported' || status === 'unavailable';
     }
   }
 
@@ -1276,9 +1278,11 @@
       }
       var result = payload && payload.results && payload.results[0];
       if (!result) throw new Error('translation response invalid');
-      setTranslationStatus(row, result.status);
+      var waitingForRequest = result.status === 'not_requested' && pollAttempt > 0 && translationIntents[id] === locale;
+      setTranslationStatus(row, waitingForRequest ? 'pending' : result.status);
       var text = $('.text[data-text-cycle]', row);
       if (text && result.literal) {
+        var previousLayer = text.getAttribute('data-layer-key');
         if (result.literal.en) text.setAttribute('data-text-en', result.literal.en);
         if (result.literal['zh-cn']) text.setAttribute('data-literal-cn', result.literal['zh-cn']);
         if (result.literal.ja) text.setAttribute('data-text-ja', result.literal.ja);
@@ -1286,12 +1290,19 @@
           text.setAttribute('data-translation-selected', '1');
           selectTextLayer(text, translationLocale() === 'zh-cn' ? 'literal_cn' : translationLocale() === 'ja' ? 'literal_ja' : 'en');
           delete translationIntents[id];
+        } else if (previousLayer) {
+          selectTextLayer(text, previousLayer);
         }
         renderTextLayer(text);
       }
-      if (result.status === 'pending' || result.status === 'deferred') {
-        var delay = SYNTHESIS_POLL_DELAYS[Math.min(pollAttempt, SYNTHESIS_POLL_DELAYS.length - 1)];
+      if ((result.status === 'pending' || waitingForRequest) && pollAttempt < SYNTHESIS_POLL_DELAYS.length) {
+        var delay = SYNTHESIS_POLL_DELAYS[pollAttempt];
         setTimeout(function () { requestTranslation(row, pollAttempt + 1, selection, locale, generation, pollGeneration); }, delay);
+      } else if (result.status === 'pending' || waitingForRequest) {
+        setTranslationStatus(row, 'deferred');
+        delete translationIntents[id];
+      } else if (result.status === 'deferred' || result.status === 'unsupported' || result.status === 'unavailable' || result.status === 'failed') {
+        delete translationIntents[id];
       }
     }).catch(function () {
       if (row.isConnected && generation === synthesisGeneration && row.getAttribute('data-translation-poll-generation') === pollGeneration) setTranslationStatus(row, 'failed');
@@ -1318,9 +1329,11 @@
         button.setAttribute('data-translation-bound', '1');
         setTranslationStatus(row, row.getAttribute('data-translation-status') || 'not_requested');
         var id = row.getAttribute('data-tweet-id');
-        if (row.getAttribute('data-translation-status') === 'pending') {
+        var hasIntent = translationIntents[id] === currentLocale();
+        if (row.getAttribute('data-translation-status') === 'pending' || hasIntent) {
           var text = $('.text[data-text-cycle]', row);
-          var resumed = translationIntents[id] === currentLocale() ? '1' : 'not-selected';
+          var resumed = hasIntent ? '1' : 'not-selected';
+          if (hasIntent) setTranslationStatus(row, 'pending');
           if (resumed === '1') text.setAttribute('data-translation-selection', resumed);
           row.setAttribute('data-translation-poll-generation', '1');
           requestTranslation(row, 1, resumed, currentLocale(), synthesisGeneration, '1');
@@ -1473,6 +1486,7 @@
         var row = el.closest('.feed-row');
         if (!row) return;
         delete translationIntents[row.getAttribute('data-tweet-id')];
+        el.setAttribute('data-layer-selected-by-user', '1');
         el.removeAttribute('data-translation-selected');
         el.setAttribute('data-translation-selection', String(Number(el.getAttribute('data-translation-selection') || '0') + 1));
         if (!el.classList.contains('is-expanded')) {
@@ -1630,12 +1644,8 @@
     if (!root) return;
     var body = $('[data-pw-feed-body]', root);
     if (!body) return;
-    resetSynthesisDemand();
-    // Clear the body but preserve the first batch (already rendered by
-    // Jinja). For the simplest behavior, refetch from the server and
-    // replace the entire body. U4 (2026-07-16): pass the current
-    // control-panel filter so the immediate refetch honors it (was
-    // previously fetching the un-filtered feed on every toggle).
+    // Keep the current rows and their requests active until replacement succeeds.
+    // The refetch uses the current control-panel filters.
     var filterSnapshot = filters || filtersForEvent();
     return runFeedRequest(filterSnapshot, { cursor: null }, function (payload, committedFilters) {
       replaceRows(body, payload.rows);
@@ -1846,7 +1856,18 @@
       }
       var currentBody = $('[data-pw-feed-body]');
       if (currentBody) {
-        observeSynthesisRows($$('.feed-row[data-pw-feed-row]', currentBody));
+        var rows = $$('.feed-row[data-pw-feed-row]', currentBody);
+        observeSynthesisRows(rows);
+        rows.forEach(function (row) {
+          if (row.getAttribute('data-translation-status') !== 'pending') return;
+          var id = row.getAttribute('data-tweet-id');
+          var text = $('.text[data-text-cycle]', row);
+          var selection = translationIntents[id] === currentLocale() && text
+            ? text.getAttribute('data-translation-selection') : 'not-selected';
+          var pollGeneration = String(Number(row.getAttribute('data-translation-poll-generation') || '0') + 1);
+          row.setAttribute('data-translation-poll-generation', pollGeneration);
+          requestTranslation(row, 1, selection, currentLocale(), synthesisGeneration, pollGeneration);
+        });
       }
     });
   }

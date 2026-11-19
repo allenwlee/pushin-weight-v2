@@ -457,7 +457,7 @@ def replay_rejected_classifier_packet(
         list(Post.objects.select_for_update().filter(pk__in=members).order_by("pk"))
         snapshot = saved_classifier_input(calls[0])
         facts = completion_facts(selected)
-        if all(facts[p]["translation"] and facts[p]["classification"] for p in selected):
+        if all(facts[p]["classification"] for p in selected):
             return {"replayed": [], "already_complete": selected}
         locked = list(OriginalContentCall.objects.select_for_update().filter(pk__in=ids).order_by("pk"))
         for call in locked:
@@ -476,10 +476,10 @@ def replay_rejected_classifier_packet(
             raise BatchAdmissionError("classifier_revalidation_requires_unsaved_reply")
         facts = completion_facts(members)
         succeeded = set(PostEnrichmentState.objects.filter(
-            pk__in=selected, translation_status="succeeded", classification_status="succeeded",
+            pk__in=selected, classification_status="succeeded",
         ).values_list("post_id", flat=True))
         if succeeded != set(selected) or any(
-            not facts[p]["translation"] or not facts[p]["classification"] for p in selected
+            not facts[p]["classification"] for p in selected
         ):
             raise BatchAdmissionError("classifier_revalidation_publication_incomplete")
         complete = sorted(p for p in members if facts[p]["classification"])
@@ -596,7 +596,7 @@ def replay_requested_saved_translation(cfg, *, delegates=None, post_ids=None):
     candidates = (
         PostEnrichmentState.objects.filter(
             translation_requested=True, translation_status="pending",
-            classification_status="succeeded", source_collection_job__isnull=False,
+            source_collection_job__isnull=False,
         )
         .filter(Q(translation_next_attempt_at__isnull=True) | Q(translation_next_attempt_at__lte=now))
         .filter(Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now))
@@ -613,16 +613,15 @@ def replay_requested_saved_translation(cfg, *, delegates=None, post_ids=None):
     if delegates is None:
         delegates = {
             "translation": build_translator_client_from_env(cfg),
-            "classification": build_classifier_client_from_env(cfg),
         }
-    if not all(delegates.values()):
+    if not delegates.get("translation"):
         return False
     try:
         # prepare_page only replays cached replies or prepares requests in
         # memory. We deliberately never register or send those requests here.
         _, _, missing = prepare_page(
             state.source_collection_job, [str(state.pk)], cfg, delegates=delegates,
-            quarantine_rejected=False,
+            quarantine_rejected=False, translation_only=True, defer_conflicts=True,
         )
         if missing:
             with transaction.atomic():
@@ -635,7 +634,6 @@ def replay_requested_saved_translation(cfg, *, delegates=None, post_ids=None):
                 ).exists()
                 if (locked.translation_requested
                         and locked.translation_status == "pending"
-                        and locked.classification_status == "succeeded"
                         and (not locked.claim_expires_at or locked.claim_expires_at <= timezone.now())):
                     locked.translation_error_code = (
                         "historical_translation_unresolved" if active else "incomplete_saved_translation"
@@ -651,9 +649,13 @@ def replay_requested_saved_translation(cfg, *, delegates=None, post_ids=None):
     return True
 
 
-def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot=None, quarantine_rejected=True):
+def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot=None, quarantine_rejected=True, translation_only=False, defer_conflicts=False):
     """Replay exact shared callers; missing replies roll back every Post write."""
-    own_historical_posts(job, ids)
+    conflicts = own_historical_posts(job, ids, defer_conflicts=defer_conflicts)
+    if conflicts:
+        ids = [post_id for post_id in ids if str(post_id) not in conflicts]
+        if not ids:
+            return [], {}, False
     stage_targets = {
         stage: set(
             PostEnrichmentState.objects.filter(
@@ -722,24 +724,27 @@ def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot
                 }
         return None
 
-    delegates = delegates or {
-        "translation": build_translator_client_from_env(
-            cfg, deepinfra_key_env="DEEPINFRA_ON_DEMAND",
-        ),
-        "classification": build_classifier_client_from_env(
-            cfg, deepinfra_key_env="DEEPINFRA_ON_DEMAND",
-        ),
-    }
-    if any(client is None for client in delegates.values()):
+    if delegates is None:
+        delegates = {
+            "translation": build_translator_client_from_env(
+                cfg, deepinfra_key_env="DEEPINFRA_ON_DEMAND",
+            ),
+        }
+        if not translation_only:
+            delegates["classification"] = build_classifier_client_from_env(
+                cfg, deepinfra_key_env="DEEPINFRA_ON_DEMAND",
+            )
+    required_stages = ("translation",) if translation_only else ("translation", "classification")
+    if any(delegates.get(stage) is None for stage in required_stages):
         raise BatchAdmissionError("enrichment_role_credentials_missing")
     clients = {
         stage: DeferredInferenceClient(
-            client,
+            delegates[stage],
             resolve=resolve,
             reply_transport=lambda identity: cached[identity].provider_batch.transport,
-            context_transform=getattr(client, "context_for_request", None),
+            context_transform=getattr(delegates[stage], "context_for_request", None),
         )
-        for stage, client in delegates.items()
+        for stage in required_stages
     }
     bounded = bounded_backfill_config(cfg, enrichment_limit=len(ids))
     if not bounded.llm.literal_translation_v2_enabled:
@@ -757,6 +762,7 @@ def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot
             post_ids=set(ids),
             source_collection_job_id=job.pk,
             classification_input_snapshot=classification_input_snapshot,
+            translation_only=translation_only,
         )
         snapshot_ids = set(ids) | {
             p for request in prepared.values() for p in request["context"]["post_ids"]
@@ -1032,6 +1038,7 @@ def _replay_pending_classifier_packets(
             cfg,
             delegates=delegates,
             classification_input_snapshot=saved_input,
+            defer_conflicts=True,
         )
         requests.extend(prepared)
         # Publication can reject a newer attempt while an older paid reply is
@@ -1237,7 +1244,7 @@ def _blocking_model_groups(job, model, *, allow_drained_ambiguous):
 
 def _register_requests(
     job, requests, policy, cfg, *, transport="batch", allow_drained_ambiguous=False,
-    deferred=None,
+    deferred=None, defer_claim_conflicts=False,
 ):
     models = defaultdict(list)
     for request in requests:
@@ -1310,7 +1317,7 @@ def _register_requests(
                 deadline_at=timezone.datetime.fromisoformat(policy["deadline"]),
             )
             claim = claim_batch(batch.pk, owner=f"register:{uuid.uuid4().hex}")
-            if deferred is None:
+            if deferred is None and not defer_claim_conflicts:
                 reserve_requests(claim, selected)
             else:
                 # Each child retains the same fenced, Post-locked admission.
@@ -1320,13 +1327,21 @@ def _register_requests(
                         with transaction.atomic():
                             reserve_requests(claim, [request])
                     except BatchAdmissionError as exc:
-                        if str(exc) not in {
+                        duplicate_or_exhausted = str(exc) in {
                             "model_request_already_outstanding_or_complete",
                             "model_member_work_already_outstanding",
                             "model_attempt_allowance_exhausted",
-                        }:
+                        }
+                        claimed = str(exc) == "historical_state_missing_or_claimed"
+                        duplicate = str(exc) in {
+                            "model_request_already_outstanding_or_complete",
+                            "model_member_work_already_outstanding",
+                        }
+                        if not ((deferred is not None and duplicate_or_exhausted)
+                                or (defer_claim_conflicts and (claimed or duplicate))):
                             raise
-                        deferred.update({p: str(exc) for p in exc.member_ids})
+                        if deferred is not None:
+                            deferred.update({p: str(exc) for p in exc.member_ids})
                 admitted = list(batch.calls.order_by("request_hash"))
                 admitted_manifest = digest([c.request_hash for c in admitted])
                 if admitted_manifest != manifest:
@@ -1478,7 +1493,7 @@ def execute_enrichment(
                 )
                 if not pending:
                     continue
-                prepared, _, _ = prepare_page(job, pending, cfg, delegates=delegates)
+                prepared, _, _ = prepare_page(job, pending, cfg, delegates=delegates, defer_conflicts=True)
                 requests.extend(prepared)
                 if len(requests) >= request_limit:
                     break
@@ -1490,6 +1505,7 @@ def execute_enrichment(
                 transport=transport,
                 allow_drained_ambiguous=defer_failures,
                 deferred=deferred if defer_failures else None,
+                defer_claim_conflicts=True,
             ):
                 advance(ProviderBatch.objects.get(pk=batch_id))
         except BatchAdmissionError as exc:

@@ -20,6 +20,9 @@ def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
         "pushinweight-harvest",
         "pushinweight-jobs",
         "pushinweight-home-counts",
+        "pushinweight-graphics-a",
+        "pushinweight-graphics-b",
+        "pushinweight-graphics-review",
     }
     assert [database["name"] for database in blueprint["databases"]] == [
         "pushinweight-db-shadow"
@@ -106,7 +109,7 @@ def test_render_crons_keep_harvest_as_the_only_cycle_scheduler():
         ),
         "pushinweight-home-counts": (
             "7,22,37,52 * * * *",
-            "python manage.py refresh_home_counts",
+            "python manage.py refresh_materializations",
         ),
         "pushinweight-jobs": (
             "17 */6 * * *",

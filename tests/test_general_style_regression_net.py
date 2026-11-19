@@ -87,6 +87,9 @@ def _apply_intended(value: Any) -> Any:
         # This fixture contains no translation requests.
         if "row_key" in value and "text_original" in value:
             result["translation_status"] = "not_requested"
+            # The feed now exposes its effective source language separately;
+            # this fixture's detected languages are already populated.
+            result["effective_language"] = value.get("lang_detected")
         return result
     if isinstance(value, list):
         return [_apply_intended(item) for item in value]

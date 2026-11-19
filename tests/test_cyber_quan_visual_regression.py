@@ -5,6 +5,10 @@ The goldens were recaptured for the General-style homepage
 supersedes the icon-only Cyber-Quan delta. Its prechange-to-candidate icon
 comparison is retired; ``prechange-*.png`` and ``mask-*.png`` remain only as the
 evidence recorded by docs/iterations/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md.
+The two current goldens were recaptured from unchanged revision 44a98074 on
+the current test host after proving its rendering had the same 7 desktop and
+17 mobile out-of-mask differences as the candidate. The mask and comparison
+threshold remain unchanged.
 Recapture with ``CYBER_QUAN_CAPTURE_ONLY=candidate``.
 """
 

@@ -53,6 +53,7 @@ verify_serving_environment(environ.Env.ENVIRON)
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-only-change-in-production-xmonitor-v2")
 DEBUG = env("DEBUG")
+TRUST_RENDER_CLIENT_IP = env.bool("TRUST_RENDER_CLIENT_IP", default=False)
 POST_TRANSLATION_DAILY_REQUEST_LIMIT = env.int("POST_TRANSLATION_DAILY_REQUEST_LIMIT", default=1000)
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", ".onrender.com"])
 
