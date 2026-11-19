@@ -1,7 +1,7 @@
 {
   "schema_version": "bridgewright.assurance.declaration/v1",
   "profile": "stateful-ui-assurance/v1",
-  "source_revision": "worktree-sha256:84a3dd39d19a341e3ba4c246ebcfb49b755868ea51ee13473ed9ed636ef757fb",
+  "source_revision": "worktree-sha256:31630391aac0e5b66e4dd5b01e2524efacbd2bc9f844f87082e104ddbc430d44",
   "fixture": {
     "path": "tests/fixtures/chatter_pools_contract.json",
     "sha256": "22a276b6db868f17c73669283584f7885da91e066ba075ecf64de2a57ba90ef1"

@@ -1032,10 +1032,12 @@ connections and timeout-discard followed by a successful fresh connection on
 both versions. The next complete candidate gate/preview must use the staging
 version overlay, and staging activation remains pending.
 
-The staging owner allowlist has no existing active account. If needed for real
-HTTPS/browser verification, create one temporary normal account using an
-already-configured allowed owner email and an unusable password, obtain a short
-normal Django session, then delete only that test account/session. Preserve any
+The owner worker does not carry the web owner allowlist. Read the actual web
+policy privately at the verified staging SHA before HTTPS/browser verification;
+it currently contains one allowed owner. Reuse an existing active matching owner,
+or create one temporary normal account with that configured email and an unusable
+password, obtain a short normal Django session, then delete only the test
+account/session created for this check. Preserve any
 existing inactive owner; do not change the allowlist, OAuth configuration or
 provider credentials. Record this as an authentication test fixture, not proof
 of the external OAuth login flow. Cookie material stays private and untracked.
@@ -1049,3 +1051,58 @@ the dual-signature regression was red1failed/1passed before repair. Both actual
 cold SELECT1 and timed-out initial settings discovery followed by a fresh
 budgeted SELECT1 pass. Evidence is `driver-compatibility-repair.json` under the
 private task evidence root. No shared environment dependency was replaced.
+
+
+### Narrow Post access paths after measured grouped refresh failure
+
+The target-runtime619tests+303subtests/326requiredPG(0skips/errors) and sealed
+performance attempt `3cf433c8542bfdf799cd6f27` passed for `32144e5b`. All seven
+staging services reached that SHA, but its actual grouped Each refresh also hit
+the unchanged90s cap (90.523620s). Home counts reported skipped at the current
+cutoff. Each activation remains incomplete; the empty copy was not published.
+The native grouped SELECT alone measured84.200614s/388,692rows; its actual plan
+touched111,832Postheapblocks(about874MiB) and spilled22,036temporaryblocks.
+This is not a successful REFRESH measurement.
+
+Existing `idx_posts_created_cover` covers time, post ID and author but lacks both
+language fields. Additive0233 adds two indexes and retires no index/table. Its
+normal-row partial cover includes the five needed Post columns. A complementary
+sparse date index retains exact access to rows with unusually wide raw text.
+Each of the three text fields must be at most256bytes to enter the cover; wider
+values take the second path without truncation, normalization or a new rejection.
+This matters because provider `lang` is passed through without a length bound.
+The grouped build joins an exhaustive short/wide UNION ALL of the same raw
+projection. The ordinary source view/readers,20stored columns, classification,
+category order and numerical semantics stay unchanged. No ordinary table/JSON
+column/service or global memory setting is added. The smaller existing cover
+remains useful for homepage/count-only queries.
+
+Both new indexes build CONCURRENTLY, with a nonwaiting session guard,2slock wait
+and5min/index build allowance, restoring session settings. All native properties
+and frozen predicates are checked before adopting prebuilt objects; wrong or
+invalid objects fail without deletion. Index preparation may precede app rollout
+on the verified staging owner connection using the exact reviewed0233 source.
+It creates/adopts only the two native indexes and does not change the MV or
+Django migration recorder. The normal deployed migration adopts those verified
+objects, then atomically swaps the MV to the short/wide projection and withdraws
+publication. Reverse restores0232 before removing these two optional indexes.
+No writer or collection process is paused.
+
+Native target-version verification passed9tests plus an integrated61PostgreSQL
+tests/37subtests, skips0/errors0, with clean drift and no new lint. Tests cover
+wide/NULL/Unicode raw values, exact physical source parity, actual interrupted
+CONCURRENTLY residue, conflict/adoption/reverse, timeout restoration and writer
+continuity. Fixture VACUUM/forced-plan assertions prove path availability only;
+real planner, visibility-map behavior, refresh/latency and write overhead must
+still be measured. Independent scoped review found no remaining code issue:
+`/tmp/compound-engineering-501/ce-code-review/20261119-215522-613f15bc/followup-cover-index-review.json`.
+
+
+Index writer experiment (task-test fixtures,200posts,threeinterleaved samples per
+arm; Each triggers enabled throughout): real v4 publisher9.269→9.210ms/post
+(no measured slowdown; not a claimed speedup), source insert0.444→0.463ms
+(+0.0192ms/+4.32%), language update0.237→0.263ms(+0.0269ms/+11.38%). The publish
+and insert comparisons meet the5%/2ms limits; language's relative figure exceeds
+5%, so this is not labelled a universal5% pass. Its measured absolute increase
+is27microseconds. These fixture results do not certify production throughput.
+Evidence: `cover-index-publish-overhead.json` in the private task evidence root.
