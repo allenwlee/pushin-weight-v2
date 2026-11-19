@@ -647,7 +647,7 @@ def project_publication_coordinates_batch(
             ).order_by("pk").values_list("pk", flat=True))
         query = query.filter(pk__in=owners).select_related("run__job", "legacy_archive").only(
             "pk", "run_id", "run__job_id", "run__job__source_id",
-            "source_identifier", "source_metadata", "dimensions",
+            "source_identifier", "source_metadata", "dimensions", "projection_kind",
             "legacy_archive__body", "legacy_archive__content_sha256",
             "provider_revision", "config_key", "category_key", "source_record_date",
         )

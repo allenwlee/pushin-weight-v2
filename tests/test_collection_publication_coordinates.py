@@ -7,10 +7,23 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 from core.collection_storage_migration import project_publication_coordinates_batch
+from core.data_source_backfill_upgrade import EXPAND
 from core.models import CollectionObservation
+from tests.collection_document_fixtures import historical_models
 from tests.test_collection_resources import publication_observation
 
-pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    pytest.mark.requires_postgres,
+    pytest.mark.parametrize("migration_rehearsal_schema", [EXPAND], indirect=True),
+]
+
+
+@pytest.fixture(autouse=True)
+def publication_projection_schema(migration_rehearsal_schema):
+    # Rehearse the copy when its legacy inputs and typed destinations coexisted.
+    with historical_models():
+        yield
 
 
 def observation():

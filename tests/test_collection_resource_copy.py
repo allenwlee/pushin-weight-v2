@@ -6,10 +6,23 @@ from django.test.utils import CaptureQueriesContext
 
 from core.collection_resources import resource_snapshot_values
 from core.collection_storage_migration import project_resource_snapshots_batch
+from core.data_source_backfill_upgrade import EXPAND
 from core.models import CollectionObservation, CollectionResourceSnapshot
+from tests.collection_document_fixtures import historical_models
 from tests.test_collection_resources import publication_observation
 
-pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    pytest.mark.requires_postgres,
+    pytest.mark.parametrize("migration_rehearsal_schema", [EXPAND], indirect=True),
+]
+
+
+@pytest.fixture(autouse=True)
+def historical_projection_schema(migration_rehearsal_schema):
+    # The one-time copy reads the real pre-retirement columns in this schema.
+    with historical_models():
+        yield
 
 
 def captured_commit():

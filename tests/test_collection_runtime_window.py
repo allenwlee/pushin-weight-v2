@@ -66,7 +66,7 @@ def test_runtime_window_survives_resume_after_legacy_envelopes_are_cleared(
         **extras,
     )
     job = set_job_state(job.pk, "ready")
-    first = claim_job(job.pk)
+    first = claim_job(job.pk, typed=True)
     view = _runtime_publication_window(first, job)
     expected_end = now.replace(hour=0)
     expected_start = expected_end - timedelta(days=7)
@@ -79,11 +79,13 @@ def test_runtime_window_survives_resume_after_legacy_envelopes_are_cleared(
         scoped.requested_start_at == expected_start
         and scoped.requested_end_at == expected_end
     )
-    finish_run(first, status="partial", request_count=0)
-    scoped.envelopes = []
-    scoped.save(update_fields=["envelopes"])
+    finish_run(first, status="partial", request_count=0, typed=True, physical_accounting_complete=True)
+    from core.collection_capture import archive_legacy
+
+    scoped.legacy_archive = archive_legacy({"ownership": {}, "envelopes": [], "cursor_history": []})
+    scoped.save(update_fields=["legacy_archive"])
     monkeypatch.setattr("django.utils.timezone.now", lambda: now + timedelta(days=1))
-    next_claim = claim_job(job.pk)
+    next_claim = claim_job(job.pk, typed=True)
     resumed = _runtime_publication_window(next_claim, job)
     assert next_claim.run_id == first.run_id
     assert resumed.scope["cutoff"] == expected_end.isoformat()

@@ -27,12 +27,12 @@ pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 def execution():
     job = ready()
-    run = CollectionRun.objects.get(pk=claim_job(job.pk).run_id)
+    run = CollectionRun.objects.get(pk=claim_job(job.pk, typed=True).run_id)
     attempt = run.attempts.get()
     scope = CollectionScopeRun.objects.create(
         run=run,
         scope_key="publisher",
-        ownership={},
+        **({"ownership": {}} if hasattr(CollectionScopeRun, "ownership") else {}),
     )
     return run, attempt, scope
 
@@ -41,9 +41,9 @@ def test_real_claim_and_resume_record_two_attempts_for_one_catalog_run():
     from core.collection_state import finish_run
 
     job = ready()
-    first = claim_job(job.pk)
-    finish_run(first, status="partial", request_count=1)
-    second = claim_job(job.pk)
+    first = claim_job(job.pk, typed=True)
+    finish_run(first, status="partial", request_count=1, typed=True, physical_accounting_complete=False)
+    second = claim_job(job.pk, typed=True)
     assert first.run_id == second.run_id
     attempts = list(
         CollectionAttempt.objects.filter(run_id=first.run_id).order_by("ordinal")
@@ -61,13 +61,13 @@ def test_typed_partial_resume_keeps_one_logical_run_and_updates_separate_states(
     stop,
 ):
     from core.collection_jobs import register_job, set_job_state
-    from core.collection_state import checkpoint_scope, finish_run
+    from core.collection_state import fenced_run, finish_run
     from core.models import DataSource
     from tests.test_source_metric_projection import configured
 
     contract = configured()[0] if purpose == "metric" else None
     source_id = (
-        "hf" if purpose == "metric" else "x" if purpose == "content" else "arena"
+        "hf" if purpose == "metric" else "x" if purpose == "content" else "openrouter"
     )
     source, _ = DataSource.objects.get_or_create(
         pk=source_id,
@@ -102,38 +102,41 @@ def test_typed_partial_resume_keeps_one_logical_run_and_updates_separate_states(
         },
     )
     set_job_state(job.pk, "ready")
-    first = claim_job(job.pk, invocation_id="first", manual_authorized=True)
-    scope = checkpoint_scope(
-        first, scope_key="one", ownership={}, enumeration_complete=False
-    )
+    first = claim_job(job.pk, invocation_id="first", manual_authorized=True, typed=True)
+    # This check owns execution/coverage lifecycle across purposes. Persist a
+    # typed unit under its actual run fence; adapter-specific checkpoint shape
+    # validation belongs to the adapters' own suites.
+    with fenced_run(first) as (_, run):
+        scope = CollectionScopeRun.objects.create(
+            run=run, scope_kind="fixture_unit", scope_key="one",
+            execution_state="yielded", coverage_state="partial",
+        )
     if stop == "pause":
         from core.collection_state import StaleClaim
 
         set_job_state(job.pk, "paused")
         with pytest.raises(StaleClaim):
-            finish_run(first, status="success", request_count=0)
+            finish_run(first, status="success", request_count=0, typed=True, physical_accounting_complete=True)
         run = CollectionRun.objects.get(pk=first.run_id)
         attempt = run.attempts.get()
         assert attempt.outcome == "interrupted" and attempt.finished_at is None
         set_job_state(job.pk, "ready")
     else:
-        run = finish_run(first, status="partial", request_count=0)
+        run = finish_run(first, status="partial", request_count=0, typed=True, physical_accounting_complete=True)
     assert (
         run.completed_at is None
         and run.execution_state == ("interrupted" if stop == "pause" else "yielded")
         and run.coverage_state == "partial"
     )
-    second = claim_job(job.pk, invocation_id="second", manual_authorized=True)
+    second = claim_job(job.pk, invocation_id="second", manual_authorized=True, typed=True)
     assert second.run_id == first.run_id and second.attempt_id != first.attempt_id
     assert CollectionScopeRun.objects.get(pk=scope.pk).run_id == second.run_id
-    checkpoint_scope(
-        second,
-        scope_key="one",
-        ownership={},
-        enumeration_complete=True,
-        outcome="complete",
-    )
-    run = finish_run(second, status="success", request_count=0)
+    with fenced_run(second):
+        CollectionScopeRun.objects.filter(pk=scope.pk).update(
+            enumeration_complete=True, outcome="complete",
+            execution_state="completed", coverage_state="complete",
+        )
+    run = finish_run(second, status="success", request_count=0, typed=True, physical_accounting_complete=True)
     assert run.execution_state == "completed" and run.coverage_state == "complete"
     assert run.attempts.count() == 2
 
@@ -304,7 +307,7 @@ def test_cross_run_request_is_rejected_by_database():
         status="pending",
     )
     wrong_scope = CollectionScopeRun.objects.create(
-        run=other, scope_key="other", ownership={}
+        run=other, scope_key="other"
     )
     with pytest.raises(IntegrityError, match="same run"), transaction.atomic():
         CollectionRequest.objects.create(
