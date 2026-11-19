@@ -4,6 +4,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
@@ -122,12 +123,31 @@ def test_candidate_membership_is_not_duplicated_for_background():
         )
 
 
+@pytest.mark.parametrize("kind", [
+    "semantic_shortlist", "memory_only", "keyword_only", "release", None,
+    "personalized_trend",
+])
+def test_appearance_kind_preserves_recorded_provenance(kind):
+    row = consideration(appearance_kind=kind)
+    row.refresh_from_db()
+    assert row.appearance_kind == kind
+
+
+def test_personalized_trend_is_a_valid_model_choice():
+    field = OriginalContent._meta.get_field("appearance_kind")
+    field.validate("personalized_trend", OriginalContent())
+    with pytest.raises(ValidationError) as error:
+        field.validate("personalized_trends", OriginalContent())
+    assert error.value.code == "invalid_choice"
+
+
 @pytest.mark.parametrize("changes", [
     {"consideration_state": "invented"},
     {"consideration_state": "selected", "source_locale_id": None},
     {"consideration_state": "selected", "editorial_group": None},
     {"consideration_state": "selected", "development": None},
     {"appearance_kind": "keyword_rediscovery"},
+    {"appearance_kind": "personalized_trends"},
     {"shortlist_position": 0},
 ])
 def test_invalid_new_contract_cannot_be_bulk_written(changes):
