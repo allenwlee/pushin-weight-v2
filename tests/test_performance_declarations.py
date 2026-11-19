@@ -153,7 +153,7 @@ def test_each_candidate_preserves_four_workloads_and_measures_rich_each_legend()
     seed_recipe = json.loads((root / each["fixture"]["path"]).read_text())
     assert seed_recipe["schema_version"] == "pushinweight.performance-seed/v1"
     inputs = {item["id"]: item for item in seed_recipe["inputs"]}
-    assert len(inputs) == len(seed_recipe["inputs"]) == 8
+    assert len(inputs) == len(seed_recipe["inputs"]) == 10
     assert {key: item["path"] for key, item in inputs.items()} == {
         "base-oracle": "docs/ideation/mockups/06-tier1-composed.v22-master.html",
         "base-fixture": "tests/golden/v22_mockup_fixture.json",
@@ -163,19 +163,29 @@ def test_each_candidate_preserves_four_workloads_and_measures_rich_each_legend()
         "each-seeder": "tests/each_area_fixture.py",
         "general-contract": "tests/fixtures/general_feed_contract.json",
         "general-seeder": "tests/general_helpers.py",
+        "combined-seeder": "tests/each_performance_fixture.py",
+        "harvest-coverage-seeder": "tests/test_chart_harvest_coverage.py",
     }
     for item in inputs.values():
         assert item["sha256"] == hashlib.sha256((root / item["path"]).read_bytes()).hexdigest(), item["path"]
-    recipe = seed_recipe["recipe"]
-    assert [step["id"] for step in recipe] == ["base", "each", "general-clock", "general", "general-closed-job"]
-    assert recipe[0]["call"] == "tests.v22_support.seed_real_home_orm(tests.v22_support.fixture_from_oracle())"
-    assert recipe[1]["call"] == "tests.each_area_fixture.seed_each_area_orm(json.loads(each_manifest))"
-    assert recipe[1]["expected_return"] == 62
-    assert recipe[2]["assign"] == "tests.general_helpers.NOW = captured_preview_seed_time"
-    assert recipe[3]["for_each"] == 'post_id, category in general_contract["sections"].items()'
-    assert recipe[3]["call"] == "tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(post_id, category))"
-    assert recipe[4]["call"] == 'tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(general_contract["closed_job"], brand="claude"))'
-    assert seed_recipe["time_policy"]["kind"] == "relative-to-preview-seed-time"
+    assert seed_recipe["entrypoint"] == {
+        "call": "tests.each_performance_fixture.seed_each_performance_orm(now=captured_preview_seed_time)",
+        "returns": "captured_preview_seed_time", "inputs": ["combined-seeder"],
+    }
+    recipe = {step["id"]: step for step in seed_recipe["recipe"]}
+    assert list(recipe) == ["general-clock", "base", "base-synthesis", "each", "general", "general-closed-job", "harvest-coverage"]
+    assert recipe["base"]["call"] == "tests.v22_support.seed_real_home_orm(tests.v22_support.fixture_from_oracle())"
+    assert recipe["base-synthesis"]["for_each"] == 'post in Post.objects.filter(tweet_id__startswith="u3-post-")'
+    assert recipe["base-synthesis"]["call"] == 'tests.general_helpers.saved_commentary(post, texts={"en": post.commentary_en, "zh-cn": post.commentary_zh_cn, "ja": f"保存されたテスト用解説 {post.pk}"})'
+    assert recipe["base-synthesis"]["expected_status"] == "ready"
+    assert recipe["each"]["call"] == "tests.each_area_fixture.seed_each_area_orm(json.loads(each_manifest))"
+    assert recipe["each"]["expected_return"] == 62
+    assert recipe["general-clock"]["assign"] == "tests.general_helpers.NOW = captured_preview_seed_time"
+    assert recipe["general"]["for_each"] == 'post_id, category in general_contract["sections"].items()'
+    assert recipe["general"]["call"] == "tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(post_id, category))"
+    assert recipe["general-closed-job"]["call"] == 'tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(general_contract["closed_job"], brand="claude"))'
+    assert recipe["harvest-coverage"]["call"] == "tests.test_chart_harvest_coverage.record_harvest(captured_preview_seed_time, finished_at=captured_preview_seed_time, staggered=False)"
+    assert seed_recipe["time_policy"]["kind"] == "frozen-preview-test-clock"
     assert seed_recipe["time_policy"]["general_override"] == {
         "symbol": "tests.general_helpers.NOW", "value": "captured preview seed time",
     }

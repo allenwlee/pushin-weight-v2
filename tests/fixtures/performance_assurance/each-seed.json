@@ -2,14 +2,14 @@
   "schema_version": "pushinweight.performance-seed/v1",
   "purpose": "Combined deterministic input recipe for homepage, General and rich Each candidate performance workloads.",
   "time_policy": {
-    "kind": "relative-to-preview-seed-time",
-    "anchor": "Capture django.utils.timezone.now() once when preparing the preview fixture.",
+    "kind": "frozen-preview-test-clock",
+    "anchor": "Capture django.utils.timezone.now() once before preparing the preview fixture.",
     "general_override": {
       "symbol": "tests.general_helpers.NOW",
       "value": "captured preview seed time"
     },
-    "base_and_each": "Use the helpers' normal timezone.now() calls while preparing the same preview fixture; Each uses seven Japan calendar days and relative pre-current-time timestamps.",
-    "runtime_clock": "Serve with the real current clock; do not reuse the General helper's historical module NOW default."
+    "base_and_each": "The shared combined seeder patches django.utils.timezone.now to the captured anchor during all seed writes; Each uses seven Japan calendar days.",
+    "runtime_clock": "Test-only preview condition: hold django.utils.timezone.now at the returned seed anchor for every served preview request. Production clocks and settings are unchanged."
   },
   "inputs": [
     {
@@ -50,10 +50,27 @@
     {
       "id": "general-seeder",
       "path": "tests/general_helpers.py",
-      "sha256": "f421fc1b82eaa119fecca60c0ff1d387aea6cbccfa2af14e45f2f617ad270b8e"
+      "sha256": "35d8d8bc0cc01222b48682a9f1e31f568009f0991bf40ec4b8db4401f19de321"
+    },
+    {
+      "id": "combined-seeder",
+      "path": "tests/each_performance_fixture.py",
+      "sha256": "e664a1cd7b0124e880936394e371a1a40a5b730a23ae9441153f2a9c20d767e4"
+    },
+    {
+      "id": "harvest-coverage-seeder",
+      "path": "tests/test_chart_harvest_coverage.py",
+      "sha256": "fcf4f81a1702d00cc9377d682eadaa0123c9a5acd6d999b5f7d26ba01179b4fb"
     }
   ],
   "recipe": [
+    {
+      "id": "general-clock",
+      "assign": "tests.general_helpers.NOW = captured_preview_seed_time",
+      "inputs": [
+        "general-seeder"
+      ]
+    },
     {
       "id": "base",
       "call": "tests.v22_support.seed_real_home_orm(tests.v22_support.fixture_from_oracle())",
@@ -66,6 +83,18 @@
       "purpose": "Populate the real homepage/feed base records from the authored oracle and verified golden fixture."
     },
     {
+      "id": "base-synthesis",
+      "for_each": "post in Post.objects.filter(tweet_id__startswith=\"u3-post-\")",
+      "call": "tests.general_helpers.saved_commentary(post, texts={\"en\": post.commentary_en, \"zh-cn\": post.commentary_zh_cn, \"ja\": f\"\u4fdd\u5b58\u3055\u308c\u305f\u30c6\u30b9\u30c8\u7528\u89e3\u8aac {post.pk}\"})",
+      "inputs": [
+        "base-seeder",
+        "general-seeder",
+        "combined-seeder"
+      ],
+      "purpose": "Create complete typed EN/ZH/JA synthesis while preserving the existing base English and Chinese visible commentary verbatim; normal feed observers remain enabled.",
+      "expected_status": "ready"
+    },
+    {
       "id": "each",
       "call": "tests.each_area_fixture.seed_each_area_orm(json.loads(each_manifest))",
       "inputs": [
@@ -74,13 +103,6 @@
       ],
       "expected_return": 62,
       "effect": "Replace the base DeepSeek PostBrand associations with the manifest's 62-post, seven-day chart cohort."
-    },
-    {
-      "id": "general-clock",
-      "assign": "tests.general_helpers.NOW = captured_preview_seed_time",
-      "inputs": [
-        "general-seeder"
-      ]
     },
     {
       "id": "general",
@@ -102,6 +124,15 @@
       ],
       "scope": "The contract closed_job post, using classified_post's default job_listings category and the explicit claude brand.",
       "purpose": "Preserve GeneralBrowserTests.setUp's closed-brand fixture alongside the four section posts."
+    },
+    {
+      "id": "harvest-coverage",
+      "call": "tests.test_chart_harvest_coverage.record_harvest(captured_preview_seed_time, finished_at=captured_preview_seed_time, staggered=False)",
+      "inputs": [
+        "harvest-coverage-seeder",
+        "combined-seeder"
+      ],
+      "purpose": "Record completed local fixture harvest coverage at the same preview anchor without provider calls."
     }
   ],
   "workloads": {
@@ -116,6 +147,13 @@
     "each": [
       "each-desktop",
       "each-mobile"
+    ]
+  },
+  "entrypoint": {
+    "call": "tests.each_performance_fixture.seed_each_performance_orm(now=captured_preview_seed_time)",
+    "returns": "captured_preview_seed_time",
+    "inputs": [
+      "combined-seeder"
     ]
   }
 }

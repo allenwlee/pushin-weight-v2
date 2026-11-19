@@ -914,3 +914,24 @@ are AST-identical after conflict resolution. Main's retry/translation handling
 and G2's credential/ingestion behavior are both retained. The merged gate keeps
 G2's Chatter browser tests as well as Each's new coverage. Staging is still held
 by G2 at this checkpoint; only the local feature branch has changed.
+
+### Candidate verification and deterministic performance fixture
+
+Candidate `e5eebd60` passed570tests and297subtests, with required PostgreSQL
+executed279/skipped0/errors0. Each38 and homepage5191 normalized obligations
+were clean. The subsequent performance attempt `c0e285dc4e5f9f2d5d9e6923` was
+invalid: repeated homepage samples had919DOMelements but119,284 versus119,344
+HTMLbytes. Both samples triggered independent synthesis-demand polling because
+the base fixture's saved commentary lacked Japanese. This is not a passed
+performance result or evidence of a latency regression.
+
+The repaired test fixture uses one shared seeder, keeps the original base
+English/Chinese commentary verbatim, and saves complete trilingual synthesis
+before measurement. Normal feed observers remain active. Its captured Django
+read clock is held fixed only in the local preview; browser performance clocks,
+monotonic request deadlines, production settings and all measurement budgets
+remain unchanged. The complete seed recipe, ten input hashes and this explicit
+test-clock condition are in `tests/fixtures/performance_assurance/each-seed.json`.
+Two PostgreSQL reader regressions passed, confirming ready content and unchanged
+helper defaults. No invalid attempt is labelled clean; the exact final candidate
+must still pass the unchanged repeated-shape and performance checks.
