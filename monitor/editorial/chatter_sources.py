@@ -5,7 +5,7 @@ import json
 import re
 import time
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 from urllib.parse import urlencode
@@ -50,6 +50,8 @@ from .chatter_history import (
     validated_packet,
 )
 from .persistence import BudgetHeld
+
+SOURCE_FINALIZATION_HEADROOM = timedelta(minutes=3)
 
 
 class CompactPost(BaseModel):
@@ -467,9 +469,17 @@ class SourceSession:
         scope.save(update_fields=["search_query", "content_call"])
         return scope
 
+    def _check_finalization_headroom(self, run):
+        if self.ranked_lane and (
+            run.lease_until is None
+            or run.lease_until <= timezone.now() + SOURCE_FINALIZATION_HEADROOM
+        ):
+            raise BudgetHeld("Chatter source finalization headroom reached")
+
     def start(self, path, params):
         if time.monotonic() - self.started_monotonic >= 600:
             raise BudgetHeld("Chatter source execution deadline exhausted")
+        self._check_finalization_headroom(self.run)
         if self.ranked_lane:
             used = CollectionRequest.objects.filter(attempt__run_id=self.claim.run_id).aggregate(total=Sum(Coalesce("response_bytes", 2_000_000)))["total"] or 0
             remaining = 8_000_000 - used
@@ -496,7 +506,7 @@ class SourceSession:
             **bounds,
         )
         with transaction.atomic():
-            locked_run(self.run.pk, self.run.fence)
+            current = locked_run(self.run.pk, self.run.fence)
             with fenced_run(self.claim):
                 endpoint_url = path if model else self.client.base_url + path + ("?" + urlencode(params) if params else "")
                 if self.ranked_lane and CollectionRequest.objects.filter(
@@ -524,6 +534,7 @@ class SourceSession:
                         self.cfg, self.cfg.chatter.source_request_reservation_usd
                     )
                 attempt = CollectionAttempt.objects.select_for_update().get(pk=self.claim.attempt_id)
+                self._check_finalization_headroom(current)
                 if self.ranked_lane:
                     # Reserve this admitted physical send, not a fixed page quota.
                     attempt.reserved_requests = attempt.requests.count() + 1

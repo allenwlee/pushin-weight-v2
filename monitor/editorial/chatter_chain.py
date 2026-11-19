@@ -266,13 +266,28 @@ def _consider(run, story, pitch, source_ids, kind, call, position=None):
     return row
 
 
+def _discover_trends_and_queue_gathering(run, cfg, *, transport, x_client, enqueue, resume=False):
+    from .chatter_trends import discover_trends
+
+    result = discover_trends(run.pk, cfg=cfg, transport=transport)
+    if result["status"] == "ranked":
+        arguments = (run.pk, True) if resume else (run.pk,)
+        enqueue("gather", *arguments)
+        return {"status": "gather_queued", "run_id": run.pk}
+    if result["status"] == "empty":
+        from .chatter_gathering import gather_trends
+
+        return gather_trends(run.pk, cfg=cfg, x_client=x_client, enqueue=enqueue, resume=resume)
+    return result
+
+
 def run_chatter(envelope, *, cfg=None, transport=None, x_client=None, enqueue=enqueue):
     configured = cfg is not None
     cfg = cfg or load_editorial_config()
     if not cfg.chatter.enabled:
         return {"status": "disabled"}
     if cfg.chatter.discovery_lane == "personalized-trends-v1":
-        from .chatter_trends import discover_trends, envelope_for, reserve_due_slot
+        from .chatter_trends import envelope_for, reserve_due_slot
 
         if envelope.get("schema_version") != 1 or envelope.get("dry_run") is not False:
             return {"status": "ineligible"}
@@ -283,12 +298,8 @@ def run_chatter(envelope, *, cfg=None, transport=None, x_client=None, enqueue=en
         else:
             run, _ = reserve_due_slot(envelope["source_cycle_id"], datetime.fromisoformat(envelope["cutoff"]),
                                        cfg=cfg, purpose=envelope["credential_purpose"])
-        result = discover_trends(run.pk, cfg=cfg, transport=transport)
-        if result["status"] in {"ranked", "empty"}:
-            from .chatter_gathering import gather_trends
-
-            return gather_trends(run.pk, cfg=cfg, x_client=x_client, enqueue=enqueue)
-        return result
+        return _discover_trends_and_queue_gathering(run, cfg, transport=transport,
+            x_client=x_client, enqueue=enqueue)
     if not shared_storage():
         raise ValueError("Chatter workflow requires shared content storage")
     if envelope.get("schema_version") != 1 or envelope.get("dry_run") is not False:
@@ -357,15 +368,11 @@ def resume_chatter_discovery(
 ):
     """Explicitly continue a held reply; never send the discovery request again."""
     run = OriginalContentRun.objects.get(pk=run_id, workflow_key=WORKFLOW)
-    from .chatter_trends import TRENDS_SCOPE, discover_trends
+    from .chatter_trends import TRENDS_SCOPE
 
     if run.scope_key == TRENDS_SCOPE:
-        result = discover_trends(run.pk, cfg=cfg, transport=transport)
-        if result["status"] in {"ranked", "empty"}:
-            from .chatter_gathering import gather_trends
-
-            return gather_trends(run.pk, cfg=cfg, x_client=x_client, enqueue=enqueue, resume=True)
-        return result
+        return _discover_trends_and_queue_gathering(run, cfg, transport=transport,
+            x_client=x_client, enqueue=enqueue, resume=True)
     configured = cfg is not None
     cfg = _saved_config(run, cfg)
     if cfg is None:

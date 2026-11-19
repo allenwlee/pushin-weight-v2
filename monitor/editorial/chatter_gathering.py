@@ -704,8 +704,10 @@ def _repair_completion(run, *, enqueue=None):
     run.save(update_fields=["discovery_state", "execution_state", "claim_owner", "lease_until", "updated_at"])
 
 
-def gather_trends(run_id, *, cfg=None, x_client=None, enqueue=None, resume=False):
+def gather_trends(run_id, resume=False, *, cfg=None, x_client=None, enqueue=None):
     """Gather independently supported leads, then use the existing evidence selector."""
+    if type(resume) is not bool:
+        raise ValueError("Chatter gathering resume must be boolean")
     from .chatter_chain import _consider, _history, _saved_config
 
     run = OriginalContentRun.objects.get(pk=run_id, scope_key=TRENDS_SCOPE)

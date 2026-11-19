@@ -322,6 +322,12 @@ def refresh_editorial(envelope):
              ignore_result=True, acks_late=True, reject_on_worker_lost=True,
              soft_time_limit=600, time_limit=660)
 def chatter_stage(stage, *args):
+    if stage == "gather":
+        from monitor.editorial.chatter_chain import enqueue
+        from monitor.editorial.chatter_gathering import gather_trends
+
+        return gather_trends(*args, enqueue=enqueue)
+
     from monitor.editorial.chatter_chain import (
         resume_chatter_discovery,
         review_chatter,
