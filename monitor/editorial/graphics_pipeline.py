@@ -36,6 +36,7 @@ from monitor.trend_narrative_lifecycle import (
 
 from .config import load_editorial_config
 from .graphics_contracts import (
+    bind_copy_contract,
     load_pack,
     normalize_treatments,
     validate_copy_fact_ids,
@@ -82,12 +83,22 @@ def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport
     is_image = stage in {'I-A', 'I-B'}
     per_run = run.config_snapshot['per_story_usd']
     daily = run.config_snapshot['daily_usd']
+    route = request.get('writer_route') if stage == 'C1' else None
+    provider = ('xai' if is_image else 'openrouter') if route is None else {
+        'https://openrouter.ai/api/v1/chat/completions': 'openrouter',
+        'https://api.openai.com/v1/chat/completions': 'openai',
+    }[route['endpoint']]
+    ceiling = '0.15' if is_image else '0.25'
+    if route:
+        input_cost = Decimal(len(body.encode()) + 1024) * Decimal(str(route['input_usd_per_million']))
+        output_cost = Decimal(route['max_output_tokens']) * Decimal(str(route['output_usd_per_million']))
+        ceiling = (input_cost + output_cost) / Decimal(1_000_000)
 
     def reserve(saved_packet, saved_hash):
         return reserve_graphics_call(
             run=run, stage=stage, kind='media' if is_image else 'text', request_hash=saved_hash,
-            request_packet=saved_packet, provider='xai' if is_image else 'openrouter', model=request['body']['model'],
-            ceiling='0.15' if is_image else '0.25', owner=claim.owner, lease_seconds=160,
+            request_packet=saved_packet, provider=provider, model=request['body']['model'],
+            ceiling=ceiling, owner=claim.owner, lease_seconds=max(160, request['timeout'] + 20),
             workflow_key=content.workflow_key, per_run_limit=per_run, daily_limit=daily,
             configured_daily_limit=configured_daily_limit, review=stage == 'E1',
         )
@@ -117,7 +128,7 @@ def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport
             current = OriginalContentRun.objects.select_for_update().get(pk=run.pk)
             if not _owned(current, claim.owner, claim.fence):
                 return False
-            cost = reported_cost_usd('xai' if is_image else 'openrouter', usage)
+            cost = reported_cost_usd(provider, usage)
             completed = complete_graphics_call(call.pk, owner=claim.owner, fence=call.claim_fence,
                 response_hash=digest(payload), response_payload=payload, actual_usd=cost)
             if not completed:
@@ -315,7 +326,10 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                  configured_daily_limit=None, search=None):
     """Advance one persisted phase without retrying a sent provider request."""
     owner = owner or f'graphics-{uuid4()}'
-    claim = claim_package(run_id, owner=owner, lease_seconds=180)
+    selected = OriginalContentRun.objects.get(pk=run_id).snapshot.get('request', {})
+    route = selected.get('writer_route')
+    lease_seconds = max(180, route['timeout_seconds'] + 40) if route else 180
+    claim = claim_package(run_id, owner=owner, lease_seconds=lease_seconds)
     if claim is None:
         return {'state': 'busy', 'next_action': None}
     try:
@@ -323,6 +337,7 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
         content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
         saved = run.snapshot['request']
         pack = load_pack(Path(settings.BASE_DIR) / 'config/editorial_prompts/editorial-creative-roles-v1.json')
+        pack = bind_copy_contract(pack, saved['handoff'])
         credentials = os.environ if keys is None else keys
         config = load_editorial_config()
         if config.enabled:
@@ -332,11 +347,11 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
         if c1 is None:
             if 'C1' in run.decisions.get('graphics_skipped_stages', {}):
                 return {'state': 'unavailable', 'stage': 'C1', 'next_action': None}
-            key = credentials.get('OPENROUTER_API_KEY', '')
+            key = credentials.get(route['key_env'] if route else 'OPENROUTER_API_KEY', '')
             if not key:
                 _skip_stage(run, claim, 'C1', 'credential_unavailable')
                 return {'state': 'credential_unavailable', 'stage': 'C1', 'next_action': None}
-            request = build_text_request(pack, 'C1', saved['handoff'])
+            request = build_text_request(pack, 'C1', saved['handoff'], writer_route=route)
             try:
                 outcome = _run_text_stage(run, content, claim, 'C1', request, key, pack,
                                           transport=transport, configured_daily_limit=configured_daily_limit)
