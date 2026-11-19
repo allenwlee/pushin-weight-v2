@@ -327,3 +327,17 @@ def test_affiliation_source_writer_requires_authorized_connection(serving_login)
         transaction.atomic(),
     ):
         write_source_evidence(evidence, extracted_claim_data={"role": "Changed"})
+
+
+@pytest.mark.parametrize('view', ['each_brand_post_facts_source', 'each_brand_post_facts'])
+def test_web_readiness_waits_for_each_view_grants(serving_login, view):
+    from core.geolocation_access import serving_grants_ready
+
+    serving, role, _owner, _report = serving_login
+    with patch.object(connections['default'], 'connection', serving):
+        assert serving_grants_ready(connections['default'])
+    with connection.cursor() as cursor:
+        cursor.execute(sql.SQL('REVOKE SELECT ON {} FROM {}').format(
+            sql.Identifier(view), sql.Identifier(role)))
+    with patch.object(connections['default'], 'connection', serving):
+        assert not serving_grants_ready(connections['default'])

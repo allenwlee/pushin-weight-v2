@@ -125,3 +125,94 @@ def test_performance_scenarios_seed_conflicting_locale_and_legacy_state() -> Non
             assert legacy["window"] == 365
             assert legacy["filters"] == {"brands": ["qwen"], "window": 365}
             assert legacy["pulseBrands"] == ["qwen"]
+
+
+def test_each_candidate_preserves_four_workloads_and_measures_rich_each_legend() -> None:
+    import hashlib
+    from urllib.parse import parse_qs, urlparse
+
+    from bridgewright.performance.contracts import PerformanceDeclaration
+    from django.contrib.staticfiles.storage import ManifestStaticFilesStorage
+    from django.core.files.base import ContentFile
+
+    root = Path(__file__).parents[1]
+    general = _load("declaration.general-candidate.json")
+    each = _load("declaration.each-candidate.json")
+    PerformanceDeclaration.model_validate(each)
+
+    # Extending candidate coverage must never alter existing workloads, budgets,
+    # cache requirements, metric engines, run counts, or device profiles.
+    assert each["scenarios"][:4] == general["scenarios"]
+    assert {key: value for key, value in each.items() if key not in {"scenarios", "fixture"}} == {
+        key: value for key, value in general.items() if key not in {"scenarios", "fixture"}
+    }
+    assert each["fixture"] == {
+        "path": "tests/fixtures/performance_assurance/each-seed.json",
+        "sha256": hashlib.sha256((root / "tests/fixtures/performance_assurance/each-seed.json").read_bytes()).hexdigest(),
+    }
+    seed_recipe = json.loads((root / each["fixture"]["path"]).read_text())
+    assert seed_recipe["schema_version"] == "pushinweight.performance-seed/v1"
+    inputs = {item["id"]: item for item in seed_recipe["inputs"]}
+    assert len(inputs) == len(seed_recipe["inputs"]) == 8
+    assert {key: item["path"] for key, item in inputs.items()} == {
+        "base-oracle": "docs/ideation/mockups/06-tier1-composed.v22-master.html",
+        "base-fixture": "tests/golden/v22_mockup_fixture.json",
+        "base-oracle-reader": "tests/mockup_spec.py",
+        "base-seeder": "tests/v22_support.py",
+        "each-manifest": "tests/fixtures/ui_assurance/each-fixture.json",
+        "each-seeder": "tests/each_area_fixture.py",
+        "general-contract": "tests/fixtures/general_feed_contract.json",
+        "general-seeder": "tests/general_helpers.py",
+    }
+    for item in inputs.values():
+        assert item["sha256"] == hashlib.sha256((root / item["path"]).read_bytes()).hexdigest(), item["path"]
+    recipe = seed_recipe["recipe"]
+    assert [step["id"] for step in recipe] == ["base", "each", "general-clock", "general", "general-closed-job"]
+    assert recipe[0]["call"] == "tests.v22_support.seed_real_home_orm(tests.v22_support.fixture_from_oracle())"
+    assert recipe[1]["call"] == "tests.each_area_fixture.seed_each_area_orm(json.loads(each_manifest))"
+    assert recipe[1]["expected_return"] == 62
+    assert recipe[2]["assign"] == "tests.general_helpers.NOW = captured_preview_seed_time"
+    assert recipe[3]["for_each"] == 'post_id, category in general_contract["sections"].items()'
+    assert recipe[3]["call"] == "tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(post_id, category))"
+    assert recipe[4]["call"] == 'tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(general_contract["closed_job"], brand="claude"))'
+    assert seed_recipe["time_policy"]["kind"] == "relative-to-preview-seed-time"
+    assert seed_recipe["time_policy"]["general_override"] == {
+        "symbol": "tests.general_helpers.NOW", "value": "captured preview seed time",
+    }
+    assert {name for names in seed_recipe["workloads"].values() for name in names} == {
+        case["id"] for case in each["scenarios"]
+    }
+    seed = json.loads((root / inputs["each-manifest"]["path"]).read_text())
+    assert seed["brand"] == "deepseek" and seed["days"] == 7
+    assert seed["counts"] == [8, 9, 10, 8, 9, 10, 8]
+    assert sum(seed["counts"]) == 62 and "bug" in seed["products"]
+
+    additions = each["scenarios"][4:]
+    assert [case["id"] for case in additions] == ["each-desktop", "each-mobile"]
+    assert [case["profile"] for case in additions] == ["desktop", "mobile"]
+    expected_assets = []
+    for filename in ("pw-each-chart.js", "pw-each-chart.css"):
+        asset = root / "monitor/static" / filename
+        hashed = ManifestStaticFilesStorage().hashed_name(filename, content=ContentFile(asset.read_bytes()))
+        expected_assets.append({
+            "path": "/static/" + hashed, "policy": "immutable",
+            "min_max_age_seconds": 31_536_000, "must_reuse": True,
+        })
+    for case, locale in zip(additions, ("en", "zh_cn"), strict=True):
+        route = urlparse(case["route"])
+        assert route.path == "/dashboard/each"
+        assert parse_qs(route.query) == {
+            "brand": ["deepseek"], "locale": [locale], "window": ["7"],
+            "tab": ["product_labels"], "timezone": ["Asia/Tokyo"],
+        }
+        assert case["actions"] == [{"kind": "click", "target": '[data-each-category="bug"]'}]
+        assert case["cache_expectations"] == expected_assets
+        original = next(item for item in general["scenarios"] if item["id"] == "general-" + case["profile"])
+        for field in ("runs", "required_metrics", "metric_engines", "web_vitals_metrics", "lighthouse_assertions", "budgets"):
+            assert case[field] == original[field]
+        assert case["network_expectations"] == [
+            {"path": "/dashboard/each/chart/", "max_requests": 2, "max_bytes": 500_000},
+            {"path": "/api/v2/dashboard/each/headline/", "max_requests": 0, "max_bytes": 0},
+            {"path": "/feed/", "max_requests": 0, "max_bytes": 0},
+            {"path": "/chart.html", "max_requests": 0, "max_bytes": 0},
+        ]

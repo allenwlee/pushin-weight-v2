@@ -201,7 +201,7 @@ class LocalPreviewServer:
                         body = response.read() if include_body else b""
                         content_type = response.headers.get("Content-Type", "")
                         if (
-                            parsed.path == "/"
+                            parsed.path in {"/", "/dashboard/each", "/dashboard/each/"}
                             and content_type.lower().startswith("text/html")
                             and include_body
                         ):

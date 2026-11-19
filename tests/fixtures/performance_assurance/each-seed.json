@@ -1,0 +1,121 @@
+{
+  "schema_version": "pushinweight.performance-seed/v1",
+  "purpose": "Combined deterministic input recipe for homepage, General and rich Each candidate performance workloads.",
+  "time_policy": {
+    "kind": "relative-to-preview-seed-time",
+    "anchor": "Capture django.utils.timezone.now() once when preparing the preview fixture.",
+    "general_override": {
+      "symbol": "tests.general_helpers.NOW",
+      "value": "captured preview seed time"
+    },
+    "base_and_each": "Use the helpers' normal timezone.now() calls while preparing the same preview fixture; Each uses seven Japan calendar days and relative pre-current-time timestamps.",
+    "runtime_clock": "Serve with the real current clock; do not reuse the General helper's historical module NOW default."
+  },
+  "inputs": [
+    {
+      "id": "base-oracle",
+      "path": "docs/ideation/mockups/06-tier1-composed.v22-master.html",
+      "sha256": "0cac263541bce45269790ef127907aef177ad26cbee7b363d0d6eef7f834c013"
+    },
+    {
+      "id": "base-fixture",
+      "path": "tests/golden/v22_mockup_fixture.json",
+      "sha256": "cade1fcef0b250df73fcd86a8e4364b81c8653ad45862cf88080a2ea9277daab"
+    },
+    {
+      "id": "base-oracle-reader",
+      "path": "tests/mockup_spec.py",
+      "sha256": "21fd72131516dd8291500a38a6f3174bcb34b46d941276c718e3dcfd9545de7b"
+    },
+    {
+      "id": "base-seeder",
+      "path": "tests/v22_support.py",
+      "sha256": "ea1d298d5b0a8b7c9be5c86a337737706f96ee1c496db90def4b62ddfc5c1037"
+    },
+    {
+      "id": "each-manifest",
+      "path": "tests/fixtures/ui_assurance/each-fixture.json",
+      "sha256": "698946a4176a66fac8972c2f97c769dc4c88ccd2a240860f8e1d12fcb9a1d4c4"
+    },
+    {
+      "id": "each-seeder",
+      "path": "tests/each_area_fixture.py",
+      "sha256": "8d3cce055fe70bf5551c15c0ed024b42fb7fb5a8830309093516d0421b6b8b2d"
+    },
+    {
+      "id": "general-contract",
+      "path": "tests/fixtures/general_feed_contract.json",
+      "sha256": "f6578c8ae5822870bb6e99a368d85be10e5b7d16484e89db22b1fd7134425d88"
+    },
+    {
+      "id": "general-seeder",
+      "path": "tests/general_helpers.py",
+      "sha256": "f421fc1b82eaa119fecca60c0ff1d387aea6cbccfa2af14e45f2f617ad270b8e"
+    }
+  ],
+  "recipe": [
+    {
+      "id": "base",
+      "call": "tests.v22_support.seed_real_home_orm(tests.v22_support.fixture_from_oracle())",
+      "inputs": [
+        "base-oracle",
+        "base-fixture",
+        "base-oracle-reader",
+        "base-seeder"
+      ],
+      "purpose": "Populate the real homepage/feed base records from the authored oracle and verified golden fixture."
+    },
+    {
+      "id": "each",
+      "call": "tests.each_area_fixture.seed_each_area_orm(json.loads(each_manifest))",
+      "inputs": [
+        "each-manifest",
+        "each-seeder"
+      ],
+      "expected_return": 62,
+      "effect": "Replace the base DeepSeek PostBrand associations with the manifest's 62-post, seven-day chart cohort."
+    },
+    {
+      "id": "general-clock",
+      "assign": "tests.general_helpers.NOW = captured_preview_seed_time",
+      "inputs": [
+        "general-seeder"
+      ]
+    },
+    {
+      "id": "general",
+      "for_each": "post_id, category in general_contract[\"sections\"].items()",
+      "call": "tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(post_id, category))",
+      "inputs": [
+        "general-contract",
+        "general-seeder"
+      ],
+      "scope": "The four contract section posts; classified_post uses its default qwen brand.",
+      "purpose": "Populate actual General section records and persisted saved commentary in each supported locale."
+    },
+    {
+      "id": "general-closed-job",
+      "call": "tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(general_contract[\"closed_job\"], brand=\"claude\"))",
+      "inputs": [
+        "general-contract",
+        "general-seeder"
+      ],
+      "scope": "The contract closed_job post, using classified_post's default job_listings category and the explicit claude brand.",
+      "purpose": "Preserve GeneralBrowserTests.setUp's closed-brand fixture alongside the four section posts."
+    }
+  ],
+  "workloads": {
+    "homepage": [
+      "homepage-desktop",
+      "homepage-mobile"
+    ],
+    "general": [
+      "general-desktop",
+      "general-mobile"
+    ],
+    "each": [
+      "each-desktop",
+      "each-mobile"
+    ]
+  }
+}

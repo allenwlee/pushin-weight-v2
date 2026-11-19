@@ -10,6 +10,11 @@ import sys
 from pathlib import Path
 
 from tests.ui_assurance.evidence import build_evidence
+from tests.ui_assurance.each import (
+    EVIDENCE_PATH as EACH_EVIDENCE_PATH,
+    RUNTIME_PATH as EACH_RUNTIME_PATH,
+    assess_each_runtime,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE_RELATIVE_PATH = Path(".ollija/tmp/ui-assurance-evidence.json")
@@ -22,8 +27,13 @@ FOCUSED_TESTS = [
     "tests/test_general_editorial.py",
     "tests/test_content_detail.py",
     "tests/test_general_browser.py",
+    "tests/test_each_request_budget.py",
+    "tests/test_each_connection_budget.py",
+    "tests/test_each_request_isolation.py",
+    "tests/test_each_headline_browser.py",
     "tests/test_dashboard_each.py",
     "tests/test_dashboard_each_browser.py",
+    "tests/test_each_assurance.py",
     "tests/test_ui_assurance_contract.py",
     "tests/test_ui_assurance_evidence.py",
     "tests/test_ui_assurance_candidate_binding.py",
@@ -211,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
     _run(args.bridgewright, "assurance-prescribe", "--project-root", str(ROOT))
     for command in ("assurance-validate", "assurance-prescribe"):
         _run(args.bridgewright, command, "--project-root", str(ROOT), "--declaration", "tests/fixtures/ui_assurance/general-declaration.json")
+    for command in ("assurance-validate", "assurance-prescribe"):
+        _run(args.bridgewright, command, "--project-root", str(ROOT), "--declaration", "tests/fixtures/ui_assurance/each-declaration.json")
     performance_declaration = (
         args.performance_declaration
         if args.scope == "candidate"
@@ -233,6 +245,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.pytest_wrapper
         else [sys.executable, "-m", "pytest"]
     )
+    # Required Each runtime proof belongs to this invocation, including affected scope.
+    EACH_RUNTIME_PATH.unlink(missing_ok=True)
+    EACH_EVIDENCE_PATH.unlink(missing_ok=True)
     _run(
         *pytest_command,
         "-q",
@@ -242,6 +257,14 @@ def main(argv: list[str] | None = None) -> int:
     _run("node", "tests/test_pw_chart_filter.js")
     _run("node", "tests/test_pw_feed_formatter.js")
     _run("node", "tests/test_pw_tz.js")
+    _run("node", "tests/test_pw_each_chart.js")
+    assessment = assess_each_runtime()
+    assert assessment.status == "clean"
+    _run(
+        args.bridgewright, "assurance-assess", "--project-root", str(ROOT),
+        "--declaration", "tests/fixtures/ui_assurance/each-declaration.json",
+        "--evidence", str(EACH_EVIDENCE_PATH.relative_to(ROOT)),
+    )
 
     if args.scope == "candidate":
         require_candidate_checkout(ROOT, args.candidate_revision)

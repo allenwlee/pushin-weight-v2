@@ -24,7 +24,7 @@ class BridgewrightRevisionMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        if request.path in {"/", "/general/"}:
+        if request.path in {"/", "/general/", "/dashboard/each", "/dashboard/each/"}:
             revision = deployed_revision()
             if revision is not None:
                 response["X-Bridgewright-Revision"] = revision

@@ -182,6 +182,17 @@ def test_preview_serves_verified_bytes_and_blocks_redirects(
             assert b"/__bridgewright_assets/htmx.js" in homepage
             assert b"unchanged" in homepage
 
+            for path in ('/dashboard/each?brand=deepseek', '/dashboard/each/?brand=deepseek'):
+                with local_preview._NO_REDIRECT_OPENER.open(
+                    f'{preview.origin}{path}', timeout=5,
+                ) as response:
+                    each = response.read()
+                    assert response.headers['X-Bridgewright-Revision'] == _Upstream.revision
+                assert b'/__bridgewright_assets/htmx.js' in each
+                assert b'/__bridgewright_assets/chart.js' in each
+                assert b'https://unpkg.test/' not in each
+                assert b'unchanged' in each
+
             asset_path, expected = next(iter(assets.items()))
             with local_preview._NO_REDIRECT_OPENER.open(
                 f"{preview.origin}{asset_path}", timeout=5

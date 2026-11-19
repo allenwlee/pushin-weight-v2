@@ -840,3 +840,21 @@ def test_dossier_history_is_copied_and_pre_dossier_sources_remain_supported():
     assert tables.isdisjoint(policy.scrub.truncate_tables)
     assert sequences <= policy.relations.sequences
     assert sequences <= policy.relations.optional_source_sequences
+
+
+def test_each_source_view_is_known_but_materialized_data_stays_environment_local():
+    policy = load_policy(POLICY_PATH)
+    assert 'each_brand_post_facts_source' in policy.relations.views
+    assert 'each_brand_post_facts' not in policy.relations.classified_tables
+    assert 'each_brand_post_facts' not in policy.relations.views
+    assert 'materialization_state' in policy.relations.excluded_tables
+
+
+def test_source_before_each_facts_migration_remains_supported():
+    policy = load_policy(POLICY_PATH)
+    source = _inspection(policy, source=True)
+    source = replace(source, views=source.views - {'each_brand_post_facts_source'})
+    authorize(
+        policy, action="preflight", environ=_environment(policy), source=source,
+        target=_inspection(policy, source=False),
+    )

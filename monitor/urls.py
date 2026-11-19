@@ -26,6 +26,7 @@ urlpatterns = [
     # Pages
     path("", views.home, name="home"),
     path("dashboard/each", views.dashboard_each, name="dashboard_each"),
+    path("api/v2/dashboard/each/headline/", views.dashboard_each_headline_json, name="dashboard_each_headline"),
     path("dashboard/each/chart/", views.dashboard_each_chart_json, name="dashboard_each_chart"),
     path("internal/", views.home_internal, name="home_internal"),
     path("brands/<str:brand>/", views.brand_home, name="brand_home"),

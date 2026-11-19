@@ -487,11 +487,11 @@ Times are JST; UTC is given where it identifies a log query.
 
 ## Owner request and authorization
 
-Owner request, 2026-11-13 09:57 JST: plan saved Each counts following the homepage pattern and bundle a live-query limit. On November 19, the owner requests joining the whole-dashboard audit and updating this same plan for execution. This amendment makes the implementation and verification instructions ready; implementation, commit/push, migration execution and deployment have not been requested in this turn. The owner subsequently accepted the local chart prototype and requested including it in this plan, retaining the prior category order and placing NVIDIA immediately after Meta. That is planning authority only. `delivery_target` remains `on-request`. The earlier October 30 homepage release grant does not authorize this release.
+Owner request, 2026-11-13 09:57 JST: plan saved Each counts following the homepage pattern and bundle a live-query limit. On November 19, the owner joined the whole-dashboard audit, accepted the local chart prototype, retained the prior category order, and placed NVIDIA immediately after Meta. The earlier planning-only state is superseded by the owner's explicit `$compound-engineering:lfg the plan` followed by **“to staging.”** Implementation, necessary fixture migrations/checks, commit/push and staging deployment are authorized. Completion requires observing the intended revision on staging and verifying its activation. Production deployment, provider calls, new services, production-data copies and interruptions to live collection are excluded. Preserve G2's occupied staging trial and integrate its released descendant before moving staging. No additional approval is required for this granted scope.
 
 ## Goal Capsule
 
-Update the current Each dashboard using saved per-post facts plus an exact live tail for every tracked brand and tab. Preserve all chart semantics except the confirmed Role correction. Add bounded chart/page/headline work and a narrow shared headline fragment. Apply the approved B palette, left legend and category emphasis while preserving existing category/stack ordering. Move NVIDIA immediately after Meta through the shared brand presentation path. Keep feed data, Pulse values, writers, service count and provider controls intact. Completion for a later implementation invocation means the local U1–U7/U9/U10/U11/U12 verification contract; release remains U8 only after the owner selects delivery. This turn edits/reviews this plan only.
+Update the current Each dashboard using saved per-post facts plus an exact live tail for every tracked brand and tab. Preserve all chart semantics except the confirmed Role correction. Add bounded chart/page/headline work and a narrow shared headline fragment. Apply the approved B palette, left legend and category emphasis while preserving existing category/stack ordering. Move NVIDIA immediately after Meta through the shared brand presentation path. Keep feed data, Pulse values, writers, service count and provider controls intact. Complete U1–U7/U9/U10/U11/U12 and the staging portion of U8. Verify the exact staging revision, actual view publication and serving grants, representative endpoint timings and the rendered chart. Production-only follow-up remains unperformed.
 
 ## November 19 audit incorporated
 
@@ -503,7 +503,7 @@ Update the current Each dashboard using saved per-post facts plus an exact live 
 
 ## Execution order and technical shape
 
-Active units retain stable IDs U1–U8. Added U9 is the headline request repair; U10 prepares the current execution base/database; U11 adds the approved chart presentation; U12 moves NVIDIA in the shared brand order. Work in this order: **U10 → U1 → U2 → U3 → U4 → U5/U9 → U11/U12 → U6 → U7**. U8 is dormant until release authority exists. Establish regression failures before the corresponding product change; do not run a second dashboard implementation in parallel.
+Active units retain stable IDs U1–U8. Added U9 is the headline request repair; U10 prepares the current execution base/database; U11 adds the approved chart presentation; U12 moves NVIDIA in the shared brand order. Work in this order: **U10 → U1 → U2 → U3 → U4 → U5/U9 → U11/U12 → U6 → U7 → staging U8**. Establish regression failures before the corresponding product change; do not run a second dashboard implementation in parallel.
 
 ```mermaid
 flowchart LR
@@ -740,6 +740,7 @@ are failures, never green.
 
 ### U8. Release verification (only after an explicit owner delivery request)
 
+- Current selection is **staging only**. Verify `pushinweight-staging-web` and the existing staging workers at the candidate SHA, preserving the released G2 descendant and schema. Staging has no count-maintenance cron; explicitly bootstrap the candidate `refresh_materializations` command on the verified staging owner connection. Verify the serving role independently. Use the existing staging post cohort for scale checks without copying production. The production service/cron checks below remain conditional on a separate production request; do not activate them for staging.
 - Confirm the exact SHA is deployed on `pushinweight-web` and
   `pushinweight-home-counts`.
 - Confirm `django_migrations` has the new migration.
@@ -783,6 +784,8 @@ are failures, never green.
   production.
 
 ## Risks and implementation checkpoints
+
+- **Connection startup boundary.** Each requests install a connection-local psycopg IO deadline before Django initialization and settings discovery, plus a scoped two-second connection timeout. All address attempts share the request deadline once resolution returns. Synchronous hostname resolution itself follows the host resolver and is outside this hard IO bound; no observed DNS incident is claimed. Tests exercise a real silent TCP endpoint, delayed initial settings SQL, ordinary SQL deadlines and restoration of shorter caller limits. No global writer timeout or background request thread is introduced.
 
 - **Trigger write cost on hot paths.** The check is one primary-key lookup per
   changed row; recent posts return before any state-row update. U2 gates the
@@ -839,4 +842,59 @@ The combined scope is implementation-ready after the November19 review below. Th
 
 ### Accepted presentation amendment — November 19
 
-The owner approved the rendered B prototype and requested adding it to this existing plan. KTD12/U11 replace the previous appearance-preservation rule while retaining existing category/stack order and API numerical/color baselines. KTD13/U12 record the additional request to place NVIDIA immediately after Meta in shared brand presentation. The prior six-review receipt covers the earlier performance/headline scope, not this later amendment. This amendment was checked against the renderer, shared ordering helper and retained prototype; application implementation and its browser/performance verification remain pending. No release authority is added.
+The owner approved the rendered B prototype and requested adding it to this existing plan. KTD12/U11 replace the previous appearance-preservation rule while retaining existing category/stack order and API numerical/color baselines. KTD13/U12 record the additional request to place NVIDIA immediately after Meta in shared brand presentation. The prior six-review receipt covers the earlier performance/headline scope, not this later amendment. At that historical planning checkpoint, implementation and browser/performance verification were pending; the current staging grant is recorded under Owner request and authorization.
+
+## Execution evidence — November 19
+
+The native session GPT route implemented the accepted scope on main revision
+`9ed25df7`, retaining the offered plan checkpoint `9a35ed71`. No external Claude
+route, provider call, production deployment or collection pause was used.
+The canonical worktree and root coordination branch remain separate.
+
+- Storage: one ordinary source view, one materialized view, indexes and
+  invalidation triggers; one row in the existing lifecycle table. No ordinary
+  tables added or retired and no persisted JSON column introduced.
+- Backend parity/refresh/grants/policy: 121 passing checks plus the three repaired
+  positive saved/live cohort cases, with no required skips. The new cases prove
+  explicit positive labels, audience topics, promotions and UUID roles in both
+  halves, other-brand isolation and exact window boundaries.
+- Request/HTTP boundary: 28 passed, required PostgreSQL executed19/skipped0/errors0.
+  Real cold TCP, delayed settings discovery, sequential SQL, savepoint recovery,
+  tighter nested limits, locked HTTP headline demand, slow projection, localized
+  page errors and GET-only admission are covered.
+- Browser failures/races: four passed plus three locale subtests; latest valid
+  headline survives obsolete success/failure, timeout and recovery; retained
+  charts name their committed tab in the notice and accessible canvas label.
+- Each presentation: real 96-case matrix (eight tabs × two modes × two widths ×
+  three locales) passed. All38 normalized obligations passed, with zero failed,
+  skipped, errored, missing or unknown. Every tuple uses real DOM/chart actions.
+  Fully saved trilingual fixture commentary keeps independent feed polling out
+  of the chart's strict zero-new-requests assertion without disabling observers.
+- Harness/declarations: 62 stateless checks passed. Existing homepage5191 and
+  General71 obligation sets remain intact; Each has its own declaration and
+  measured browser packet.
+- Current-day real v4 publisher, 200 posts × three samples per arm: disabled
+  9.164ms/post, enabled9.297ms/post; +0.134ms/+1.46%, within the publish gate.
+  Separate language UPDATE: 0.208→0.237ms/post (+0.029ms/+13.91%). These are
+  fixture measurements, not representative-volume evidence. An earlier mixed
+  synthetic SQL sample measured+6.57%; it did not exercise the real publisher
+  required by U2 and is retained as diagnostic evidence rather than a pass.
+- Permanent shared test database contains zero posts; no production restore was
+  made. Representative refresh, storage size and endpoint timings remain for
+  the existing approximately309,000-post staging cohort after G2 releases it.
+- Formal review: fourteen lenses in run `20261119-215522-613f15bc`; confirmed
+  startup-bound and committed-tab defects repaired. Independent follow-up also
+  verified locale/GET repairs and reported no remaining findings in that scope.
+  Artifacts: `/tmp/compound-engineering-501/ce-code-review/20261119-215522-613f15bc`.
+  Its unvalidated audience-query-cost and maintenance-diagnostic suggestions
+  remain follow-ups, not disproven findings or accepted production debt.
+- Additional solution documentation was skipped: the implemented comments,
+  regression tests and this plan retain the reasoning needed to avoid recurrence.
+
+Detailed local command logs and private benchmark/harness records live at
+`/Users/fuchitalee/development/pushin-weight-v2/.local/2026-11-19-each-saved-counts`.
+The first broad run reported491passed and failed the subsequently repaired
+feed-poll counter, mock-wrapper evidence isolation, and concurrently revised
+performance fixture test. That run is not labelled green. The final combined
+candidate gate, exact staging SHA, view publication, scale measurements and
+staging browser proof are still pending; no deployment completion is claimed.

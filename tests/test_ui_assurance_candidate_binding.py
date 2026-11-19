@@ -76,11 +76,21 @@ def test_dirty_candidate_is_rejected(candidate_repo):
         candidate_declaration(root, revision)
 
 
-def test_affected_gate_uses_selected_database_wrapper_without_changing_test_scope(monkeypatch):
+def test_affected_gate_uses_selected_database_wrapper_without_changing_test_scope(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
     from tests.ui_assurance import gate
 
+    # A mocked gate run must never remove the enclosing real browser's proof.
+    monkeypatch.setattr(gate, 'ROOT', tmp_path)
+    for name in ('EACH_RUNTIME_PATH', 'EACH_EVIDENCE_PATH'):
+        artifact = tmp_path / name
+        artifact.write_text('stale test proof')
+        monkeypatch.setattr(gate, name, artifact)
     commands = []
     monkeypatch.setattr(gate, "_run", lambda *args, **kwargs: commands.append((args, kwargs)))
+    assessments = []
+    monkeypatch.setattr(gate, 'assess_each_runtime', lambda: assessments.append('each') or SimpleNamespace(status='clean'))
     assert gate.main(["--scope", "affected", "--pytest-wrapper", "/test/shared-db"]) == 0
     pytest_calls = [(args, kwargs) for args, kwargs in commands if "pytest" in args]
     assert len(pytest_calls) == 1
@@ -88,3 +98,7 @@ def test_affected_gate_uses_selected_database_wrapper_without_changing_test_scop
     assert args == ("/test/shared-db", "pytest", "-q", *gate.FOCUSED_TESTS)
     assert kwargs["env_overrides"] == {"DEBUG": "1", "CYBER_QUAN_CAPTURE_ONLY": ""}
     assert any(args[:2] == ("node", "tests/test_pw_chart_filter.js") for args, _ in commands)
+    assert assessments == ['each']
+    assert any(args[:2] == ('node', 'tests/test_pw_each_chart.js') for args, _ in commands)
+    assert any('tests/fixtures/ui_assurance/each-declaration.json' in args and 'assurance-assess' in args for args, _ in commands)
+    assert not gate.EACH_RUNTIME_PATH.exists() and not gate.EACH_EVIDENCE_PATH.exists()

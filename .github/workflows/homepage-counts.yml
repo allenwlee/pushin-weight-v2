@@ -62,6 +62,8 @@ jobs:
           tests/test_home_v22_feed_row_shape.py tests/test_home_v22_filter_pills.py
           tests/test_home_v22_topbar_layout.py tests/test_render_headline_topology.py
           tests/test_dashboard_each.py tests/test_dashboard_each_browser.py
+          tests/test_each_chart_facts.py tests/test_each_chart_facts_migrations.py
+          tests/test_each_request_budget.py tests/test_each_request_isolation.py
           tests/staging_refresh/test_policy.py tests/ollija
           tests/test_collection_schema_regression_net.py::test_concrete_application_models_match_database_columns
           tests/test_home_v22_browser.py::HomeV22BrowserTests::test_anonymous_filters_window_and_pulse_share_one_request_state
@@ -71,3 +73,4 @@ jobs:
           node tests/test_pw_chart_filter.js
           node tests/test_pw_feed_formatter.js
           node tests/test_pw_tz.js
+          node tests/test_pw_each_chart.js
