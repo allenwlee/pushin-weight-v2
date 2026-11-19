@@ -47,6 +47,120 @@ def test_c1_uses_one_schema_and_explicit_provider_route():
     assert request['body']['messages'][1]['content'].count('OUTPUT JSON SCHEMA FOR THIS REQUEST:') == 1
 
 
+@pytest.mark.parametrize('locale', ['en', 'ja', 'zh-cn'])
+def test_c1_binds_native_voice_and_locale_without_changing_the_shared_pack(locale):
+    from copy import deepcopy
+
+    from jsonschema.exceptions import ValidationError
+
+    from monitor.editorial.graphics_contracts import (
+        bind_copy_contract,
+        validate_stage_output,
+    )
+    from monitor.editorial.voices import Voice
+    from tests.test_graphics_chatter_adapter import copy_result
+
+    saved = deepcopy(PACK)
+    voice = Voice(id='saved-native-v1', version=1, track='chatter', locale=locale,
+                  instructions=f'Exact saved native instructions for {locale}.')
+    handoff = {'locale': locale, 'voice': voice.model_dump(mode='json'),
+               'voice_hash': voice.digest, 'fact_items': []}
+    bound = bind_copy_contract(PACK, handoff)
+    request = build_text_request(PACK, 'C1', handoff)
+    assert voice.instructions in request['body']['messages'][0]['content']
+    assert bound['publication_schema']['properties']['locale']['const'] == locale
+    assert validate_stage_output(bound, 'C1', copy_result(locale))['locale'] == locale
+    wrong = copy_result('ja' if locale == 'en' else 'en')
+    with pytest.raises(ValidationError):
+        validate_stage_output(bound, 'C1', wrong)
+    assert PACK == saved
+
+
+def test_configured_c1_route_reuses_shared_provider_payload_and_preserves_manual_default():
+    from monitor.editorial.config import Route
+    from monitor.editorial.providers import request_payload
+
+    route = Route(model='native-writer', endpoint='https://openrouter.ai/api/v1/chat/completions',
+                  key_env='OPENROUTER_API_KEY', reasoning='high', timeout_seconds=300,
+                  input_usd_per_million=1, output_usd_per_million=2, max_output_tokens=8192)
+    handoff = {'locale': 'ja', 'fact_items': []}
+    request = build_text_request(PACK, 'C1', handoff, writer_route=route.model_dump(mode='json'))
+    messages = request['body']['messages']
+    assert request['body'] == request_payload(route, {'system': messages[0]['content'], 'user': messages[1]['content']})
+    assert request['body']['model'] == 'native-writer' and request['timeout'] == 300
+    manual = build_text_request(PACK, 'C1', {'fact_items': []})
+    assert manual['body']['model'] == 'openai/gpt-6-sol' and manual['timeout'] == 140
+
+
+@pytest.mark.parametrize(('endpoint', 'key_env'), [
+    ('https://openrouter.ai/api/v1/chat/completions', 'OPENROUTER_API_KEY'),
+    ('https://api.openai.com/v1/chat/completions', 'OPENAI_API_KEY'),
+])
+def test_configured_c1_submission_validates_its_actual_model_and_locale(endpoint, key_env):
+    import json
+
+    from monitor.editorial.config import Route
+    from monitor.editorial.graphics_contracts import bind_copy_contract
+    from monitor.editorial.graphics_generation import submit_once
+    from tests.test_graphics_chatter_adapter import copy_result
+
+    route = Route(model='configured-native-writer', endpoint=endpoint, key_env=key_env,
+                  input_usd_per_million=1, output_usd_per_million=2, timeout_seconds=300)
+    handoff = {'locale': 'ja', 'fact_items': []}
+    pack = bind_copy_contract(PACK, handoff)
+    request = build_text_request(pack, 'C1', handoff, writer_route=route.model_dump(mode='json'))
+    wire = json.dumps(request['body'], ensure_ascii=False)
+    packet = {'schema_version': 'graphics-request/v1', 'request_json': wire}
+    response = {'model': route.model, 'usage': {}}
+    text = json.dumps(copy_result('ja'))
+    response['choices'] = [{'finish_reason': 'stop', 'message': {'content': text}}]
+    sent = []
+
+    def transport(url, key, body, **kwargs):
+        sent.append((url, key, body, kwargs))
+        return 200, json.dumps(response).encode()
+
+    def unexpected(*args):
+        pytest.fail('Valid configured native C1 response must complete.')
+
+    result = submit_once('C1', request, packet, hashlib.sha256(wire.encode()).hexdigest(), 'fake', pack,
+        reserve=lambda *args: (object(), True), mark_sent=lambda call: True,
+        complete=lambda call, payload, image, usage: payload['locale'] == 'ja',
+        fail=unexpected, ambiguous=unexpected, transport=transport)
+    assert result['state'] == 'completed' and len(sent) == 1
+    assert sent[0][0] == endpoint and sent[0][3]['timeout'] == 300
+
+
+@pytest.mark.parametrize(('endpoint', 'key_env'), [
+    ('https://api.x.ai/v1/responses', 'XAI_API_KEY_PW'),
+    ('https://api.deepinfra.com/v1/openai/chat/completions', 'DEEPINFRA_API_KEY'),
+])
+def test_other_editorial_provider_routes_cannot_fall_back_or_send_as_graphics_c1(endpoint, key_env):
+    import json
+
+    from monitor.editorial.config import Route
+    from monitor.editorial.graphics_generation import submit_once
+
+    route = Route(model='other-editorial-model', endpoint=endpoint, key_env=key_env,
+                  input_usd_per_million=1, output_usd_per_million=2, timeout_seconds=300)
+    value = route.model_dump(mode='json')
+    with pytest.raises(ValueError, match='unsupported.*C1'):
+        build_text_request(PACK, 'C1', {'locale': 'ja', 'fact_items': []}, writer_route=value)
+
+    def untouched(*args):
+        pytest.fail('Unsupported writer routes must fail before reservation or send.')
+
+    body = {'model': route.model}
+    wire = json.dumps(body, ensure_ascii=False)
+    forged = {'endpoint': endpoint, 'timeout': 300, 'body': body, 'writer_route': value}
+    packet = {'schema_version': 'graphics-request/v1', 'request_json': wire}
+    with pytest.raises(ValueError, match='unsupported.*C1'):
+        submit_once('C1', forged, packet, hashlib.sha256(wire.encode()).hexdigest(), 'fake', PACK,
+                    reserve=untouched, mark_sent=untouched, complete=untouched,
+                    fail=untouched, ambiguous=untouched, transport=untouched)
+    assert value['endpoint'] == endpoint and value['model'] == 'other-editorial-model'
+
+
 def test_image_prompt_and_real_reference_bytes_are_preserved():
     treatment = {'candidate_id': 'A', 'still_prompt': 'Draw the exact headline.',
                  'aspect_ratio': '3:4', 'input_asset_refs': [{'asset_ref': 'person:1', 'role': 'identity_reference'}]}
