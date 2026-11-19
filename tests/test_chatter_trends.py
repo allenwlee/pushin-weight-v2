@@ -137,6 +137,26 @@ def test_discovery_uses_the_encrypted_access_only_credential_without_refresh(con
     assert CollectionRequest.objects.get(attempt__run__content_run=run).http_status == 200
 
 
+def test_official_display_counts_are_preserved_and_saved_batch_replays(configured):
+    from monitor.editorial.chatter_trends import read_ranked_batch
+
+    response = official_response(count=2)
+    document = json.loads(response.content)
+    for row, count in zip(document["data"], ["3.6K posts", "31K posts"], strict=True):
+        row["post_count"] = count
+    response.content = json.dumps(document).encode()
+    run = start(configured)
+    result, official, ranker = discover(run, configured, response=response,
+                                       transport=Mock(return_value=rank_wire(count=2)))
+    assert result["status"] == "ranked", result
+    assert [row["post_count"] for row in read_ranked_batch(run.pk)["headlines"]] == ["3.6K posts", "31K posts"]
+    again, unused_official, unused_ranker = discover(run, configured,
+        transport=Mock(side_effect=AssertionError("saved response must not resend")))
+    assert again["status"] == "ranked" and official.call_count == ranker.call_count == 1
+    unused_official.assert_not_called()
+    unused_ranker.assert_not_called()
+
+
 @pytest.mark.parametrize("expires_during_preparation", [False, True])
 def test_expired_snapshot_stops_before_http_without_a_request_or_reservation(
     configured, monkeypatch, expires_during_preparation,
