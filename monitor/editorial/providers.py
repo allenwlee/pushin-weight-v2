@@ -252,7 +252,7 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None, reserva
             raise ProviderReplyError("malformed_provider_response", diagnostics)
         diagnostics.update(response_diagnostics(decoded))
         kept = diagnostics["usage"]
-        if request.get("packet_version") == "chatter-trends-ranking-v1":
+        if route.endpoint == "https://openrouter.ai/api/v1/chat/completions":
             from .graphics_generation import reported_cost_usd
 
             cost = reported_cost_usd("openrouter", decoded.get("usage"))
