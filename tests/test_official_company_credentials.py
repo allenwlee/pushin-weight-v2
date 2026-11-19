@@ -1,3 +1,5 @@
+import time
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -8,6 +10,152 @@ from core.official_company_credentials import OwnerTokenStore
 from core.official_company_lists import XListError
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
+
+
+def test_access_only_snapshot_is_encrypted_and_never_renews():
+    key = Fernet.generate_key()
+    store = OwnerTokenStore(key=key, client_id="client", client_secret=None, access_only=True)
+    expiry = time.time() + 120
+    store.provision(access_token="borrowed-access", expires_at=expiry)
+    row = OfficialCompanyOwnerCredential.objects.get()
+    before = (bytes(row.encrypted_tokens), row.revision, row.status, row.updated_at)
+    assert b"borrowed-access" not in before[0]
+    saved = store.load()
+    assert saved["refresh_token"] is None
+    assert saved["expires_at"] == expiry
+    assert store.access_token() == "borrowed-access"
+    request = Mock()
+    with pytest.raises(XListError, match="owner_refresh_disabled"):
+        store.refresh(request=request)
+    request.assert_not_called()
+    row.refresh_from_db()
+    assert (bytes(row.encrypted_tokens), row.revision, row.status, row.updated_at) == before
+    with pytest.raises(XListError, match="credential_decryption"):
+        OwnerTokenStore(key=key, client_id="client", client_secret="secret").load()
+
+
+def test_expired_access_only_snapshot_stops_without_refresh_or_mutation(monkeypatch):
+    store = OwnerTokenStore(key=Fernet.generate_key(), client_id="client", client_secret=None, access_only=True)
+    expiry = time.time() + 600
+    store.provision(access_token="borrowed-access", expires_at=expiry)
+    row = OfficialCompanyOwnerCredential.objects.get()
+    before = (bytes(row.encrypted_tokens), row.revision, row.status, row.updated_at)
+    monkeypatch.setattr("core.official_company_credentials.time.time", lambda: expiry + 1)
+    with pytest.raises(XListError, match="owner_access_expired"):
+        store.access_token()
+    row.refresh_from_db()
+    assert (bytes(row.encrypted_tokens), row.revision, row.status, row.updated_at) == before
+
+
+@pytest.mark.parametrize("expiry", [
+    None, True, -1, float("inf"), float("nan"),
+    pytest.param(10 ** 400, id="overflowing-integer"),
+])
+def test_access_only_snapshot_requires_a_real_expiry_before_persistence(expiry):
+    store = OwnerTokenStore(key=Fernet.generate_key(), client_id="client", client_secret=None, access_only=True)
+    with pytest.raises(XListError, match="invalid_owner_snapshot"):
+        store.provision(access_token="borrowed-access", expires_at=expiry)
+    assert not OfficialCompanyOwnerCredential.objects.exists()
+
+
+def test_access_only_snapshot_refuses_a_copied_refresh_token():
+    store = OwnerTokenStore(key=Fernet.generate_key(), client_id="client", client_secret=None, access_only=True)
+    with pytest.raises(XListError, match="invalid_owner_snapshot"):
+        store.provision(access_token="borrowed-access", refresh_token="must-stay-with-owner", expires_at=time.time() + 600)
+    assert not OfficialCompanyOwnerCredential.objects.exists()
+
+
+def test_access_only_reader_rejects_managed_encrypted_credentials_without_mutation():
+    key = Fernet.generate_key()
+    managed = OwnerTokenStore(key=key, client_id="client", client_secret="secret")
+    managed.provision(access_token="managed-access", refresh_token="managed-refresh",
+                      expires_at=time.time() + 600)
+    row = OfficialCompanyOwnerCredential.objects.get()
+    before = (bytes(row.encrypted_tokens), row.revision, row.status, row.updated_at)
+    access_only = OwnerTokenStore(key=key, client_id="client", client_secret=None, access_only=True)
+    with pytest.raises(XListError, match="credential_decryption"):
+        access_only.access_token()
+    row.refresh_from_db()
+    assert (bytes(row.encrypted_tokens), row.revision, row.status, row.updated_at) == before
+
+
+@pytest.mark.parametrize("access", [True, 123, ["token"], {"token": "value"}])
+def test_access_only_snapshot_rejects_non_string_access_tokens(access):
+    store = OwnerTokenStore(key=Fernet.generate_key(), client_id="client", client_secret=None, access_only=True)
+    with pytest.raises(XListError, match="invalid_owner_snapshot"):
+        store.provision(access_token=access, expires_at=time.time() + 600)
+    assert not OfficialCompanyOwnerCredential.objects.exists()
+
+
+def test_access_only_mode_is_explicit_in_environment(monkeypatch):
+    monkeypatch.setenv("PUSHINWEIGHT_X_LIST_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("PUSHINWEIGHT_X_LIST_CLIENT_ID", "client")
+    monkeypatch.delenv("PUSHINWEIGHT_X_LIST_CLIENT_SECRET", raising=False)
+    monkeypatch.setenv("PUSHINWEIGHT_X_LIST_ACCESS_ONLY", "true")
+    store = OwnerTokenStore.from_env()
+    store.provision(access_token="borrowed-access", expires_at=time.time() + 600)
+    assert store.access_token() == "borrowed-access"
+    monkeypatch.setenv("PUSHINWEIGHT_X_LIST_ACCESS_ONLY", "yes")
+    with pytest.raises(XListError, match="invalid_owner_access_mode"):
+        OwnerTokenStore.from_env()
+
+
+def test_snapshot_expiry_error_keeps_the_revision_that_supplied_the_token(monkeypatch):
+    key = Fernet.generate_key()
+    store = OwnerTokenStore(key=key, client_id="client", client_secret=None, access_only=True)
+    expiry = time.time() + 120
+    store.provision(access_token="old-access", expires_at=expiry)
+    monkeypatch.setattr("core.official_company_credentials.time.time", lambda: expiry + 1)
+    decode = store._decode
+
+    def replace_after_decode(row):
+        value = decode(row)
+        replacement = OwnerTokenStore(key=key, client_id="client", client_secret=None, access_only=True)
+        replacement.provision(access_token="new-access", expires_at=expiry + 600, replace=True)
+        return value
+
+    monkeypatch.setattr(store, "_decode", replace_after_decode)
+    with pytest.raises(XListError, match="owner_access_expired") as error:
+        store.access_token()
+    assert error.value.credential_revision == store.revision == 1
+    assert OfficialCompanyOwnerCredential.objects.get().revision == 2
+
+
+def test_presend_expiry_check_keeps_the_selected_token_revision_without_a_query(
+    monkeypatch, django_assert_num_queries,
+):
+    key = Fernet.generate_key()
+    store = OwnerTokenStore(key=key, client_id="client", client_secret=None, access_only=True)
+    expiry = time.time() + 120
+    store.provision(access_token="old-access", expires_at=expiry)
+    assert store.access_token() == "old-access"
+    replacement = OwnerTokenStore(key=key, client_id="client", client_secret=None, access_only=True)
+    replacement.provision(access_token="new-access", expires_at=expiry + 600, replace=True)
+    monkeypatch.setattr("core.official_company_credentials.time.time", lambda: expiry + 1)
+    with django_assert_num_queries(0), pytest.raises(XListError, match="owner_access_expired") as error:
+        store.check_access_expiry()
+    assert error.value.credential_revision == store.revision == 1
+    assert OfficialCompanyOwnerCredential.objects.get().revision == 2
+
+
+def test_stored_client_401_cannot_turn_disabled_renewal_into_a_credential_mutation(monkeypatch):
+    from core import official_company_lists as lists
+
+    store = OwnerTokenStore(key=Fernet.generate_key(), client_id="client", client_secret=None, access_only=True)
+    store.provision(access_token="snapshot-access", expires_at=time.time() + 600)
+    row = OfficialCompanyOwnerCredential.objects.get()
+    before = (bytes(row.encrypted_tokens), row.revision, row.status, row.updated_at)
+    request = Mock(return_value=Mock(status_code=401))
+    actual_client = lists.XOwnerListClient
+    monkeypatch.setattr(lists, "XOwnerListClient", lambda **kw: actual_client(**kw, request=request))
+    client = lists.build_owner_list_client(SimpleNamespace(list_id="list", owner_id="17456158"), token_store=store)
+    with pytest.raises(XListError, match="owner_refresh_disabled") as error:
+        client.preflight()
+    assert error.value.error_origin == "local_credential_gate"
+    assert error.value.provider_request_made is True
+    assert request.call_count == 1
+    row.refresh_from_db()
+    assert (bytes(row.encrypted_tokens), row.revision, row.status, row.updated_at) == before
 
 
 def test_rotation_saves_both_tokens_encrypted_and_next_process_reads_them():

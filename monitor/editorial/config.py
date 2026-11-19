@@ -60,6 +60,9 @@ class ChatterTrial(BaseModel):
     scope: str = Field(min_length=1, max_length=70, pattern=r"^chatter-[a-z0-9-]+$")
     limit_usd: float = Field(gt=0, le=20)
     carry_usd: float = Field(ge=0, le=20)
+    publication_limit: int | None = Field(
+        default=None, strict=True, ge=1, le=18, exclude_if=lambda value: value is None
+    )
 
 
 class ChatterWorkflow(BaseModel):

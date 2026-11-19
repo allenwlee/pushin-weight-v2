@@ -843,19 +843,25 @@ def _queue_writers(run, cfg, enqueue):
         if binding.startswith("chatter:")
     ]
     locales.sort(key=lambda locale: locale != "en")
-    planned = [f"{row.pk}:{locale}" for locale in locales for row in selected]
-    _update(run, planned_writers=planned)
+    pairs = [(row, locale) for locale in locales for row in selected]
+    deferred = {}
+    trial = cfg.chatter.trial
+    if trial and trial.publication_limit is not None:
+        deferred["trial_deferred_writers"] = [
+            f"{row.pk}:{locale}" for row, locale in pairs[trial.publication_limit:]
+        ]
+        pairs = pairs[:trial.publication_limit]
+    planned = [f"{row.pk}:{locale}" for row, locale in pairs]
+    _update(run, planned_writers=planned, **deferred)
     from .chatter_trends import TRENDS_SCOPE
 
     if run.scope_key == TRENDS_SCOPE:
-        for locale in locales:
-            for row in selected:
-                write_chatter(row.pk, locale, cfg=cfg, enqueue=enqueue)
+        for row, locale in pairs:
+            write_chatter(row.pk, locale, cfg=cfg, enqueue=enqueue)
         return
-    for locale in locales:
-        for row in selected:
-            if not row.localized_texts.filter(locale=locale).exists():
-                enqueue("write", row.pk, locale)
+    for row, locale in pairs:
+        if not row.localized_texts.filter(locale=locale).exists():
+            enqueue("write", row.pk, locale)
     if planned and set(planned) <= run.outcome.get("writers", {}).keys():
         enqueue("review", run.pk)
 
