@@ -5100,7 +5100,7 @@ class OriginalContent(models.Model):
     consideration_reason = models.TextField(blank=True, default="", db_default="")
     appearance_kind = models.CharField(max_length=24, null=True, blank=True,
         choices=[(value, value) for value in (
-            "semantic_shortlist", "memory_only", "keyword_only", "release")])
+            "semantic_shortlist", "memory_only", "keyword_only", "release", "personalized_trend")])
     discovery_call = models.ForeignKey(OriginalContentCall, null=True, blank=True,
         on_delete=models.PROTECT, related_name="discovered_considerations")
     decision_call = models.ForeignKey(OriginalContentCall, null=True, blank=True,
@@ -5179,7 +5179,8 @@ class OriginalContent(models.Model):
                 name="ck_oc_editorial_group"),
             models.CheckConstraint(
                 condition=models.Q(appearance_kind__isnull=True)
-                | models.Q(appearance_kind__in=["semantic_shortlist", "memory_only", "keyword_only", "release"]),
+                | models.Q(appearance_kind__in=[
+                    "semantic_shortlist", "memory_only", "keyword_only", "release", "personalized_trend"]),
                 name="ck_oc_appearance_kind"),
             models.CheckConstraint(
                 condition=models.Q(shortlist_position__isnull=True)
