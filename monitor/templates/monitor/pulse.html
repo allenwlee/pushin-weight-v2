@@ -1,0 +1,32 @@
+{% extends 'monitor/pulse_base.html' %}{% load i18n %}
+{% block content %}
+<div class="page-heading"><p class="eyebrow">PULSE</p><h1>{% trans 'Release discoveries' %}</h1><p class="muted">{% trans 'Saved discoveries, newest first. Pending details remain visible.' %}</p></div>
+{% if read_error %}<section class="notice" role="alert"><p>{{ error_message }}</p><a href="{% url 'pulse' %}?locale={{ active_locale }}">{% trans 'Latest discoveries' %}</a></section>
+{% else %}
+<div class="release-list">
+{% for entry in entries %}
+<article class="release-card" data-pulse-event="{{ entry.id }}">
+  <div class="release-top"><span class="category">{{ entry.category_label }}</span><span class="state">{{ entry.state_label }}</span></div>
+  <h2>{% if entry.name %}{{ entry.name }}{% else %}{% if entry.has_pulse_finding %}{% trans 'Classifier finding with no product name' %}{% elif entry.review_id %}{% trans 'Reviewed release with no product name' %}{% else %}{% trans 'Release candidate with no linked product name' %}{% endif %}{% endif %}</h2>
+  <p class="ownership">{% if entry.brand %}{{ entry.brand.name }}{% else %}{% trans 'Brand pending' %}{% endif %}{% if entry.family %}<span aria-hidden="true"> · </span>{{ entry.family.name }}{% endif %}<span aria-hidden="true"> · </span>{% for company in entry.companies %}{{ company.name }}{% if not forloop.last %} / {% endif %}{% empty %}{% trans 'Company pending' %}{% endfor %}{% if entry.companies_more %} · {% trans 'Additional ownership records' %}{% endif %}</p>
+  {% if entry.product_identity_state == 'reported' %}<p class="muted">{% trans 'Reported product identity — awaiting review' %}</p>{% elif entry.product_identity_state == 'pending' %}<p class="muted">{% trans 'Product identity pending' %}</p>{% endif %}
+  {% if not entry.provider_mapping_present %}<p class="muted">{% trans 'Provider identity pending' %}</p>{% endif %}
+  {% if entry.identity_conflict %}<p class="notice">{% trans 'Sources refer to competing identities.' %}</p>{% endif %}
+  {% if entry.category_conflict %}<p class="notice">{{ entry.category_conflict_label }}</p>{% endif %}
+  {% if entry.category_evidence_incomplete %}<p class="muted">{% trans 'Category evidence is incomplete.' %}</p>{% endif %}
+  <dl class="release-dates"><div><dt>{% trans 'Discovered' %}</dt><dd>{{ entry.discovered_label }}</dd></div>
+  {% for claim in entry.release_dates %}<div><dt>{{ claim.kind_label }}</dt><dd>{{ claim.display_value }} <span class="muted">· {{ claim.disposition_label }}</span>{% if claim.url %} <a href="{{ claim.url }}" rel="noopener noreferrer" target="_blank">{% trans 'Source' %} ↗</a>{% endif %}</dd></div>{% empty %}<div><dt>{% trans 'Release date' %}</dt><dd class="muted">{% trans 'Date pending' %}</dd></div>{% endfor %}
+  </dl>
+  {% if entry.dates_more %}<p class="muted">{% trans 'More dated evidence is saved with this discovery.' %}</p>{% endif %}
+  {% for source in entry.sources %}{% if source.post_id %}
+  <blockquote><a href="{% url 'post_detail' source.post_id %}?locale={{ active_locale }}">{{ source.label }}</a>
+    {% if source.excerpt %}<p>{{ source.excerpt }}</p>{% endif %}
+    <small>{% if source.last_finding_count != None %}{% trans 'Latest saved P1 release count for this post' %} · {{ source.last_finding_count }}{% elif source.has_attached_finding %}{% trans 'Saved release finding attached to this candidate' %}{% elif source.invalid_answer %}{% trans 'P1 ran, but its answer failed validation' %}{% else %}{% trans 'No saved P1 decision for this post' %}{% endif %}</small>
+  </blockquote>{% endif %}{% endfor %}
+  <div class="release-sources"><a href="{% url 'pulse_sources' entry.id %}?locale={{ active_locale }}">{% trans 'Related sources' %} <span class="count">{{ entry.sources_count }}</span> →</a></div>
+</article>
+{% empty %}<section class="empty"><h2>{% trans 'No release discoveries yet' %}</h2><p class="muted">{% trans 'Saved release discoveries will appear here.' %}</p></section>{% endfor %}
+</div>
+{% if next_url %}<nav class="pagination"><a href="{{ next_url }}" data-pulse-next>{% trans 'Older discoveries' %} →</a></nav>{% endif %}
+{% endif %}
+{% endblock %}

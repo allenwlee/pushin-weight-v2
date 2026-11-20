@@ -12,8 +12,8 @@ def test_two_product_mentions_count_once_for_company_and_broad_stays_broad():
 
     brand = Brand.objects.create(nickname="minimax")
     company = Company.objects.create(nickname="minimax")
-    a = Product.objects.create(repo_id="MiniMaxAI/M2", **product_type_fields(Product, "llm-model"), brand=brand)
-    b = Product.objects.create(repo_id="MiniMaxAI/M3", **product_type_fields(Product, "llm-model"), brand=brand)
+    a = Product.objects.create(repo_id="MiniMaxAI/M2", **product_type_fields(Product, "model-llm"), brand=brand)
+    b = Product.objects.create(repo_id="MiniMaxAI/M3", **product_type_fields(Product, "model-llm"), brand=brand)
     subjects = [
         {"kind": "company", "key": company.pk},
         {"kind": "brand", "key": brand.pk},

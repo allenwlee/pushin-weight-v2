@@ -15,7 +15,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from core.models import (
@@ -108,9 +108,9 @@ def _aware(value):
         raise ValueError("Dossier timestamps must be timezone-aware")
 
 
-def _validate(row):
+def _validate(row, *, validate_constraints=True):
     try:
-        row.full_clean()
+        row.full_clean(validate_constraints=validate_constraints)
     except ValidationError as error:
         raise ValueError(str(error)) from error
     return row
@@ -268,12 +268,23 @@ def add_claim(
     values.pop("claim_kind")
     values.pop("event_timezone")
     values.pop("access_channel", None)
-    return _insert(EventDossierClaim(
+    row = EventDossierClaim(
         claim_hash=claim_hash, claim_kind_reference=kind,
         event_timezone_reference=timezone_reference,
         release_access_channel_reference=channel_reference,
         **values,
-    ))
+    )
+    # PostgreSQL enforces the same check constraints at INSERT. Avoid issuing
+    # one SELECT per constraint for every claim in a multi-finding packet.
+    _validate(row, validate_constraints=False)
+    try:
+        with transaction.atomic():
+            row.save(force_insert=True)
+    except IntegrityError as error:
+        if getattr(error.__cause__, "sqlstate", None) != "23514":
+            raise
+        raise ValueError("Invalid dossier claim") from error
+    return row
 
 
 @transaction.atomic
@@ -343,6 +354,15 @@ def complete_review(
     existing = event.reviews.filter(input_hash=digest).first()
     if existing:
         return existing
+    if product_release is not None:
+        from core.product_identity_locks import lock_product_evidence_names
+
+        names = [product_release.observed_name]
+        if event.current_review_id:
+            previous_name = ProductReleaseDetail.objects.filter(review_id=event.current_review_id).values_list("observed_name", flat=True).first()
+            if previous_name is not None:
+                names.append(previous_name)
+        lock_product_evidence_names(names)
     expected = (
         UUID(str(expected_current_review_id))
         if expected_current_review_id is not None
@@ -411,6 +431,26 @@ def complete_review(
             raise ValueError("Personnel affiliations must belong to the same person")
         _insert(PersonnelChangeDetail(review=saved, **detail))
     EventDossier.objects.filter(pk=event.pk).update(current_review=saved)
+    if product_release and product_release.product_key and review_state == "confirmed":
+        from core.product_identity import _resolved_anchor_product
+        from core.product_release_dossiers import _read_pulse_packet
+        from core.product_release_lineage_recovery import (
+            WAKEUP_BUDGETS,
+            register_lineage_wakeup,
+        )
+
+        event.current_review = saved
+        accepted_ids = {str(item.claim_id) for item in claims if item.disposition == "accepted"}
+        for candidate in sorted(evidence, key=lambda item: str(item.pk)):
+            if str(candidate.pk) not in accepted_ids:
+                continue
+            if candidate.scope_key.startswith("pulse-finding-v1:"):
+                packet = _read_pulse_packet(candidate)
+                if not _resolved_anchor_product(candidate, event, packet=packet):
+                    continue
+            register_lineage_wakeup(parent_claim_id=candidate.pk, cause_review_id=saved.pk,
+                                    budgets=WAKEUP_BUDGETS, only_if_dependents=True)
+            break
     return saved
 
 

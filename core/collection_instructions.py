@@ -14,6 +14,8 @@ from core.measurement_taxonomy import digest, require
 from core.models import CollectionJob, CollectionJobTarget
 
 OPTION_TYPES = {
+    "lineage_wakeup": {},
+
     "chatter_search": {"credential_purpose": str, "workflow_version": str, "pricing_sha256": str},
     "release_acquisition": {},
     "release_document_import": {},
@@ -110,6 +112,7 @@ def scope_for_job(job):
         job.targets.select_related(
             "subject__product__publisher_account",
             "mapping",
+            "parent_target",
             "evidence_observation__run__job",
         ).order_by("ordinal")
     )
@@ -211,11 +214,13 @@ def scope_for_job(job):
             }
         )
     if job.operation == "match_crosswalk":
-        from core.collection_matching import _candidate, _native
+        from core.collection_matching import _candidate, _native, _pending_target
 
         matches, approved = [], []
         for target in targets:
             if target.target_kind != "match_candidate":
+                continue
+            if target.resolution_state == "unresolved":
                 continue
             native = _native(
                 target.evidence_observation,
@@ -226,7 +231,19 @@ def scope_for_job(job):
                 native is not None and native["identifier"] == target.native_identifier,
                 "native evidence changed",
             )
-            candidate = _candidate(target.subject.product, native)
+            origin_id = None
+            if target.parent_target_id:
+                parent = target.parent_target
+                require(parent.target_kind == "pending_origin" and parent.target_key.startswith("origin-target:"), "invalid pending origin")
+                origin_id = int(parent.target_key.removeprefix("origin-target:"))
+                origin, origin_native = _pending_target(origin_id)
+                require(
+                    origin_native == native and parent.evidence_observation_id == origin.evidence_observation_id
+                    and parent.source_row_index == origin.source_row_index
+                    and parent.selection_sha256 == origin.selection_sha256,
+                    "pending origin evidence changed",
+                )
+            candidate = _candidate(target.subject.product, native, origin_target_id=origin_id)
             candidate["decision"] = target.target_role
             candidate["reasons"] = [target.selection_basis]
             candidate["input_sha256"] = target.selection_sha256
@@ -250,8 +267,8 @@ def scope_for_job(job):
                 approved.append(target.target_key)
         scope["matches"] = matches
         scope["review"] = {
-            "reviewed_by": scope.pop("reviewed_by"),
-            "basis": scope.pop("review_basis"),
+            "reviewed_by": scope.pop("reviewed_by", None),
+            "basis": scope.pop("review_basis", None),
             "candidate_ids": approved,
         }
     return scope
@@ -546,19 +563,25 @@ def register_relational_job(
         validate_sealed_job(existing)
         return existing
     candidate.save(force_insert=True)
-    created_targets = {}
+    targets_to_create = []
     parent_keys = {}
+    namespace_cache = {}
     for ordinal, target in enumerate(targets):
         values = {"ordinal": ordinal, **target}
         parent_key = values.pop("parent_target_key", None)
         if "identifier_scope" in values:
             from core.identifier_namespaces import target_namespace_id
-            values["identifier_scope_id"] = target_namespace_id(values)
+            namespace_key = (values.get("identifier_scope"), values.get("mapping_id"),
+                             values.get("evidence_observation_id"), values.get("target_kind"))
+            if namespace_key not in namespace_cache:
+                namespace_cache[namespace_key] = target_namespace_id(values)
+            values["identifier_scope_id"] = namespace_cache[namespace_key]
             del values["identifier_scope"]
-        created = CollectionJobTarget.objects.create(job=candidate, **values)
-        created_targets[created.target_key] = created
+        created = CollectionJobTarget(job=candidate, **values)
+        targets_to_create.append(created)
         if parent_key is not None:
             parent_keys[created.target_key] = parent_key
+    created_targets = {row.target_key: row for row in CollectionJobTarget.objects.bulk_create(targets_to_create, batch_size=500)}
     for target_key, parent_key in parent_keys.items():
         require(parent_key in created_targets, "parent target is missing")
         created = created_targets[target_key]

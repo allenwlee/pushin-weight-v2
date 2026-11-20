@@ -1,0 +1,19 @@
+{% load i18n %}
+<section id="pulse-control" class="panel account-section" aria-labelledby="pulse-admin-title">
+  <h2 id="pulse-admin-title">{% trans 'Pulse identity processing' %}</h2>
+  <p data-pulse-control-status="{{ pulse_control.status }}"><strong>{{ pulse_control.status_label }}</strong></p>
+  <p class="muted">{% trans 'A stop defers new identity resolution. Collection, classification and saved discoveries continue.' %}</p>
+  {% if pulse_control.status == 'unavailable' %}<p role="alert">{% trans 'Control storage is unavailable. Processor state cannot be confirmed.' %}</p><code>{{ pulse_control.error }}</code>
+  {% else %}
+  <dl><dt>{% trans 'Requested revision' %}</dt><dd data-pulse-request-revision>{{ pulse_control.desired_revision }}</dd><dt>{% trans 'Acknowledged revision' %}</dt><dd data-pulse-ack-revision>{{ pulse_control.acknowledged_revision|default_if_none:'—' }}</dd><dt>{% trans 'Acknowledged at' %}</dt><dd>{{ pulse_control.acknowledged_label|default:'—' }}</dd></dl>
+  <form method="post" action="{% url 'pulse_control' %}?locale={{ active_locale }}">
+    {% csrf_token %}<input type="hidden" name="revision" value="{{ pulse_control.desired_revision }}">
+    <label>{% trans 'Reason' %}<textarea name="reason" required maxlength="1000"></textarea></label>
+    <div class="actions"><button name="state" value="stopped" class="reject">{% trans 'Request stop' %}</button><button name="state" value="running" class="approve">{% trans 'Request resume' %}</button></div>
+  </form>
+  {% endif %}
+  <p class="muted">{% trans 'Checked' %} {{ pulse_control.observed_label }}</p>
+  <h3>{% trans 'Pulse diagnostics' %}</h3>
+  {% for item in pulse_control.diagnostics %}<article data-pulse-diagnostic="{{ item.id }}"><p><strong>{{ item.stage }} · {{ item.code }}</strong> <span class="muted">{{ item.reported_label }}</span></p><p>{{ item.display_message }}</p><dl><dt>{% trans 'Observed' %}</dt><dd>{{ item.observed|default_if_none:'—' }}</dd><dt>{% trans 'Expected' %}</dt><dd>{{ item.expected|default_if_none:'—' }}</dd></dl>{% if item.references.post_id %}{% url 'post_detail' item.references.post_id as diagnostic_post_url %}{% if diagnostic_post_url %}<p><a href="{{ diagnostic_post_url }}?locale={{ active_locale }}">{% trans 'Stored post' %}</a></p>{% endif %}{% endif %}<details><summary>{% trans 'References' %}</summary><pre>{{ item.references|pprint }}</pre></details></article>{% empty %}<p class="muted">{% trans 'No diagnostics are available in the current snapshot.' %}</p>{% endfor %}
+  {% if pulse_control.discarded_diagnostics %}<p class="muted">{% trans 'Older diagnostics removed by retention' %}: {{ pulse_control.discarded_diagnostics }}</p>{% endif %}
+</section>

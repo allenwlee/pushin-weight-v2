@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import threading
 import time
+from datetime import timedelta
 
 import pytest
+from django.utils import timezone
 
 
 def _tweets(count: int) -> list[dict]:
@@ -477,7 +479,10 @@ def test_two_role_publisher_keeps_exact_lineage_idempotence_and_last_good_on_rej
     ]
     for brand in brands:
         PostBrand.objects.create(post=post, brand=brand)
-    PostEnrichmentState.objects.create(post=post, claim_run_id="u18-run")
+    PostEnrichmentState.objects.create(
+        post=post, claim_run_id="u18-run",
+        claim_expires_at=timezone.now() + timedelta(minutes=5),
+    )
 
     tweet = {**_tweets(1)[0], "tweet_id": post.pk, "text": post.text, "brand_ids": [brand.pk for brand in brands]}
     result = classify_batch_pragmatics_full(

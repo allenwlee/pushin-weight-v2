@@ -107,7 +107,7 @@ def test_post_reader_keeps_brand_candidate_categories_and_product_evidence_disti
         brand=brand,
         display_name="MiniMax M3",
         repo_id="MiniMaxAI/M3",
-        **product_type_fields(Product, "llm-model"),
+        **product_type_fields(Product, "model-llm"),
     )
     PostBrandProduct.objects.create(
         post=post,

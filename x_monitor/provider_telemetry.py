@@ -50,6 +50,7 @@ def provider_host_class(client_or_url: Any) -> str:
         "api.anthropic.com": "anthropic",
         "openrouter.ai": "openrouter",
         "api.openrouter.ai": "openrouter",
+        "api.typesafe.ai": "typesafe",
     }.get(hostname, "unknown")
 
 

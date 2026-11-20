@@ -1,0 +1,36 @@
+.pulse-page #page-sections { max-width: 1000px; padding-top: 30px; padding-bottom: 64px; }
+.pulse-main { min-width: 0; }
+.pulse-main a { color: var(--blue); text-underline-offset: 3px; }
+.pulse-main a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
+.pulse-main .page-heading { margin: 0 0 24px; }
+.pulse-main .eyebrow { color: var(--blue); font-size: 12px; font-weight: 700; letter-spacing: .1em; }
+.pulse-main h1 { margin: 8px 0; font-size: 26px; line-height: 1.2; }
+.pulse-main h2 { margin: 16px 0 8px; font-size: 24px; overflow-wrap: anywhere; }
+.pulse-main .muted { color: var(--muted); }
+.pulse-main .release-list { display: grid; gap: 24px; }
+.pulse-main .release-card, .pulse-main .empty { padding: 28px 32px; border: 1px solid var(--panel-border); border-radius: 18px; background: var(--surface); overflow-wrap: anywhere; }
+.pulse-main > .release-card + .release-card { margin-top: 24px; }
+.pulse-main .release-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
+.pulse-main .category { color: var(--muted); font-weight: 700; }
+.pulse-main .state { padding: 5px 10px; border: 1px solid var(--panel-border); border-radius: 24px; background: #f4f7fb; }
+.pulse-main .ownership, .pulse-main .release-sources { font-size: 14px; }
+.pulse-main .release-dates { display: grid; gap: 8px; margin: 22px 0; font-size: 13px; }
+.pulse-main .release-dates > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; }
+.pulse-main .release-dates dt { color: var(--muted); }
+.pulse-main .release-dates dd { margin: 0; line-height: 1.6; }
+.pulse-main .release-sources { margin-top: 20px; }
+.pulse-main .count { display: inline-block; margin-left: 4px; }
+.pulse-main .notice { padding: 16px; border: 1px solid #e4c78e; background: #fff9ed; border-radius: 8px; line-height: 1.6; }
+.pulse-main .pagination { margin-top: 28px; text-align: center; }
+.pulse-main .pagination a { display: inline-block; padding: 9px 16px; border: 1px solid var(--panel-border); border-radius: 8px; background: var(--surface); }
+.pulse-main .source-actions { display: flex; flex-wrap: wrap; gap: 24px; }
+@media (max-width: 700px) {
+  .pulse-page #page-sections { padding-top: 22px; }
+  .pulse-main .release-list { gap: 16px; }
+  .pulse-main .release-card, .pulse-main .empty { padding: 20px 18px; border-radius: 14px; }
+  .pulse-main .release-dates > div { grid-template-columns: 1fr; gap: 3px; }
+  .pulse-main h2 { font-size: 21px; }
+}
+.pulse-main blockquote { margin: 16px 0; padding: 0 14px; border-inline-start: 2px solid var(--panel-border); }
+.pulse-main blockquote p { margin: 6px 0; white-space: pre-line; }
+.pulse-main blockquote small { color: var(--muted); }

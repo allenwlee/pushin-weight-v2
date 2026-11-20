@@ -66,6 +66,16 @@ CANONICAL_PRODUCT_LABEL_KEYS = (
     "bug", "complaint", "testimonial", "ideas_requests", "investigate_claim",
 )
 POST_TYPE_KEYS = CANONICAL_POST_TYPE_KEYS
+COMPRESSED_CLASSIFIER_LEGACY_REVISIONS = (
+    "compressed8-pulse-content-v1", "compressed8-pulse-brand-v1", "compressed8-pulse-merge-v1",
+)
+COMPRESSED_CLASSIFIER_REVISIONS = (
+    "compressed8-pulse-content-v2", "compressed8-pulse-brand-v2", "compressed8-pulse-merge-v2",
+)
+COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS = (
+    COMPRESSED_CLASSIFIER_LEGACY_REVISIONS,
+    COMPRESSED_CLASSIFIER_REVISIONS,
+)
 PRODUCT_LABEL_KEYS = CANONICAL_PRODUCT_LABEL_KEYS
 AUDIENCE_TOPIC_KEYS = (
     "local_inference", "cost_performance", "model_distillation",

@@ -312,3 +312,374 @@ msgstr "Published reports"
 #: monitor/templates/monitor/general/_pulse_framework.html
 msgid "Earlier published reports are shown here; they are not forecasts."
 msgstr "Earlier published reports are shown here; they are not forecasts."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "A stop defers new identity resolution. Collection, classification and saved discoveries continue."
+msgstr "A stop defers new identity resolution. Collection, classification and saved discoveries continue."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Accepted evidence"
+msgstr "Accepted evidence"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Acknowledged at"
+msgstr "Acknowledged at"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Acknowledged revision"
+msgstr "Acknowledged revision"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Additional ownership records"
+msgstr "Additional ownership records"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Agent"
+msgstr "Agent"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Announcement"
+msgstr "Announcement"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Availability"
+msgstr "Availability"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Brand pending"
+msgstr "Brand pending"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Category pending"
+msgstr "Category pending"
+
+#: monitor/pulse_views.py
+#, python-format
+msgid "Reported category: %(category)s"
+msgstr "Reported category: %(category)s"
+
+#: monitor/pulse_views.py
+#, python-format
+msgid "Sources report different categories: %(categories)s."
+msgstr "Sources report different categories: %(categories)s."
+
+#: monitor/templates/monitor/pulse.html
+msgid "Category evidence is incomplete."
+msgstr "Category evidence is incomplete."
+
+#: monitor/pulse_views.py
+#, python-format
+msgid "Legacy category: %(code)s"
+msgstr "Legacy category: %(code)s"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Checked"
+msgstr "Checked"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Choose a valid action and enter a reason."
+msgstr "Choose a valid action and enter a reason."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Company pending"
+msgstr "Company pending"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Confirmed"
+msgstr "Confirmed"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Control storage is unavailable. Processor state cannot be confirmed."
+msgstr "Control storage is unavailable. Processor state cannot be confirmed."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Control unavailable"
+msgstr "Control unavailable"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Date pending"
+msgstr "Date pending"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Discovered"
+msgstr "Discovered"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Expected"
+msgstr "Expected"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "First observed use"
+msgstr "First observed use"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Flagged source"
+msgstr "Flagged source"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Harness"
+msgstr "Harness"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Language"
+msgstr "Language"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Language model"
+msgstr "Language model"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Latest discoveries"
+msgstr "Latest discoveries"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Linked"
+msgstr "Linked"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "More dated evidence is saved with this discovery."
+msgstr "More dated evidence is saved with this discovery."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "More sources"
+msgstr "More sources"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Name pending"
+msgstr "Name pending"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "No diagnostics are available in the current snapshot."
+msgstr "No diagnostics are available in the current snapshot."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "No release discoveries yet"
+msgstr "No release discoveries yet"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "No sources have been attached yet."
+msgstr "No sources have been attached yet."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Not a release"
+msgstr "Not a release"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Not reviewed"
+msgstr "Not reviewed"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Observed"
+msgstr "Observed"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Older diagnostics removed by retention"
+msgstr "Older diagnostics removed by retention"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Older discoveries"
+msgstr "Older discoveries"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Original link unavailable"
+msgstr "Original link unavailable"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Original source"
+msgstr "Original source"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Other"
+msgstr "Other"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Other model"
+msgstr "Other model"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pending review"
+msgstr "Pending review"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Product identity pending"
+msgstr "Product identity pending"
+
+#: monitor/templates/monitor/pulse.html
+msgid "Reported product identity — awaiting review"
+msgstr "Reported product identity — awaiting review"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Provisional"
+msgstr "Provisional"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse control changed. Refresh Admin before trying again."
+msgstr "Pulse control changed. Refresh Admin before trying again."
+
+#: monitor/pulse_views.py
+msgid "Pulse control requires owner or staff access."
+msgstr "Pulse control requires owner or staff access."
+
+#: monitor/pulse_views.py
+msgid "Pulse processing needs investigation."
+msgstr "Pulse processing needs investigation."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse control is unavailable. No stop or resume was confirmed."
+msgstr "Pulse control is unavailable. No stop or resume was confirmed."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse diagnostics"
+msgstr "Pulse diagnostics"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse identity processing"
+msgstr "Pulse identity processing"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse processing"
+msgstr "Pulse processing"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Reason"
+msgstr "Reason"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "References"
+msgstr "References"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Rejected evidence"
+msgstr "Rejected evidence"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related discussion is separate from evidence accepted in a review."
+msgstr "Related discussion is separate from evidence accepted in a review."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related source"
+msgstr "Related source"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related sources"
+msgstr "Related sources"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related sources are temporarily unavailable. Please try again."
+msgstr "Related sources are temporarily unavailable. Please try again."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Release date"
+msgstr "Release date"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Release discoveries"
+msgstr "Release discoveries"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Release discoveries are temporarily unavailable. Please try again."
+msgstr "Release discoveries are temporarily unavailable. Please try again."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Reported date"
+msgstr "Reported date"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Reported release"
+msgstr "Reported release"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Request resume"
+msgstr "Request resume"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Request stop"
+msgstr "Request stop"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Requested revision"
+msgstr "Requested revision"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Resume requested"
+msgstr "Resume requested"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Retired"
+msgstr "Retired"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Return to Admin"
+msgstr "Return to Admin"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Running"
+msgstr "Running"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Saved discoveries, newest first. Pending details remain visible."
+msgstr "Saved discoveries, newest first. Pending details remain visible."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Saved release discoveries will appear here."
+msgstr "Saved release discoveries will appear here."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Source"
+msgstr "Source"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Sources refer to competing identities."
+msgstr "Sources refer to competing identities."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Stop requested"
+msgstr "Stop requested"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Stopped"
+msgstr "Stopped"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Stored post"
+msgstr "Stored post"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Superseded"
+msgstr "Superseded"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "This page link is invalid. Open the latest discoveries."
+msgstr "This page link is invalid. Open the latest discoveries."
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Uncertain evidence"
+msgstr "Uncertain evidence"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Unconfirmed report"
+msgstr "Unconfirmed report"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Unresolved"
+msgstr "Unresolved"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Provider identity pending"
+msgstr "Provider identity pending"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Saved provider identity"
+msgstr "Saved provider identity"
+
+#: monitor/pulse_views.py
+msgid "Lineage recovery paused after reaching its processing limit."
+msgstr "Lineage recovery paused after reaching its processing limit."
+
+#: monitor/pulse_views.py
+msgid "Some lineage evidence is invalid and needs investigation."
+msgstr "Some lineage evidence is invalid and needs investigation."
+
+#: monitor/pulse_views.py
+msgid "Some non-X lineage evidence is pending; automatic recovery is not available yet."
+msgstr "Some non-X lineage evidence is pending; automatic recovery is not available yet."

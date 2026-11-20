@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 from urllib.parse import unquote, urlsplit
 
 from core.classification_contract import (
+    COMPRESSED_CLASSIFIER_REVISIONS,
     CONTRACT_VERSION as _STAGE1_CONTRACT_VERSION,
     AUDIENCE_TOPIC_KEYS as _V4_AUDIENCE_TOPIC_KEYS,
     GEOPOLITICAL_MODE_KEYS as _V4_GEOPOLITICAL_MODE_KEYS,
@@ -91,6 +92,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+CLASSIFIER_MAX_TOKENS = 65_536
 
 
 # --- Type aliases --------------------------------------------------------
@@ -1195,7 +1197,9 @@ def _call_signal_with_retry(
         )
     )
     event_context = dict(telemetry_context or {})
-    event_context["provider_host_class"] = provider_host_class(client)
+    event_context["provider_host_class"] = provider_host_class(
+        "https://api.typesafe.ai" if model == "jev-1.14.0" else client
+    )
     for attempt in range(_MAX_RETRIES):
         attempt_kind = (
             operation_kind
@@ -1227,12 +1231,14 @@ def _call_signal_with_retry(
             # identical request; permanent provider and malformed-response
             # failures stay pending for a later normal attempt.
             from .deepinfra import DeepInfraRetryableError
+            from .jev_classifier import JevRetryableError
             from .openrouter import OpenRouterRetryableError
             if not isinstance(
                 e,
                 (
                     TimeoutError,
                     DeepInfraRetryableError,
+                    JevRetryableError,
                     OpenRouterRetryableError,
                     AnthropicCompatibleRetryableError,
                 ),
@@ -3582,6 +3588,7 @@ _TWO_ROLE_PREVIOUS_MERGE_REVISION = "stage1-two-role-merge-0731-v5"
 _TWO_ROLE_SELECTED_CONTENT_REVISION = "stage1-content-0731-v7"
 _TWO_ROLE_SELECTED_MERGE_REVISION = "stage1-two-role-merge-0731-v7"
 _TWO_ROLE_ALLOWED_REVISION_TRIPLETS = frozenset({
+    COMPRESSED_CLASSIFIER_REVISIONS,
     ("stage1-content-0731-v6", _TWO_ROLE_SELECTED_BRAND_REVISION, "stage1-two-role-merge-0731-v6"),
     (
         _TWO_ROLE_CONTENT_REVISION,
@@ -3757,12 +3764,22 @@ def _two_role_fingerprint(
         "reviewed_affiliations": _canonical_reviewed_affiliations(tweet.get("affiliations")),
         "tracked_brand_catalog_revision": (tracked_catalog or {}).get("revision", ""),
     }
+    if tweet.get("_classification_pipeline") == "compressed8_pulse_v1":
+        envelope.update(
+            pipeline=tweet["_classification_pipeline"], author_handle=tweet.get("author_handle"),
+            release_channels=tweet.get("_classification_channels"),
+            matcher_revision=tweet.get("_classification_matcher_revision"),
+        )
+        if tweet.get("author_profile_evidence") is not None:
+            envelope["author_profile_evidence"] = tweet["author_profile_evidence"]
     return hashlib.sha256(
         json.dumps(envelope, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
 
 
 def _two_role_revisions(request_profile: str | None = None) -> tuple[str, str, str]:
+    if request_profile == "compressed8_pulse_v1":
+        return COMPRESSED_CLASSIFIER_REVISIONS
     if request_profile == "deepseek_0731":
         return (
             _TWO_ROLE_SELECTED_CONTENT_REVISION,
@@ -4248,7 +4265,7 @@ def _two_role_trace(
         "contract_version": _STAGE1_CONTRACT_VERSION,
         "taxonomy_version": (
             _STAGE1_TAXONOMY_VERSION
-            if request_profile == "deepseek_0731"
+            if request_profile in {"deepseek_0731", "compressed8_pulse_v1"}
             else _STAGE1_TAXONOMY_V3_VERSION
         ),
         "model": model or _SIGNAL_MODEL,
@@ -4289,7 +4306,7 @@ def classify_batch_pragmatics_full(
     *,
     model: str | None = None,
     on_batch_error: Callable[[list[dict[str, Any]], Exception], None] | None = None,
-    max_tokens: int = 65_536,
+    max_tokens: int = CLASSIFIER_MAX_TOKENS,
     thinking: "dict | None" = None,
     deadline: Any | None = None,
     max_workers: int = 3,
@@ -4308,6 +4325,14 @@ def classify_batch_pragmatics_full(
     empty = [_stage1_empty() for _ in tweets]
     if anthropic_client is None:
         return empty
+    if getattr(anthropic_client, "request_profile", None) == "compressed8_pulse_v1":
+        from x_monitor.compressed_classifier import classify_batch
+
+        return classify_batch(
+            tweets, brand_registry, anthropic_client, on_batch_error=on_batch_error,
+            max_tokens=max_tokens, deadline=deadline, max_workers=max_workers, telemetry_context=telemetry_context,
+            tracked_catalog_snapshot=tracked_catalog_snapshot,
+        )
     selected_0731 = getattr(anthropic_client, "request_profile", None) == "deepseek_0731"
     if selected_0731 and model is None:
         # The direct caller historically omits `model`; this selected transport

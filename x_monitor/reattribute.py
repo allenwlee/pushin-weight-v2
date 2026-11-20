@@ -475,6 +475,28 @@ def build_classifier_client_from_env(
         cfg = load_config(Path("config.yaml"))
 
     provider_name = getattr(cfg.llm, "classifier_provider", "anthropic")
+    if getattr(cfg.llm, "classifier_pipeline", "two_role") == "compressed8_pulse_v1":
+        import os
+
+        from x_monitor.deepinfra import (
+            DEEPSEEK_0731_MODEL,
+            DeepInfraChatCompletionsClient,
+        )
+        from x_monitor.jev_classifier import (
+            CompressedClassifierClient,
+            JevClassifierClient,
+        )
+
+        if provider_name != "deepinfra" or cfg.llm.classifier_model != DEEPSEEK_0731_MODEL or cfg.llm.classifier_deepinfra_request_profile != "deepseek_0731":
+            raise ValueError("compressed_classifier_requires_selected_deepinfra_route")
+        extraction = DeepInfraChatCompletionsClient.from_config(
+            model=cfg.llm.classifier_model, base_url=cfg.llm.classifier_base_url,
+            request_profile="deepseek_0731", credential_env=deepinfra_key_env,
+        )
+        key = os.environ.get("TYPESAFE_API_KEY", "").strip()
+        if extraction is None or not key:
+            return None
+        return CompressedClassifierClient(extraction, JevClassifierClient(api_key=key))
     if provider_name == "deepinfra":
         from x_monitor.deepinfra import DeepInfraChatCompletionsClient
 
@@ -534,9 +556,12 @@ def build_relevancy_client_from_env(
                 "route; relevancy disabled"
             )
             return None
-        return build_classifier_client_from_env(
-            cfg, **({"deepinfra_key_env": deepinfra_key_env}
-                    if deepinfra_key_env != "DEEPINFRA_API_KEY" else {}),
+        from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+
+        return DeepInfraChatCompletionsClient.from_config(
+            model=cfg.llm.relevancy_model, base_url=cfg.llm.classifier_base_url,
+            request_profile=cfg.llm.classifier_deepinfra_request_profile,
+            credential_env=deepinfra_key_env,
         )
     return build_anthropic_client_from_env(cfg)
 

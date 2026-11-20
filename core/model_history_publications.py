@@ -617,6 +617,9 @@ def _publication_window(parent, budget, start, end, *, key, config):
 
 
 def _admit_publication(claim, job, publication, start, end):
+    from core.collection_matching import admit_saved_publication_rows
+
+    admit_saved_publication_rows(claim=claim, publication_id=publication.pk, budgets=job.budgets)
     contract = history_statistics_contract(job)
     if (
         contract
@@ -889,6 +892,18 @@ def _publication_evidence(claim, job, model, pins, budget, *, key):
             reused, missing_windows = _reuse_openrouter_days(
                 job, model, identifiers, start, end
             )
+            from core.collection_matching import stage_saved_publications
+
+            reused_ids = [row["observation_id"] for row in reused]
+            projected_ids = CollectionObservationInput.objects.filter(
+                observation_id__in=reused_ids, input_role="numeric_projection",
+            ).values_list("input_observation_id", flat=True)
+            origin_ids = CollectionObservationInput.objects.filter(
+                observation_id__in=[*reused_ids, *projected_ids],
+                input_role="publication_row_origin",
+                input_observation_id__isnull=False,
+            ).values_list("input_observation_id", flat=True).distinct()
+            stage_saved_publications(claim=claim, publication_ids=list(origin_ids))
             evidence.extend(reused)
             acquisition_windows.extend(missing_windows)
         else:

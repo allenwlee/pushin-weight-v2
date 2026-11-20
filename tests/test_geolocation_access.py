@@ -341,3 +341,55 @@ def test_web_readiness_waits_for_each_view_grants(serving_login, view):
             sql.Identifier(view), sql.Identifier(role)))
     with patch.object(connections['default'], 'connection', serving):
         assert not serving_grants_ready(connections['default'])
+
+
+def test_pulse_page_uses_source_linked_category_without_archive_access(serving_login, client):
+    from django.contrib.auth import get_user_model
+    from core.product_release_dossiers import persist_classified_release_findings
+    from tests.test_pulse_finding_persistence import finding
+
+    post = Post.objects.create(tweet_id='serving-pulse-release', text='Released Model A')
+    persist_classified_release_findings(source={'kind':'post', 'id':post.pk}, revision_id='b' * 64,
+        content_fingerprint='c' * 64, extraction_version='test', findings=[finding()])
+    user = get_user_model().objects.create_user(username='pulse-serving-test', email='pulse@example.org', is_staff=True)
+    client.force_login(user)
+    serving, _, _, _ = serving_login
+    with patch.object(connections['default'], 'connection', serving):
+        response = client.get('/pulse?locale=en', secure=True)
+        assert response.status_code == 200
+        assert b'Model A' in response.content and b'Language model' in response.content
+        with serving.cursor() as cursor, pytest.raises(psycopg.errors.InsufficientPrivilege):
+            cursor.execute('SELECT body FROM collection_evidence_archives LIMIT 1')
+
+
+def test_pulse_serving_does_not_guess_when_category_projection_is_missing(serving_login):
+    from core.pulse_readers import release_page
+    from tests.test_pulse_readers import category_release
+
+    event = category_release('serving-pulse-missing-category')
+    serving, _, _, _ = serving_login
+    with patch.object(connections['default'], 'connection', serving):
+        row = next(item for item in release_page()['entries'] if item['id'] == str(event.pk))
+    assert row['category'] is None and row['category_evidence_incomplete'] is True
+
+
+def test_category_projection_cannot_disagree_with_its_saved_packet(serving_login):
+    from core.event_dossiers import add_claim
+    from core.models import EventDossierClaim
+    from core.product_release_dossiers import persist_classified_release_findings
+    from tests.test_pulse_finding_persistence import finding
+
+    post = Post.objects.create(tweet_id='serving-pulse-category-conflict', text='Released Model A')
+    saved = persist_classified_release_findings(source={'kind':'post', 'id':post.pk}, revision_id='f' * 64,
+        content_fingerprint='e' * 64, extraction_version='test', findings=[finding()])
+    anchor = EventDossierClaim.objects.get(pk=saved['findings'][0]['anchor_claim_id'])
+    with pytest.raises(ValueError, match='Invalid dossier claim'), transaction.atomic():
+        add_claim(anchor.event_dossier_source_id, claim_kind='release_context',
+            scope_key='pulse-category-v1:' + 'a' * 64, assertion_text='agent',
+            source_excerpt=anchor.source_excerpt, source_locator=anchor.source_locator,
+            extraction_version=anchor.extraction_version, source_archive_id=anchor.source_archive_id)
+    serving, _, _, _ = serving_login
+    from core.pulse_readers import release_page
+    with patch.object(connections['default'], 'connection', serving):
+        row = next(item for item in release_page()['entries'] if item['id'] == str(saved['findings'][0]['dossier_id']))
+    assert row['category'] == 'model-llm'

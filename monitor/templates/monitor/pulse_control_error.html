@@ -1,0 +1,2 @@
+{% extends 'monitor/pulse_base.html' %}{% load i18n %}
+{% block content %}<h1>{% trans 'Pulse processing' %}</h1><p role="alert" class="notice">{{ error_message }}</p><a href="{% url 'product_review' %}?locale={{ active_locale }}#pulse-control">{% trans 'Return to Admin' %}</a>{% endblock %}

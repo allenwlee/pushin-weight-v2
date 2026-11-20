@@ -1,0 +1,5 @@
+{% extends 'monitor/general.html' %}{% load static i18n %}
+{% block title %}Pulse · PUSHINWEIGHT{% endblock %}
+{% block body_class %}general-page pulse-page{% endblock %}
+{% block page_assets %}<link rel="stylesheet" href="{% static 'pulse.css' %}"><script src="{% static 'monitor/general.js' %}" defer></script>{% endblock %}
+{% block page_content %}<section id="pulse" class="pulse-main">{% block content %}{% endblock %}</section>{% endblock %}

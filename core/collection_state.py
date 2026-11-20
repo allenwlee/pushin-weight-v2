@@ -323,6 +323,8 @@ def claim_job(
                 or job.source_id in {"hf", "github"} and job.purpose == "content"
                 and job.operation == "release_acquisition" and job.mode == "manual"
                 and manual_authorized
+                or job.purpose == "content" and job.operation == "lineage_wakeup"
+                and job.mode == "manual" and manual_authorized
                 or job.source_id == "x" and job.purpose == "content"
                 and job.operation == "x_backfill" and job.mode == "historical"
                 and manual_authorized
@@ -480,6 +482,8 @@ def claim_job(
             marker_kind, marker_phase = "match_execution", "typed-product-match-v1"
         elif job.source_id in {"hf", "github"} and job.operation == "release_acquisition":
             marker_kind, marker_phase = "release_acquisition", "typed-release-acquisition-v1"
+        elif job.operation == "lineage_wakeup":
+            marker_kind, marker_phase = "lineage_wakeup", "typed-lineage-wakeup-v1"
         elif job.source_id == "x" and job.operation == "x_backfill":
             marker_kind, marker_phase = "x_backfill_execution", "typed-backfill-v1"
         elif job.source_id == "x" and job.operation == "x_cycle":
@@ -1458,6 +1462,10 @@ def finish_run(
                 job.source_id in {"hf", "github"} and job.purpose == "content"
                 and job.operation == "release_acquisition" and request_count is not None
             )
+            lineage_wakeup = (
+                job.purpose == "content" and job.operation == "lineage_wakeup"
+                and request_count == 0
+            )
             require(
                 (job.purpose == "catalog" and (
                     job.source_id == "hf" and job.operation in {"model_inventory", "hf_catalog"}
@@ -1465,7 +1473,7 @@ def finish_run(
                 ))
                 or metric_collection or model_history or github_catalog or x_backfill
                 or x_cycle or chatter
-                or product_match or release_acquisition,
+                or product_match or release_acquisition or lineage_wakeup,
                 "typed completion needs a supported collection operation",
             )
         now = now or timezone.now()

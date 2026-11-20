@@ -1241,6 +1241,357 @@ msgstr "バイト"
 msgid "Chart is busy. Try again shortly."
 msgstr "チャートを読み込み中です。しばらくしてからお試しください。"
 
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "A stop defers new identity resolution. Collection, classification and saved discoveries continue."
+msgstr "停止すると新しい同一性の判定を保留します。収集、分類、保存済みの発見の表示は続きます。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Accepted evidence"
+msgstr "採用された証拠"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Acknowledged at"
+msgstr "確認日時"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Acknowledged revision"
+msgstr "確認済みリビジョン"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Additional ownership records"
+msgstr "その他の所有関係"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Announcement"
+msgstr "発表"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Availability"
+msgstr "提供開始"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Brand pending"
+msgstr "ブランド未確定"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Category pending"
+msgstr "分類未確定"
+
+#: monitor/pulse_views.py
+#, python-format
+msgid "Reported category: %(category)s"
+msgstr "報告された分類: %(category)s"
+
+#: monitor/pulse_views.py
+#, python-format
+msgid "Sources report different categories: %(categories)s."
+msgstr "情報源ごとに報告された分類が異なります: %(categories)s。"
+
+#: monitor/templates/monitor/pulse.html
+msgid "Category evidence is incomplete."
+msgstr "分類の根拠が不完全です。"
+
+#: monitor/pulse_views.py
+#, python-format
+msgid "Legacy category: %(code)s"
+msgstr "旧分類: %(code)s"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Checked"
+msgstr "確認時刻"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Choose a valid action and enter a reason."
+msgstr "有効な操作を選び、理由を入力してください。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Company pending"
+msgstr "企業未確定"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Confirmed"
+msgstr "確認済み"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Control storage is unavailable. Processor state cannot be confirmed."
+msgstr "制御用ストレージを利用できないため、処理の状態を確認できません。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Control unavailable"
+msgstr "制御を利用できません"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Date pending"
+msgstr "日付未確定"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Discovered"
+msgstr "発見日時"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Expected"
+msgstr "期待値"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "First observed use"
+msgstr "使用を初めて確認"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Flagged source"
+msgstr "問題が報告された情報源"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Harness"
+msgstr "ハーネス"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Language model"
+msgstr "言語モデル"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Latest discoveries"
+msgstr "最新の発見"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Linked"
+msgstr "関連付け日時"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "More dated evidence is saved with this discovery."
+msgstr "この発見には、ほかにも日付を含む証拠が保存されています。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "More sources"
+msgstr "ほかの情報源"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Name pending"
+msgstr "名称未確定"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "No diagnostics are available in the current snapshot."
+msgstr "現在のスナップショットに診断情報はありません。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "No release discoveries yet"
+msgstr "リリースの発見はまだありません"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "No sources have been attached yet."
+msgstr "情報源はまだ関連付けられていません。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Not a release"
+msgstr "リリースではありません"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Not reviewed"
+msgstr "未レビュー"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Older diagnostics removed by retention"
+msgstr "保存上限により削除された過去の診断"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Older discoveries"
+msgstr "以前の発見"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Original link unavailable"
+msgstr "元のリンクはありません"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Other"
+msgstr "その他"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Other model"
+msgstr "その他のモデル"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pending review"
+msgstr "レビュー待ち"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Product identity pending"
+msgstr "製品の同一性は未確定"
+
+#: monitor/templates/monitor/pulse.html
+msgid "Reported product identity — awaiting review"
+msgstr "情報源が報告した製品の同一性 — レビュー待ち"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Provisional"
+msgstr "暫定"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse control changed. Refresh Admin before trying again."
+msgstr "Pulse の制御状態が変わりました。管理画面を更新してから再試行してください。"
+
+#: monitor/pulse_views.py
+msgid "Pulse control requires owner or staff access."
+msgstr "Pulse の操作には所有者またはスタッフ権限が必要です。"
+
+#: monitor/pulse_views.py
+msgid "Pulse processing needs investigation."
+msgstr "Pulse の処理状況を調査する必要があります。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse control is unavailable. No stop or resume was confirmed."
+msgstr "Pulse の制御を利用できません。停止や再開は確認されていません。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse diagnostics"
+msgstr "Pulse の診断"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse identity processing"
+msgstr "Pulse の同一性判定"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse processing"
+msgstr "Pulse の処理"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Reason"
+msgstr "理由"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "References"
+msgstr "参照記録"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Rejected evidence"
+msgstr "不採用の証拠"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related discussion is separate from evidence accepted in a review."
+msgstr "関連する議論と、レビューで採用された証拠は別のものです。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related source"
+msgstr "関連する情報源"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related sources"
+msgstr "関連する情報源"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related sources are temporarily unavailable. Please try again."
+msgstr "関連する情報源を一時的に読み込めません。再試行してください。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Release discoveries"
+msgstr "リリースの発見"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Release discoveries are temporarily unavailable. Please try again."
+msgstr "リリースの発見を一時的に読み込めません。再試行してください。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Reported date"
+msgstr "報告された日付"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Reported release"
+msgstr "報告されたリリース"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Request resume"
+msgstr "再開をリクエスト"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Request stop"
+msgstr "停止をリクエスト"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Requested revision"
+msgstr "要求したリビジョン"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Resume requested"
+msgstr "再開リクエスト済み"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Retired"
+msgstr "取り下げ済み"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Return to Admin"
+msgstr "管理画面に戻る"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Running"
+msgstr "稼働中"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Saved discoveries, newest first. Pending details remain visible."
+msgstr "保存された発見を新しい順に表示します。未確定の情報も表示されます。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Saved release discoveries will appear here."
+msgstr "保存されたリリースの発見がここに表示されます。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Source"
+msgstr "情報源"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Sources refer to competing identities."
+msgstr "情報源が異なる製品の同一性を示しています。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Stop requested"
+msgstr "停止リクエスト済み"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Stopped"
+msgstr "停止済み"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Stored post"
+msgstr "保存済みの投稿"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Superseded"
+msgstr "置き換え済み"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "This page link is invalid. Open the latest discoveries."
+msgstr "このページのリンクは無効です。最新の発見を開いてください。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Uncertain evidence"
+msgstr "不確かな証拠"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Unconfirmed report"
+msgstr "未確認の報告"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Unresolved"
+msgstr "未解決"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Provider identity pending"
+msgstr "データ提供元の識別情報は未確定"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Saved provider identity"
+msgstr "保存済みのデータ提供元の識別情報"
+
+#: monitor/pulse_views.py
+msgid "Lineage recovery paused after reaching its processing limit."
+msgstr "系譜の復旧は処理上限に達したため一時停止しました。"
+
+#: monitor/pulse_views.py
+msgid "Some lineage evidence is invalid and needs investigation."
+msgstr "一部の系譜の証拠が無効なため、調査が必要です。"
+
+#: monitor/pulse_views.py
+msgid "Some non-X lineage evidence is pending; automatic recovery is not available yet."
+msgstr "X 以外の一部の系譜の証拠は処理待ちです。自動復旧はまだ利用できません。"
+
 msgid "Source language"
 msgstr "情報源の言語"
 
@@ -1261,3 +1612,24 @@ msgstr "表示"
 
 msgid "Chatter updates are delayed. The latest available story is shown."
 msgstr "Chatterの更新が遅れています。現在は最新の公開記事を表示しています。"
+
+msgid "Classifier finding with no product name"
+msgstr "製品名のない分類結果"
+
+msgid "Reviewed release with no product name"
+msgstr "製品名のないレビュー済みリリース"
+
+msgid "Release candidate with no linked product name"
+msgstr "製品名が紐付いていないリリース候補"
+
+msgid "Latest saved P1 release count for this post"
+msgstr "この投稿の最新のP1リリース判定件数"
+
+msgid "Saved release finding attached to this candidate"
+msgstr "この候補にリリース判定が紐付いています"
+
+msgid "No saved P1 decision for this post"
+msgstr "この投稿のP1判定は未保存です"
+
+msgid "P1 ran, but its answer failed validation"
+msgstr "P1を実行しましたが、回答は検証に通りませんでした"

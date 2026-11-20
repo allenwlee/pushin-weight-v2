@@ -8,7 +8,39 @@ pytestmark = pytest.mark.django_db
 
 
 def product(name, brand):
-    return Product.objects.create(repo_id=f"lab/{name}", brand=brand, **product_type_fields(Product, "llm-model"))
+    return Product.objects.create(repo_id=f"lab/{name}", brand=brand, **product_type_fields(Product, "model-llm"))
+
+
+def test_source_backed_versions_without_provider_listing_share_one_family():
+    from core.measurement_taxonomy import configure_taxonomy, resolve_products
+    from core.models import ProductGroup, TaxonomyVersion
+
+    brand = Brand.objects.create(nickname="family-fixture")
+    first, second = [
+        Product.objects.create(display_name=name, brand=brand, **product_type_fields(Product, "model-llm"))
+        for name in ("Example 4.1", "Example 5")
+    ]
+    keys = [str(first.product_key), str(second.product_key)]
+    spec = {
+        "reviewed_by": "source-fixture",
+        "subjects": [{"kind": "product", "key": key} for key in keys],
+        "relationships": [{
+            "parent": keys[0], "child": keys[1], "type": "new_version",
+            "evidence": {"source_excerpt": "Example 5 is the successor to Example 4.1"},
+        }],
+        "groups": [{
+            "key": "example-family-fixture", "name": "Example family",
+            "group_kind": "family", "rule_kind": "new_version_chain",
+            "root": keys[0], "owner_brands": [brand.pk],
+        }],
+    }
+    version = configure_taxonomy(spec)
+    assert configure_taxonomy(spec).pk == version.pk
+    group = ProductGroup.objects.get(group_key="example-family-fixture")
+    assert resolve_products(version, group.subject.pk) == set(keys)
+    assert len(version.snapshot["products"]) == 2
+    assert TaxonomyVersion.objects.count() == 1
+    assert first.product_key != second.product_key
 
 
 def test_reviewed_successors_preserve_manual_exclusion_and_frozen_labels():

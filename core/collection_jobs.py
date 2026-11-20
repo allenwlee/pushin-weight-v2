@@ -13,6 +13,8 @@ from core.measurement_taxonomy import digest, require
 from core.models import CollectionAttempt, CollectionJob, CollectionRun
 
 OPERATIONS = {
+    "lineage_wakeup": ("content", None),
+
     "chatter_search": ("content", {"x"}),
     "release_acquisition": ("content", {"hf", "github"}),
     "release_document_import": ("content", {"publisher_web", "hf", "github"}),
@@ -37,7 +39,7 @@ def validate_definition(
     *, source_id, purpose, operation, mode, contract_id, definition
 ):
     safe_payload(definition)
-    if operation in {"release_document_import", "release_acquisition"}:
+    if operation in {"release_document_import", "release_acquisition", "lineage_wakeup"}:
         require(mode == "manual" and isinstance(definition, dict) and definition.get("version") == 2,
                 "release evidence jobs require manual typed instructions")
     if isinstance(definition, dict) and definition.get("version") == 2:

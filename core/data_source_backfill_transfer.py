@@ -245,9 +245,9 @@ def _prepare_product():
             and product.created_at == aware_instant('2026-08-13T03:05:06Z'),
             '0813 product identity differs from the reviewed cohort')
     before = product.product_type_code
-    require(before in (None, 'llm-model'), '0813 product already has another reviewed type')
+    require(before in (None, 'llm-model', 'model-llm'), '0813 product already has another reviewed type')
     if before is None:
-        product.product_type_id = product_type_id('llm-model')
+        product.product_type_id = product_type_id('model-llm')
         product.save(update_fields=['product_type'])
     return before
 
@@ -440,7 +440,7 @@ def _transfer(bundle, *, reviewed_by, database):
                      'created': contract.pk not in existing_contracts,
                      'catalog_hash': contract.catalog_hash, 'mapping_hash': contract.mapping_hash,
                      'methodology_hash': contract.methodology_hash, 'taxonomy_version': str(taxonomy.pk)},
-        'product_type_before': product_type_before, 'product_type_after': 'llm-model',
+        'product_type_before': product_type_before, 'product_type_after': product_type_before or 'model-llm',
         'captures': len(bundle['captures']), 'captures_created': created,
         'values': values,
         'reader_lines': len(actual_reader),

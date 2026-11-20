@@ -206,6 +206,14 @@ def test_invalid_temporal_representation_is_rejected(values):
     assert models.EventDossierClaim.objects.count() == 0
 
 
+def test_invalid_claim_does_not_break_the_callers_transaction():
+    event = dossier()
+    with transaction.atomic():
+        with pytest.raises(ValueError, match="Invalid dossier claim"):
+            claim(event, effective_precision="day")
+        assert models.EventDossier.objects.filter(pk=event.pk).exists()
+
+
 def test_claim_replay_and_separate_milestones():
     event = dossier()
     source = attach_source(event.pk, post_id=post().pk)

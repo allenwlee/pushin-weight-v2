@@ -20,16 +20,16 @@ def test_export_preserves_canonical_products_utc_counts_and_never_writes():
         BrandCompany.objects.create(brand=brand, company=company)
     org = hf_publisher(namespace="maker", company=company, confirmed=True)
     opened = Product.objects.create(
-        repo_id="maker/Alpha-1", brand=alpha, publisher_account=org.account, **product_type_fields(Product, "llm-model")
+        repo_id="maker/Alpha-1", brand=alpha, publisher_account=org.account, **product_type_fields(Product, "model-llm")
     )
     closed = Product.objects.create(
-        repo_id=None, display_name="Beta Closed", brand=beta, **product_type_fields(Product, "llm-model")
+        repo_id=None, display_name="Beta Closed", brand=beta, **product_type_fields(Product, "model-llm")
     )
     Product.objects.create(
-        repo_id="maker/private", brand=alpha, publisher_account=org.account, **product_type_fields(Product, "llm-model"), private=True
+        repo_id="maker/private", brand=alpha, publisher_account=org.account, **product_type_fields(Product, "model-llm"), private=True
     )
     Product.objects.create(
-        repo_id="maker/vision", brand=alpha, publisher_account=org.account, **product_type_fields(Product, "other-ai-model")
+        repo_id="maker/vision", brand=alpha, publisher_account=org.account, **product_type_fields(Product, "model-other")
     )
     for name, time in (
         ("before", "2026-09-30T23:59:59+00:00"),

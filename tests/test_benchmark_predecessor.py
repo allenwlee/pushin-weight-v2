@@ -17,7 +17,7 @@ def proxy_spec():
         repo_id="lab/Previous",
         publisher_account=successor.publisher_account,
         brand=successor.brand,
-        **product_type_fields(Product, "llm-model"),
+        **product_type_fields(Product, "model-llm"),
         private=False,
         disabled=False,
     )

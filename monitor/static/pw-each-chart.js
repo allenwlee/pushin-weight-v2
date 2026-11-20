@@ -8,6 +8,7 @@
   var face = root.querySelector('.each-chart-face');
   var legend = root.querySelector('[data-each-legend]');
   var status = root.querySelector('[data-each-status]');
+  var bucketNote = root.querySelector('[data-each-bucket-note]');
   var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-each-tab]'));
   var modes = Array.prototype.slice.call(root.querySelectorAll('[data-each-mode]'));
   var pulses = Array.prototype.slice.call(document.querySelectorAll('[data-pw-pulse-entry]'));
@@ -29,7 +30,6 @@
   var pinnedCategory = null;
   var hoveredCategory = null;
   var focusedCategory = null;
-  var canvasBox = root.querySelector('.pw-canvas-box');
   var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   window.pwFilter = {
@@ -77,7 +77,7 @@
 
   // Time axis built from the payload's dates: one-day ticks end at the last
   // harvested bucket and step back whole hours; date ticks end on the latest day.
-  function timeAxis(days, granularity) {
+  function timeAxis(days, granularity, bucketEnds) {
     var time = window.pwTime;
     var built = [];
     var yearly = days.length > 90;
@@ -87,6 +87,11 @@
         if (!time) return;
         if (granularity === 'minute') {
           built = time.oneDayTicks(days, axis.width, 8);
+          if (bucketEnds) {
+            built = built.map(function (tick) {
+              return { value: tick.value, instant: Date.parse(bucketEnds[tick.value]) };
+            });
+          }
           axis.ticks = built.map(function (tick) { return { value: tick.value }; });
         } else {
           var indices = time.dateTickIndices(days);
@@ -168,16 +173,6 @@
     });
   }
 
-  function fitLegendHeight() {
-    if (!canvasBox) return;
-    var buttons = Array.prototype.slice.call(legend.children);
-    var tallest = buttons.reduce(function (height, button) {
-      return Math.max(height, button.getBoundingClientRect().height);
-    }, 0);
-    face.style.setProperty('--each-plot-height', Math.max(320,
-      (buttons.length - 1) * (tallest + 8) + 60) + 'px');
-  }
-
   function buildLegend(next) {
     var version = ++legendVersion;
     legend.replaceChildren();
@@ -212,12 +207,31 @@
       });
       legend.appendChild(button);
     });
-    fitLegendHeight();
   }
 
   function tabLabel(tab) {
     var button = tabs.find(function (entry) { return entry.dataset.eachTab === tab; });
     return button ? button.textContent.trim() : '';
+  }
+
+  function displayPayload(next) {
+    if (next.window_days !== 1 || next.granularity !== 'minute' || next.days.length <= 12) return next;
+    // The API retains five-minute counts. Sum before calculating percentages:
+    // averaging percentages would give a one-post bucket the same weight as a busy one.
+    var days = [], ends = [], totals = [];
+    var series = {};
+    var keys = Object.keys(next.series);
+    keys.forEach(function (key) { series[key] = []; });
+    for (var start = 0; start < next.days.length; start += 12) {
+      var stop = Math.min(start + 12, next.days.length);
+      days.push(next.days[start]);
+      ends.push(new Date(Date.parse(next.days[stop - 1]) + 300000).toISOString());
+      totals.push(next.totals.slice(start, stop).reduce(function (sum, value) { return sum + value; }, 0));
+      keys.forEach(function (key) {
+        series[key].push(next.series[key].slice(start, stop).reduce(function (sum, value) { return sum + value; }, 0));
+      });
+    }
+    return Object.assign({}, next, { days: days, series: series, totals: totals, bucket_ends: ends });
   }
 
   function render(next) {
@@ -229,6 +243,8 @@
     focusedCategory = null;
     chartIdentity = identity;
     payload = next;
+    next = displayPayload(next);
+    if (bucketNote) bucketNote.hidden = !next.bucket_ends;
     root.dataset.selectedBrand = next.brand;
     root.dataset.committedTab = next.tab;
     root.dataset.countingUnit = next.counting_unit;
@@ -236,7 +252,7 @@
     var unitText = next.counting_unit === 'posts' ?
       (/^zh/.test(locale) ? '帖子' : locale === 'ja' ? '投稿' : 'posts') :
       (/^zh/.test(locale) ? '标签分配' : locale === 'ja' ? 'ラベル割当' : 'label assignments');
-    canvas.setAttribute('aria-label', next.brand + ': ' + [tabLabel(next.tab), unitText].filter(Boolean).join(', ') + (mode === 'percent' ? ', % of total' : ', by volume'));
+    canvas.setAttribute('aria-label', next.brand + ': ' + [tabLabel(next.tab), unitText].filter(Boolean).join(', ') + (mode === 'percent' ? ', % of total' : ', by volume') + (bucketNote && !bucketNote.hidden ? ', ' + bucketNote.textContent.trim() : ''));
     var localeLabels = next.days.map(function (day) {
       return chartLabel(day, next.granularity, next.days.length > 90);
     });
@@ -272,7 +288,7 @@
     chart = new window.Chart(canvas, {
       type: 'line',
       data: { labels: localeLabels, datasets: datasets },
-      plugins: [{ id: 'eachLeftLegend', afterLayout: placeLegend, resize: fitLegendHeight }],
+      plugins: [{ id: 'eachLeftLegend', afterLayout: placeLegend }],
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -283,6 +299,11 @@
           tooltip: {
             itemSort: function (left, right) { return right.datasetIndex - left.datasetIndex; },
             callbacks: {
+              title: next.bucket_ends ? function (items) {
+                if (!items.length) return '';
+                var index = items[0].dataIndex;
+                return localeLabels[index] + ' – ' + chartLabel(next.bucket_ends[index], 'minute', false);
+              } : undefined,
               label: function (item) {
                 var entry = next.entries[item.datasetIndex];
                 var count = next.series[entry.key][item.dataIndex];
@@ -299,7 +320,7 @@
           }
         },
         scales: {
-          x: timeAxis(next.days, next.granularity),
+          x: timeAxis(next.days, next.granularity, next.bucket_ends),
           y: {
             stacked: true,
             position: 'right',

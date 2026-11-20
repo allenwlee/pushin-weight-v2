@@ -7,6 +7,7 @@ only the fenced executor calls the shared catalog admission writer.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import uuid
 from collections import defaultdict
@@ -36,6 +37,7 @@ RULESET = "product-crosswalk-v1"
 SOURCES = ("github", "openrouter", "arena", "opencode")
 MAX_CANDIDATES = 5
 MAX_ENVELOPE_BYTES = 32768
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -156,7 +158,7 @@ def ownership_pin(product, publisher):
             ),
         }
 
-    return {
+    result = {
         "product_key": str(product.product_key),
         "repo_id": product.repo_id,
         "brand_id": product.brand_id,
@@ -172,6 +174,9 @@ def ownership_pin(product, publisher):
         if product.brand_id
         else [],
     }
+    if product.repo_id is None:
+        result["display_name"] = product.display_name
+    return result
 
 
 def _pages(query, *, size=500):
@@ -199,7 +204,7 @@ def _evidence_pin(observation, documents=None):
     }
 
 
-def _native(observation, scope, row_index=None, documents=None):
+def _native(observation, scope, row_index=None, documents=None, evidence_pin=None):
     source, identifier = observation.run.job.source_id, observation.source_identifier
     documents = documents or observation_object_documents(observation)
     listing, _, _ = documents
@@ -251,11 +256,379 @@ def _native(observation, scope, row_index=None, documents=None):
         "source_subject_kind": "repository" if source == "github" else "model",
         "observed_label": label,
         "db_presence": "present",
-        "evidence": _evidence_pin(observation, documents),
+        "evidence": evidence_pin if evidence_pin is not None else _evidence_pin(observation, documents),
         "publisher_account_key": str(publisher.pk) if publisher else None,
         "repo": repo_pin,
         "publication_row_index": row_index,
     }
+
+
+def _pending_native(observation, identifier_scope, row_index, documents=None, evidence_pin=None):
+    native = _native(observation, identifier_scope, row_index, documents=documents, evidence_pin=evidence_pin)
+    require(
+        native is not None and native["source"] in {"arena", "openrouter"}
+        and row_index is not None
+        and identifier_scope == {"arena": "arena_model_name", "openrouter": "rankings_permaslug"}[native["source"]]
+        and observation.observation_kind == "publication_window"
+        and observation.source_subject_kind == "aggregate"
+        and observation.status == "ok" and observation.run.status in {"success", "partial"},
+        "saved Arena or OpenRouter publication row required",
+    )
+    return native
+
+
+def pending_target_pin(observation, identifier_scope, row_index):
+    """Pin the exact saved publication row before an unresolved target is sealed."""
+    native = _pending_native(observation, identifier_scope, row_index)
+    return digest({"version": "pending-product-row-v1", "native": native})
+
+
+def _validate_pending_budgets(budgets):
+    from core.collection_jobs import BUDGET_LIMITS
+
+    require(
+        isinstance(budgets, dict) and set(budgets) == {"requests", "bytes", "seconds", "items"}
+        and all(type(value) is int and 0 < value <= BUDGET_LIMITS[name] for name, value in budgets.items()),
+        "explicit pending-target budgets required",
+    )
+
+
+@transaction.atomic
+def register_pending_publication_targets(*, observation_id, row_indices, budgets):
+    """Seal explicit unresolved row selections from one already-saved publication."""
+    from core.collection_jobs import register_job
+    from core.models import CollectionEvidenceArchive
+
+    require(
+        isinstance(row_indices, (list, tuple)) and bool(row_indices)
+        and all(type(index) is int and index >= 0 for index in row_indices)
+        and len(set(row_indices)) == len(row_indices),
+        "distinct publication row selections required",
+    )
+    _validate_pending_budgets(budgets)
+    require(budgets["items"] >= len(row_indices), "pending-target item budget is too small")
+    deadline = monotonic() + budgets["seconds"]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT current_setting('statement_timeout'), current_setting('lock_timeout'), "
+            "(SELECT setting::bigint FROM pg_settings WHERE name='statement_timeout'), "
+            "(SELECT setting::bigint FROM pg_settings WHERE name='lock_timeout')"
+        )
+        statement_before, lock_before, statement_ms, lock_ms = cursor.fetchone()
+        budget_ms = budgets["seconds"] * 1000
+        statement_limit = min(statement_ms or budget_ms, budget_ms)
+        lock_limit = min(lock_ms or budget_ms, budget_ms)
+        cursor.execute("SELECT set_config('statement_timeout', %s, true), set_config('lock_timeout', %s, true)",
+                       [f"{statement_limit}ms", f"{lock_limit}ms"])
+    observation = CollectionObservation.objects.select_for_update(of=("self",)).select_related("run__job__source").get(pk=observation_id)
+    source = observation.run.job.source
+    require(source.pk in {"arena", "openrouter"}, "unsupported pending publication source")
+    scope = {"arena": "arena_model_name", "openrouter": "rankings_permaslug"}[source.pk]
+    archive_id = (
+        observation.run.payload_archive_id
+        if observation.projection_kind == "publication-window-v1"
+        else observation.legacy_archive_id
+    )
+    if archive_id is not None:
+        require(
+            CollectionEvidenceArchive.objects.values_list("byte_count", flat=True).get(pk=archive_id) <= budgets["bytes"],
+            "pending-target evidence exceeds byte or time budget",
+        )
+    documents = observation_object_documents(observation)
+    require(
+        len(json.dumps(documents, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()) <= budgets["bytes"]
+        and monotonic() < deadline,
+        "pending-target evidence exceeds byte or time budget",
+    )
+    targets = []
+    evidence_pin = _evidence_pin(observation, documents)
+    for index in sorted(row_indices):
+        require(monotonic() < deadline, "pending-target time budget exceeded")
+        native = _pending_native(observation, scope, index, documents=documents, evidence_pin=evidence_pin)
+        pin = digest({"version": "pending-product-row-v1", "native": native})
+        targets.append({
+            "target_key": "pending-row:" + pin, "target_kind": "match_candidate",
+            "target_role": "selected", "resolution_state": "unresolved",
+            "gap_reason": "unmatched_source_identifier", "native_identifier": native["identifier"],
+            "identifier_scope": scope, "source_row_index": index,
+            "evidence_observation_id": observation.pk, "selection_sha256": pin,
+        })
+    key = digest({"source": source.pk, "observation": observation.pk,
+                  "pins": [target["selection_sha256"] for target in targets], "budgets": budgets})
+    remaining = deadline - monotonic()
+    require(remaining > 0, "pending-target time budget exceeded")
+    remaining_ms = max(1, int(remaining * 1000))
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT set_config('statement_timeout', %s, true), set_config('lock_timeout', %s, true)",
+                       [f"{min(statement_ms or remaining_ms, remaining_ms)}ms",
+                        f"{min(lock_ms or remaining_ms, remaining_ms)}ms"])
+    job = register_job(
+        job_key="pending-match:" + key, source=source, purpose="catalog",
+        operation="match_crosswalk", mode="historical",
+        definition={"version": 2, "options": {"ruleset": RULESET, "preview_sha256": key}}, targets=targets,
+        settings={"owner_kind": "source", "schedule_kind": "manual", "schedule_driver": "manual",
+                  **{"max_" + name: value for name, value in budgets.items()}},
+    )
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT set_config('statement_timeout', %s, true), set_config('lock_timeout', %s, true)",
+                       [statement_before, lock_before])
+    require(monotonic() < deadline, "pending-target time budget exceeded")
+    return job
+
+
+def _process_pending_publication_scope(scope, observation, budgets):
+    """Run a bounded local page while holding the observation and scope locks."""
+    from datetime import timedelta
+
+    from core.collection_identity import DEDICATED_ROLES
+    from core.models import CollectionEvidenceArchive, CollectionJobTarget
+
+    source = observation.run.job.source_id
+    deadline = monotonic() + budgets["seconds"]
+    try:
+        with transaction.atomic():
+            archive_id = observation.run.payload_archive_id if observation.projection_kind == "publication-window-v1" else observation.legacy_archive_id
+            if (archive_id is not None and CollectionEvidenceArchive.objects.values_list("byte_count", flat=True).get(pk=archive_id) > budgets["bytes"]):
+                scope.outcome, scope.error_code, scope.retry_at = "blocked", "pending_admission_byte_limit", None
+                scope.enumeration_complete = False
+                scope.save(update_fields=["outcome", "error_code", "retry_at", "enumeration_complete"])
+                return {"status": "blocked", "reused": False, "admitted": 0, "job_id": None}
+            documents = observation_object_documents(observation)
+            require(monotonic() < deadline, "publication admission time budget exceeded")
+            if len(json.dumps(documents, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()) > budgets["bytes"]:
+                scope.outcome, scope.error_code, scope.retry_at = "blocked", "pending_admission_byte_limit", None
+                scope.enumeration_complete = False
+                scope.save(update_fields=["outcome", "error_code", "retry_at", "enumeration_complete"])
+                return {"status": "blocked", "reused": False, "admitted": 0, "job_id": None}
+            listing, _, _ = documents
+            rows = listing.get("rows") if isinstance(listing, dict) else None
+            require(isinstance(rows, list), "publication rows missing")
+            field = "model_permaslug" if source == "openrouter" else "model_name"
+            namespace = "rankings_permaslug" if source == "openrouter" else "arena_model_name"
+            candidates = {index: row.get(field) for index, row in enumerate(rows) if isinstance(row, dict)
+                          and isinstance(row.get(field), str) and row[field] and row[field] != "other"}
+            mapped_subjects, dedicated = defaultdict(set), set()
+            for identifier, subject, role in SourceSubjectMapping.objects.filter(
+                source_id=source, purpose="catalog", source_subject_kind="model", identifier_scope__code=namespace,
+                normalized_identifier__in=set(candidates.values()), subject__product__isnull=False,
+            ).values_list("normalized_identifier", "subject_id", "identity_snapshot__role"):
+                mapped_subjects[identifier].add(subject)
+                if role in DEDICATED_ROLES:
+                    dedicated.add(identifier)
+            require(monotonic() < deadline, "publication admission time budget exceeded")
+            mapped = {identifier for identifier, subjects in mapped_subjects.items() if len(subjects) == 1 and identifier in dedicated}
+            prior = defaultdict(set)
+            for index, pin in CollectionJobTarget.objects.filter(
+                evidence_observation=observation, target_kind="match_candidate", source_row_index__in=candidates,
+                identifier_scope__code=namespace, resolution_state="unresolved",
+                job__operation="match_crosswalk", job__job_key__startswith="pending-match:",
+                job__instructions_sealed_at__isnull=False,
+            ).values_list("source_row_index", "selection_sha256"):
+                prior[index].add(pin)
+            require(monotonic() < deadline, "publication admission time budget exceeded")
+            evidence_pin = _evidence_pin(observation, documents) if prior else None
+            existing = {index for index, pins in prior.items() if digest({
+                "version": "pending-product-row-v1",
+                "native": _pending_native(observation, namespace, index, documents=documents, evidence_pin=evidence_pin),
+            }) in pins}
+            unresolved = [index for index, identifier in candidates.items() if identifier not in mapped and index not in existing]
+            page = unresolved[:budgets["items"]]
+            require(monotonic() < deadline, "publication admission time budget exceeded")
+            admitted = register_pending_publication_targets(
+                observation_id=observation.pk, row_indices=page,
+                budgets={**budgets, "seconds": max(1, min(budgets["seconds"], int(deadline - monotonic())))},
+            ) if page else None
+            require(monotonic() < deadline, "publication admission time budget exceeded")
+            more = len(unresolved) > len(page)
+            scope.raw_count = len(rows)
+            scope.outcome = "pending" if more else "complete"
+            scope.error_code = "pending_admission_item_limit" if more else None
+            scope.enumeration_complete = not more
+            scope.retry_at = timezone.now() if more else None
+            scope.save(update_fields=["raw_count", "outcome", "error_code", "enumeration_complete", "retry_at"])
+            return {"status": "pending" if more else "complete", "reused": False, "rows": len(rows),
+                    "admitted": len(page), "job_id": str(admitted.pk) if admitted else None}
+    except Exception:
+        logger.exception("Saved publication admission remains pending for observation %s", observation.pk)
+        scope.error_code = "pending_admission_failed"
+        scope.outcome = "pending"
+        scope.enumeration_complete = False
+        scope.retry_at = timezone.now() + timedelta(seconds=60)
+        scope.save(update_fields=["error_code", "outcome", "enumeration_complete", "retry_at"])
+        return {"status": "pending", "reused": False, "admitted": 0, "job_id": None}
+
+
+
+def admit_saved_publication_rows(*, claim, publication_id, budgets):
+    """Save an admission page during the existing collection without provider calls."""
+    from datetime import timedelta
+
+    from django.db import OperationalError
+
+    from core.collection_state import fenced_run
+    from core.models import CollectionScopeRun
+
+    _validate_pending_budgets(budgets)
+    budgets = {**budgets, "seconds": min(budgets["seconds"], 5)}
+    with fenced_run(claim) as (parent_job, run):
+        observation = CollectionObservation.objects.select_related("run__job__source").get(pk=publication_id)
+        require(observation.run.job.source_id in {"arena", "openrouter"} and parent_job.source_id == observation.run.job.source_id,
+                "saved publication source differs from its collector")
+        key = digest(["pending-publication-admission-v1", observation.pk])
+        scope, created = CollectionScopeRun.objects.get_or_create(
+            run=run, scope_kind="pending_publication_admission", scope_key=key,
+            defaults={"resource_observation": observation, "phase": "pending-publication-v1"},
+        )
+        require(scope.resource_observation_id == observation.pk and scope.phase == "pending-publication-v1",
+                "pending publication admission identity changed")
+        if not created and scope.enumeration_complete:
+            return {"status": "complete", "reused": True}
+        try:
+            with transaction.atomic():
+                observation = CollectionObservation.objects.select_for_update(of=("self",), nowait=True).select_related("run__job__source").get(pk=publication_id)
+        except OperationalError as exc:
+            if getattr(exc.__cause__, "sqlstate", None) != "55P03":
+                raise
+            scope.outcome, scope.error_code = "pending", "pending_admission_busy"
+            scope.retry_at = timezone.now() + timedelta(seconds=5)
+            scope.save(update_fields=["outcome", "error_code", "retry_at"])
+            return {"status": "busy", "reused": False}
+        require(parent_job.source_id == observation.run.job.source_id,
+                "saved publication source changed")
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_setting('lock_timeout'), current_setting('statement_timeout'), (SELECT setting::bigint FROM pg_settings WHERE name='lock_timeout'), (SELECT setting::bigint FROM pg_settings WHERE name='statement_timeout')")
+            previous_lock, previous_statement, old_lock_ms, old_statement_ms = cursor.fetchone()
+            time_ms = budgets["seconds"] * 1000
+            cursor.execute("SELECT set_config('lock_timeout', %s, true), set_config('statement_timeout', %s, true)",
+                           [f"{min(old_lock_ms or 1000, 1000)}ms", f"{min(old_statement_ms or time_ms, time_ms)}ms"])
+        try:
+            return _process_pending_publication_scope(scope, observation, budgets)
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT set_config('lock_timeout', %s, true), set_config('statement_timeout', %s, true)", [previous_lock, previous_statement])
+
+
+def stage_saved_publications(*, claim, publication_ids):
+    """Record bounded cached-publication recovery without reading their contents."""
+    from core.collection_state import fenced_run
+    from core.models import CollectionScopeRun
+
+    ids = sorted(set(publication_ids))
+    if not ids:
+        return 0
+    with fenced_run(claim) as (parent_job, run):
+        require(len(ids) <= parent_job.budgets["items"], "publication staging item budget exceeded")
+        observations = CollectionObservation.objects.filter(pk__in=ids, run__job__source_id=parent_job.source_id)
+        require(observations.count() == len(ids) and parent_job.source_id in {"arena", "openrouter"},
+                "staged publication source differs from its collector")
+        now = timezone.now()
+        CollectionScopeRun.objects.bulk_create([
+            CollectionScopeRun(run=run, scope_kind="pending_publication_admission",
+                               scope_key=digest(["pending-publication-admission-v1", pk]),
+                               resource_observation_id=pk, phase="pending-publication-v1",
+                               outcome="pending", retry_at=now)
+            for pk in ids
+        ], ignore_conflicts=True, batch_size=500)
+    return len(ids)
+
+
+def drain_pending_publication_scope(scope_id, *, budgets=None):
+    """Retry one saved observation locally; explicit budgets may repair a blocked page."""
+    from datetime import timedelta
+
+    from django.db import OperationalError
+
+    from core.models import CollectionScopeRun
+
+    try:
+        with transaction.atomic():
+            candidate = CollectionScopeRun.objects.select_related("run__job").get(pk=scope_id, scope_kind="pending_publication_admission")
+            selected_budgets = budgets if budgets is not None else candidate.run.job.budgets
+            _validate_pending_budgets(selected_budgets)
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT setting::bigint FROM pg_settings WHERE name='statement_timeout'")
+                old_ms = cursor.fetchone()[0]
+                limit_ms = selected_budgets["seconds"] * 1000
+                cursor.execute("SELECT set_config('statement_timeout', %s, true)", [f"{min(old_ms or limit_ms, limit_ms)}ms"])
+            observation = CollectionObservation.objects.select_for_update(of=("self",), nowait=True).select_related("run__job__source").get(pk=candidate.resource_observation_id)
+            scope = CollectionScopeRun.objects.select_for_update(nowait=True).get(pk=scope_id)
+            require(scope.resource_observation_id == observation.pk and scope.phase == "pending-publication-v1"
+                    and scope.run.job.source_id == observation.run.job.source_id, "pending publication ownership changed")
+            if scope.enumeration_complete:
+                return {"status": "complete", "reused": True}
+            if scope.outcome == "blocked" and budgets is None:
+                return {"status": "blocked", "reused": True}
+            return _process_pending_publication_scope(scope, observation, selected_budgets)
+    except OperationalError as exc:
+        if getattr(exc.__cause__, "sqlstate", None) != "55P03":
+            raise
+        with transaction.atomic():
+            scope = CollectionScopeRun.objects.select_for_update(skip_locked=True).filter(pk=scope_id, outcome="pending").first()
+            if scope:
+                scope.retry_at = timezone.now() + timedelta(seconds=5)
+                scope.save(update_fields=["retry_at"])
+        return {"status": "busy", "reused": False}
+
+
+def drain_pending_publication_scopes(*, max_jobs, max_seconds):
+    """Attempt a finite due page of saved publication admissions; no provider work."""
+    from core.models import CollectionScopeRun
+
+    require(type(max_jobs) is int and 1 <= max_jobs <= 100 and type(max_seconds) in (int, float)
+            and 0 < max_seconds <= 120, "explicit local recovery limits required")
+    deadline = monotonic() + max_seconds
+    ids = list(CollectionScopeRun.objects.filter(scope_kind="pending_publication_admission", outcome="pending",
+                                                retry_at__lte=timezone.now()).order_by("retry_at", "pk").values_list("pk", flat=True)[:max_jobs])
+    results = []
+    for scope_id in ids:
+        remaining = deadline - monotonic()
+        if remaining < 1:
+            break
+        scope = CollectionScopeRun.objects.select_related("run__job").get(pk=scope_id)
+        budgets = {**scope.run.job.budgets, "seconds": min(scope.run.job.budgets["seconds"], int(remaining))}
+        results.append(drain_pending_publication_scope(scope_id, budgets=budgets))
+    return {"selected": len(ids), "processed": len(results), "results": results}
+
+def _pending_target(target_id):
+    from core.models import CollectionJobTarget
+
+    target = CollectionJobTarget.objects.select_related(
+        "job", "evidence_observation__run__job", "identifier_scope"
+    ).get(pk=target_id)
+    require(
+        target.job.instructions_sealed_at is not None
+        and target.target_kind == "match_candidate"
+        and target.resolution_state == "unresolved"
+        and target.subject_id is None and target.evidence_observation_id is not None
+        and target.identifier_scope_id is not None and target.source_row_index is not None
+        and target.job.source_id == target.evidence_observation.run.job.source_id,
+        "sealed unresolved source target required",
+    )
+    native = _native(target.evidence_observation, target.identifier_scope_code, target.source_row_index)
+    require(
+        native is not None and native["identifier"] == target.native_identifier
+        and target.selection_sha256 == pending_target_pin(
+            target.evidence_observation, target.identifier_scope_code, target.source_row_index
+        ),
+        "unresolved source target evidence changed",
+    )
+    return target, native
+
+
+def preview_pending_target(*, target_id, product_key):
+    """Inspect one frozen unresolved row against a known Product, without writes."""
+    target, native = _pending_target(target_id)
+    product = Product.objects.select_related("publisher_account").get(product_key=product_key)
+    require(product.brand_id is not None, "a Product brand is required for matching")
+    candidate = _candidate(product, native, origin_target_id=target.pk)
+    report = {
+        "ruleset": RULESET, "cutoff": timezone.now().isoformat(),
+        "brands": [product.brand_id], "sources": [native["source"]],
+        "products": [{"product_key": str(product.product_key), "candidates": [candidate]}],
+        "partial": [], "writes": 0, "request_count": 0,
+    }
+    report["input_sha256"] = digest(report)
+    return report
 
 
 def _native_inventory(sources, cutoff):
@@ -437,7 +810,13 @@ def _existing_mappings(product_keys, sources, cutoff):
     return result
 
 
-def _candidate(product, native):
+def _candidate(product, native, *, origin_target_id=None):
+    if origin_target_id is not None:
+        name = product.repo_id.split("/")[-1] if product.repo_id else product.display_name
+        require(
+            bool(name) and name_key(name) == name_key(native["observed_label"].split("/")[-1]),
+            "pending target does not match Product name",
+        )
     publisher = (
         Account.objects.get(pk=native["publisher_account_key"])
         if native["publisher_account_key"]
@@ -454,6 +833,8 @@ def _candidate(product, native):
         "publisher_account_key": str(publisher.pk) if publisher else None,
         "ownership": ownership_pin(product, publisher),
     }
+    if origin_target_id is not None:
+        row["origin_target_id"] = origin_target_id
     row["evidence_url"] = (
         f"https://github.com/{native['observed_label']}"
         if native["source"] == "github"
@@ -522,7 +903,10 @@ def preview_matches(*, brand_ids, sources=SOURCES, cutoff=None):
             company_id__in=companies, role_id="official", ownership_confirmed=True
         ).values_list("account_id", flat=True)
         query = (
-            Product.objects.filter(repo_id__isnull=False)
+            Product.objects.filter(
+                Q(repo_id__isnull=False)
+                | (Q(display_name__isnull=False) & ~Q(display_name=""))
+            )
             .filter(Q(brand_id__in=brand_ids) | Q(publisher_account_id__in=publishers))
             .select_related("publisher_account")
             .order_by("product_key")
@@ -540,9 +924,10 @@ def preview_matches(*, brand_ids, sources=SOURCES, cutoff=None):
         for product in products:
             retained = existing[str(product.product_key)]
             known = {(r["source"], r["identifier"]) for r in retained}
+            product_name = product.repo_id.split("/")[-1] if product.repo_id else product.display_name
             candidates = [
                 _candidate(product, row)
-                for row in index[name_key(product.repo_id.split("/")[-1])]
+                for row in index[name_key(product_name or "")]
                 if (row["source"], row["identifier"]) not in known
             ]
             candidates.sort(
@@ -733,6 +1118,26 @@ def _register_matches(
                 }
             )
         for choice in selected:
+            origin_id = choice.get("origin_target_id")
+            parent_key = None
+            if origin_id is not None:
+                origin, origin_native = _pending_target(origin_id)
+                require(
+                    origin_native["evidence"] == choice["evidence"]
+                    and origin_native["identifier"] == choice["identifier"]
+                    and origin_native["publication_row_index"] == choice["publication_row_index"],
+                    "pending target differs from reviewed candidate",
+                )
+                parent_key = f"origin-target:{origin.pk}"
+                if not any(row["target_key"] == parent_key for row in targets):
+                    targets.append({
+                        "target_key": parent_key, "target_kind": "pending_origin",
+                        "target_role": "selected", "resolution_state": "unresolved",
+                        "gap_reason": origin.gap_reason, "native_identifier": origin.native_identifier,
+                        "evidence_observation_id": origin.evidence_observation_id,
+                        "source_row_index": origin.source_row_index,
+                        "selection_sha256": origin.selection_sha256,
+                    })
             subject, _ = MeasurementSubject.objects.get_or_create(
                 id=resolve_subject_id("product", choice["product_key"]),
                 defaults={
@@ -744,8 +1149,7 @@ def _register_matches(
                 len(choice["reasons"]) == 1,
                 "matching reason requires a typed disposition",
             )
-            targets.append(
-                {
+            target_values = {
                     "target_key": choice["candidate_id"],
                     "subject_id": subject.pk,
                     "target_kind": "match_candidate",
@@ -759,7 +1163,9 @@ def _register_matches(
                     "selection_sha256": choice["input_sha256"],
                     "review_confirmed": choice["candidate_id"] in reviewed,
                 }
-            )
+            if parent_key:
+                target_values["parent_target_key"] = parent_key
+            targets.append(target_values)
         options = {
             name: definition["scope"][name]
             for name in ("ruleset", "preview_sha256", "cutoff")
@@ -827,6 +1233,10 @@ def _admit_choice(choice, review):
         and current["identifier"] == choice["identifier"],
         "native evidence changed",
     )
+    origin_id = choice.get("origin_target_id")
+    if origin_id is not None:
+        _, original = _pending_target(origin_id)
+        require(original == current, "pending target evidence changed")
     require(
         observation.status == "ok" and observation.run.status in {"success", "partial"},
         "source evidence unavailable",
@@ -843,7 +1253,7 @@ def _admit_choice(choice, review):
             "db_presence": choice["db_presence"],
         }
     require(
-        _candidate(product, current)["input_sha256"] == choice["input_sha256"],
+        _candidate(product, current, origin_target_id=origin_id)["input_sha256"] == choice["input_sha256"],
         "candidate identity evidence changed",
     )
     subject, _ = MeasurementSubject.objects.get_or_create(
@@ -921,6 +1331,10 @@ def execute_matches(job_id):
         job.operation == "match_crosswalk" and scope["ruleset"] == RULESET,
         "matching instruction required",
     )
+    require(
+        bool(scope["matches"]) and scope["review"]["reviewed_by"] and scope["review"]["basis"],
+        "pending selections need a reviewed resolution before execution",
+    )
     if job.state == "completed":
         return {
             "job_id": str(job.pk),
@@ -971,6 +1385,10 @@ def execute_matches(job_id):
                     input_observation_id=choice["evidence"]["observation_id"],
                     input_role="match_candidate",
                     input_sha256=choice["evidence"]["payload_hash"],
+                    row_locator=(
+                        f"target:{choice['origin_target_id']};row:{choice['publication_row_index']}"
+                        if choice.get("origin_target_id") is not None else None
+                    ),
                 )
 
             admitted = choice["decision"] == "qualified" or (
@@ -1014,6 +1432,10 @@ def execute_matches(job_id):
                         input_observation_id=choice["evidence"]["observation_id"],
                         input_role="match_candidate",
                         input_sha256=choice["evidence"]["payload_hash"],
+                        row_locator=(
+                            f"target:{choice['origin_target_id']};row:{choice['publication_row_index']}"
+                            if choice.get("origin_target_id") is not None else None
+                        ),
                     )
 
                 checkpoint_scope(

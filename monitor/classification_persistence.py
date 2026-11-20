@@ -19,7 +19,10 @@ from urllib.parse import urlparse
 
 from django.utils import timezone
 
-from core.classification_contract import UNTRACKED_BRAND_PROMOTION_KEYS
+from core.classification_contract import (
+    COMPRESSED_CLASSIFIER_REVISIONS,
+    UNTRACKED_BRAND_PROMOTION_KEYS,
+)
 from core.models import (
     Account,
     AudienceTopicConcept,
@@ -31,6 +34,7 @@ from core.models import (
     PostUntrackedBrandPromotion,
     UntrackedBrandPromotionEvidence,
 )
+from monitor.promotion_subject_matcher import PromotionSubjectMatcher
 
 AUDIENCE_TOPIC_SCHEME_KEY = "ai_audience_topics/v1"
 _HANDLE_RE = re.compile(r"^@?([A-Za-z0-9_]{1,64})$")
@@ -67,13 +71,6 @@ def _normalized_domain(value: Any) -> str | None:
     domain = (parsed.hostname or "").removeprefix("www.")
     return domain or None
 
-
-def _normalized_visible_name(value: Any) -> str | None:
-    """Normalize an exact catalog alias without treating a substring as a match."""
-    if not isinstance(value, str):
-        return None
-    normalized = " ".join(unicodedata.normalize("NFKC", value).split()).casefold()
-    return normalized or None
 
 
 def _identity(*, name: str, handles: list[str], domains: list[str]) -> str:
@@ -136,67 +133,20 @@ def _exact_account(*, account_handle: Any, handle: Any) -> Account | None:
     return None
 
 
-def _subject_is_tracked(subject: dict[str, Any], tracked_catalog: Iterable[Any]) -> bool:
-    """Return true only for exact evidence already belonging to a tracked brand.
-
-    Promotion output is about a subject outside the tracked catalog.  An exact
-    known alias, product, keyword, official handle/account, or domain is
-    therefore a contract violation.  This deliberately avoids fuzzy matching:
-    a new company that merely contains a tracked brand's word remains a
-    candidate for later human review.
-    """
-    subject_name = _normalized_visible_name(subject.get("name"))
-    subject_handles = {
-        value
-        for value in (
-            _normalized_handle(subject.get("handle")),
-            _normalized_handle(subject.get("account_handle")),
-        )
-        if value
-    }
-    subject_domain = _normalized_domain(subject.get("domain"))
-    for row in tracked_catalog:
-        if not isinstance(row, dict):
-            continue
-        known_names = {
-            value
-            for field in ("brand_id", "aliases", "products", "keywords")
-            for raw in (
-                [row.get(field)]
-                if field == "brand_id"
-                else (row.get(field) or [])
-            )
-            for value in (_normalized_visible_name(raw),)
-            if value
-        }
-        if subject_name and subject_name in known_names:
-            return True
-        known_handles = {
-            value
-            for raw in row.get("handles") or []
-            for value in (_normalized_handle(raw),)
-            if value
-        }
-        for account in row.get("accounts") or []:
-            if isinstance(account, dict):
-                value = _normalized_handle(account.get("handle"))
-                if value:
-                    known_handles.add(value)
-        if subject_handles.intersection(known_handles):
-            return True
-        known_domains = {
-            value
-            for raw in row.get("domains") or []
-            for value in (_normalized_domain(raw),)
-            if value
-        }
-        if subject_domain and subject_domain in known_domains:
-            return True
-    return False
+def _subject_is_tracked(
+    subject: dict[str, Any], tracked_catalog: Iterable[Any], *,
+    matcher: PromotionSubjectMatcher | None = None,
+) -> bool:
+    """Use selected containment only when the caller supplies its matcher."""
+    return (matcher or PromotionSubjectMatcher(tracked_catalog)).match(
+        subject, exact_only=matcher is None,
+    ) is not None
 
 
 def discard_tracked_promotion_subjects(
-    result: dict[str, Any], tracked_catalog: Iterable[Any]
+    result: dict[str, Any], tracked_catalog: Iterable[Any], *,
+    matcher: PromotionSubjectMatcher | None = None,
+    discard_records: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Keep valid brand judgments when a model also promotes a tracked subject.
 
@@ -231,20 +181,19 @@ def discard_tracked_promotion_subjects(
         for subject in subjects
     ):
         return result
-    catalog = list(tracked_catalog)
+    legacy = matcher is None
+    matcher = matcher or PromotionSubjectMatcher(
+        [{**row, "keywords": []} for row in tracked_catalog if isinstance(row, dict)]
+    )
     retained = []
     for subject in subjects:
-        # A keyword can be a search term rather than a product identity. Only
-        # reviewed names/products and exact official handles/domains qualify.
-        owners = {
-            row.get("brand_id") for row in catalog if isinstance(row, dict)
-            and _subject_is_tracked(subject, [{**row, "keywords": []}])
-        }
-        owners.discard(None)
-        if len(owners) > 1:
+        match = matcher.match(subject, exact_only=legacy)
+        if legacy and match is not None and len(match.owners) > 1:
             raise ValueError("classification_promotion_identity_ambiguous")
-        if not owners:
+        if match is None:
             retained.append(subject)
+        elif discard_records is not None:
+            discard_records.append({"subject": dict(subject), **match.as_dict()})
     if len(retained) == len(subjects):
         return result
     return {
@@ -564,6 +513,8 @@ def persist_v4_extensions(
         },
     )
     incoming: set[str] = set()
+    matcher = None
+    selected_matching = content_prompt_version == COMPRESSED_CLASSIFIER_REVISIONS[0]
     for subject in subjects:
         if not isinstance(subject, dict):
             raise ValueError("classification_untracked_promotion_subject_invalid")
@@ -586,7 +537,9 @@ def persist_v4_extensions(
         )
         if identity in incoming:
             continue
-        if _subject_is_tracked(subject, tracked_catalog):
+        if matcher is None:
+            matcher = PromotionSubjectMatcher(tracked_catalog)
+        if matcher.match(subject, exact_only=not selected_matching) is not None:
             raise ValueError("classification_untracked_promotion_subject_is_tracked")
         incoming.add(identity)
         _write_promoted_subject(

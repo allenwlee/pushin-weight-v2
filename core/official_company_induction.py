@@ -163,7 +163,7 @@ def induce_accounts(manifest, *, cfg, expected_count, deadline=None):
                     }
                 )
                 continue
-        intent = register_account(state.pk, cfg=cfg)
+        intent = register_account(state.pk, cfg=cfg, select_for_list=True)
         state.refresh_from_db()
         results.append(
             {

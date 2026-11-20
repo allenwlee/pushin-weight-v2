@@ -73,7 +73,7 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(
 
     scope()
     product = Product.objects.create(
-        brand_id="lab", repo_id="lab/model", **product_type_fields(Product, "llm-model")
+        brand_id="lab", repo_id="lab/model", **product_type_fields(Product, "model-llm")
     )
     source = DataSource.objects.get(pk="hf")
     source.enabled, source.adapter_key = True, "hf-catalog-v1"
@@ -209,7 +209,7 @@ def test_hf_history_access_failure_keeps_evidence_and_transient_resume(
 
     scope()
     product = Product.objects.create(
-        brand_id="lab", repo_id="lab/model", **product_type_fields(Product, "llm-model")
+        brand_id="lab", repo_id="lab/model", **product_type_fields(Product, "model-llm")
     )
     source = DataSource.objects.get(pk="hf")
     source.enabled, source.adapter_key = True, "hf-catalog-v1"
@@ -533,7 +533,13 @@ def test_each_selected_model_has_a_durable_source_gap_without_synthetic_values()
 
 
 @pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
-def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time(migration_rehearsal_schema):
+def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time(migration_rehearsal_schema, monkeypatch):
+    # This rehearsal intentionally starts at 0200, before the new category
+    # codes exist. Keep its historical Product while testing archive timing.
+    import tests.test_benchmark_download_db_identity as identity_fixture
+
+    historical_fields = identity_fixture.product_type_fields
+    monkeypatch.setattr(identity_fixture, "product_type_fields", lambda model, _code: historical_fields(model, "llm-model"))
     contract = configured()
     source = DataSource.objects.get(pk="hf")
     source.enabled, source.adapter_key = True, "hf-engagement-v1"
@@ -644,7 +650,7 @@ def test_shared_openrouter_window_is_fetched_once_and_other_never_fills_missing_
         brand=other_brand, account=account, role=Role.objects.get(pk="official")
     )
     other_product = Product.objects.create(
-        brand=other_brand, **product_type_fields(Product, "llm-model"), display_name="missing from ranking"
+        brand=other_brand, **product_type_fields(Product, "model-llm"), display_name="missing from ranking"
     )
     other_subject = MeasurementSubject.objects.create(
         subject_kind="product", product=other_product

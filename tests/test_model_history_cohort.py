@@ -41,7 +41,7 @@ def inventory():
             brand=brands[0],
             publisher_account=namespaces[i % 2].account,
             repo_id=f"Fixture{i % 2}/Model{i}",
-            **product_type_fields(Product, "llm-model"),
+            **product_type_fields(Product, "model-llm"),
             private=False,
             created_at=cutoff - timedelta(days=i + 1),
         )
@@ -49,9 +49,9 @@ def inventory():
     ]
     Product.objects.bulk_create(products)
     Product.objects.create(
-        brand=brands[0], **product_type_fields(Product, "llm-model"), display_name="unknown creation"
+        brand=brands[0], **product_type_fields(Product, "model-llm"), display_name="unknown creation"
     )
-    Product.objects.create(brand=brands[0], **product_type_fields(Product, "agent-harness"), display_name="agent")
+    Product.objects.create(brand=brands[0], **product_type_fields(Product, "agent"), display_name="agent")
     return [b.pk for b in brands], cutoff, products
 
 
@@ -163,7 +163,7 @@ def test_reviewed_first_party_mirror_collapses_before_cap_and_uses_earliest_crea
         brand_id=brands[0],
         publisher_account=get_publisher(source="hf", identifier="Fixture0").account,
         repo_id="Fixture0/Mirror",
-        **product_type_fields(Product, "llm-model"),
+        **product_type_fields(Product, "model-llm"),
         private=False,
         created_at=cutoff - timedelta(hours=1),
     )
