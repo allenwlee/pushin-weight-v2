@@ -1,5 +1,5 @@
-from datetime import UTC, datetime, timedelta
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -125,7 +125,8 @@ def test_exact_wording_fallback_preserves_explicit_prior_match_in_later_group():
     result = apply_selection(packet, reply)
     assert result["leads"] == []
     assert result["history"]["admitted"][0]["wordings"] == [
-        "original wording", "reworded follow-up"
+        "original wording",
+        "reworded follow-up",
     ]
 
 
@@ -145,3 +146,28 @@ def test_two_old_aliases_cannot_occupy_both_slots_for_one_pending_episode():
     assert len(admitted) == 2
     assert admitted[0]["episode_id"] == pending_id
     assert admitted[1]["title"] == "new"
+
+
+def test_pending_material_update_survives_reranking_without_fresh_development():
+    packet = decision_packet([sample(0, "Initial report")], BASE, {})
+    history = apply_selection(packet, votes(packet))["history"]
+    prior = history["admitted"][0]["episode_id"]
+    packet = decision_packet(
+        [sample(30, "A", "B", "New fact")], BASE + timedelta(minutes=30), history
+    )
+    reply = votes(packet)
+    reply["ranked_stories"][2].update(
+        prior_episode_id=prior, material_change="A new fact"
+    )
+    history = apply_selection(packet, reply)["history"]
+    assert history["pending"][0]["episode_id"] == prior
+    packet = decision_packet(
+        [sample(60, "New fact", "C")], BASE + timedelta(hours=1), history
+    )
+    prior_rows = json.loads(selection_request(packet)["user"])["prior_episodes"]
+    assert [r["state"] for r in prior_rows if r["episode_id"] == prior] == ["pending"]
+    reply = votes(packet)
+    reply["ranked_stories"][0]["prior_episode_id"] = prior
+    result = apply_selection(packet, reply)
+    assert result["leads"][0]["material_change"] == "A new fact"
+    assert result["leads"][0]["headlines"] == history["pending"][0]["headlines"]
