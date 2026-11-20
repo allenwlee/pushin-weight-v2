@@ -72,8 +72,13 @@ def shared_story(story_id, track, locale="en", pinned=None):
 
 def shared_feed_payload(
     cfg, *, track, locale, cursor, limit, source_locale=None, editorial_group=None,
+    stable_locale=False,
 ):
-    from monitor.editorial.readers import edition_payload, pictures_for_editions
+    from monitor.editorial.readers import (
+        _archive_cursor,
+        edition_payload,
+        pictures_for_editions,
+    )
 
     requested_locale = locale
     pool_query = text_query(track)
@@ -88,13 +93,15 @@ def shared_feed_payload(
     else:
         # The old global feed remains stable until its caller selects pool mode.
         pool_query = pool_query.filter(narrative__consideration_state__isnull=True, narrative__source_locale__isnull=True)
-    if locale != "en" and not pool_query.filter(locale=locale).exists():
+    value = _archive_cursor(cursor, requested_locale=locale, stable_locale=stable_locale)
+    if value is not None and stable_locale:
+        locale = value["locale"]
+    elif locale != "en" and not pool_query.filter(locale=locale).exists():
         locale = "en"
     query = pool_query.filter(locale=locale).order_by(
         "-edition_published_at", "-public_id"
     )
-    if cursor:
-        value = signing.loads(cursor, salt="editorial-archive")
+    if value is not None:
         if (
             value["track"] != track or value["locale"] != locale
             or value.get("source_locale") != source_locale
@@ -151,6 +158,7 @@ def shared_feed_payload(
                 "editorial_group": editorial_group,
                 "at": editions[-1].published_at.isoformat(),
                 "id": str(editions[-1].pk),
+                **({"requested_locale": requested_locale} if stable_locale else {}),
             },
             salt="editorial-archive",
         )

@@ -94,6 +94,26 @@ def test_general_candidate_preserves_pro_workloads_and_checks_immutable_assets()
     }
 
 
+def test_chatter_candidate_preserves_general_and_measures_the_archive() -> None:
+    from bridgewright.performance.contracts import PerformanceDeclaration
+
+    general = _load("declaration.general-candidate.json")
+    chatter = _load("declaration.chatter-candidate.json")
+    PerformanceDeclaration.model_validate(chatter)
+    assert chatter["scenarios"][:4] == general["scenarios"]
+    assert {key: value for key, value in chatter.items() if key != "scenarios"} == {
+        key: value for key, value in general.items() if key != "scenarios"
+    }
+    for scenario, baseline in zip(chatter["scenarios"][4:], general["scenarios"][2:], strict=True):
+        assert scenario["id"] == baseline["id"].replace("general-", "chatter-")
+        assert scenario["route"] == baseline["route"].replace("/general/", "/chatter/")
+        assert scenario["actions"] == [{
+            "kind": "press", "target": ".archive-list .editorial-story:first-child .editorial-sources > summary", "value": "Enter"
+        }]
+        for key in ("runs", "required_metrics", "metric_engines", "budgets", "lighthouse_assertions"):
+            assert scenario[key] == baseline[key]
+
+
 def test_performance_scenarios_seed_conflicting_locale_and_legacy_state() -> None:
     for name in ("declaration.json", "declaration.staging.json"):
         declaration = _load(name)

@@ -93,8 +93,9 @@ def test_general_pool_controls_and_archive_use_saved_pools(
         browser.close()
 
 
+@pytest.mark.parametrize("route", ["/general/", "/chatter/"])
 def test_declared_pool_controls_are_independent_reversible_and_read_only(
-    live_server, monkeypatch, settings
+    live_server, monkeypatch, settings, route
 ):
     import json
     from pathlib import Path
@@ -133,7 +134,7 @@ def test_declared_pool_controls_are_independent_reversible_and_read_only(
         )
 
         def reset():
-            page.goto(live_server.url + "/general/?lang=en")
+            page.goto(live_server.url + route + "?lang=en")
             return dict(defaults)
 
         def apply(state, key, value):
@@ -186,7 +187,7 @@ def test_declared_pool_controls_are_independent_reversible_and_read_only(
                 )
             results.append({"obligation_id": obligation.id, "status": "passed"})
         for locale in fixture["languages"]:
-            page.goto(live_server.url + "/general/?lang=" + locale)
+            page.goto(live_server.url + route + "?lang=" + locale)
             assert page.locator('#chatter [name="source_lang"]').input_value() == locale
             assert (
                 page.locator('#chatter [name="edition_lang"]').input_value() == locale
@@ -213,6 +214,9 @@ def test_declared_pool_controls_are_independent_reversible_and_read_only(
     assessment = assess_evidence(declaration, evidence)
     destination = Path(__file__).resolve().parents[1] / ".ollija" / "tmp"
     destination.mkdir(parents=True, exist_ok=True)
+    (destination / (route.strip("/") + "-pools-ui-evidence.json")).write_text(
+        evidence.model_dump_json(indent=2)
+    )
     (destination / "chatter-ui-evidence.json").write_text(
         evidence.model_dump_json(indent=2)
     )

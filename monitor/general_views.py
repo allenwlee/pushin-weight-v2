@@ -1,7 +1,10 @@
 """General's server-rendered shell and progressive, read-only panel updates."""
 
+from datetime import datetime
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
+from django.core import signing
 from django.http import Http404, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
@@ -124,8 +127,6 @@ def _duration(seconds):
 
 
 def present_feed(feed):
-    from datetime import datetime
-
     at = datetime.fromisoformat(feed["as_of"])
     for item in feed["items"]:
         params = {"lang": feed["locale"]}
@@ -258,6 +259,76 @@ def general(request):
             },
         }
         return private_response(render(request, "monitor/general.html", context))
+
+
+@require_GET
+def chatter(request):
+    """Read saved Chatter editions through the same publication and pool boundary."""
+    try:
+        state = selection(request)
+        if request.GET.get("track", "chatter") != "chatter":
+            raise ValueError("Unsupported track")
+        try:
+            cfg = editorial_access(request)
+        except Http404:
+            cfg = None
+        options = pool_options(request, cfg, "chatter", state["locale"]) if cfg else {}
+        feed = (
+            editorial_feed(
+                cfg,
+                track="chatter",
+                cursor=request.GET.get("cursor", ""),
+                stable_locale=True,
+                **({"locale": state["locale"]} | options),
+            )
+            if cfg
+            else {"items": [], "next_cursor": ""}
+        )
+    except (ValueError, TypeError, KeyError, signing.BadSignature):
+        return HttpResponseBadRequest("Invalid Chatter selection")
+    for item in feed["items"]:
+        item["display_published_at"] = (
+            datetime.fromisoformat(item["published_at"])
+            .astimezone(ZoneInfo("Asia/Tokyo"))
+            .strftime("%Y-%m-%d %H:%M JST")
+        )
+        if item.get("asset"):
+            item["asset"]["preload"] = "none"
+    next_url = None
+    if feed["next_cursor"]:
+        params = request.GET.copy()
+        params["lang"] = state["locale"]
+        if options:
+            params["source_lang"] = options["source_locale"]
+            params["group"] = options["editorial_group"]
+            params["edition_lang"] = options["locale"]
+        params["cursor"] = feed["next_cursor"]
+        next_url = request.path + "?" + params.urlencode()
+    locale = state["locale"]
+    now = timezone.now()
+    with translation.override("zh-hans" if locale == "zh-cn" else locale):
+        context = {
+            "state": state,
+            "locale": locale,
+            "feed": feed,
+            "available": cfg is not None,
+            "next_url": next_url,
+            "pool_controls": pool_controls(request, options),
+            "panels": {"chatter": {"title": _("Chatter"), "glyph": "icon-discourse"}},
+            "preferences_namespace": _home_preferences_namespace(request),
+            "settings_links": _settings_links(state, request, path=request.path),
+            "return_path": request.get_full_path(),
+            "initial_data": {
+                "state": state,
+                "feeds": {},
+                "as_of": now.isoformat(),
+                "closed_weights_notice": (
+                    request.GET.get("weights") in {"closed", "both"}
+                    or request.GET.get("notice") == "closed-weights"
+                ),
+            },
+        }
+        return private_response(render(request, "monitor/chatter.html", context))
 
 
 @require_GET
