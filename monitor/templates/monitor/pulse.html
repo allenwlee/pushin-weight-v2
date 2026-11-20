@@ -21,7 +21,7 @@
   {% for source in entry.sources %}{% if source.post_id %}
   <blockquote><a href="{% url 'post_detail' source.post_id %}?locale={{ active_locale }}">{{ source.label }}</a>
     {% if source.excerpt %}<p>{{ source.excerpt }}</p>{% endif %}
-    <small>{% if source.last_finding_count != None %}{% trans 'Latest saved P1 release count for this post' %} · {{ source.last_finding_count }}{% elif source.has_attached_finding %}{% trans 'Saved release finding attached to this candidate' %}{% else %}{% trans 'No saved P1 decision for this post' %}{% endif %}</small>
+    <small>{% if source.last_finding_count != None %}{% trans 'Latest saved P1 release count for this post' %} · {{ source.last_finding_count }}{% elif source.has_attached_finding %}{% trans 'Saved release finding attached to this candidate' %}{% elif source.invalid_answer %}{% trans 'P1 ran, but its answer failed validation' %}{% else %}{% trans 'No saved P1 decision for this post' %}{% endif %}</small>
   </blockquote>{% endif %}{% endfor %}
   <div class="release-sources"><a href="{% url 'pulse_sources' entry.id %}?locale={{ active_locale }}">{% trans 'Related sources' %} <span class="count">{{ entry.sources_count }}</span> →</a></div>
 </article>

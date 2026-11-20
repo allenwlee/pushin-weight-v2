@@ -1630,3 +1630,6 @@ msgstr "この候補にリリース判定が紐付いています"
 
 msgid "No saved P1 decision for this post"
 msgstr "この投稿のP1判定は未保存です"
+
+msgid "P1 ran, but its answer failed validation"
+msgstr "P1を実行しましたが、回答は検証に通りませんでした"

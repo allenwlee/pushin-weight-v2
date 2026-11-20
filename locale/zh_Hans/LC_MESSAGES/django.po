@@ -1549,3 +1549,6 @@ msgstr "此候选已关联发布判定"
 
 msgid "No saved P1 decision for this post"
 msgstr "此帖尚无已保存的 P1 判定"
+
+msgid "P1 ran, but its answer failed validation"
+msgstr "P1 已运行，但结果未通过验证"

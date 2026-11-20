@@ -144,6 +144,11 @@ def test_pulse_real_route_includes_dossier_with_no_review_or_identity(client):
     assert f"/pulse/{event.pk}/sources" in html
     unexpected = [query["sql"] for query in queries if not query["sql"].lstrip().upper().startswith("SELECT")]
     assert unexpected == []
+    from core.models import PostEnrichmentState
+    PostEnrichmentState.objects.create(post=post, classification_error_code="classification_compressed_invalid:invalid_release_findings")
+    retried = client.get("/pulse?locale=en").content.decode()
+    assert "P1 ran, but its answer failed validation" in retried
+    assert "No saved P1 decision for this post" not in retried
 
 
 @pytest.mark.parametrize("locale,title", [("en", "Release discoveries"), ("zh_hans", "发布动态"), ("ja", "リリースの発見")])

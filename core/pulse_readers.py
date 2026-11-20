@@ -277,6 +277,7 @@ def _source_query(event_ids):
             event_dossier_source_id=OuterRef("pk"), scope_key__startswith="pulse-finding-v1:",
             extraction_version__startswith="pulse-classified-findings-v1:",
         )),
+        post_classifier_error=F("post__enrichment_state__classification_error_code"),
         excerpt=Substr("post__text", 1, 320),
         last_release_keys=Subquery(PostBrandClassificationJudgment.objects.filter(
             post_id=OuterRef("post_id"),
@@ -300,6 +301,7 @@ _SOURCE_FIELDS = (
     "excerpt",
     "last_release_keys",
     "has_attached_finding",
+    "post_classifier_error",
     "observation_label",
     "observation_url",
     "supports_current_review",
@@ -315,6 +317,7 @@ def _source(row):
         "id": row["id"],
         "post_id": post_id,
         "excerpt": row["excerpt"],
+        "invalid_answer": (row["post_classifier_error"] or "").startswith("classification_compressed_invalid"),
         "has_attached_finding": row["has_attached_finding"],
         "last_finding_count": len(row["last_release_keys"]) if isinstance(row["last_release_keys"], list) else None,
         "observation_id": row["collection_observation_id"],
