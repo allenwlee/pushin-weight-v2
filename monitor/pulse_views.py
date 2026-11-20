@@ -9,15 +9,45 @@ from django.db import DatabaseError
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone, translation
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
 from core.models import EventDossier
 from core.pulse_readers import PulseReadError, release_page, release_sources
 from monitor import pulse_control
-from monitor.views import _can_review_products, _resolve_locale
+from monitor.views import _can_review_products, _home_preferences_namespace, _resolve_locale
 
 JST = ZoneInfo("Asia/Tokyo")
+
+
+def _shell_context(request):
+    """Use General's navigation without depending on its brand inventory."""
+    from monitor.general_views import _settings_links
+
+    if request.GET.get("lang"):
+        from monitor.content_views import content_locale
+        try:
+            locale = content_locale(request)
+        except ValueError:
+            locale = "en"
+        translation.activate("zh-hans" if locale == "zh-cn" else locale)
+    else:
+        locale = _resolve_locale(request, persist=False)
+        locale = "zh-cn" if locale in {"zh_cn", "zh_hans", "zh-CN"} else locale
+    state = {"locale": locale, "weights": "open", "audience": "human", "timezone": "local", "brands": []}
+    for key, values in {"weights": {"open", "none"}, "audience": {"human", "agent"}, "timezone": {"local", "ca"}}.items():
+        if request.GET.get(key) in values:
+            state[key] = request.GET[key]
+    return {
+        "active_locale": locale, "locale": locale, "state": state,
+        "panels": {"pulse": {"title": _("Pulse"), "glyph": "icon-rise"}},
+        "preferences_namespace": _home_preferences_namespace(request),
+        "settings_links": _settings_links(state, request, path=request.path),
+        "return_path": request.get_full_path(),
+        "initial_data": {"state": state, "feeds": {}, "as_of": timezone.now().isoformat(),
+                         "closed_weights_notice": request.GET.get("notice") == "closed-weights"},
+    }
 
 
 def _next_url(path, cursor, locale):
@@ -76,8 +106,9 @@ def _card(row):
 
 @require_GET
 def pulse(request):
-    locale = _resolve_locale(request, persist=False)
-    context = {"active_locale": locale, "entries": [], "read_error": False, "next_url": ""}
+    context = _shell_context(request)
+    locale = context["active_locale"]
+    context.update(entries=[], read_error=False, next_url="")
     try:
         page = release_page(cursor=request.GET.get("cursor"))
     except ValueError:
@@ -101,8 +132,9 @@ def pulse_legacy(request):
 
 @require_GET
 def sources(request, dossier_id):
-    locale = _resolve_locale(request, persist=False)
-    context = {"active_locale": locale, "sources": [], "read_error": False, "next_url": ""}
+    context = _shell_context(request)
+    locale = context["active_locale"]
+    context.update(sources=[], read_error=False, next_url="")
     try:
         page = release_sources(dossier_id, cursor=request.GET.get("cursor"))
     except EventDossier.DoesNotExist as error:
@@ -175,4 +207,6 @@ def control(request):
         message, status = _("Choose a valid action and enter a reason."), 400
     else:
         return redirect(reverse("product_review") + "?" + urlencode({"locale": locale}) + "#pulse-control")
-    return render(request, "monitor/pulse_control_error.html", {"active_locale": locale, "error_message": message}, status=status)
+    context = _shell_context(request)
+    context["error_message"] = message
+    return render(request, "monitor/pulse_control_error.html", context, status=status)

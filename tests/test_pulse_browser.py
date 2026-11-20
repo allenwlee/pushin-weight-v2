@@ -40,6 +40,33 @@ pytestmark = pytest.mark.requires_postgres
 
 @override_settings(SECURE_SSL_REDIRECT=False, SESSION_COOKIE_SECURE=False, CSRF_COOKIE_SECURE=False)
 class PulseBrowserTests(StaticLiveServerTestCase):
+    def test_pulse_uses_general_shell_and_light_cards(self):
+        event = pending_release("browser-general-style", "Cedar Preview")
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 1440, "height": 900})
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                self.assertEqual(page.goto(self.live_server_url + "/pulse?locale=en").status, 200)
+                self.assertTrue(page.locator(".general-shell .masthead").is_visible())
+                self.assertTrue(page.locator("#left-navigation").is_visible())
+                card = page.locator(f'[data-pulse-event="{event.pk}"]')
+                self.assertTrue(card.is_visible())
+                self.assertEqual(card.evaluate("el => getComputedStyle(el).backgroundColor"), "rgb(255, 255, 255)")
+                self.assertTrue(page.locator("body").evaluate("el => el.classList.contains('js-enabled')"))
+                page.locator('.header-settings [data-pref="lang"][data-value="ja"]').click()
+                self.assertTrue(page.get_by_role("heading", name="リリースの発見", exact=True).is_visible())
+                page.set_viewport_size({"width": 390, "height": 900})
+                toggle = page.locator(".mobile-nav-toggle")
+                self.assertTrue(toggle.is_visible())
+                toggle.click()
+                self.assertEqual(toggle.get_attribute("aria-expanded"), "true")
+                self.assertTrue(page.locator("#left-navigation").is_visible())
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_saved_category_stays_reported_with_pending_product_identity(self):
         events = {
             "reported": saved_category_release("browser-category-reported", ["model-llm"]),

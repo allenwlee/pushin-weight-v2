@@ -1,1 +1,33 @@
-:root{color-scheme:dark;font-family:ui-sans-serif,system-ui,sans-serif;background:#0a0d12;color:#e8edf5;font-synthesis:none}*{box-sizing:border-box}body{margin:0}a{color:#93bfff;text-underline-offset:4px}a:focus-visible,button:focus-visible{outline:2px solid #a6caff;outline-offset:5px}.pulse-header{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:24px max(24px,calc((100vw - 1080px)/2));border-bottom:1px solid #293342}.wordmark{color:#e8edf5;font-weight:800;letter-spacing:.08em;text-decoration:none;font-size:15px}.pulse-header nav{display:flex;gap:16px;font-size:13px}.pulse-main{max-width:840px;margin:0 auto;padding:48px 24px 80px}.eyebrow{font-size:12px;font-weight:700;letter-spacing:.16em;color:#9eacbd}h1{font-size:clamp(28px,5vw,42px);letter-spacing:-.035em;margin:8px 0 12px}h2{font-size:23px;letter-spacing:-.02em;overflow-wrap:anywhere;margin:16px 0 8px}.muted{color:#9eacbd}.page-heading{margin-bottom:36px}.release-card{padding:26px 0;border-top:1px solid #293342;overflow-wrap:anywhere}.release-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;font-size:12px}.category{text-transform:uppercase;letter-spacing:.08em;color:#9fb3cc}.state{background:#192334;border:1px solid #33445e;border-radius:24px;padding:5px 10px;color:#c8d6e8}.ownership{font-size:14px}.release-dates{font-size:13px;display:grid;gap:8px;margin:22px 0}.release-dates>div{display:grid;grid-template-columns:140px minmax(0,1fr);gap:16px}.release-dates dt{color:#9eacbd}.release-dates dd{margin:0;line-height:1.6}.release-sources{font-size:14px;margin-top:20px}.count{display:inline-block;margin-left:4px;color:#dce8fa}.notice{padding:16px;border:1px solid #795832;background:#231d16;border-radius:8px;line-height:1.6}.pagination{padding:28px 0;display:flex;justify-content:flex-end;border-top:1px solid #293342}.pagination a{padding:10px}.empty{padding:40px 0}.source-actions{display:flex;flex-wrap:wrap;gap:24px}@media(max-width:520px){.pulse-header{padding:18px 16px;align-items:flex-start;gap:20px;flex-direction:column}.pulse-main{padding:30px 18px 60px}.release-dates>div{grid-template-columns:1fr;gap:3px}.release-card{padding:22px 0}h2{font-size:21px}}
+.pulse-page #page-sections { max-width: 1000px; padding-top: 30px; padding-bottom: 64px; }
+.pulse-main { min-width: 0; }
+.pulse-main a { color: var(--blue); text-underline-offset: 3px; }
+.pulse-main a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
+.pulse-main .page-heading { margin: 0 0 24px; }
+.pulse-main .eyebrow { color: var(--blue); font-size: 12px; font-weight: 700; letter-spacing: .1em; }
+.pulse-main h1 { margin: 8px 0; font-size: 26px; line-height: 1.2; }
+.pulse-main h2 { margin: 16px 0 8px; font-size: 24px; overflow-wrap: anywhere; }
+.pulse-main .muted { color: var(--muted); }
+.pulse-main .release-list { display: grid; gap: 24px; }
+.pulse-main .release-card, .pulse-main .empty { padding: 28px 32px; border: 1px solid var(--panel-border); border-radius: 18px; background: var(--surface); overflow-wrap: anywhere; }
+.pulse-main > .release-card + .release-card { margin-top: 24px; }
+.pulse-main .release-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
+.pulse-main .category { color: var(--muted); font-weight: 700; }
+.pulse-main .state { padding: 5px 10px; border: 1px solid var(--panel-border); border-radius: 24px; background: #f4f7fb; }
+.pulse-main .ownership, .pulse-main .release-sources { font-size: 14px; }
+.pulse-main .release-dates { display: grid; gap: 8px; margin: 22px 0; font-size: 13px; }
+.pulse-main .release-dates > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; }
+.pulse-main .release-dates dt { color: var(--muted); }
+.pulse-main .release-dates dd { margin: 0; line-height: 1.6; }
+.pulse-main .release-sources { margin-top: 20px; }
+.pulse-main .count { display: inline-block; margin-left: 4px; }
+.pulse-main .notice { padding: 16px; border: 1px solid #e4c78e; background: #fff9ed; border-radius: 8px; line-height: 1.6; }
+.pulse-main .pagination { margin-top: 28px; text-align: center; }
+.pulse-main .pagination a { display: inline-block; padding: 9px 16px; border: 1px solid var(--panel-border); border-radius: 8px; background: var(--surface); }
+.pulse-main .source-actions { display: flex; flex-wrap: wrap; gap: 24px; }
+@media (max-width: 700px) {
+  .pulse-page #page-sections { padding-top: 22px; }
+  .pulse-main .release-list { gap: 16px; }
+  .pulse-main .release-card, .pulse-main .empty { padding: 20px 18px; border-radius: 14px; }
+  .pulse-main .release-dates > div { grid-template-columns: 1fr; gap: 3px; }
+  .pulse-main h2 { font-size: 21px; }
+}
