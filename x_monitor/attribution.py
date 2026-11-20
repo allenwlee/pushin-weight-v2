@@ -3669,6 +3669,8 @@ def _tracked_brand_catalog(
             "handles": [], "domains": [], "products": [],
             "keywords": [], "hashtags": [], "accounts": [],
         }
+        if isinstance(display_name, str) and display_name.strip():
+            rows[brand_id]["display_name"] = display_name.strip()
     for tweet in tweets:
         for supplied in tweet.get("tracked_brand_catalog") or []:
             if not isinstance(supplied, dict) or not isinstance(supplied.get("brand_id"), str):
@@ -3713,6 +3715,10 @@ def _tracked_brand_catalog(
                     for handle, role in accounts
                 ],
             }
+            # Historical snapshots omit this key and must retain their original hash.
+            display_name = supplied.get("display_name")
+            if isinstance(display_name, str) and display_name.strip():
+                rows[brand_id]["display_name"] = display_name.strip()
         for brand_id in tweet.get("brand_ids") or []:
             if isinstance(brand_id, str) and brand_id and brand_id not in rows:
                 rows[brand_id] = {

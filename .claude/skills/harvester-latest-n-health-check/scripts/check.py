@@ -282,7 +282,19 @@ def _snapshot_select(
     if translation_contract == "literal-v2":
         # Text stays inside the bounded observation. Only --report renders it;
         # evaluate_snapshot emits completeness flags and sanitized reason codes.
-        artifact_fields = """,
+        artifact_fields = """ || jsonb_build_object(
+        'translation_requested', es.translation_requested,
+        'literal_attempts', es.translation_attempts,
+        'historical_translation_sent', EXISTS (
+          SELECT 1 FROM original_content_calls paid
+          WHERE paid.provider_batch_id IS NOT NULL AND paid.stage = 'translation'
+            AND paid.state IN ('sent', 'ambiguous', 'completed', 'failed')
+            AND paid.member_post_ids @> ARRAY[p.tweet_id]::varchar[]
+        ),
+        'translation_pending_age_seconds', CASE WHEN es.translation_requested
+          THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+            (CURRENT_TIMESTAMP - COALESCE(es.translation_first_attempt_at, es.updated_at)))))
+          END,
         'artifact_source', jsonb_build_object(
           'text', COALESCE(p.text, ''),
           'text_en', p.text_en, 'text_zh_cn', p.text_zh_cn,
@@ -343,7 +355,7 @@ def _snapshot_select(
           ) FROM post_synthesis_artifacts a
           WHERE a.post_id = p.tweet_id AND a.is_current
           ORDER BY a.created_at DESC, a.id DESC LIMIT 1
-        )"""
+        ))"""
 
     schema_profile = "stage1" if stage1 else "legacy"
     return f"""WITH
@@ -395,7 +407,7 @@ def _snapshot_select(
         'translation_status', es.translation_status,
         'translation_error_code', es.translation_error_code,
         'classification_status', es.classification_status,
-        'classification_error_code', es.classification_error_code{artifact_fields},
+        'classification_error_code', es.classification_error_code,
         'brands', COALESCE((
           SELECT jsonb_agg(
             jsonb_build_object(
@@ -469,7 +481,7 @@ def _snapshot_select(
           {classification_join}
           WHERE pb.post_id = p.tweet_id
         ), '[]'::jsonb)
-      ) AS post_data
+      ){artifact_fields} AS post_data
     FROM selected p
     LEFT JOIN post_enrichment_states es ON es.post_id = p.tweet_id
   )
@@ -657,6 +669,8 @@ def _stage_reasons(
         return [_reason(stage, "failed", error_code=row.get(error_key))]
     if status == "pending":
         age_seconds = row.get("age_seconds")
+        if stage == "translation" and row.get("translation_pending_age_seconds") is not None:
+            age_seconds = row["translation_pending_age_seconds"]
         if not isinstance(age_seconds, (int, float)):
             return [_reason(stage, "pending_age_unknown")]
         if age_seconds > grace_seconds:
@@ -979,6 +993,12 @@ def _evaluate_post(
 ) -> dict[str, Any]:
     tweet_id = str(row.get("tweet_id") or "")
     translation_status = row.get("translation_status") or "missing"
+    no_translation_demand = (translation_contract == "literal-v2" and row.get("translation_requested") is False
+            and row.get("literal_attempts") == 0 and not row.get("translation_error_code")
+            and not row.get("historical_translation_sent")
+            and translation_status == "pending" and not row.get("literal_artifact"))
+    if no_translation_demand:
+        translation_status = "not_requested"
     classification_status = row.get("classification_status") or "missing"
     brands = row.get("brands") if isinstance(row.get("brands"), list) else []
     reasons: list[dict[str, str]] = []
@@ -999,9 +1019,8 @@ def _evaluate_post(
         reasons.append(_reason("persistence", "missing_brand"))
 
     grace_seconds = grace_hours * 60 * 60
-    reasons.extend(
-        _stage_reasons(row, stage="translation", grace_seconds=grace_seconds)
-    )
+    if not no_translation_demand:
+        reasons.extend(_stage_reasons(row, stage="translation", grace_seconds=grace_seconds))
     reasons.extend(
         _stage_reasons(row, stage="classification", grace_seconds=grace_seconds)
     )
@@ -1094,6 +1113,7 @@ def _evaluate_post(
         "fetched_at": row.get("fetched_at"),
         "state": state,
         "translation_status": translation_status,
+        **({"literal_required": not no_translation_demand} if translation_contract == "literal-v2" else {}),
         "classification_status": classification_status,
         "lang_detected": row.get("lang_detected"),
         "has_text_zh_cn": bool(row.get("has_text_zh_cn")),
@@ -1149,6 +1169,25 @@ def _acceptance_metrics(
 ) -> dict[str, Any]:
     """Calculate the explicit latest-N enrichment completeness contract."""
     total = len(posts)
+    if translation_contract == "literal-v2":
+        requested = [post for post in posts if post.get("synthesis_required")]
+        translations = [post for post in posts if post.get("literal_required", True)]
+        metrics = {
+            "lang_detected_present": _rate_metric(
+                sum(_canonical_language(post.get("lang_detected")) for post in translations),
+                len(translations), threshold=1.0, empty_passes=True,
+            ),
+            "literal_artifact_complete": _rate_metric(
+                sum(bool(post.get("literal_artifact_complete")) for post in translations),
+                len(translations), threshold=1.0, empty_passes=True,
+            ),
+            "requested_synthesis_complete": _rate_metric(
+                sum(bool(post.get("synthesis_complete")) for post in requested),
+                len(requested), threshold=1.0, empty_passes=True,
+            ),
+        }
+        metrics["passed"] = total > 0 and all(metric["passed"] for metric in metrics.values())
+        return metrics
     with_language = [
         post
         for post in posts
@@ -1158,21 +1197,6 @@ def _acceptance_metrics(
         post for post in with_language if post["lang_detected"].strip() != "zh-Hans"
     ]
     language = _rate_metric(len(with_language), total, threshold=1.0)
-    if translation_contract == "literal-v2":
-        requested = [post for post in posts if post.get("synthesis_required")]
-        metrics = {
-            "lang_detected_present": language,
-            "literal_artifact_complete": _rate_metric(
-                sum(bool(post.get("literal_artifact_complete")) for post in posts),
-                total, threshold=1.0,
-            ),
-            "requested_synthesis_complete": _rate_metric(
-                sum(bool(post.get("synthesis_complete")) for post in requested),
-                len(requested), threshold=1.0, empty_passes=True,
-            ),
-        }
-        metrics["passed"] = total > 0 and all(metric["passed"] for metric in metrics.values())
-        return metrics
     translation = _rate_metric(
         sum(bool(post.get("has_text_zh_cn")) for post in non_zh_hans),
         len(non_zh_hans),

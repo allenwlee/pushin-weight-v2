@@ -138,7 +138,7 @@ def test_named_release_with_unidentified_publisher_is_saved_and_searchable():
     )
     first = _post("unknown-owner-1", text="Introducing Model Z", brand_ids=(), author_handle="witness_one")
     second = _post("unknown-owner-2", text="Introducing Model Z", brand_ids=(), author_handle="witness_two")
-    record = {"model_name": "Model Z", "version": "1.0", "categories": ["llm-model"]}
+    record = {"model_name": "Model Z", "version": "1.0", "categories": ["model-llm"]}
     assert _persist_product_release_reports(first, [record], "test-v1")[:2] == (1, 1)
     assert _persist_product_release_reports(first, [record], "test-v1")[:2] == (0, 0)
     assert _persist_product_release_reports(second, [record], "test-v1")[:2] == (1, 1)
@@ -148,7 +148,7 @@ def test_named_release_with_unidentified_publisher_is_saved_and_searchable():
     for claim in claims:
         assert claim.reported_brand_id is None
         assert claim.reported_brand_discovery_candidate_id is None
-        assert read_document(claim.source_archive)["record"]["categories"] == ["llm-model"]
+        assert read_document(claim.source_archive)["record"]["categories"] == ["model-llm"]
     assert not models.BrandDiscoveryCandidate.objects.exists()
     assert not models.ProductVerificationProposal.objects.exists()
     assert not models.RareTypeCategoryAssignment.objects.exists()
@@ -1909,3 +1909,23 @@ def test_personnel_relative_date_request_cache_changes_with_source_date():
     post.save(update_fields=["created_at"])
     assert run_targeted_extractions(**kwargs).calls_made == 1
     assert len(requests) == 2 and requests[0] != requests[1]
+
+
+def test_targeted_capacity_refusal_records_no_provider_attempt(monkeypatch):
+    from x_monitor.attribution import LLMCallBudgetExhausted
+
+    class RefusedClient:
+        def messages_create(self, **kwargs):
+            raise LLMCallBudgetExhausted("enrichment_batch_budget_exhausted")
+
+    emitted = []
+    monkeypatch.setattr("core.targeted_extraction.emit_attempt", lambda *a, **kw: emitted.append(kw))
+    calls = build_targeted_extraction_calls(client=RefusedClient(), roles=_config().roles, timeout_seconds=1)
+    post = _post("before-dispatch", text="Attend our live workshop.")
+    result = run_targeted_extractions(post=post, post_types={"events"}, config=_config(),
+                                     calls=calls, max_calls=1)
+    assert emitted == []
+    assert (result.calls_made, result.deferred_roles, result.failed_roles) == (0, ("event_extraction",), ())
+    pending = TargetedExtractionState.objects.get(post=post)
+    assert pending.status == "pending" and pending.attempts == 0
+    assert not pending.attempt_events.exists()

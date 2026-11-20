@@ -1016,6 +1016,38 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_language_chart_keeps_unspecified_chinese_separate_from_detected_scripts(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from core.models import Post, PostBrand
+
+        # This disposable database contains four DeepSeek language observations.
+        PostBrand.objects.filter(brand_id="deepseek").delete()
+        for number, (reported, detected) in enumerate((
+            ("zh", None), ("zh-TW", None), ("zh", "zh-Hans"), ("zh", "zh-Hant"),
+        )):
+            post = Post.objects.create(tweet_id=f"script-chart-{number}", text="中文",
+                                       created_at=timezone.now() - timedelta(hours=2),
+                                       lang=reported, lang_detected=detected)
+            PostBrand.objects.create(post=post, brand_id="deepseek")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context(browser)
+                page = context.new_page()
+                page.goto(f"{self.live_server_url}/dashboard/each?brand=deepseek&tab=lang&window=1&locale=en")
+                page.locator('[data-each-category="zh"]').wait_for()
+                page.locator('[data-each-mode="volume"]').check()
+                chart_counts = page.evaluate("""() => Object.fromEntries(
+                    Chart.getChart(document.querySelector('[data-each-canvas]')).data.datasets.map(
+                        item => [item.categoryKey, item.data.reduce((sum, n) => sum + (n || 0), 0)]
+                    ))""")
+                self.assertEqual({k: chart_counts[k] for k in ("zh", "zh-hans", "other", "undetected")},
+                                 {"zh": 2, "zh-hans": 1, "other": 1, "undetected": 0})
+                context.close()
+            finally:
+                browser.close()
+
     def test_partial_hour_uses_the_actual_harvest_end_on_axis_and_tooltip(self):
         from datetime import datetime, timedelta
         from unittest.mock import patch

@@ -68,7 +68,7 @@ def test_each_declaration_separates_controls_from_legacy_homepage():
     assert {item.id for item in each_decl.controls} == {"pin", "hover", "mode"}
     assert len(compile_obligations(each_decl)) == 38
     legacy = AssuranceDeclaration.model_validate_json((each.ROOT / "tests/fixtures/ui_assurance/declaration.json").read_text())
-    assert len(compile_obligations(legacy)) == 5191
+    assert len(compile_obligations(legacy)) == 5215
     assert not any(item.id.startswith("each_") for item in legacy.controls)
 
 

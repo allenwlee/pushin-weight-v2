@@ -117,10 +117,15 @@ Interpret `status`, `regression_gate`, and `acceptance_gate`:
 - `status=healthy` and `regression_gate=complete`: every selected row is complete.
 - `status=healthy_with_pending` and `regression_gate=inconclusive`: pending is fresh and neutral, but completion is not proven.
 - `status=unhealthy` and `regression_gate=failed`: one or more persisted facts are failed, missing, invalid, or overdue.
-- In `literal-v2`, `acceptance_gate=complete` requires all posts to have a canonical
+- In `literal-v2`, `acceptance_gate=complete` requires requested translations and previously attempted
+  or published translation outcomes, including historical batch submissions, to have a canonical
   `lang_detected` accepted by the production language validator, and a successful
   current translation artifact matching the current source with nonblank EN/ZH-CN/JA
-  texts. Compatibility columns cannot substitute for an artifact.
+  texts. An explicitly unrequested, pending row with no translation artifact has no literal
+  work due and is excluded from both denominators. Requested literal work ages from
+  its first attempt or, before an attempt is recorded, from the last update to the queue row.
+  This gives a lower bound on the wait for older requests without a separate demand timestamp. A failed or missing state is still checked.
+  Compatibility columns cannot substitute for an artifact.
   `requested_synthesis_complete` counts only required synthesis: success needs the
   current context and demand identity, the demand's exact published artifact, and
   three nonblank, nonsentinel texts distinct from source, translations and one another.

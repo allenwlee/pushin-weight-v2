@@ -2064,3 +2064,48 @@ def test_change_harvester_health_route_preserves_existing_guardrails():
         "avoiding-recurring-mistakes/SKILL.md",
     ):
         assert rule in section
+
+
+@pytest.mark.parametrize(("requested", "status", "literal_due", "state"), [
+    (False, "pending", False, "complete"),
+    (True, "pending", True, "unhealthy"),
+    (True, "failed", True, "unhealthy"),
+    (False, "failed", True, "unhealthy"),
+    (False, "succeeded", True, "unhealthy"),
+])
+def test_literal_health_requires_demand_and_keeps_failed_or_published_evidence(
+    checker, requested, status, literal_due, state,
+):
+    row = _post(translation_requested=requested, translation_status=status, literal_attempts=0, age_seconds=90000,
+                has_lang_detected=False, lang_detected=None)
+    report, _code = checker.evaluate_snapshot(
+        _snapshot(row), latest=1, requested_ids=None, grace_hours=24, translation_contract="literal-v2",
+    )
+    assert report["posts"][0]["state"] == state
+    for key in ("lang_detected_present", "literal_artifact_complete"):
+        assert report["acceptance"][key]["denominator"] == int(literal_due)
+        assert report["acceptance"][key]["passed"] is (not literal_due)
+
+
+@pytest.mark.parametrize("history", [
+    {"literal_attempts": 1}, {"translation_error_code": "previous_failure"},
+    {"historical_translation_sent": True},
+    {"translation_requested": True, "translation_status": "not_requested"},
+])
+def test_unrequested_label_cannot_hide_previous_attempts_or_invalid_status(checker, history):
+    row = _post(translation_requested=False, translation_status="pending", literal_attempts=0,
+                age_seconds=90000, lang_detected=None, has_lang_detected=False)
+    row.update(history)
+    report, _ = checker.evaluate_snapshot(_snapshot(row), latest=1, requested_ids=None,
+                                          grace_hours=24, translation_contract="literal-v2")
+    assert report["posts"][0]["state"] == "unhealthy"
+    assert report["acceptance"]["literal_artifact_complete"]["denominator"] == 1
+
+
+def test_literal_request_on_an_old_enrichment_row_has_its_own_grace_window(checker):
+    row = _post(translation_requested=True, translation_status="pending", literal_attempts=0,
+                age_seconds=90000, translation_pending_age_seconds=60)
+    report, _ = checker.evaluate_snapshot(_snapshot(row), latest=1, requested_ids=None,
+                                          grace_hours=24, translation_contract="literal-v2")
+    assert report["posts"][0]["state"] == "pending"
+    assert report["acceptance"]["literal_artifact_complete"]["denominator"] == 1

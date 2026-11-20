@@ -1425,3 +1425,68 @@ def test_unresolved_promotion_saves_sentiment_without_changing_existing_promotio
     models.PostBrand.objects.create(post=state.post, brand=other)
     row = _enrich_posts_with_classifications(models.Post.objects.filter(pk=state.pk))[0]
     assert row['enrichment_stages']['classification'][0] == 'pending'
+
+
+def test_unresolved_combined_release_is_owned_by_pulse_during_targeted_replay(monkeypatch):
+    from core.targeted_extraction import run_targeted_extractions
+    state, runner, transport = setup_cycle(monkeypatch)
+    transport.document["release_findings"]["schema"] = "invalid"
+    runner.cfg.targeted_extraction.enabled = True
+    calls = []
+    runner._targeted_extraction_calls = {"model_release_extraction": lambda *args: calls.append(args)}
+    runner._run_post_fetch([], run_id="partial-release-with-targeted")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    assert selected_release_revision(state.pk) is None
+    run_targeted_extractions(post=state.post, post_types={"releases_updates"},
+        config=runner.cfg.targeted_extraction, calls=runner._targeted_extraction_calls, max_calls=1)
+    assert len(transport.calls) == 2
+    assert calls == []
+
+
+def test_continuous_worker_completes_targeted_and_requested_translation_after_pair(monkeypatch, settings):
+    from monitor.enrichment_worker import process_enrichment_batch
+    from tests.test_literal_translation_plaintext import PlaintextClient, TextResponse
+    from x_monitor import reattribute
+    from x_monitor.provider_telemetry import ProviderResponse
+
+    settings.X_MONITOR_LLM_PAUSE_SECONDS = 0
+    state, runner, transport = setup_cycle(monkeypatch, empty=True)
+    state.post.text += " Join the live Qwen workshop."
+    state.post.save(update_fields=["text"])
+    state.translation_status = "pending"
+    state.translation_requested = True
+    state.save(update_fields=("translation_requested", "translation_status"))
+    runner.cfg.harvest.enrichment.max_calls_per_batch = 6
+    runner.cfg.harvest.enrichment.classifier_reserved_calls = 2
+    runner.cfg.targeted_extraction.enabled = True
+    runner.cfg.llm.literal_translation_v2_enabled = True
+    runner.cfg.llm.translator_model = "google/gemma-4-31B-it-turbo"
+    translator = PlaintextClient([TextResponse("今天可以使用通义千问四代权重。"), TextResponse("今日からモデルの重みを利用できます。")])
+    runner._post_fetch_clients["translation"] = translator
+    dispatch = transport.messages_create
+
+    def classify(**kwargs):
+        response = dispatch(**kwargs)
+        if "answers" in response:
+            response["answers"]["type:events"]["noul"] = 0.9
+        return response
+
+    monkeypatch.setattr(transport, "messages_create", classify)
+    class TargetedProvider:
+        def messages_create(self, **kwargs):
+            return ProviderResponse({"records": [{
+                "brand_id": "qwen", "organization_name": "Qwen", "title": "Live Qwen workshop",
+                "attendance_mode": "online_live", "start_value": None, "start_precision": "unknown",
+                "end_value": None, "end_precision": "unknown", "source_status": "scheduled",
+            }]})
+
+    monkeypatch.setattr(reattribute, "build_relevancy_client_from_env", lambda *a, **kw: TargetedProvider())
+    result = process_enrichment_batch(runner, [], scope="continuous", run_id="release-unused", fair_queue=True)
+    state.refresh_from_db()
+    assert state.translation_status == state.classification_status == "succeeded"
+    assert result["n_targeted_extraction_calls"] == 1
+    assert models.TargetedExtractionState.objects.get(post=state.post).status == "succeeded"
+    assert models.EventEvidence.objects.get(source_post=state.post).event.title == "Live Qwen workshop"
+    assert len(transport.calls) == len(translator.calls) == 2
+    assert result["reserved_dispatches"] == result["provider_requests"] == 5

@@ -51,7 +51,7 @@ from django.db.models import (
     When,
 )
 from django.db.models.functions import Coalesce, Lower, NullIf, Trim
-from django.db.models.lookups import In
+from django.db.models.lookups import Exact, In
 from django.http import (
     Http404,
     HttpRequest,
@@ -120,7 +120,7 @@ from core.product_vocabulary import product_type_choices
 from core.u18a_activation import enabled_audience_topics
 from core.u18a_activation import is_enabled as u18a_enabled
 from monitor.country_flags import COUNTRY_FLAG_CODES, country_flag_symbol_id
-from x_monitor.translator import TRUSTED_SOURCE_LANGS, normalize_lang_detected, post_source_language
+from x_monitor.translator import SOURCE_SCRIPT_TAGS, TRUSTED_SOURCE_LANGS, normalize_display_language, post_source_language
 
 log = logging.getLogger(__name__)
 
@@ -242,7 +242,7 @@ _DASHBOARD_NATIONALISM_KEYS: tuple[str, ...] = NATIONALISM_KEYS
 
 _DASHBOARD_LANG_FILTER_KEYS: tuple[str, ...] = (
     "en", "zh-hans", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar", "pl",
-    "undetected", "other",
+    "undetected", "other", "zh",
 )
 _TRUSTED_SOURCE_LANGS = TRUSTED_SOURCE_LANGS
 _post_language = post_source_language
@@ -254,6 +254,7 @@ def _post_language_expression(prefix=""):
         NullIf(F(f"{prefix}lang_detected"), Value("")),
         Case(
             When(In(source, _TRUSTED_SOURCE_LANGS), then=source),
+            *(When(Exact(source, Value(tag)), then=Value(script)) for tag, script in SOURCE_SCRIPT_TAGS.items()),
             default=Value(None), output_field=CharField(),
         ),
         output_field=CharField(),
@@ -273,6 +274,7 @@ _DASHBOARD_LANG_KNOWN_PERSISTED_VALUES: tuple[str, ...] = tuple(
 
 _DASHBOARD_LANG_DISPLAY_NAMES: dict[str, str] = {
     "en": "English",
+    "zh": "中文",
     "zh-hans": "简体中文",
     "ja": "日本語",
     "es": "Español",
@@ -289,6 +291,7 @@ _DASHBOARD_LANG_DISPLAY_NAMES: dict[str, str] = {
 
 _DASHBOARD_LANG_DISPLAY_NAMES_ZH_CN: dict[str, str] = {
     "en": "英语",
+    "zh": "中文",
     "zh-hans": "简体中文",
     "ja": "日语",
     "es": "西班牙语",
@@ -1435,7 +1438,7 @@ def _geography_accessible_label(label: str, locale: str) -> str:
 def _compact_language_display(lang_detected: str | None, locale: str) -> str:
     """Project persisted language metadata without guessing from post text."""
 
-    normalized = normalize_lang_detected(lang_detected)
+    normalized = normalize_display_language(lang_detected)
     use_zh = _is_zh_locale(locale)
     if not normalized or normalized == "other":
         return "未检测" if use_zh else "undetected"
@@ -1443,7 +1446,7 @@ def _compact_language_display(lang_detected: str | None, locale: str) -> str:
 
 
 def _language_undetected(lang_detected: str | None) -> bool:
-    return normalize_lang_detected(lang_detected) in {None, "other"}
+    return normalize_display_language(lang_detected) in {None, "other"}
 
 
 def _language_inspection(stages: dict[str, tuple[str, int]], locale: str) -> str:
@@ -4247,7 +4250,7 @@ def _each_assign_keys(tab, fact, keys, brand):
         role = fact.get("role_key")
         return {role if role in keys and role != "other" else "other"}
     detected = fact["effective_language"]
-    normalized = normalize_lang_detected(detected) if detected else None
+    normalized = normalize_display_language(detected)
     key = _DASHBOARD_LANG_FILTER_KEYS_BY_PERSISTED_VALUE.get(normalized, normalized)
     return {key if key in keys else "other" if key else "undetected"}
 

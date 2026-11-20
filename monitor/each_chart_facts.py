@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -9,7 +10,7 @@ from django.db import DatabaseError, connection, transaction
 
 from core.materializations import MaterializationDefinition, sqlstate
 from monitor.each_request_budget import EachChartUnavailable, EachRequestBudget
-from x_monitor.translator import TRUSTED_SOURCE_LANGS
+from x_monitor.translator import SOURCE_SCRIPT_TAGS, TRUSTED_SOURCE_LANGS
 
 __all__ = ["EACH_FACTS", "EachChartUnavailable", "read_each_fact_groups"]
 
@@ -114,9 +115,9 @@ def _read_groups(brand_id, tab, start, end, bucket, tz, at):
         # spaces, not arbitrary Python whitespace, and detected text owns NULLIF.
         selected = [
             ("COALESCE(NULLIF(f.lang_detected, ''), CASE WHEN lower(trim(f.lang)) = ANY(%s) "
-             'THEN lower(trim(f.lang)) END) COLLATE "C" AS effective_language')
+             'THEN lower(trim(f.lang)) ELSE (%s::jsonb ->> lower(trim(f.lang))) END) COLLATE "C" AS effective_language')
         ]
-        signature_params = [list(TRUSTED_SOURCE_LANGS)]
+        signature_params = [list(TRUSTED_SOURCE_LANGS), json.dumps(SOURCE_SCRIPT_TAGS)]
         output_columns = ["effective_language"]
     elif tab == "audience_topics":
         # Resolve current concept keys after the first grouping. Historical

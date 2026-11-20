@@ -108,7 +108,7 @@ class DispatchGuard:
             time.monotonic() + cfg.harvest.enrichment.claim_safe_envelope_seconds
         )
 
-    def __call__(self, request):
+    def __call__(self, request, *, record_start=None):
         with self._lock:
             try:
                 if self.stop_event.is_set():
@@ -127,29 +127,26 @@ class DispatchGuard:
                     remaining,
                 )
                 prepaid = request.pop("_enrichment_budget_prepaid", False)
+                if prepaid and self.prepaid <= 0:
+                    raise LLMCallBudgetExhausted("enrichment_pair_reservation_missing")
+                if not prepaid:
+                    if self.calls >= self.cfg.harvest.enrichment.max_calls_per_batch:
+                        raise LLMCallBudgetExhausted("enrichment_batch_budget_exhausted")
+                    if not self.window_id and (self.scope == "pilot" or (
+                        self.scope != "continuous" and self.cfg.harvest.enrichment.mode == "worker"
+                    )):
+                        raise LLMCallBudgetExhausted("enrichment_budget_missing")
+                # A failed checkpoint or COMMIT cannot consume a prepaid sibling's slot.
+                with transaction.atomic() if record_start is not None else nullcontext():
+                    if record_start is not None:
+                        record_start()
+                    if not prepaid and self.window_id:
+                        reserve_request(window_id=self.window_id, fingerprint=self.fingerprint,
+                                        request=request, scope=self.scope)
                 if prepaid:
-                    if self.prepaid <= 0:
-                        raise LLMCallBudgetExhausted(
-                            "enrichment_pair_reservation_missing"
-                        )
                     self.prepaid -= 1
-                    return
-                if self.calls >= self.cfg.harvest.enrichment.max_calls_per_batch:
-                    raise LLMCallBudgetExhausted("enrichment_batch_budget_exhausted")
-                window_id = self.window_id
-                if window_id:
-                    reserve_request(
-                        window_id=window_id,
-                        fingerprint=self.fingerprint,
-                        request=request,
-                        scope=self.scope,
-                    )
-                elif self.scope == "pilot" or (
-                    self.scope != "continuous"
-                    and self.cfg.harvest.enrichment.mode == "worker"
-                ):
-                    raise LLMCallBudgetExhausted("enrichment_budget_missing")
-                self.calls += 1
+                else:
+                    self.calls += 1
             except LLMCallBudgetExhausted as exc:
                 self.error_code = str(exc)
                 raise
@@ -192,6 +189,15 @@ class DispatchGuard:
             except LLMCallBudgetExhausted as exc:
                 self.error_code = str(exc)
                 raise
+
+    def release_unused_pair(self, unused):
+        """Return unused continuous-batch capacity after both roles settle."""
+        if self.scope == "continuous":
+            with self._lock:
+                if not 0 <= unused <= self.prepaid:
+                    raise ValueError("invalid_unused_pair_reservation")
+                self.prepaid -= unused
+                self.calls -= unused
 
 
 def process_enrichment_batch(

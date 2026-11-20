@@ -68,6 +68,17 @@ def selected_release_revision(post_id):
     return publication[0] if publication is not None else None
 
 
+def classifier_owns_release_extraction(post_id):
+    """A selected combined judgment owns release processing even while its evidence is incomplete."""
+    if PostBrandClassificationState.objects.filter(
+        post_id=post_id, selected_final_judgment__stage="final",
+        selected_final_judgment__validation_state="validated",
+        selected_final_judgment__prompt_version__in=[rev[2] for rev in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS],
+    ).exists():
+        return True
+    return selected_release_revision(post_id) is not None
+
+
 def _complete_release_publication(post_id):
     """Return the exact selected generation and its complete-output manifest.
 

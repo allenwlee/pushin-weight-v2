@@ -23,7 +23,7 @@ from core.models import (
     PostTranslationText,
 )
 from monitor.post_enrichment import commentary_is_distinct, present_text
-from x_monitor.translator import normalize_lang_detected, post_source_language
+from x_monitor.translator import literal_source_language, normalize_lang_detected, post_source_language
 
 SUPPORTED_CONTENT_LOCALES = ("en", "zh-cn", "ja")
 
@@ -180,7 +180,7 @@ def publish_literal_translation(
     now=None,
 ) -> PostTranslationArtifact | None:
     current = now or timezone.now()
-    language = normalize_lang_detected(row.get("lang_detected"))
+    language = literal_source_language(row.get("lang_detected"))
     if language is None:
         return None
     source = _literal_text(post.text)
@@ -287,9 +287,9 @@ def record_literal_translation_failure(
 
     current = now or timezone.now()
     language = (
-        normalize_lang_detected(source_language)
-        or normalize_lang_detected(post.lang_detected)
-        or normalize_lang_detected(post.lang)
+        literal_source_language(source_language)
+        or literal_source_language(post.lang_detected)
+        or literal_source_language(post.lang)
         or "unknown"
     )
     with transaction.atomic():

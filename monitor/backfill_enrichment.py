@@ -619,7 +619,7 @@ def replay_requested_saved_translation(cfg, *, delegates=None, post_ids=None):
     try:
         # prepare_page only replays cached replies or prepares requests in
         # memory. We deliberately never register or send those requests here.
-        _, _, missing = prepare_page(
+        prepared, _, missing = prepare_page(
             state.source_collection_job, [str(state.pk)], cfg, delegates=delegates,
             quarantine_rejected=False, translation_only=True, defer_conflicts=True,
         )
@@ -635,9 +635,21 @@ def replay_requested_saved_translation(cfg, *, delegates=None, post_ids=None):
                 if (locked.translation_requested
                         and locked.translation_status == "pending"
                         and (not locked.claim_expires_at or locked.claim_expires_at <= timezone.now())):
-                    locked.translation_error_code = (
-                        "historical_translation_unresolved" if active else "incomplete_saved_translation"
-                    )
+                    error_code = "historical_translation_unresolved" if active else "incomplete_saved_translation"
+                    if not active and len(prepared) == 1 and (
+                        prepared[0]["context"].get("operation") == "post_literal_language_detection"
+                    ):
+                        from monitor.enrichment_queue import HISTORICAL_SCRIPT_DEMAND
+                        post = Post.objects.prefetch_related("brands").get(pk=state.pk)
+                        contexts = [c.provenance.get("context", {}) for c in _saved_translation_calls([post]).values()]
+                        source_languages = {ctx.get("source_language") for ctx in contexts
+                                            if ctx.get("target_language")}
+                        targets = {ctx.get("target_language") for ctx in contexts}
+                        if (str(post.lang or "").strip().lower().split("-")[0] in {"zh", "zho", "chi"}
+                                and source_languages in ({"zh-Hans"}, {"zh-Hant"})
+                                and {"en", "ja"} <= targets):
+                            error_code = HISTORICAL_SCRIPT_DEMAND
+                    locked.translation_error_code = error_code
                     locked.save(update_fields=["translation_error_code", "updated_at"])
     finally:
         # Keep this worker's replay attempts bounded without touching the
@@ -647,6 +659,73 @@ def replay_requested_saved_translation(cfg, *, delegates=None, post_ids=None):
                 _saved_replay_cooldowns.pop(next(iter(_saved_replay_cooldowns)))
             _saved_replay_cooldowns[str(state.pk)] = time.monotonic() + 300
     return True
+
+
+def _saved_translation_calls(posts):
+    snapshots = {str(post.pk): post_snapshot(post) for post in posts}
+    calls = OriginalContentCall.objects.filter(
+        provider_batch__isnull=False, member_post_ids__overlap=list(snapshots), stage="translation",
+        state="completed", import_state__in=("pending", "applied"),
+    ).select_related("provider_batch")
+    return {call.request_hash: call for call in calls
+            if len(call.member_post_ids) == 1
+            and call.provenance.get("post_snapshots", {}).get(call.member_post_ids[0])
+            == snapshots[call.member_post_ids[0]]}
+
+
+def reader_translation_cache(posts, delegate):
+    """Offer an exact paid reply before a reader's bounded live translation dispatch."""
+    from x_monitor.deferred_inference import DeferredRequestPending
+    from x_monitor.provider_telemetry import ProviderTextResponse
+
+    cached = _saved_translation_calls(posts)
+    consumed = defaultdict(set)
+    consumed_lock = threading.Lock()
+    by_id = {str(post.pk): post for post in posts}
+    def resolve(identity, body, kind, context):
+        call = cached.get(identity)
+        if (call and call.request_packet == body and call.provenance.get("context") == context
+                and _cached_reply_valid(call, delegate, by_id[call.member_post_ids[0]].text)):
+            with consumed_lock:
+                consumed[call.member_post_ids[0]].add(call.pk)
+            return call.response_payload
+        return None
+
+    replay = DeferredInferenceClient(
+        delegate, resolve=resolve, reply_transport=lambda identity: cached[identity].provider_batch.transport,
+        context_transform=getattr(delegate, "context_for_request", None),
+    )
+
+    def lookup(request):
+        ids = (request.get("_batch_context") or {}).get("post_ids", ())
+        if len(ids) != 1 or ids[0] not in by_id:
+            return None
+        try:
+            reply = replay.messages_create_text(**request)
+        except DeferredRequestPending:
+            return None
+        # Original provider usage stays on the paid call. No new tokens were used.
+        return ProviderTextResponse(text=reply.text, provider_usage={"replayed": True})
+
+    def close_applied(post_id, artifact_id):
+        applied = consumed.get(post_id)
+        if not applied:
+            return
+        with transaction.atomic():
+            state = PostEnrichmentState.objects.select_for_update().get(pk=post_id)
+            owned = OriginalContentCall.objects.select_for_update().filter(
+                pk__in=applied, import_state="pending", state="completed",
+                provider_batch__source_collection_job_id=state.source_collection_job_id,
+            )
+            for call in owned:
+                call.import_state = "applied"
+                call.import_evidence = {
+                    **call.import_evidence, "validation": "passed", "complete_member_ids": [post_id],
+                    "published_at": timezone.now().isoformat(), "reader_translation_artifact": str(artifact_id),
+                }
+                call.save(update_fields=["import_state", "import_evidence", "updated_at"])
+
+    return lookup, close_applied
 
 
 def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot=None, quarantine_rejected=True, translation_only=False, defer_conflicts=False):

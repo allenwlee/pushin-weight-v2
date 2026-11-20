@@ -294,7 +294,7 @@ def test_absent_saved_relation_uses_live_facts(fact_brand):
 
 
 @pytest.mark.parametrize(('detected', 'source'), [
-    (None, '\tja\t'), (None, '\nja\n'), (None, ' JA '),
+    (None, '\tja\t'), (None, '\nja\n'), (None, ' JA '), (None, 'zh-hans'), (None, 'ZH-Hant'),
     ('  ', 'en'), ('\t', 'en'), ('', 'en'), ('\tja\t', 'en'),
 ])
 @pytest.mark.requires_postgres
@@ -303,6 +303,17 @@ def test_language_preserves_exact_sql_empty_and_trim_rules(fact_brand, detected,
     actual = _each_chart_payload(fact_brand.pk, 'lang', 7, 'en', now=NOW, _rank=False)
     expected = reference_each_chart_payload(fact_brand.pk, 'lang', 7, 'en', now=NOW, _rank=False)
     assert actual == expected
+
+
+@pytest.mark.requires_postgres
+def test_chart_separates_reported_chinese_from_detected_script_and_unknown(fact_brand):
+    Post.objects.filter(pk="each-facts-1").update(lang=" ZH ", lang_detected=None)
+    Post.objects.filter(pk="each-facts-5").update(lang="und", lang_detected=None)
+    payload = _each_chart_payload(fact_brand.pk, "lang", 7, "en", now=NOW, _rank=False)
+    assert sum(payload["series"]["zh"]) == 1
+    assert sum(payload["series"]["zh-hans"]) == 1
+    assert sum(payload["series"]["undetected"]) >= 1
+    assert payload == reference_each_chart_payload(fact_brand.pk, "lang", 7, "en", now=NOW, _rank=False)
 
 
 @pytest.fixture

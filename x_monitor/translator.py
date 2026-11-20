@@ -522,7 +522,11 @@ _LANG_SYNONYMS: dict[str, str] = {
 }
 
 
-TRUSTED_SOURCE_LANGS = ("en", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar", "pl")
+TRUSTED_SOURCE_LANGS = tuple(sorted(_ISO_639_1_PRIMARY_CODES))
+SOURCE_SCRIPT_TAGS = {
+    "zh-hans": "zh-Hans", "zh-hant": "zh-Hant",
+    "zh-cn": "zh", "zh-sg": "zh", "zh-tw": "zh", "zh-hk": "zh", "zh-mo": "zh",
+}
 
 
 def post_source_language(detected, source):
@@ -530,7 +534,21 @@ def post_source_language(detected, source):
     if detected:
         return detected
     source = str(source or "").strip().lower()
-    return source if source in TRUSTED_SOURCE_LANGS else None
+    return source if source in _ISO_639_1_PRIMARY_CODES else SOURCE_SCRIPT_TAGS.get(source)
+
+
+def normalize_display_language(value):
+    """Keep source-reported Chinese distinct from a detected script."""
+    return "zh" if value == "zh" else normalize_lang_detected(value)
+
+
+def literal_source_language(value):
+    """Require a script before using Chinese source text as a native translation."""
+    if isinstance(value, str):
+        tag = value.strip().lower().replace("_", "-")
+        if tag in {"zh", "zho", "chi"} or SOURCE_SCRIPT_TAGS.get(tag) == "zh":
+            return None
+    return normalize_lang_detected(value)
 
 
 def normalize_lang_detected(raw: object) -> str | None:

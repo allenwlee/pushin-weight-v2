@@ -36,6 +36,7 @@ import threading
 import time
 import uuid
 from collections import defaultdict
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
@@ -197,6 +198,7 @@ def _classification_tracked_brand_catalog() -> list[dict[str, Any]]:
         }
         rows[brand_id] = {
             "brand_id": brand_id,
+            "display_name": brand.display_name_en or brand.display_name or brand_id,
             "aliases": sorted(
                 {value for value in aliases if value},
                 key=lambda value: (value.casefold(), value),
@@ -826,6 +828,8 @@ class _BoundedClassifierClient:
         after_call: Any = None,
         before_dispatch: Any = None,
         reserve_pair_budget: Any = None,
+        release_pair_budget: Any = None,
+        cached_text: Any = None,
     ) -> None:
         self._delegate = client
         self._base_url = getattr(client, "_base_url", None)
@@ -837,12 +841,15 @@ class _BoundedClassifierClient:
         self._after_call = after_call
         self._before_dispatch = before_dispatch
         self._reserve_pair_budget = reserve_pair_budget
+        self._release_pair_budget = release_pair_budget
+        self._cached_text = cached_text
         self._lock = threading.Lock()
         self._calls = 0
         self._reserved_calls = 0
         self._reservations: dict[str, int] = {}
         self._reservation_sequence = 0
-        self._last_started: float | None = None
+        self._start_locks = defaultdict(threading.Lock)
+        self._last_started: dict[str, float] = {}
 
     @property
     def calls(self) -> int:
@@ -913,39 +920,45 @@ class _BoundedClassifierClient:
     def release_reservations(self, *tokens: str | None) -> None:
         """Return unused reserved attempts after both sibling tasks settle."""
         with self._lock:
-            for token in tokens:
-                if token is None:
-                    continue
-                remaining = self._reservations.pop(token, 0)
-                self._reserved_calls -= remaining
+            unused = sum(self._reservations.pop(token, 0) for token in tokens if token is not None)
+            self._reserved_calls -= unused
+            if unused and self._release_pair_budget is not None:
+                self._release_pair_budget(unused)
 
     def _start_physical_call(self, kwargs: dict[str, Any]) -> None:
-        """Consume one shared transport slot before calling the delegate."""
+        """Space starts to each upstream, then debit the shared cap at dispatch."""
+        identify = getattr(self._delegate, "pacing_key", None)
+        route = identify(kwargs.get("model")) if callable(identify) else "default"
+        with self._lock:
+            start_lock = self._start_locks[route]
+        with start_lock:
+            if not self.deferred_requests and self._pause_seconds and route in self._last_started:
+                wait_seconds = self._last_started[route] + self._pause_seconds - self._monotonic()
+                if wait_seconds > 0:
+                    self._sleep(wait_seconds)
+            self._debit_dispatch(kwargs)
+            self._last_started[route] = self._monotonic()
+
+    def _debit_dispatch(self, kwargs: dict[str, Any]) -> None:
         reservation = kwargs.pop("_classifier_reservation", None)
         with self._lock:
             if reservation is not None:
                 remaining = self._reservations.get(str(reservation), 0)
                 if remaining <= 0:
                     raise LLMCallBudgetExhausted("classifier reservation exhausted")
-                self._reservations[str(reservation)] = remaining - 1
-                self._reserved_calls -= 1
                 if self._reserve_pair_budget is not None:
                     kwargs["_enrichment_budget_prepaid"] = True
             elif self._maximum_calls is not None and self._calls + self._reserved_calls >= self._maximum_calls:
                 raise LLMCallBudgetExhausted("classifier transport cap exhausted")
-            if not self.deferred_requests and self._last_started is not None and self._pause_seconds:
-                wait_seconds = (
-                    self._last_started + self._pause_seconds - self._monotonic()
-                )
-                if wait_seconds > 0:
-                    self._sleep(wait_seconds)
             if self._before_call is not None and not self.deferred_requests:
                 self._before_call()
             if self._before_dispatch is not None and not self.deferred_requests:
                 self._before_dispatch(kwargs)
                 kwargs.pop("_batch_context", None)
+            if reservation is not None:
+                self._reservations[str(reservation)] -= 1
+                self._reserved_calls -= 1
             self._calls += 1
-            self._last_started = self._monotonic()
 
     def messages_create(self, **kwargs: Any) -> dict[str, Any]:
         self._start_physical_call(kwargs)
@@ -953,6 +966,10 @@ class _BoundedClassifierClient:
 
     def messages_create_text(self, **kwargs: Any) -> Any:
         """Forward raw-text requests through the same physical-call budget."""
+        if self._cached_text is not None:
+            cached = self._cached_text(kwargs)
+            if cached is not None:
+                return cached
         self._start_physical_call(kwargs)
         return self._invoke(self._delegate.messages_create_text, kwargs)
 
@@ -4168,10 +4185,13 @@ class CycleRunner:
                 context = request.get("_batch_context") or {}
                 ids = [str(value) for value in context.get("post_ids", [])]
                 try:
-                    with transaction.atomic():
-                        if dispatch_guard is not None:
-                            dispatch_guard(request)
+                    def mark_started():
                         mark_stage_started(post_ids=ids, run_id=run_id, stage=stage)
+
+                    if dispatch_guard is None:
+                        mark_started()
+                    else:
+                        dispatch_guard(request, record_start=mark_started)
                     started_ids[stage].update(ids)
                 finally:
                     if threading.current_thread() is not threading.main_thread():
@@ -4321,6 +4341,7 @@ class CycleRunner:
                 monotonic=self._monotonic,
                 before_dispatch=before_dispatch("classification"),
                 reserve_pair_budget=dispatch_guard.reserve_pair if dispatch_guard is not None else None,
+                release_pair_budget=dispatch_guard.release_unused_pair if dispatch_guard is not None else None,
                 **self._backfill_model_callbacks(),
             )
             try:
@@ -4479,6 +4500,7 @@ class CycleRunner:
 
         translation_succeeded: set[str] = set()
         bounded_translator_client = None
+        close_cached_translation = None
         if translation_tweets and translator_client is None:
             logger.warning(
                 "_run_post_fetch: no translator client (configured provider "
@@ -4491,10 +4513,19 @@ class CycleRunner:
             translation_rows = []
         elif translation_tweets:
             remaining_llm_calls = self._remaining_model_calls()
-            if fair_queue and remaining_llm_calls is not None and classification_tweets:
+            if (fair_queue and remaining_llm_calls is not None and classification_tweets
+                    and getattr(dispatch_guard, "scope", None) != "continuous"):
                 remaining_llm_calls = max(0, remaining_llm_calls - enrichment_cfg.classifier_reserved_calls)
+            from monitor.enrichment_queue import HISTORICAL_SCRIPT_DEMAND
+            cache_lookup = None
+            if source_collection_job_id is None:
+                historical = [state.post for state in claimed_states
+                              if state.source_collection_job_id and state.translation_error_code == HISTORICAL_SCRIPT_DEMAND]
+                if historical:
+                    from monitor.backfill_enrichment import reader_translation_cache
+                    cache_lookup, close_cached_translation = reader_translation_cache(historical, translator_client)
             bounded_translator_client = _BoundedClassifierClient(
-                translator_client,
+                translator_client, cached_text=cache_lookup,
                 maximum_calls=remaining_llm_calls,
                 pause_seconds=0,
                 monotonic=self._monotonic,
@@ -4656,21 +4687,24 @@ class CycleRunner:
                         source_text_fingerprint,
                     )
 
-                    artifact = publish_literal_translation(
-                        post=post,
-                        expected_claim_run_id=run_id,
-                        row=r,
-                        prompt_version=LITERAL_TRANSLATION_PROMPT_VERSION,
-                        model=self.cfg.llm.translator_model,
-                        expected_source_fingerprint=source_text_fingerprint(
-                            translation_input_text.get(str(tid))
-                        ),
-                        input_tokens=int(r.get("input_tokens") or 0),
-                        output_tokens=int(r.get("output_tokens") or 0),
-                        latency_ms=r.get("latency_ms"),
-                    )
-                    if artifact is not None:
-                        translation_succeeded.add(str(tid))
+                    with transaction.atomic() if close_cached_translation is not None else nullcontext():
+                        artifact = publish_literal_translation(
+                            post=post,
+                            expected_claim_run_id=run_id,
+                            row=r,
+                            prompt_version=LITERAL_TRANSLATION_PROMPT_VERSION,
+                            model=self.cfg.llm.translator_model,
+                            expected_source_fingerprint=source_text_fingerprint(
+                                translation_input_text.get(str(tid))
+                            ),
+                            input_tokens=int(r.get("input_tokens") or 0),
+                            output_tokens=int(r.get("output_tokens") or 0),
+                            latency_ms=r.get("latency_ms"),
+                        )
+                        if artifact is not None:
+                            translation_succeeded.add(str(tid))
+                            if close_cached_translation is not None:
+                                close_cached_translation(str(tid), artifact.pk)
                     continue
 
                 lang_detected = _present_text(r.get("lang_detected"))

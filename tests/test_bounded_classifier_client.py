@@ -129,3 +129,29 @@ def test_raw_and_json_calls_share_start_rate_spacing():
 
     assert sleeps == [1.0]
     assert delegate.calls == ["json", "text"]
+
+
+def test_two_provider_classifier_spaces_each_upstream_and_shares_one_call_cap():
+    from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
+    from x_monitor.jev_classifier import CompressedClassifierClient, MODEL
+
+    clock = [0.0]
+    starts = []
+    class Provider:
+        _base_url = "test"
+        def messages_create(self, **kwargs):
+            starts.append((kwargs["model"], clock[0]))
+            return {}
+
+    def sleep(seconds):
+        clock[0] += seconds
+
+    client = _BoundedClassifierClient(
+        CompressedClassifierClient(Provider(), Provider()), maximum_calls=4, pause_seconds=1,
+        monotonic=lambda: clock[0], sleep=sleep,
+    )
+    for role in (DEEPSEEK_0731_MODEL, MODEL, DEEPSEEK_0731_MODEL, MODEL):
+        client.messages_create(model=role)
+    assert starts == [(DEEPSEEK_0731_MODEL, 0), (MODEL, 0), (DEEPSEEK_0731_MODEL, 1), (MODEL, 1)]
+    with pytest.raises(LLMCallBudgetExhausted):
+        client.messages_create(model=MODEL)

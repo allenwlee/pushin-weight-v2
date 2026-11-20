@@ -212,32 +212,49 @@ def _context_limits(request):
             "limits": {"request": 48000, "state_plus_question": 24000}}
 
 
+@lru_cache(maxsize=4096)
+def _catalog_term_pattern(term):
+    return re.compile(parser._literal_term_pattern(term), re.IGNORECASE)
+
+
+def _original_catalog_text(state):
+    return "\n".join(source["text"] for source in sources(state) if source["id"] != "translation")
+
+
+def _catalog_term_long_enough(term, minimum):
+    # Two ideographs can be a complete catalog name. Keep short Latin keys out.
+    return (len(re.sub(r"\W", "", term)) >= minimum
+            or (len(term) == 2 and all(parser._is_cjk(ch) for ch in term)))
+
+
 def _umbrella(request, state, targets, question_map):
-    visible = "\n".join(source["text"] for source in sources(state))
+    visible = _original_catalog_text(state)
     facts = {}
     for brand in targets:
         entry = next((r for r in state["tracked_brands"] if r["brand_id"] == brand), {})
         terms = []
         for raw in [*entry.get("aliases", []), *entry.get("products", [])]:
             term = raw.strip('"').strip()
-            if len(term) < 3 or "/" in term:
+            if not _catalog_term_long_enough(term, 3) or "/" in term:
                 continue
-            if re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", visible, re.IGNORECASE) and term.casefold() not in {v.casefold() for v in terms}:
+            if _catalog_term_pattern(term).search(visible) and term.casefold() not in {v.casefold() for v in terms}:
                 terms.append(term)
         facts[brand] = terms
-        scope = (
-            "the post and its discussed offerings [unattributed discovery: no known owner; a tracked-brand connection is not required]"
-            if brand == "_unattributed" else
-            brand + " [tracked umbrella; post-matched catalog names: " + (", ".join(terms) if terms else "none") + "]"
-        )
+        if brand == "_unattributed":
+            scope = "the post and its discussed offerings [unattributed discovery: no known owner; a tracked-brand connection is not required]"
+        else:
+            name = entry.get("display_name") or (", ".join(terms) if terms else brand)
+            matched = ", ".join(terms) or "none"
+            scope = f"{name} and its offerings [post-matched catalog names: {matched}; database key: {brand}]"
         for key, qid in question_map[brand].items():
             if key not in POST_QUESTIONS:
                 question = request["questions"][qid]
-                question["instructions"] = question["instructions"].replace(brand, scope)
+                question["instructions"] = QUESTIONS[key].format(b=scope)
     request["state"]["umbrella_meaning"] = (
         "Each target ID is a database key for a tracked company and its product umbrella. "
         "The matched names are members of that target, not separate targets. Judge the relevant company or product mentioned in the source; "
-        "avoid transferring opinions or promotion between offerings."
+        "avoid transferring opinions or promotion between offerings. Read the source as written. "
+        "The source language tag is a hint and can be incorrect."
     )
     request["state"]["target_umbrella_post_matched_names"] = facts
     if "_unattributed" in targets:
@@ -765,16 +782,11 @@ def _case_for_tweet(tweet, catalog):
         "target_brand": tweet["brand_ids"][0],
     }
 
-    def normalize(value):
-        return re.sub(r"[^\w]", "", str(value).casefold())
-
-    context = state["context"]
-    texts = list(context.values()) if isinstance(context, dict) else [r.get("text", "") for r in context if isinstance(r, dict)]
-    visible = normalize(state["source_text"] + " " + " ".join(str(text) for text in texts))
+    visible = _original_catalog_text(state)
     state["tracked_brands"] = [
         {**entry, "aliases": sorted({v.strip() for v in entry.get("aliases", []) if v and v.strip()}),
          "source_matched_product_candidates": sorted({value for value in entry.get("products", [])
-             if value and len(normalize(value)) >= 4 and normalize(value) in visible})}
+             if value and _catalog_term_long_enough(value, 4) and _catalog_term_pattern(value).search(visible)})}
         for entry in catalog["brands"]
     ]
     return {"case_id": str(tweet["tweet_id"]), "target_brands": list(tweet["brand_ids"]),
@@ -807,7 +819,7 @@ def classify_batch(tweets, brand_registry, client, *, max_tokens, on_batch_error
             case = _case_for_tweet(tweet, catalog)
             tweet["_classification_pipeline"] = PROFILE
             tweet["_classification_channels"] = channels
-            tweet["_classification_matcher_revision"] = _matcher(case["state"]).revision
+            tweet["_classification_matcher_revision"] = _matcher(case["state"]).revision + ":source-catalog-v2"
             fingerprint = parser._two_role_fingerprint(tweet, tracked_catalog=catalog)
             first = make_extraction_request(case, release_channels=channels, max_tokens=max_tokens)
             second_bound = {"model": MODEL, "max_tokens": 1, "messages": [{"role": "user", "content": json.dumps({

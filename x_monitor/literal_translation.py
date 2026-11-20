@@ -16,7 +16,7 @@ from .provider_telemetry import (
     normalize_usage,
     provider_host_class,
 )
-from .translator import normalize_lang_detected
+from .translator import literal_source_language
 
 if TYPE_CHECKING:
     from .config import Config
@@ -260,7 +260,7 @@ def _translation_request_defaults(
 def _declared_source_language(tweet: dict[str, Any]) -> str | None:
     """Prefer an explicitly declared source language without blocking fallbacks."""
     for key in ("source_language", "lang_detected", "lang"):
-        normalized = normalize_lang_detected(tweet.get(key))
+        normalized = literal_source_language(tweet.get(key))
         if normalized is not None:
             return normalized
     return None
@@ -701,7 +701,9 @@ def _call_text(
         kwargs["timeout"] = timeout
     try:
         response: ProviderTextResponse = client.messages_create_text(**kwargs)
-        usage = normalize_usage(getattr(response, "provider_usage", None))
+        reported_usage = getattr(response, "provider_usage", None)
+        usage = normalize_usage(reported_usage)
+        replayed = isinstance(reported_usage, Mapping) and reported_usage.get("replayed")
         text = getattr(response, "text", None)
         if not isinstance(text, str) or not text.strip():
             emit_attempt(
@@ -722,7 +724,7 @@ def _call_text(
             role=role,
             model=model,
             attempt=1,
-            outcome="cached" if getattr(client, "deferred_requests", False) else "success",
+            outcome="cached" if replayed or getattr(client, "deferred_requests", False) else "success",
             started=started,
             response=response,
             prompt=prompt,

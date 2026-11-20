@@ -821,14 +821,14 @@ def test_literal_and_cached_callers_accept_quantity_after_complete_tco_link():
     source = "143亿Token。https://t.co/xWdYwT1HGs在接入后达到143.5亿Tokens。"
     english = "[[PQ0:001]]. https://t.co/xWdYwT1HGs reached 14.35 billion Tokens."
     japanese = "[[PQ0:001]]。https://t.co/xWdYwT1HGsは143.5億Tokensに達した。"
-    client = PlaintextClient([TextResponse(english), TextResponse(japanese)])
+    client = PlaintextClient([TextResponse("zh-Hans"), TextResponse(english), TextResponse(japanese)])
     row = translate_batch_literal_plaintext(
         [{"tweet_id": "tco-source", "text": source, "lang": "zh"}], client,
     )[0]
     assert row["text_en"] and "14.35 billion" in row["text_en"]
     assert row["text_ja"] and row["text_zh_cn"] == source
-    assert len(client.calls) == 2
-    assert "达到143.5亿Tokens" in _prompt(client.calls[0])
+    assert len(client.calls) == 3
+    assert "达到143.5亿Tokens" in _prompt(client.calls[1])
     call = SimpleNamespace(
         provenance={"response_kind": "text", "context": {
             "operation": "post_literal_translation", "target_language": "en",
@@ -938,3 +938,16 @@ def test_real_literal_and_cached_callers_accept_word_and_range_source_forms(sour
         }]},
     )
     assert _cached_reply_valid(call, delegate, source)
+
+
+def test_requested_generic_chinese_does_not_relabel_traditional_text_as_simplified():
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    source = "臺灣使用這個軟體。"
+    client = PlaintextClient([TextResponse("zh-Hant"), TextResponse("Taiwan uses this software."),
+                              TextResponse("台湾使用这个软件。"), TextResponse("台湾でこのソフトを使います。")])
+    row, = translate_batch_literal_plaintext([{"tweet_id": "requested-zh", "text": source, "lang": "zh"}], client)
+    assert row["translation_failed"] is False
+    assert row["lang_detected"] == "zh-Hant"
+    assert row["text_zh_cn"] == "台湾使用这个软件。"
+    assert len(client.calls) == 4

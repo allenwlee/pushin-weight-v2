@@ -931,3 +931,121 @@ def test_retries_keep_a_share_while_first_attempts_continue_arriving():
         assert len(batch.states) == 10
         assert sum(s.classification_attempts == 0 for s in batch.states) == 7
         assert sum(s.classification_attempts > 0 for s in batch.states) == 3
+
+
+def test_continuous_pairs_return_only_unused_slots_for_follow_on_work():
+    from types import SimpleNamespace
+
+    from monitor.cycle import _BoundedClassifierClient
+    from monitor.enrichment_worker import DispatchGuard
+
+    cfg = _cfg()
+    cfg.harvest.enrichment.max_calls_per_batch = 600
+    guard = DispatchGuard(cfg=cfg, lease=SimpleNamespace(assert_held=lambda: None), scope="continuous")
+    class Provider:
+        def messages_create(self, **kwargs):
+            return {}
+
+    client = _BoundedClassifierClient(Provider(), maximum_calls=600, pause_seconds=0,
+        before_dispatch=guard, reserve_pair_budget=guard.reserve_pair,
+        release_pair_budget=guard.release_unused_pair)
+    for _ in range(100):
+        pair = client.reserve_pair(attempts_per_role=3, request_bounds=[{}, {}])
+        assert pair is not None
+        for role in pair:
+            client.messages_create(_classifier_reservation=role)
+        client.release_reservations(*pair)
+        client.release_reservations(*pair)
+    assert (client.calls, guard.calls, guard.prepaid) == (200, 200, 0)
+    for _ in range(400):
+        guard({})
+    with pytest.raises(LLMCallBudgetExhausted):
+        guard({})
+
+
+def test_due_requested_translation_has_room_among_older_classifier_retries():
+    now = timezone.now()
+    cfg = _cfg().harvest.enrichment.model_copy(update={"batch_size": 10, "fresh_batch_size": 0})
+    for index in range(12):
+        state = _state(f"older-{index}")
+        PostEnrichmentState.objects.filter(pk=state.pk).update(
+            translation_requested=False, classification_attempts=1, created_at=now - timedelta(hours=4))
+    requested = _state("requested-after-retries")
+    PostEnrichmentState.objects.filter(pk=requested.pk).update(
+        classification_status="succeeded", created_at=now - timedelta(hours=2))
+    claimed = claim_enrichment_states(cfg=cfg, run_id="translation-fairness", now=now, fair_queue=True)
+    assert requested.pk in {row.pk for row in claimed.states}
+    assert len(claimed.states) == 10
+
+
+def test_new_translation_on_an_old_first_classification_uses_its_first_attempt_share():
+    now = timezone.now()
+    cfg = _cfg().harvest.enrichment.model_copy(update={"batch_size": 10, "fresh_batch_size": 0})
+    for index in range(20):
+        state = _state(f"first-or-retry-{index}")
+        PostEnrichmentState.objects.filter(pk=state.pk).update(translation_requested=False,
+            classification_attempts=int(index < 10), created_at=now - timedelta(hours=4))
+    request = _state("classify-and-translate")
+    PostEnrichmentState.objects.filter(pk=request.pk).update(created_at=now - timedelta(hours=2))
+    claimed = claim_enrichment_states(cfg=cfg, run_id="two-stages", now=now, fair_queue=True)
+    assert request.pk in {s.pk for s in claimed.states}
+    assert sum(s.classification_attempts == 0 for s in claimed.states) == 8
+    assert len(claimed.states) == 10
+
+
+def test_unsent_reserved_call_releases_the_entire_continuous_allowance():
+    from types import SimpleNamespace
+    from monitor.cycle import _BoundedClassifierClient
+    from monitor.enrichment_worker import DispatchGuard
+
+    guard = DispatchGuard(cfg=_cfg(), lease=SimpleNamespace(assert_held=lambda: None), scope="continuous")
+    def lost_claim(kwargs):
+        raise LLMCallBudgetExhausted("claim expired")
+
+    bounded = _BoundedClassifierClient(object(), maximum_calls=6, pause_seconds=0, before_dispatch=lost_claim,
+        reserve_pair_budget=guard.reserve_pair, release_pair_budget=guard.release_unused_pair)
+    pair = bounded.reserve_pair(attempts_per_role=3, request_bounds=[{}, {}])
+    with pytest.raises(LLMCallBudgetExhausted, match="claim expired"):
+        bounded.messages_create(_classifier_reservation=pair[0])
+    bounded.release_reservations(*pair)
+    assert (bounded.calls, guard.calls, guard.prepaid) == (0, 0, 0)
+
+
+def test_failed_checkpoint_commit_preserves_both_active_pairs(monkeypatch):
+    from types import SimpleNamespace
+    from django.db import OperationalError, connection
+    from monitor.cycle import _BoundedClassifierClient
+    from monitor.enrichment_worker import DispatchGuard
+
+    state = _state("commit-before-transport")
+    guard = DispatchGuard(cfg=_cfg(), lease=SimpleNamespace(assert_held=lambda: None), scope="continuous")
+    sent = []
+
+    def checkpoint():
+        PostEnrichmentState.objects.filter(pk=state.pk).update(classification_error_code="started")
+
+    def refuse_commit():
+        raise OperationalError("checkpoint commit failed")
+
+    def provider(**kwargs):
+        sent.append(kwargs)
+        return {}
+
+    client = _BoundedClassifierClient(
+        SimpleNamespace(messages_create=provider), maximum_calls=12, pause_seconds=0,
+        before_dispatch=lambda request: guard(request, record_start=checkpoint),
+        reserve_pair_budget=guard.reserve_pair, release_pair_budget=guard.release_unused_pair,
+    )
+    first = client.reserve_pair(attempts_per_role=3, request_bounds=[{}, {}])
+    sibling = client.reserve_pair(attempts_per_role=3, request_bounds=[{}, {}])
+    with monkeypatch.context() as failing:
+        failing.setattr(connection, "_commit", refuse_commit)
+        with pytest.raises(OperationalError, match="checkpoint commit failed"):
+            client.messages_create(_classifier_reservation=first[0])
+    state.refresh_from_db()
+    assert state.classification_error_code == "" and not sent
+    client.release_reservations(*first)
+    client.messages_create(_classifier_reservation=sibling[0])
+    client.release_reservations(*sibling)
+    assert len(sent) == client.calls == guard.calls == 1
+    assert guard.prepaid == 0

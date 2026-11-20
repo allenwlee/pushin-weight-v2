@@ -83,6 +83,12 @@ def _apply_intended(value: Any) -> Any:
         return value
     if isinstance(value, dict):
         result = {key: _apply_intended(item) for key, item in value.items()}
+        if value.get("tab") == "lang" and "zh" not in result["series"]:
+            # The fixture has detected languages on every post. The new source-only
+            # series is empty and sorts next to Simplified Chinese at the same count.
+            simplified = next(i for i, entry in enumerate(result["entries"]) if entry["key"] == "zh-hans")
+            result["entries"].insert(simplified, {"key": "zh", "label": "中文", "color": "#0ea5e9"})
+            result["series"]["zh"] = [0] * len(value["days"])
         # Feed rows now expose whether a reader has requested translation.
         # This fixture contains no translation requests.
         if "row_key" in value and "text_original" in value:

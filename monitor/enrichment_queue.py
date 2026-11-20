@@ -18,18 +18,22 @@ from django.utils import timezone
 from core.models import OriginalContentCall, PostBrand, PostEnrichmentState
 
 STAGES = ("translation", "classification")
+HISTORICAL_SCRIPT_DEMAND = "requested_historical_script_detection"
 
 
-def _outstanding_historical_translations(post_ids: set[str]) -> set[str]:
+def _outstanding_historical_translations(states) -> set[str]:
     """Find paid historical translations that have not finished importing."""
     calls = OriginalContentCall.objects.filter(
         provider_batch__isnull=False, stage="translation", import_state="pending",
         state__in=("reserved", "sent", "ambiguous", "completed"),
     )
-    if not post_ids:
+    historical = {str(s.pk): s for s in states if s.source_collection_job_id}
+    if not historical:
         return set()
-    calls = calls.filter(member_post_ids__overlap=sorted(post_ids))
-    return {str(post_id) for members in calls.values_list("member_post_ids", flat=True) for post_id in members}
+    calls = calls.filter(member_post_ids__overlap=list(historical))
+    return {post_id for status, members in calls.values_list("state", "member_post_ids")
+            for post_id in members if post_id in historical and
+            (status != "completed" or historical[post_id].translation_error_code != HISTORICAL_SCRIPT_DEMAND)}
 
 
 def request_post_translation(post_id: str) -> PostEnrichmentState:
@@ -122,7 +126,16 @@ def _first_attempt_share(ordered, limit: int, now: datetime) -> list[PostEnrichm
     # retries/translation. Small allocations retain at least one other slot.
     other_limit = max(1, limit // 5) if limit > 1 else 0
     first = list(ordered.filter(first_due)[: limit - other_limit])
-    other = list(ordered.exclude(first_due)[:other_limit])
+    other_due = ordered.exclude(first_due)
+    other = list(other_due[:other_limit])
+    if other_limit >= 2 and (len(first) == limit - other_limit or len(other) == other_limit) and not any(
+        stage_is_due(state, "translation", now) for state in first + other
+    ):
+        requested = ordered.filter(stage_due_q("translation", now)).annotate(first_due=first_due).first()
+        if requested is not None:
+            lane = first if requested.first_due else other
+            if lane:
+                lane[-1] = requested
     selected = first + other
     remaining = limit - len(selected)
     if remaining:
@@ -176,7 +189,10 @@ def claim_enrichment_states(
                     output_field=ArrayField(CharField(max_length=128)),
                 ),
             )
-            available &= ~(Q(source_collection_job_id__isnull=False) & Q(Exists(outstanding)))
+            blocked = Exists(outstanding.exclude(state="completed")) | (
+                ~Q(translation_error_code=HISTORICAL_SCRIPT_DEMAND) & Q(Exists(outstanding))
+            )
+            available &= ~(Q(source_collection_job_id__isnull=False) & blocked)
         # A crashed final attempt still terminates on the next claim. Retain
         # its diagnostic cause; never substitute queue age for that cause.
         if source_collection_job_id is None:
@@ -196,7 +212,7 @@ def claim_enrichment_states(
                 .order_by("post_id")
             )
             exhausted = list(exhausted)
-            blocked = _outstanding_historical_translations({str(s.pk) for s in exhausted if s.source_collection_job_id})
+            blocked = _outstanding_historical_translations(exhausted)
             for state in exhausted:
                 if str(state.pk) in blocked and state.source_collection_job_id:
                     continue
@@ -276,7 +292,7 @@ def claim_enrichment_states(
         # Recheck after locking the selected state rows. A reservation that
         # committed after the initial query must win before we issue a claim.
         if source_collection_job_id is None:
-            blocked = _outstanding_historical_translations({str(s.pk) for s in current + carryover if s.source_collection_job_id})
+            blocked = _outstanding_historical_translations(current + carryover)
             current = [s for s in current if not (s.source_collection_job_id and str(s.pk) in blocked)]
             carryover = [s for s in carryover if not (s.source_collection_job_id and str(s.pk) in blocked)]
         for state in current + carryover:

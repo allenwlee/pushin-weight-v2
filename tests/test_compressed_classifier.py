@@ -569,3 +569,76 @@ def test_release_and_promotion_can_both_remain_unresolved_with_valid_feed():
     assert publication['promotion_unresolved'] is True
     assert 'release_findings' not in publication
     assert publication['by_brand']['qwen']['sentiment'] == 'neutral'
+
+
+@pytest.mark.parametrize(("source", "expected"), [
+    ("用的都是qwen", ["Qwen"]),
+    ("Meta的AI助手Muse", ["Meta", "Muse"]),
+    ("Meta와Qwen은좋다", ["Meta", "Qwen"]),
+    ("notMeta, Metaverse, MiMoé, Museology, qwenish", []),
+])
+def test_untranslated_source_preserves_real_catalog_names_in_jev_request(source, expected):
+    from x_monitor.compressed_classifier import run_case
+
+    sample = case()
+    sample["state"].update(source_text=source, source_language="zh", english_translation="")
+    sample["state"]["tracked_brands"][0]["aliases"] = ["Meta", "Muse", "MiMo", "Qwen"]
+    stages = []
+
+    def call(provider, request, stage):
+        stages.append(stage)
+        if provider == "ds":
+            return {"entities": [], "release_findings": {"schema": "pulse-release-findings-v1", "findings": []}}
+        assert request["state"]["target_umbrella_post_matched_names"]["qwen"] == expected
+        return answers(request, positive_keys=set())
+
+    published = run_case(sample, call, release_channels=("weights",))["publication_result"]
+    assert stages == ["extraction", "classification"]
+    assert published["by_brand"]["qwen"]["outcome"] == "context_missing"
+    assert published["by_brand"]["qwen"]["sentiment"] is None
+
+
+def test_original_product_candidates_and_brand_terms_agree_in_real_classifier_batch():
+    from types import SimpleNamespace
+    import json
+    from x_monitor.compressed_classifier import classify_batch
+
+    class Client:
+        release_channels = ("weights",)
+        def messages_create(self, **kwargs):
+            if kwargs["model"].startswith("deepseek"):
+                return {"entities": [], "release_findings": {"schema": "pulse-release-findings-v1", "findings": []}}
+            request = json.loads(kwargs["messages"][0]["content"])
+            state = request["state"]
+            assert state["target_model_candidates"] == ["RealModel", "海螺", "混元"]
+            assert state["target_umbrella_post_matched_names"]["qwen"] == ["RealModel", "海螺", "混元"]
+            return answers(request, positive_keys=set())
+
+    results = classify_batch([{"tweet_id": "source-match", "brand_ids": ["qwen"],
+                               "text": "qwenish Museology MiMoé 我用RealModel和海螺了 AI", "source_language": "zh",
+                               "context": [{"provenance": "stored_quote", "text": "再试混元"}],
+                               "english_translation": "Muse, an AI product",
+                               "tracked_brand_catalog": [{"brand_id": "qwen", "aliases": ["Qwen"],
+                                                           "products": ["MiMo", "Muse", "RealModel", "海螺", "混元", "AI", "我"]}]}],
+                             [SimpleNamespace(brand_id="qwen", display_name="Qwen", is_sentinel=False)],
+                             Client(), max_tokens=4096)
+    assert results[0]["valid"] and results[0]["by_brand"]["qwen"]["outcome"] == "context_missing"
+
+
+def test_catalog_display_name_is_authoritative_even_when_post_mentions_only_a_product():
+    from x_monitor.attribution import _tracked_brand_catalog, _validated_tracked_brand_catalog_snapshot
+    from x_monitor.compressed_classifier import build_jev
+    sample = case()
+    sample["target_brands"] = ["llama"]
+    historical = {"brand_id": "llama", "aliases": ["Llama", "Meta"], "products": ["Muse"], "accounts": []}
+    def snapshot(entry):
+        return _tracked_brand_catalog([], [{"tracked_brand_catalog": [entry]}])
+    old = snapshot(historical)
+    current = snapshot({**historical, "display_name": "Meta"})
+    assert _validated_tracked_brand_catalog_snapshot(old) == old
+    assert _validated_tracked_brand_catalog_snapshot(current) == current
+    assert old["revision"] != current["revision"]
+    sample["state"].update(target_brand="llama", source_text="I like Muse.", tracked_brands=current["brands"])
+    request = build_jev(sample, {"entities": []})["request"]
+    assert "Meta and its offerings" in request["questions"]["positive"]["instructions"]
+    assert request["state"]["target_umbrella_post_matched_names"]["llama"] == ["Muse"]

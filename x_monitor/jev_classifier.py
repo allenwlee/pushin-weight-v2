@@ -105,10 +105,14 @@ class CompressedClassifierClient:
     def _base_url(self):
         return self.extraction._base_url
 
-    def messages_create(self, **kwargs):
-        model = kwargs.get("model")
+    @staticmethod
+    def pacing_key(model):
         if model == DEEPSEEK_0731_MODEL:
-            return self.extraction.messages_create(**kwargs)
+            return "deepinfra"
         if model == MODEL:
-            return self.classification.messages_create(**kwargs)
+            return "typesafe"
         raise ValueError("compressed_classifier_model_mismatch")
+
+    def messages_create(self, **kwargs):
+        provider = self.extraction if self.pacing_key(kwargs.get("model")) == "deepinfra" else self.classification
+        return provider.messages_create(**kwargs)

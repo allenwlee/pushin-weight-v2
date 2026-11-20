@@ -1,7 +1,7 @@
 ---
 title: fix/feed-enrichment-unclassified-20261120 plan
 artifact_contract: ce-unified-plan/v1
-artifact_readiness: requirements-only
+artifact_readiness: implementation-ready
 product_contract_source: ollija-annotate-plan
 execution: code
 ollija:
@@ -39,6 +39,28 @@ Regression net: demonstrate failure before the fix for both recent and aged firs
 Verification: 155 queue, worker, compressed classifier and Ollija tests passed (69 required PostgreSQL tests, zero skipped/errors). Eight focused first-attempt/runnable/fairness and unchanged-order tests passed; the two original first-attempt tests failed against 50c0cade, and the six fairness/runnability tests failed against the initial strict-priority draft. Independent review found no remaining blocking issue. The other-work share is combined retries plus requested translations, not 20% for each. Read-only representative selection queries measured 14–81 ms execution each on production data; no row-lock timing was claimed. No views, assets or dashboard readers changed, so the 50c0cade interface verification remains applicable to those unchanged surfaces. A fixed 20-post production observation starts before deployment and completes after 30 minutes before final delivery verification; retain its actual incomplete/failed translation acceptance status separately from classification coverage.
 
 The Each chart currently fetches on page load or selection change, with no automatic periodic refresh. Its clock updates independently. Fresh API responses did show recovery (67 to 50 unclassified in the same 250-post DeepSeek cohort between 22:27 and 22:29), but the 25-post gap remained. Automatic chart refreshing is not added by this queue correction. Meta also has completed context-missing errors, including a post explicitly praising Meta AI on WhatsApp; the earlier suggestion that Muse context-missing posts necessarily concern an unrelated product was not established.
+
+## November 21 production repair
+
+The owner requested a strict regression net and direct production delivery. Compare November 16–17, before the translation and Pulse changes. November 18 included a provider outage and November 19 already ran on-demand translation. Language display, catalog recognition, dispatch capacity and model judgment require separate measures.
+
+At the deployed c154adee, the literal 20-post initial snapshot was frozen at 06:27 JST. The DeepSeek day chart had 2,232 undetected and no generic Chinese series. A frozen 300-post, 397-brand-slot replay found 34 slots with a source-visible name the current classifier omitted next to East Asian characters. The older translation supplied the only match in 39 slots. A reported source language is a hint. The Meta AI WhatsApp praise post was English with an upstream Estonian tag. Names and language alone supply no sentiment.
+
+The overnight worker dispatched every eligible first classification in 11 mature 15-minute cohorts. Timely usable sentiment remains separate: the 04:00–06:00 cohorts had 278 of 304 DeepSeek and 209 of 353 Meta sentiments by 30 minutes. One hundred two-call pairs consumed 200 physical calls but all 600 local slots. All 1,596 recorded follow-on extraction attempts between midnight and 06:35 JST were local budget denials. The explicitly requested translation for post 2123767307034124629 had zero attempts.
+
+Repair the continuous worker's accounting for unused reservations, protect real provider limits, classify on original multilingual sources, keep translation requested only, and correct stored-language displays and the on-demand health measure. The two providers keep their individual start spacing and the worker keeps one process, six concurrent posts and a 600-call batch ceiling. Preserve finite historical/pilot allowances, retry limits, fairness, accepted Pulse output and original judgments. Use existing state and tables. Exclude manual harvest runs and indiscriminate paid history replay.
+
+Regression cases cover a full 100-post dispatch, exhausted physical limits, independent providers and same-provider retries, actual targeted records and requested translations, false Latin substrings, East Asian adjacency, truthful Chinese script handling, and conditional translation health with mandatory checks on failures. Require focused PostgreSQL tests and the existing surrounding nets, offline query-byte checks, public browser and API checks, and direct verification of the deployed web, worker and natural harvest. Compare traced fresh cohorts for DeepSeek and Meta, distinct attempts, persisted by-30-minute sentiment, context-missing and actual follow-on successes. Preserve the original 20-post observation and separately report the same IDs and post-deploy arrivals. Do not use name coverage or deployment alone to claim a model-quality improvement.
+
+### Regression evidence
+
+The provider-free 100-post test reproduces 200 physical classifier calls consuming all 600 slots at the prior revision. The repair lets follow-on work use the 400 unused slots while enforcing the same physical limit. A failed database commit during the first of two active pairs now leaves its sibling reservation intact. The full worker test follows a classified event through to its source-linked EventEvidence and publishes the requested translation in the same batch. The query-byte audit passed for all 18 scheduled and all 18 manual queries, with a maximum of 511 UTF-8 bytes.
+
+At 06:56 JST the same 20 posts selected at 06:26 had 16 complete, four still pending and zero unhealthy. None requested literal translation, and the one requested synthesis was complete. The classification gate on this pre-deploy cohort was inconclusive.
+
+Production had 66 raw Chinese posts with completed, unapplied historical translation replies. Both target replies can inherit the same old source-script assumption. Cache-only replay leaves ambiguous or conflicting evidence unresolved. An explicit reader request that needs a script decision can use the normal bounded translator after all outstanding paid requests settle. The deterministic local trials sent one new request when a source was independently detected as Simplified, four for Traditional where the original target requests differed, and zero for conflicting receipt evidence. Exact historical responses retain their original usage and ownership. Successful consumption and the new published artifact share a transaction. A real browser checked four stored DeepSeek posts against fixed expected counts, including a region-only tag, generic Chinese, and independently detected Simplified and Traditional sources.
+
+Keep the natural production measurements separate from local replay and from the pre-deployment cohort. Report by-30-minute outcomes for new DeepSeek and Meta posts, follow-on paid results and the explicit outstanding translation. A chart already open in a browser refreshes its data on reload or selection change.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -81,8 +103,8 @@ The owner selected direct production delivery for these fixes in the active task
 
 # Goal
 
-<!-- Planner: replace this requirements-only placeholder with the change goal. -->
+Restore timely visible enrichment and on-demand work using measured production outcomes.
 
 ## Product Contract
 
-<!-- Planner: define the user-visible contract, acceptance cases, and verification. -->
+The November 21 production repair section defines the acceptance cases, historical comparison and verification endpoint.

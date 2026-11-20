@@ -8,6 +8,7 @@ bucket behavior is copied from that source.
 
 from __future__ import annotations
 
+from x_monitor.translator import normalize_lang_detected
 from monitor.views import (
     _DASHBOARD_LANG_FILTER_KEYS_BY_PERSISTED_VALUE,
     _DEFAULT_BRAND_ACCENT,
@@ -39,7 +40,6 @@ from monitor.views import (
     _resolve_chart_timezone,
     canonicalize_taxonomy_key,
     datetime,
-    normalize_lang_detected,
     read_brand_scalars_many,
     timedelta,
 )
@@ -190,7 +190,7 @@ def reference_each_chart_payload(
                 assigned[post_id].add(role if role in series and role != "other" else "other")
         elif tab == "lang":
             for post_id, _, detected, _ in batch:
-                normalized = normalize_lang_detected(detected) if detected else None
+                normalized = detected if detected == "zh" else normalize_lang_detected(detected)
                 key = _DASHBOARD_LANG_FILTER_KEYS_BY_PERSISTED_VALUE.get(normalized, normalized)
                 if key in series:
                     assigned[post_id].add(key)

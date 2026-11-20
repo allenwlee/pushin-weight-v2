@@ -54,6 +54,7 @@ from core.product_release_dossiers import record_release_report
 from core.product_verification import POLICY_VERSION, source_repo_evidence
 from core.rare_type_search import record_unknown_name_tokens_from_movement
 from core.shared_vocabulary import resolve_time_zone
+from x_monitor.attribution import LLMCallBudgetExhausted
 from x_monitor.config import TargetedExtractionConfig
 from x_monitor.provider_telemetry import (
     ProviderResponse,
@@ -237,6 +238,8 @@ def build_targeted_extraction_calls(
                     messages=[{"role": "user", "content": user}],
                     timeout=timeout_seconds,
                 )
+            except LLMCallBudgetExhausted:
+                raise
             except Exception as exc:
                 emit_attempt(
                     logger,
@@ -2193,11 +2196,9 @@ def run_targeted_extractions(
         if key in post_types
     ]
     if "model_release_extraction" in roles:
-        from core.classified_product_releases import selected_release_revision
+        from core.classified_product_releases import classifier_owns_release_extraction
 
-        if selected_release_revision(post.pk) is not None:
-            # Its required release answer, including a valid empty answer,
-            # already committed with classification. Identity retry is DB-only.
+        if classifier_owns_release_extraction(post.pk):
             roles.remove("model_release_extraction")
     has_ambiguous_profile = AffiliationClaimEvidence.objects.filter(
         pk__in=PersonBrandAffiliationEvidence.objects.filter(
@@ -2256,7 +2257,6 @@ def run_targeted_extractions(
         error_code = ""
         result_hash = None
         try:
-            calls_made += 1
             response = call(system, user, role_config.model, role_config.max_tokens)
             records, usage = _parse_response(response)
             with transaction.atomic():
@@ -2276,9 +2276,13 @@ def run_targeted_extractions(
                 )
             result_hash = _hash(records)
             outcome = "succeeded"
+        except LLMCallBudgetExhausted:
+            deferred.extend(roles[role_index:])
+            break
         except Exception as exc:  # noqa: BLE001 - one failed role must not stop the cycle
             error_code = type(exc).__name__[:128]
             failed.append(role)
+        calls_made += 1
         latency_ms = max(round((time.monotonic() - started) * 1000), 0)
         state.content_identity = content_identity
         state.model = role_config.model

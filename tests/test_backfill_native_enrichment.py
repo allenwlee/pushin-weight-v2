@@ -231,6 +231,77 @@ def test_request_recovers_paid_historical_reply_without_sending_again(native):
     assert len(NativeProvider.submissions) == before
 
 
+@pytest.mark.parametrize(("source", "detected", "conflicting", "physical"), [
+    ("我今天试用了通义千问。", "zh-Hans", False, 1),
+    ("我今天試用了通義千問。", "zh-Hant", False, 4),
+    ("我今天试用了通义千问。", "zh-Hans", True, 0),
+])
+def test_saved_chinese_translation_uses_real_script_and_reuses_only_exact_paid_targets(
+    native, monkeypatch, source, detected, conflicting, physical,
+):
+    from monitor.backfill_enrichment import replay_requested_saved_translation
+    from monitor.cycle import CycleRunner
+    from monitor.enrichment_queue import HISTORICAL_SCRIPT_DEMAND, request_post_translation
+    from monitor.post_artifacts import literal_translation_artifact_complete
+    from tests.test_deepinfra import _response
+    from x_monitor import literal_translation
+    from x_monitor.translator import normalize_lang_detected
+
+    _, cfg, delegates, _ = native
+    Post.objects.filter(pk="native-1").update(text=source, lang="zh")
+    with monkeypatch.context() as old_contract:
+        old_contract.setattr(literal_translation, "_declared_source_language",
+                             lambda tweet: normalize_lang_detected(tweet["source_language"]))
+        advance(native, initial=True)
+    PostEnrichmentState.objects.update(translation_requested=False)
+    advance(native)
+    receipts = list(OriginalContentCall.objects.filter(
+        member_post_ids__contains=["native-1"], stage="translation", import_state="pending", state="completed",
+    ))
+    assert {c.provenance["context"]["target_language"] for c in receipts} == {"en", "ja"}
+    assert all(c.provenance["context"]["source_language"] == "zh-Hans" for c in receipts)
+    if conflicting:
+        call = receipts[0]
+        call.provenance["context"]["source_language"] = "zh-Hant"
+        call.save(update_fields=["provenance"])
+    originals = {c.pk: (c.request_packet, c.response_payload, c.provenance) for c in receipts}
+    request_post_translation("native-1")
+    assert replay_requested_saved_translation(cfg, delegates=delegates, post_ids={"native-1"})
+    state = PostEnrichmentState.objects.get(pk="native-1")
+    assert state.translation_error_code == ("incomplete_saved_translation" if conflicting else HISTORICAL_SCRIPT_DEMAND)
+    assert not state.post.lang_detected and not literal_translation_artifact_complete(state.post)
+    sent = []
+    def send(body, timeout):
+        prompt = body["messages"][-1]["content"]
+        if body["max_tokens"] == 16:
+            text = detected
+        elif "Japanese (ja)" in prompt:
+            text = "今日は通義千問を使いました。"
+        elif "English (en)" in prompt:
+            text = "I tried Qwen today."
+        else:
+            text = "我今天试用了通义千问。"
+        sent.append(body)
+        return _response(GEMMA_4_31B_MODEL, text)
+    from dataclasses import replace
+    delegates = {**delegates, "translation": replace(delegates["translation"], transport=send)}
+    runner = CycleRunner(cfg=cfg, cycle_kind="enrichment", _post_fetch_clients=delegates)
+    runner._run_post_fetch([], run_id="historical-script-demand", scope="continuous",
+                           fair_queue=True, post_ids={"native-1"})
+    post = Post.objects.get(pk="native-1")
+    assert len(sent) == physical
+    assert literal_translation_artifact_complete(post) is (not conflicting)
+    if not conflicting:
+        assert post.lang_detected == detected
+        assert post.text_zh_cn == "我今天试用了通义千问。"
+    assert post.lang == "zh"
+    assert set(OriginalContentCall.objects.filter(pk__in=originals).values_list("import_state", flat=True)) == (
+        {"applied"} if physical == 1 else {"pending"}
+    )
+    assert {c.pk: (c.request_packet, c.response_payload, c.provenance)
+            for c in OriginalContentCall.objects.filter(pk__in=originals)} == originals
+
+
 @pytest.mark.parametrize("classification_status", ["pending", "failed"])
 def test_reader_replays_saved_translation_without_touching_classification(native, classification_status):
     from monitor.backfill_enrichment import replay_requested_saved_translation
@@ -938,6 +1009,7 @@ def test_completed_untranslated_live_post_remains_available_for_live_reclassific
 
     job, cfg, _delegates, _policy = native
     post = Post.objects.create(tweet_id="live-untranslated-membership", text="source")
+    PostBrand.objects.create(post=post, brand_id="qwen")
     state = PostEnrichmentState.objects.create(
         post=post, translation_requested=False, translation_status="pending",
         classification_status="succeeded",
@@ -979,6 +1051,7 @@ def test_outstanding_historical_translations_do_not_starve_live_classification(n
         claim_expires_at=timezone.now() - timedelta(seconds=1),
     )
     live = Post.objects.create(tweet_id='new-live-during-batch', text='live source')
+    PostBrand.objects.create(post=live, brand_id='qwen')
     PostEnrichmentState.objects.create(post=live)
     claims = _claim_enrichment_states(cfg=cfg.harvest.enrichment, run_id='live-priority')
     assert [str(s.pk) for s in claims.states] == [live.pk]
