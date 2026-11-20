@@ -1738,3 +1738,32 @@ after preserving early405rejection. Lint for the changed modules passes and
 `makemigrations --check --dry-run` reports no changes. The actual prepared
 performance runtime authenticated successfully under its owning state home;
 final exact-candidate browser/performance verification follows this checkpoint.
+
+
+### 2026-11-20 17:41 JST — Render cron preparation transport
+
+Render rejected the attempted specific-commit cron deployment with HTTP400:
+`cannot deploy cron job service ... by commit reference ID`. No deployment
+started and production web/main remained64ac4fb8. The CLI supports updating the
+cron's linked Git branch, so use a temporary preparation branch pointer on the
+existing home-counts cron only. Freeze the existing feature branch at the
+reviewed release HEAD, update only that cron's branch, deploy its branch HEAD
+and observe the exact revision before starting the owner one-off probe.
+
+This is a necessary reversible deployment-routing choice within the existing
+direct-production authorization, not an additional service or a worker stop.
+Preserve auto-deploy, schedule, command, plan and environment settings. After
+main is fast-forwarded to the same verified release HEAD, restore the cron's
+branch to main and compare its settings to the saved baseline. If preparation
+cannot proceed, restore its original branch/revision while retaining additive
+storage; never interrupt collection or move web ahead of failed data gates.
+
+The final candidate75319511 passed562tests/364subtests,263required PostgreSQL
+checks with zero skips/errors,38/38Each and5191/5191full obligations, and all six
+performance scenarios. Sealed performance attempt:
+`6dfb36c1ef1f8ca01a83d9bf`. This transport amendment changes only this plan;
+application code, assets, dependencies, fixtures and deterministic source
+identities remain byte-identical to75319511. Reuse that evidence with its exact
+measured revision, verify the documentation-only diff, and verify the new release
+SHA on the prepared cron and final public deployment. Actual production data
+measurements remain unperformed and must pass before web/main activation.
