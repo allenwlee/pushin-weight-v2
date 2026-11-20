@@ -25,19 +25,30 @@ from core.models import (
     CollectionScopeRun,
 )
 from monitor.backfill_retry import RetryControl
+from tests.collection_document_fixtures import historical_models
 from tests.test_backfill_staging import staged_job
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
-@pytest.fixture
-def execution(monkeypatch):
+def make_execution(monkeypatch, *, typed=True):
     job = staged_job(monkeypatch, 1)
-    claim = claim_job(job.pk, invocation_id="typed-staging", manual_authorized=True)
+    claim = claim_job(job.pk, invocation_id="typed-staging", manual_authorized=True, typed=typed)
     import_scope_checkpoints(claim, definition_sha256=job.definition_sha256,
-                             scopes=job.scope["units"], provenance={"format": "fixture"})
+                             scopes=job.scope["units"], provenance={"format": "fixture"}, typed=True)
     scope = CollectionScopeRun.objects.get(run_id=claim.run_id, scope_kind="x_query")
     return claim, scope
+
+
+@pytest.fixture
+def execution(monkeypatch):
+    return make_execution(monkeypatch)
+
+
+@pytest.fixture
+def historical_execution(monkeypatch, migration_rehearsal_schema):
+    with historical_models():
+        yield make_execution(monkeypatch, typed=False)
 
 
 def received(execution, ids, *, save_metadata=True):
@@ -98,10 +109,14 @@ def test_receipt_and_selection_accounting_are_atomic_and_idempotent(execution):
         assert not account_staging_response(run, request, response)
     run.refresh_from_db()
     assert run.selected_count == 2 and run.physical_bytes_received == 123
-    assert "prefetch_accounted_requests" not in run.report
+    assert not hasattr(run, "report")
 
 
-def test_adopts_exact_legacy_state_then_operates_after_report_cleared(execution):
+@pytest.mark.parametrize("migration_rehearsal_schema", [
+    ("core", "0222_backfill_retry_policy_versions"),
+], indirect=True)
+def test_adopts_exact_legacy_state_then_operates_after_report_cleared(historical_execution):
+    execution = historical_execution
     claim, _ = execution
     request, metadata = received(execution, ["id", "id"], save_metadata=False)
     state = RetryControl(phase="open", failures=[100.123456789, 99.5, 100.123456789],
@@ -125,7 +140,7 @@ def test_adopts_exact_legacy_state_then_operates_after_report_cleared(execution)
 
 
 @pytest.mark.parametrize("change", [
-    {"staging_retry_version": 2}, {"staging_retry_phase": 4}, {"staging_retry_cooldowns": 4},
+    {"staging_retry_version": 3}, {"staging_retry_phase": 4}, {"staging_retry_cooldowns": 4},
     {"staging_retry_successes": 5}, {"staging_retry_until": float("inf")},
     {"staging_retry_until": float("nan")}, {"staging_retry_until": -1},
     {"staging_retry_failures": [1, 2, 3, 4]}, {"staging_retry_failures": [None]},
@@ -154,15 +169,17 @@ def test_retry_time_check_rejects_nonstandard_array_bounds(execution, array_lite
 @pytest.mark.parametrize(("array_literal", "expected"), [
     ("{}", []), ("{1,2,3}", [1, 2, 3]), ("[1:3]={3.5,1.5,3.5}", [3.5, 1.5, 3.5]),
 ])
-def test_retry_time_check_accepts_standard_empty_and_ordered_arrays(execution, array_literal, expected):
+@pytest.mark.parametrize("version", [1, 2])
+def test_retry_time_check_accepts_standard_empty_and_ordered_arrays(execution, array_literal, expected, version):
     claim, _ = execution
     with fenced_run(claim) as (_, run):
-        RetryControl().save(run)
+        RetryControl(policy=f"staging-get-retry/v{version}").save(run)
         CollectionRun.objects.filter(pk=run.pk).update(
             staging_retry_failures=RawSQL("%s::double precision[]", (array_literal,)),
         )
         run.refresh_from_db()
         assert RetryControl.from_run(run).failures == expected
+        assert run.staging_retry_version == version
 
 
 @pytest.mark.parametrize("change", [{"response_sha256": b"short"}, {"raw_count": -1},
@@ -188,7 +205,11 @@ def test_request_appearance_owner_and_unique_position(execution):
         request.received_appearances.filter(pk=appearance.pk).update(run=run)
 
 
-def test_request_appearances_are_outside_retiring_column_archive_sweep(execution):
+@pytest.mark.parametrize("migration_rehearsal_schema", [
+    ("core", "0222_backfill_retry_policy_versions"),
+], indirect=True)
+def test_request_appearances_are_outside_retiring_column_archive_sweep(historical_execution):
+    execution = historical_execution
     from core.collection_storage_migration import (
         archive_legacy_batch,
         stale_legacy_archive_count,

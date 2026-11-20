@@ -120,6 +120,8 @@ def _recovery_decision(state, entry, *, now, max_attempts):
         return "queue_identity_changed", {}, {}
     changes, before = {}, {}
     for stage in STAGES:
+        if stage == "translation" and not state.translation_requested:
+            continue
         status = getattr(state, f"{stage}_status")
         attempts = getattr(state, f"{stage}_attempts")
         error = getattr(state, f"{stage}_error_code")
@@ -168,7 +170,7 @@ def apply_manifest(manifest, *, limit=100, max_attempts=8):
         str(state.pk): state
         for state in PostEnrichmentState.objects.filter(
             pk__in=[entry["post_id"] for entry in entries],
-        ).only(*FIELDS, "source_collection_job_id", "claim_expires_at")
+        ).only(*FIELDS, "source_collection_job_id", "claim_expires_at", "translation_requested")
     }
     for entry in entries:
         reason, _, _ = _recovery_decision(

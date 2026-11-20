@@ -141,8 +141,9 @@ for staff. Job listings retain their own source text and language fields.
 ## Alphabetical table inventory
 
 Each of the 219 local physical core application tables appears once in this inventory and once in
-the detailed sections. All 219 have managed models; unmanaged source projections add no tables. The native view is
-listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The three [benchmark serving views](#benchmark-serving-views) are also outside the physical-table count.
+the detailed sections. All 219 have managed models; unmanaged source projections add no tables. The derived views are
+listed separately: [home_brand_time_counts](#view-home_brand_time_counts) and
+[Each chart source/saved facts](#view-each_brand_post_facts). The three [benchmark serving views](#benchmark-serving-views) are also outside the physical-table count.
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
@@ -3605,7 +3606,8 @@ for refresh commands, the UTC schedule, fallback and rollback.
 ### `materialization_state` — MaterializationState
 
 One row records which source generation a versioned derived dataset represents.
-The homepage uses key `home.brand_time_counts.v1`; other code-defined datasets
+The homepage uses key `home.brand_time_counts.v1`; Each classification charts use
+`each.brand_post_facts.v1`. Other code-defined datasets
 use independent rows, locks, dependency invalidation and coverage policies.
 This validity state cannot live in a post/brand row or collection execution:
 source changes arrive through multiple writers, and publication must describe
@@ -3678,6 +3680,56 @@ Django maps a composite key, but the view has no SQL PK or FK constraints.
 concurrent refresh after initial population. No additional named constraints or
 column defaults apply. The native view is separate from the application-table
 inventory and the compatibility views below.
+
+<a id="view-each_brand_post_facts"></a>
+
+### Each classification chart facts: source and materialized views
+
+`each_brand_post_facts_source` is an ordinary SQL view; `each_brand_post_facts`
+is its rebuildable materialized prefix. Each row represents one existing
+(`brands.nickname`, `posts.tweet_id`) association and the raw facts needed by all
+eight classification charts. Source tables and typed category edges remain
+authoritative. Neither view adds an ordinary table, source column, JSON field,
+foreign-key constraint or column default. There is no managed ORM model.
+
+Definition: [0228_each_chart_facts](../../core/migrations/0228_each_chart_facts.py).
+Reader and dataset: [each_chart_facts.py](../../monitor/each_chart_facts.py).
+This describes the branch's migration-defined schema; live deployment is a
+separate release observation.
+
+| SQL columns | PostgreSQL type | Nullability and meaning |
+| --- | --- | --- |
+| `brand_id` | `varchar(64)` | View columns are physically nullable; source definition produces a non-NULL brand key with existing case-insensitive collation. |
+| `post_id` | `text` | Physically nullable; definition produces the non-NULL source post identity. |
+| `created_at` | `timestamp with time zone` | Source post creation time, distinct from observation/publication time; source nullability is retained. |
+| `lang_detected`, `lang` | `text` | Nullable detected/source language inputs; existing effective-language normalization is applied by the reader. |
+| `author_account_key` | `uuid` | Nullable author-account relationship; roles are joined on the account UUID at read time. |
+| `state_present` | `boolean` | Definition always produces true/false for associated current-state presence. |
+| `state_brand_id`, `state_contract_version`, `state_taxonomy_version`, `state_outcome`, `state_sentiment` | `text` | Nullable literal state identity/version/outcome/sentiment; binary spelling is retained for exact Sentiment ownership. |
+| `legacy_sentiment_brand_ids`, `legacy_sentiment_values` | `text[]` | Sorted paired historical brand spellings and their unique nonempty sentiment or NULL for conflict/absence; equal lengths. Empty arrays represent no edges. |
+| `post_type_keys`, `product_label_keys` | `text[]` | Sorted distinct source edge keys. Empty arrays represent no edges. |
+| `audience_topic_edges` | `text[]` | Sorted source revision/typed-concept-ID signatures. Reader resolves current concept keys and scheme revision without requiring a saved-view refresh. |
+| `geopolitical_mode_versions`, `geopolitical_mode_keys` | `text[]` | Paired stable source taxonomy-version/mode-key arrays; equal lengths, empty when absent. |
+| `promotion_keys` | `text[]` | String elements from existing promotion evidence; malformed/non-array inputs yield an empty array. |
+
+The saved view has unique index `each_brand_post_facts_key` on (`brand_id`,
+`post_id`) and range index `each_brand_post_facts_window` on (`brand_id`,
+`created_at`). It starts unpopulated. Dataset state uses the existing
+`materialization_state` row, advisory lock `726514095`, a 90-second refresh limit
+and an exclusive cutoff at the start of yesterday in UTC. Requests combine the
+valid saved prefix with exact live facts in one snapshot; historical corrections
+move the live boundary back. Category assignment and DeepSeek ordering remain
+Python rules, with the current Role lookup using account UUIDs.
+
+Row triggers invalidate only facts before the start of yesterday in UTC;
+current/recent enrichment writes do not update the shared state row. Relevant
+updates use binary comparisons where literal spelling matters. Truncation,
+brand-identity changes and missing-parent cascades conservatively invalidate all
+history. Roles and current audience wording resolve at read time. Before advancing
+coverage, the refresh tries a short `SHARE MODE NOWAIT` source barrier and releases
+it before counting. Busy writers retain the prior publication until a later poll;
+maintenance does not pause collection. `refresh_materializations` independently
+refreshes homepage and Each definitions, with no new scheduler/service.
 
 <a id="vocabularies"></a>
 

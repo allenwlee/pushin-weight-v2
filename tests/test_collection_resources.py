@@ -8,9 +8,21 @@ from core.collection_resources import (
     publication_coordinate_values,
 )
 from core.models import CollectionObservation
+from tests.collection_document_fixtures import (
+    documents,
+    historical_models,
+    observation_values,
+    replace_documents,
+)
 from tests.test_collection_relational_storage import execution
 
-pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
+
+
+@pytest.fixture
+def historical_publication_models(migration_rehearsal_schema):
+    with historical_models():
+        yield
 
 
 def publication_observation(*, metadata, dimensions, source="openrouter"):
@@ -26,7 +38,7 @@ def publication_observation(*, metadata, dimensions, source="openrouter"):
     )
     return CollectionObservation.objects.create(
         run=run, source_identifier="vendor/model", source_subject_kind="model",
-        observation_key="d" * 64, dimensions=dimensions, source_metadata=metadata,
+        observation_key="d" * 64, **observation_values(dimensions=dimensions, source_metadata=metadata),
     )
 
 
@@ -35,35 +47,39 @@ def test_replaying_typed_observation_does_not_erase_facts_when_old_json_is_absen
     observation = CollectionObservation.objects.create(
         run=run, scope_run=scope, source_identifier="publisher/repo",
         source_subject_kind="repository", observation_key="a" * 64,
-        dimensions={"kind": "repository", "config": "default", "category": "code"},
-        source_metadata={
-            "revision": "original-revision", "definitions_sha256": "b" * 64,
-            "publisher_mapping_hash": "c" * 64, "period_status": "complete",
-            "row_semantic_hash": "d" * 64, "historical_public_visibility_proven": True,
-            "history_basis": "reconstructed_current_relationships",
-            "secondary_source": True, "publication_complete": False,
-            "reconstruction_date": "2026-09-01", "archive_snapshot_date": "2026-09-02",
-            "source_record_date": "2026-09-01T01:02:03Z",
-            "original_retrieved_at": "2026-09-02T01:02:03Z",
-        },
-        listing={"id": 42, "private": False},
+        **observation_values(
+            dimensions={"kind": "repository", "config": "default", "category": "code"},
+            source_metadata={
+                "revision": "original-revision", "definitions_sha256": "b" * 64,
+                "publisher_mapping_hash": "c" * 64, "period_status": "complete",
+                "row_semantic_hash": "d" * 64, "historical_public_visibility_proven": True,
+                "history_basis": "reconstructed_current_relationships",
+                "secondary_source": True, "publication_complete": False,
+                "reconstruction_date": "2026-09-01", "archive_snapshot_date": "2026-09-02",
+                "source_record_date": "2026-09-01T01:02:03Z",
+                "original_retrieved_at": "2026-09-02T01:02:03Z",
+            },
+            listing={"id": 42, "private": False},
+        ),
     )
     fields = list(observation_fact_values(observation))
     project_observation_facts(observation)
     before = {field: getattr(observation, field) for field in fields}
-    CollectionObservation.objects.filter(pk=observation.pk).update(
-        dimensions={}, source_metadata={}, listing={},
-    )
+    replace_documents(observation, dimensions={}, source_metadata={}, listing={})
     observation.refresh_from_db()
     project_observation_facts(observation)
     assert {field: getattr(observation, field) for field in fields} == before
-    observation.dimensions = {"config": None}
+    replace_documents(observation, dimensions={"config": None})
     project_observation_facts(observation)
     assert observation.config_key is None
     assert observation.provider_revision == "original-revision"
 
 
-def test_archived_publication_coordinates_survive_cleared_observation_documents():
+@pytest.mark.parametrize("migration_rehearsal_schema", [
+    ("core", "0222_backfill_retry_policy_versions"),
+], indirect=True)
+@pytest.mark.usefixtures("historical_publication_models")
+def test_archived_publication_coordinates_survive_cleared_observation_documents(migration_rehearsal_schema):
     from datetime import date
 
     from core.collection_capture import archive_legacy
@@ -73,19 +89,15 @@ def test_archived_publication_coordinates_survive_cleared_observation_documents(
         metadata={"revision": "r1"},
         dimensions={"kind": "publication_row", "date": "2026-09-03", "config": "daily"},
     )
-    observation.listing = {"id": "vendor/model"}
-    observation.save(update_fields=["listing"])
+    replace_documents(observation, listing={"id": "vendor/model"})
     facts = observation_fact_values(observation)
     coordinates = publication_coordinate_values(observation)
     observation.legacy_archive = archive_legacy({
-        "listing": observation.listing,
-        "dimensions": observation.dimensions,
-        "source_metadata": observation.source_metadata,
+        **documents(observation),
     })
+    observation.save(update_fields=["legacy_archive"])
     observation.listing, observation.dimensions, observation.source_metadata = {}, {}, {}
-    observation.save(update_fields=[
-        "legacy_archive", "listing", "dimensions", "source_metadata",
-    ])
+    observation.save(update_fields=["listing", "dimensions", "source_metadata"])
     assert observation_fact_values(observation) == facts
     assert publication_coordinate_values(observation) == coordinates
     with pytest.raises(ValueError, match="publication coordinate is not projected"):
@@ -112,7 +124,7 @@ def test_hf_commit_projection_repairs_only_missing_revision_and_refuses_conflict
     observation = CollectionObservation.objects.create(
         run=run, source_identifier="publisher/repository", source_subject_kind="repository",
         observation_key="a" * 64, observation_kind="hf_commits", provider_revision="head-revision",
-        listing={"id": "commit-revision"},
+        **observation_values(listing={"id": "commit-revision"}),
     )
     snapshot = CollectionResourceSnapshot.objects.create(
         observation=observation, resource_kind="hf_commits", native_identifier=observation.source_identifier,
@@ -121,12 +133,12 @@ def test_hf_commit_projection_repairs_only_missing_revision_and_refuses_conflict
     observation.refresh_from_db()
     assert observation.provider_revision == "head-revision"
     assert snapshot_resource(observation).revision == "commit-revision"
-    observation.listing = {"id": "changed-commit"}
+    replace_documents(observation, listing={"id": "changed-commit"})
     with pytest.raises(ValueError, match="conflicts with captured evidence"):
         snapshot_resource(observation)
     snapshot.refresh_from_db()
     assert snapshot.revision == "commit-revision"
-    observation.listing = {"id": 123}
+    replace_documents(observation, listing={"id": 123})
     with pytest.raises(ValueError, match="HF commit revision is missing"):
         snapshot_resource(observation)
 
@@ -150,7 +162,7 @@ def test_publication_identity_projects_nested_coordinates_without_inventing_publ
     assert observation.source_record_date == date(2026, 9, 3)
     assert observation.published_date is None and observation.published_at is None
     assert observation.observation_key == original_key
-    observation.dimensions, observation.source_metadata = {}, {}
+    replace_documents(observation, dimensions={}, source_metadata={})
     project_observation_facts(observation)
     assert observation.provider_revision == "r1"
     assert observation.category_key == "overall"
@@ -202,7 +214,7 @@ def test_resource_publisher_rejects_conflicting_native_and_inherited_owners():
     observation = publication_observation(
         source="github", metadata={"owner_id": 43}, dimensions={"kind": "release_asset"},
     )
-    observation.listing = {"id": 7, "owner": {"id": 42}}
+    replace_documents(observation, listing={"id": 7, "owner": {"id": 42}})
     with pytest.raises(ValueError, match="publisher conflicts with captured owner"):
         snapshot_resource(observation)
     assert not CollectionResourceSnapshot.objects.filter(observation=observation).exists()

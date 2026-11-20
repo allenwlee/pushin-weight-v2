@@ -10,6 +10,79 @@ from core.models import (
 )
 from core.staff_assets.queue import _lock
 
+ROLE_TEXT_FIELDS = (
+    "title_raw",
+    "title_normalized",
+    "job_function",
+    "department",
+    "team",
+    "description",
+    "seniority",
+    "employment_type",
+    "workplace_type",
+)
+
+
+def reconcile_role(fields, existing):
+    """Choose a unique active role without guessing between employment spells.
+
+    ``existing`` contains same-person, same-organization inventory rows. The
+    result is pure so preview and the writer can make the same decision.
+    """
+    active = [
+        row
+        for row in existing
+        if row.get("review_status") != "rejected"
+        and not row.get("superseded_at")
+        and not row.get("superseded_by_id")
+    ]
+
+    def compatible_date(old, new):
+        return (
+            not old
+            or not new
+            or old == new
+            or old.startswith(new + "-")
+            or new.startswith(old + "-")
+        )
+
+    candidates = [
+        row
+        for row in active
+        if row.get("affiliation_type") == fields.get("affiliation_type")
+        and all(
+            not fields.get(key) or not row.get(key) or row[key] == fields[key]
+            for key in (*ROLE_TEXT_FIELDS, "status")
+        )
+        and all(
+            compatible_date(row.get(key), fields.get(key))
+            for key in ("start_date", "end_date")
+        )
+    ]
+    if len(candidates) > 1:
+        return {"action": "review_existing", "match": None, "updates": {}}
+    if not candidates:
+        return {
+            "action": "review_existing" if active else "create",
+            "match": None,
+            "updates": {},
+        }
+    match = candidates[0]
+    updates = {}
+    for key in ROLE_TEXT_FIELDS:
+        if fields.get(key) and not match.get(key):
+            updates[key] = fields[key]
+    for key in ("start_date", "end_date"):
+        value, old = fields.get(key), match.get(key)
+        if value and (not old or len(value) > len(old)):
+            updates[key] = value
+            updates[key + "_precision"] = fields.get(key + "_precision")
+    return {
+        "action": "enrich" if updates else "add_evidence",
+        "match": match,
+        "updates": updates,
+    }
+
 
 def active_claims(queryset=None):
     if queryset is None:

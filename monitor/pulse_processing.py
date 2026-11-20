@@ -38,6 +38,8 @@ class _IdentityBoundary:
         self.status = row["status"]
         if self.status == "unavailable":
             return False
+        if self.status in {"running", "stopped"}:
+            return self.status == "running"
         try:
             row = pulse_control.acknowledge(row["desired_revision"], boundary="between_identity_posts")
         except (pulse_control.PulseControlConflict, pulse_control.PulseControlUnavailable):

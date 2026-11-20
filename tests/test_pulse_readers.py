@@ -53,12 +53,12 @@ def historical_product(**values):
     """Create a pre-0227 row, then read it with all current guards installed."""
     from django.db.migrations.executor import MigrationExecutor
 
-    MigrationExecutor(connection).migrate([("core", "0226_chart_native_lookup_index")])
+    MigrationExecutor(connection).migrate([("core", "0234_each_signal_aggregation")])
     try:
         category, _ = ProductType.objects.get_or_create(code="model")
         product = Product.objects.create(product_type=category, **values)
     finally:
-        MigrationExecutor(connection).migrate([("core", "0232_pending_publication_admission_index")])
+        MigrationExecutor(connection).migrate([("core", "0240_pending_publication_admission_index")])
     return product
 
 

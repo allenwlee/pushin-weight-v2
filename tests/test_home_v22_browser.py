@@ -27,7 +27,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.db import connection
 from django.test import Client, override_settings
 from django.test.utils import CaptureQueriesContext
-from playwright.sync_api import BrowserContext, Page, sync_playwright
+from playwright.sync_api import BrowserContext, Page, expect, sync_playwright
 
 from core.models import Brand, Post, PostBrand, PostUnsanctionedFlag
 from monitor.views import _build_brand_chart_payload, _clear_home_pulse_cache
@@ -906,6 +906,351 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 ],
             )
         )
+
+    def test_translation_requires_explicit_click_in_public_feed(self) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from core.models import PostEnrichmentState, PostTranslationArtifact
+        from monitor.post_artifacts import publish_literal_translation, source_content_fingerprint
+
+        PostTranslationArtifact.objects.all().delete()
+        Post.objects.update(text_en=None, text_zh_cn=None, lang_detected=None)
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                requests = []
+                page.on("request", lambda request: requests.append(request.post_data_json) if "/api/v2/post-translation-demands/" in request.url else None)
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                row = page.locator(".feed-row[data-tweet-id]").first
+                self.assertTrue(row.is_visible())
+                post_id = row.get_attribute("data-tweet-id")
+                self.assertFalse(requests)
+                with page.expect_response(lambda response: "/api/v2/post-translation-demands/" in response.url) as received:
+                    row.locator("[data-post-translate]").evaluate("button => { button.click(); button.click(); }")
+                self.assertEqual(received.value.status, 200)
+                row.locator("[data-text-cycle]").click()
+                row.locator("[data-post-translate]").click()
+                row.locator("[data-text-cycle]").click()
+                row.locator("[data-post-translate]").click()
+                page.wait_for_timeout(2500)
+                self.assertEqual(sum(bool(r.get("poll_only")) for r in requests), 2)
+                with page.expect_response(lambda response: "/feed/" in response.url):
+                    page.evaluate("document.dispatchEvent(new CustomEvent('pw:filter-change'))")
+                row = page.locator(f'.feed-row[data-tweet-id="{post_id}"]')
+                row.wait_for(state="visible")
+                page.wait_for_timeout(2500)
+                self.assertEqual(sum(not r.get("poll_only") for r in requests), 1)
+                self.assertTrue(any(r.get("poll_only") for r in requests))
+                def publish_result():
+                    self.assertTrue(PostEnrichmentState.objects.get(pk=post_id).translation_requested)
+                    post = Post.objects.get(pk=post_id)
+                    self.assertIsNotNone(publish_literal_translation(
+                        post=post,
+                        row={"lang_detected": "ja", "text_en": "Requested translation result", "text_zh_cn": "请求的翻译", "text_ja": post.text},
+                        expected_source_fingerprint=source_content_fingerprint(post),
+                        prompt_version="browser-test", model="browser-test",
+                    ))
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    executor.submit(publish_result).result()
+                page.wait_for_function("""id => {
+                    const row = document.querySelector('[data-tweet-id="' + id + '"]');
+                    return row && row.querySelector('[data-text-cycle]').textContent.includes('Requested translation result');
+                }""", arg=post_id, timeout=10000)
+                self.assertTrue(row.locator("[data-post-translate]").is_visible())
+                context.close()
+            finally:
+                browser.close()
+
+    def test_translation_keeps_manual_source_selection_when_result_arrives(self) -> None:
+        from core.models import PostTranslationArtifact
+
+        PostTranslationArtifact.objects.all().delete()
+        Post.objects.update(text_en=None, text_zh_cn=None, lang_detected=None)
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                def answer(route):
+                    body = route.request.post_data_json
+                    status = "ready" if body["poll_only"] else "pending"
+                    literal = {"en": "Delivered translation"} if status == "ready" else {}
+                    route.fulfill(json={"results": [{"post_id": body["post_ids"][0], "status": status, "literal": literal}]})
+                page.route("**/api/v2/post-translation-demands/", answer)
+                page.route("**/api/v2/post-synthesis-demands/", lambda route: route.fulfill(json={"results": []}))
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                row = page.locator(".feed-row[data-tweet-id]").first
+                text = row.locator("[data-text-cycle]")
+                text.evaluate("""el => {
+                    el.setAttribute('data-commentary-en', 'Distinct commentary');
+                    el.setAttribute('data-text-source', 'Distinct source');
+                    el.setAttribute('data-layer-idx', '0');
+                    el.setAttribute('data-layer-key', 'synthesis');
+                }""")
+                row.locator("[data-post-translate]").click()
+                text.click()
+                self.assertEqual(text.get_attribute("data-layer-key"), "source")
+                page.wait_for_function("el => el.getAttribute('data-translation-status') === 'ready'", arg=row.element_handle())
+                self.assertEqual(text.get_attribute("data-layer-key"), "source")
+                self.assertIn("Distinct source", text.inner_text())
+                context.close()
+            finally:
+                browser.close()
+
+    def test_translation_intent_survives_feed_replacement(self) -> None:
+        from core.models import PostTranslationArtifact
+
+        PostTranslationArtifact.objects.all().delete()
+        Post.objects.update(text_en=None, text_zh_cn=None, lang_detected=None)
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                requests = []
+                def answer(route):
+                    body = route.request.post_data_json
+                    requests.append(body)
+                    polls = sum(request["poll_only"] for request in requests)
+                    status = ("not_requested" if polls == 1 else "ready") if body["poll_only"] else "pending"
+                    literal = {"en": "Remounted translation"} if status == "ready" else {}
+                    route.fulfill(json={"results": [{"post_id": body["post_ids"][0], "status": status, "literal": literal}]})
+                page.route("**/api/v2/post-translation-demands/", answer)
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                row = page.locator(".feed-row[data-tweet-id]").first
+                post_id = row.get_attribute("data-tweet-id")
+                row.locator("[data-post-translate]").click()
+                page.wait_for_function("el => el.getAttribute('data-translation-status') === 'pending'", arg=row.element_handle())
+                with page.expect_response(lambda response: "/feed/" in response.url):
+                    page.evaluate("document.dispatchEvent(new CustomEvent('pw:filter-change'))")
+                replacement = page.locator(f'.feed-row[data-tweet-id="{post_id}"]')
+                replacement.wait_for(state="visible")
+                page.wait_for_function("el => el.textContent.includes('Remounted translation')", arg=replacement.element_handle(), timeout=6000)
+                self.assertEqual(sum(not request["poll_only"] for request in requests), 1)
+                self.assertTrue(any(request["poll_only"] for request in requests))
+                context.close()
+            finally:
+                browser.close()
+
+    def test_translation_intent_survives_succeeded_feed_replacement(self) -> None:
+        from core.models import PostTranslationArtifact
+
+        PostTranslationArtifact.objects.all().delete()
+        Post.objects.update(text_en=None, text_zh_cn=None, lang_detected=None)
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                requests = []
+                def answer(route):
+                    body = route.request.post_data_json
+                    requests.append(body)
+                    status = "ready" if body["poll_only"] else "pending"
+                    route.fulfill(json={"results": [{"post_id": body["post_ids"][0], "status": status, "literal": {"en": "Remounted translation"}}]})
+                page.route("**/api/v2/post-translation-demands/", answer)
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                row = page.locator(".feed-row[data-tweet-id]").first
+                post_id = row.get_attribute("data-tweet-id")
+                row.locator("[data-post-translate]").click()
+                page.wait_for_function("el => el.getAttribute('data-translation-status') === 'pending'", arg=row.element_handle())
+                def succeeded_snapshot(route):
+                    response = route.fetch()
+                    payload = response.json()
+                    for item in payload["rows"]:
+                        if item.get("tweet_id") == post_id:
+                            item["translation_status"] = "succeeded"
+                    route.fulfill(response=response, json=payload)
+                page.route("**/feed/**", succeeded_snapshot)
+                with page.expect_response(lambda response: "/feed/" in response.url):
+                    page.evaluate("document.dispatchEvent(new CustomEvent('pw:filter-change'))")
+                replacement = page.locator(f'.feed-row[data-tweet-id="{post_id}"]')
+                replacement.wait_for(state="visible")
+                page.wait_for_function("el => el.textContent.includes('Remounted translation')", arg=replacement.element_handle(), timeout=6000)
+                self.assertEqual(sum(not request["poll_only"] for request in requests), 1)
+                self.assertTrue(any(request["poll_only"] for request in requests))
+                context.close()
+            finally:
+                browser.close()
+
+    def test_translation_polling_stops_and_unsupported_cannot_retry(self) -> None:
+        from core.models import PostTranslationArtifact
+
+        PostTranslationArtifact.objects.all().delete()
+        Post.objects.update(text_en=None, text_zh_cn=None, lang_detected=None)
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                page.add_init_script("""(() => {
+                    const original = window.setTimeout;
+                    window.setTimeout = (fn, delay, ...args) => original(fn, delay >= 2000 ? 5 : delay, ...args);
+                })()""")
+                requests = []
+                response_status = ["pending"]
+                def answer(route):
+                    body = route.request.post_data_json
+                    requests.append(body)
+                    route.fulfill(json={"results": [{"post_id": body["post_ids"][0], "status": response_status[0], "literal": {}}]})
+                page.route("**/api/v2/post-translation-demands/", answer)
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                row = page.locator(".feed-row[data-tweet-id]").first
+                button = row.locator("[data-post-translate]")
+                button.click()
+                page.wait_for_function("el => el.getAttribute('data-translation-status') === 'deferred'", arg=row.element_handle())
+                page.wait_for_timeout(100)
+                self.assertEqual(len(requests), 7)
+                self.assertEqual(sum(not request["poll_only"] for request in requests), 1)
+                response_status[0] = "deferred"
+                button.click()
+                page.wait_for_timeout(100)
+                self.assertEqual(len(requests), 8)
+                response_status[0] = "unsupported"
+                button.click()
+                page.wait_for_function("el => el.disabled", arg=button.element_handle())
+                self.assertEqual(button.inner_text(), "Translation unavailable")
+                page.wait_for_timeout(100)
+                self.assertEqual(len(requests), 9)
+                context.close()
+            finally:
+                browser.close()
+
+    def test_commentary_update_preserves_manual_source_selection(self) -> None:
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                captured = []
+                def hold_synthesis(route):
+                    captured.append(route)
+                page.route("**/api/v2/post-synthesis-demands/", hold_synthesis)
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="domcontentloaded")
+                page.wait_for_timeout(500)
+                row = page.locator(".feed-row[data-tweet-id]").first
+                text = row.locator("[data-text-cycle]")
+                post_id = row.get_attribute("data-tweet-id")
+                text.evaluate("""el => {
+                    el.setAttribute('data-commentary-en', 'Original commentary');
+                    el.setAttribute('data-text-en', '');
+                    el.setAttribute('data-text-source', 'Distinct source');
+                    el.setAttribute('data-layer-idx', '0');
+                    el.setAttribute('data-layer-key', 'synthesis');
+                }""")
+                text.click()
+                self.assertEqual(text.get_attribute("data-layer-key"), "source")
+                self.assertTrue(captured, "expected real synthesis request")
+                for route in captured:
+                    route.fulfill(json={"results": [{"post_id": post_id, "status": "ready", "synthesis": {"en": "Fresh commentary"}}]})
+                page.wait_for_timeout(300)
+                self.assertEqual(text.get_attribute("data-layer-key"), "source")
+                self.assertIn("Distinct source", text.inner_text())
+                context.close()
+            finally:
+                browser.close()
+
+    def test_failed_filter_refresh_does_not_stop_translation_poll(self) -> None:
+        from core.models import PostTranslationArtifact
+
+        PostTranslationArtifact.objects.all().delete()
+        Post.objects.update(text_en=None, text_zh_cn=None, lang_detected=None, lang=None)
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                requests = []
+                def answer(route):
+                    body = route.request.post_data_json
+                    requests.append(body)
+                    status = "ready" if body["poll_only"] else "pending"
+                    literal = {"en": "Result after failed refresh"} if status == "ready" else {}
+                    route.fulfill(json={"results": [{"post_id": body["post_ids"][0], "status": status, "literal": literal}]})
+                page.route("**/api/v2/post-translation-demands/", answer)
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                row = page.locator(".feed-row[data-tweet-id]").first
+                row.locator("[data-post-translate]").click()
+                page.wait_for_function("el => el.getAttribute('data-translation-status') === 'pending'", arg=row.element_handle())
+                page.route("**/feed/**", lambda route: route.abort())
+                page.evaluate("document.dispatchEvent(new CustomEvent('pw:filter-change'))")
+                page.wait_for_function("el => el.getAttribute('data-translation-status') === 'ready'", arg=row.element_handle(), timeout=6000)
+                self.assertIn("Result after failed refresh", row.locator("[data-text-cycle]").inner_text())
+                self.assertEqual(sum(not request["poll_only"] for request in requests), 1)
+                self.assertTrue(any(request["poll_only"] for request in requests))
+                context.close()
+            finally:
+                browser.close()
+
+    def test_translation_poll_resumes_after_page_visibility_change(self) -> None:
+        from core.models import PostTranslationArtifact
+
+        PostTranslationArtifact.objects.all().delete()
+        Post.objects.update(text_en=None, text_zh_cn=None, lang_detected=None)
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                requests = []
+                def answer(route):
+                    body = route.request.post_data_json
+                    requests.append(body)
+                    status = "ready" if body["poll_only"] else "pending"
+                    route.fulfill(json={"results": [{"post_id": body["post_ids"][0], "status": status, "literal": {"en": "Visible again"}}]})
+                page.route("**/api/v2/post-translation-demands/", answer)
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                row = page.locator(".feed-row[data-tweet-id]").first
+                row.locator("[data-post-translate]").click()
+                page.wait_for_function("el => el.getAttribute('data-translation-status') === 'pending'", arg=row.element_handle())
+                page.evaluate("""() => {
+                    Object.defineProperty(document, 'hidden', {configurable: true, value: true});
+                    document.dispatchEvent(new Event('visibilitychange'));
+                    Object.defineProperty(document, 'hidden', {configurable: true, value: false});
+                    document.dispatchEvent(new Event('visibilitychange'));
+                }""")
+                page.wait_for_function("el => el.getAttribute('data-translation-status') === 'ready'", arg=row.element_handle())
+                self.assertEqual(sum(not request["poll_only"] for request in requests), 1)
+                self.assertTrue(any(request["poll_only"] for request in requests))
+                context.close()
+            finally:
+                browser.close()
+
+    def test_commentary_still_appears_automatically_without_translation(self) -> None:
+        from core.models import PostSynthesisArtifact
+
+        PostSynthesisArtifact.objects.all().delete()
+        Post.objects.update(text_en=None, text_zh_cn=None, commentary_en=None, commentary_zh_cn=None)
+        cookies = self._anonymous_cookies("en")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context_with_cookies(browser, cookies, VIEWPORTS["desktop"])
+                page = context.new_page()
+                def commentary_response(route):
+                    ids = route.request.post_data_json["post_ids"]
+                    route.fulfill(json={"results": [{
+                        "post_id": post_id, "status": "ready",
+                        "synthesis": {"en": "Automatically available commentary"},
+                        "literal": {}, "processing_badges": [],
+                    } for post_id in ids]})
+                page.route("**/api/v2/post-synthesis-demands/", commentary_response)
+                page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                row = page.locator(".feed-row[data-tweet-id]").first
+                row.locator("[data-text-cycle]").get_by_text("Automatically available commentary").wait_for()
+                context.close()
+            finally:
+                browser.close()
 
     def test_zh_hans_renders_chinese_chrome_in_browser(self) -> None:
         """The Django ``zh_hans`` alias keeps v22 chrome Chinese after JS initializes."""
@@ -5884,17 +6229,21 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         from core.models import Account, PostEnrichmentState
 
         self._seed_account_geography_fixture()
+        # The test database may already contain a preferred imported Japanese
+        # name. Pin this fixture's label without removing the imported record.
+        self.geolocation_fixture["US"].alternate_names.filter(locale_id="ja").exclude(name="米国").update(is_preferred=False)
         call_command("seed_i18n_labels", verbosity=0)
         Account.objects.filter(author_id="v22-metadata-account-000").update(based_in_location=self.geolocation_fixture["US"])
         Post.objects.filter(tweet_id=self.fixture["replacement_id"]).update(lang_detected="und")
         PostEnrichmentState.objects.update_or_create(
             post_id=self.fixture["replacement_id"],
-            defaults={"translation_status": "pending", "classification_status": "failed"},
+            defaults={"translation_requested": True, "translation_status": "pending", "classification_status": "failed"},
         )
         PostEnrichmentState.objects.update_or_create(
             post_id="v22-metadata-001",
             defaults={
                 "translation_status": "pending",
+                "translation_requested": True,
                 "translation_attempts": 1,
                 "classification_status": "succeeded",
                 "claim_owner": "browser-fixture",
@@ -5938,7 +6287,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         )
                         globe = row.locator('.post-language-tag.processing-status')
                         # General style mutes the pending language tag (prototype rule).
-                        self.assertEqual(globe.evaluate('node => getComputedStyle(node).color'), 'rgb(104, 117, 137)')
+                        expect(globe).to_have_css('color', 'rgb(104, 117, 137)')
                         self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語・翻訳・解説待ち（目安1〜5分）')
                         self.assertIn('#icon-pending-armillary-frame', globe.locator('use').get_attribute('href'))
                         globe.hover()
@@ -5955,10 +6304,22 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             trigger_rect["x"] - (popover_rect["x"] + popover_rect["width"]),
                         )
                         self.assertGreaterEqual(clearance, 11.5)
-                        self.assertGreater(
-                            popover.locator('.inspection-visual svg').evaluate('node => node.getBoundingClientRect().width'),
-                            globe.locator('svg').evaluate('node => node.getBoundingClientRect().width'),
-                        )
+                        # Pointer events can replace the cloned tooltip icon.
+                        # Measure the current pair in one browser evaluation so
+                        # a detached clone cannot masquerade as a hidden icon.
+                        sizes = globe.evaluate("""trigger => {
+                          const tip = document.getElementById(trigger.getAttribute('aria-describedby'));
+                          const visual = tip && tip.querySelector('.inspection-visual svg');
+                          return {
+                            connected: trigger.isConnected,
+                            visible: Boolean(tip && !tip.hidden && visual && visual.isConnected),
+                            expanded: visual ? visual.getBoundingClientRect().width : 0,
+                            trigger: trigger.querySelector('svg').getBoundingClientRect().width
+                          };
+                        }""")
+                        self.assertTrue(sizes['connected'])
+                        self.assertTrue(sizes['visible'])
+                        self.assertGreater(sizes['expanded'], sizes['trigger'])
                         follower = row.locator('.follower-magnitude')
                         follower.hover()
                         self.assertEqual(popover.locator('.inspection-words .feed-x-icon').count(), 1)

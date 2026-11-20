@@ -617,6 +617,77 @@ def purge_collection_runtime(cursor: Any) -> dict[str, int]:
     return cleared
 
 
+def _scrub_runtime_tables(cursor: Any, tables: frozenset[str] | set[str]) -> None:
+    """Clear runtime rows without cascading into retained evidence tables.
+
+    TRUNCATE follows foreign keys even when every referencing value is NULL.
+    Parents whose closure leaves the disposal set therefore need ordered DELETE.
+    The caller owns the shadow transaction, including rollback on a conflict.
+    """
+    cursor.execute("SELECT current_schema()")
+    schema = cursor.fetchone()[0]
+    roots = {(schema, table) for table in tables}
+    cursor.execute("""
+        SELECT cn.nspname, c.relname, pn.nspname, p.relname,
+            ARRAY(SELECT a.attname FROM unnest(f.conkey) WITH ORDINALITY k(attnum, ord)
+                  JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum=k.attnum ORDER BY k.ord),
+            ARRAY(SELECT a.attname FROM unnest(f.confkey) WITH ORDINALITY k(attnum, ord)
+                  JOIN pg_attribute a ON a.attrelid=p.oid AND a.attnum=k.attnum ORDER BY k.ord)
+        FROM pg_constraint f
+        JOIN pg_class c ON c.oid=f.conrelid
+        JOIN pg_namespace cn ON cn.oid=c.relnamespace
+        JOIN pg_class p ON p.oid=f.confrelid
+        JOIN pg_namespace pn ON pn.oid=p.relnamespace
+        WHERE f.contype='f'
+    """)
+    foreign_keys = [((cs, ct), (ps, pt), cc, pc)
+                    for cs, ct, ps, pt, cc, pc in cursor.fetchall()]
+    children = {root: set() for root in roots}
+    for child, parent, _, _ in foreign_keys:
+        if parent in children:
+            children[parent].add(child)
+    unsafe = set()
+    while True:
+        added = {root for root in roots if children[root] - roots or children[root] & unsafe}
+        if added <= unsafe:
+            break
+        unsafe |= added
+
+    pending, delete_order = set(unsafe), []
+    while pending:
+        ready = sorted(root for root in pending if not (children[root] & pending) - {root})
+        if not ready:
+            raise RefreshError("runtime_scrub_reference_cycle")
+        delete_order.extend(ready)
+        pending.difference_update(ready)
+
+    # Refuse a retention/disposal conflict before touching any policy target.
+    # Existing collection purging has already retained its full evidence lineage.
+    for child, parent, child_columns, parent_columns in foreign_keys:
+        if parent not in unsafe or child in roots:
+            continue
+        joins = sql.SQL(" AND ").join(
+            sql.SQL("c.{} = p.{}").format(sql.Identifier(cc), sql.Identifier(pc))
+            for cc, pc in zip(child_columns, parent_columns, strict=True)
+        )
+        cursor.execute(sql.SQL("SELECT EXISTS(SELECT 1 FROM {} c JOIN {} p ON {})").format(
+            sql.Identifier(*child), sql.Identifier(*parent), joins,
+        ))
+        if cursor.fetchone()[0]:
+            raise RefreshError(
+                "retained_runtime_reference:" + ".".join(child) + "(" + ",".join(child_columns)
+                + ")->" + ".".join(parent)
+            )
+    safe = sorted(roots - unsafe)
+    if safe:
+        cursor.execute(sql.SQL("TRUNCATE TABLE {} RESTART IDENTITY").format(
+            sql.SQL(", ").join(sql.Identifier(*root) for root in safe),
+        ))
+    for root in delete_order:
+        # Keep these sequences advancing; never reuse IDs from retained provenance.
+        cursor.execute(sql.SQL("DELETE FROM {}").format(sql.Identifier(*root)))
+
+
 def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
     """Scrub one already-restored non-serving database inside its transaction."""
 
@@ -625,12 +696,7 @@ def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
         for table in sorted(policy.scrub.truncate_tables)
     }
     cleared.update(purge_collection_runtime(cursor))
-    targets = [sql.Identifier(table) for table in sorted(policy.scrub.truncate_tables)]
-    cursor.execute(
-        sql.SQL("TRUNCATE TABLE {} RESTART IDENTITY CASCADE").format(
-            sql.SQL(", ").join(targets)
-        )
-    )
+    _scrub_runtime_tables(cursor, set(policy.scrub.truncate_tables))
     # These label rows are immutable snapshots, so row-wise DELETE is forbidden.
     # Preserve labels for published narratives across the staging-only scrub, then
     # truncate and restore those rows before removing transient subjects.

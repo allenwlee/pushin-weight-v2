@@ -824,13 +824,14 @@ def _reconcile_product_release_events(*, claim_id, candidate_limit, claim_limit,
 def _reconcile_missing_release_metadata(*, claim_id, candidate_limit, claim_limit, max_merges, deadline):
     """Merge the same named Product when a source omitted version metadata.
 
-    Conflicting explicit values, multiple consolidated dossiers, reviews and
+    Conflicting explicit values, multiple reviewed or consolidated dossiers, and
     over-budget candidate sets are left untouched. Exact archive-backed claims
     and the existing graph lock are required for every participating dossier.
     """
     from time import monotonic
 
-    from core.models import EventDossier, EventDossierClaim, EventDossierIntakeDecision
+    from core.models import EventDossier, EventDossierClaim, EventDossierIntakeDecision, ProductReleaseDetail
+    from django.db.models import Q
     from core.product_release_dossiers import _read_pulse_packet
     from core.product_release_pipeline import canonical_dossier, merge_dossiers
 
@@ -844,7 +845,7 @@ def _reconcile_missing_release_metadata(*, claim_id, candidate_limit, claim_limi
         event_dossier_source__post_id=original.event_dossier_source.post_id,
         scope_key=original.scope_key, source_archive_id=original.source_archive_id,
     ).first()
-    if current_anchor is None or current.current_review_id:
+    if current_anchor is None:
         return empty
     packet = _read_pulse_packet(current_anchor)
     product_id = _resolved_anchor_product(current_anchor, current, packet=packet)
@@ -853,10 +854,11 @@ def _reconcile_missing_release_metadata(*, claim_id, candidate_limit, claim_limi
     product = Product.objects.only("product_key").get(pk=product_id)
     target_name = packet["finding"]["observed_name"].casefold()
     ids = list(EventDossier.objects.filter(
-        merged_into__isnull=True, current_review__isnull=True,
-        sources__claims__reported_product_id=product_id,
-        sources__claims__scope_key__startswith="pulse-event-member-v1:",
-        sources__claims__extraction_version="pulse-event-identity-v1",
+        Q(sources__claims__reported_product_id=product_id,
+          sources__claims__scope_key__startswith="pulse-event-member-v1:",
+          sources__claims__extraction_version="pulse-event-identity-v1")
+        | Q(current_review__review_state="confirmed", current_review__product_release__product_id=product.product_key),
+        merged_into__isnull=True,
     ).order_by("first_seen_at", "pk").values_list("pk", flat=True).distinct()[:candidate_limit + 1])
     if len(ids) > candidate_limit or current.pk not in ids:
         return empty
@@ -865,8 +867,16 @@ def _reconcile_missing_release_metadata(*, claim_id, candidate_limit, claim_limi
     for dossier in dossiers:
         if monotonic() >= deadline:
             raise TimeoutError("Release reconciliation time budget exceeded")
-        if dossier.current_review_id or dossier.merged_into_id:
+        if dossier.merged_into_id:
             continue
+        review_detail = None
+        if dossier.current_review_id:
+            if dossier.current_review.review_state != "confirmed":
+                continue
+            review_detail = ProductReleaseDetail.objects.filter(review_id=dossier.current_review_id,
+                product_id=product.product_key, observed_name__iexact=packet["finding"]["observed_name"]).first()
+            if review_detail is None:
+                continue
         latest = EventDossierIntakeDecision.objects.filter(event_dossier=dossier).order_by("-recorded_at", "-pk").first()
         if latest and latest.outcome in {"non_release", "scam", "superseded"}:
             continue
@@ -876,9 +886,11 @@ def _reconcile_missing_release_metadata(*, claim_id, candidate_limit, claim_limi
             return empty
         anchors = [claim for claim in claims if claim.scope_key.startswith("pulse-finding-v1:")
                    and claim.claim_kind_reference.code in {"release_report", "release_signal"}]
-        if not anchors:
+        if not anchors and not review_detail:
             continue
         values = []
+        if review_detail:
+            values.append(tuple((value or "").casefold() for value in (review_detail.version_label, review_detail.variant)))
         for anchor in anchors:
             saved = _read_pulse_packet(anchor)
             finding = saved["finding"]
@@ -905,10 +917,11 @@ def _reconcile_missing_release_metadata(*, claim_id, candidate_limit, claim_limi
         return empty
     if not any(any(value[i] for value in versions) and any(not value[i] for value in versions) for i in (0, 1)):
         return empty
+    reviewed = [item for item in eligible if item[0].current_review_id]
     consolidated = [item for item in eligible if len(item[1]) > 1]
-    if len(consolidated) > 1:
+    if len(reviewed) > 1 or len(consolidated) > 1 or (reviewed and consolidated and reviewed[0][0].pk != consolidated[0][0].pk):
         return empty
-    target = consolidated[0] if consolidated else eligible[0]
+    target = reviewed[0] if reviewed else consolidated[0] if consolidated else eligible[0]
     merged = []
     for dossier, sources, _ in eligible:
         if dossier.pk == target[0].pk:
@@ -920,7 +933,7 @@ def _reconcile_missing_release_metadata(*, claim_id, candidate_limit, claim_limi
         try:
             merge_dossiers(dossier.pk, target[0].pk, actor="pulse-product-identity-v1",
                            reason="Same source-qualified Product with compatible missing version metadata",
-                           guard_unreviewed_post=sources[0].post_id, guard_target_review_id=None)
+                           guard_unreviewed_post=sources[0].post_id, guard_target_review_id=target[0].current_review_id)
         except ValueError as error:
             if str(error) != "source dossier is not safe for automatic reconciliation":
                 raise

@@ -150,6 +150,23 @@ class ProfileObservation:
     raw_profile_payload: dict[str, Any] | None
 
 
+class ProfileHistoryConflict(ValueError):
+    """Historical observation conflicts with a compressed snapshot interval."""
+
+    def __init__(self, observation: ProfileObservation, observed_at: datetime):
+        super().__init__("Historical profile observation overlaps a different compressed version")
+        self.observation = observation
+        self.observed_at = observed_at
+
+
+class ProfileSourceConflict(ProfileHistoryConflict):
+    """An identical observation cannot retain its distinct source on reuse."""
+
+    def __init__(self, observation: ProfileObservation, observed_at: datetime):
+        super().__init__(observation, observed_at)
+        self.args = ("Profile source or raw evidence cannot be retained on reuse",)
+
+
 @dataclass(frozen=True)
 class BrandReference:
     brand_id: str
@@ -408,20 +425,50 @@ def record_profile_snapshot(
     source_kind: str,
     source_post: Post | None = None,
     source_run: str | None = None,
+    reject_ambiguous_history: bool = False,
+    preserve_source_provenance: bool = False,
 ) -> tuple[AccountProfileSnapshot, bool, bool]:
     """Write one observation, collapsing only the latest identical version.
 
     Returns ``(snapshot, created, changed)``.  Replaying the same persisted
-    post is a no-op; a later A → B → A sequence creates a third row.
+    observation is a no-op; a later A → B → A sequence creates a third row.
+    Historical imports can reject an ambiguous compressed interval and retain
+    the original observation for review rather than inventing a split.
     """
 
     with transaction.atomic():
+        # Lock the account too: an empty snapshot queryset cannot serialize
+        # concurrent first observations.
+        Account.objects.select_for_update().get(pk=account.pk)
         snapshots = AccountProfileSnapshot.objects.select_for_update().filter(
             account=account
         )
+
+        def ensure_raw_preserved(snapshot):
+            if preserve_source_provenance:
+                from core.geolocation_evidence import source_evidence
+
+                if source_evidence(snapshot).raw_profile_payload != observation.raw_profile_payload:
+                    raise ProfileSourceConflict(observation, observed_at)
+
+        if reject_ambiguous_history and snapshots.filter(
+            first_observed_at__lte=observed_at,
+            last_observed_at__gte=observed_at,
+        ).exclude(profile_hash=observation.profile_hash).exists():
+            raise ProfileHistoryConflict(observation, observed_at)
         if source_post is not None:
-            exact = snapshots.filter(first_source_post=source_post).first()
+            exact = snapshots.filter(
+                first_source_post=source_post,
+                profile_hash=observation.profile_hash,
+                first_observed_at=observed_at,
+            ).first()
             if exact is not None:
+                if preserve_source_provenance and (
+                    exact.first_source_kind != source_kind[:32]
+                    or exact.first_source_run != (source_run or None)
+                ):
+                    raise ProfileSourceConflict(observation, observed_at)
+                ensure_raw_preserved(exact)
                 return exact, False, False
 
         covering = snapshots.filter(
@@ -430,10 +477,26 @@ def record_profile_snapshot(
             last_observed_at__gte=observed_at,
         ).first()
         if covering is not None:
+            if preserve_source_provenance and not (
+                covering.first_observed_at == observed_at
+                and covering.first_source_post_id == (source_post.pk if source_post else None)
+                and covering.first_source_kind == source_kind[:32]
+                and covering.first_source_run == (source_run or None)
+            ):
+                raise ProfileSourceConflict(observation, observed_at)
+            ensure_raw_preserved(covering)
             return covering, False, False
 
         latest = snapshots.order_by("-last_observed_at", "-id").first()
-        if latest is not None and latest.profile_hash == observation.profile_hash:
+        previous = latest
+        if reject_ambiguous_history:
+            previous = snapshots.filter(first_observed_at__lte=observed_at).order_by(
+                "-first_observed_at", "-id"
+            ).first()
+        if previous is not None and previous.profile_hash == observation.profile_hash:
+            latest = previous
+            if preserve_source_provenance:
+                raise ProfileSourceConflict(observation, observed_at)
             if observed_at <= latest.last_observed_at:
                 return latest, False, False
             AccountProfileSnapshot.objects.filter(pk=latest.pk).update(
@@ -935,13 +998,14 @@ def capture_post_profile_snapshot(
     raw: Mapping[str, Any],
     references: Iterable[BrandReference] | None = None,
     affiliation_context: AccountAffiliationContext | None = None,
+    observed_at: datetime | None = None,
 ) -> ProfileCaptureResult | None:
     if post.author_id is None:
         return None
     observation = profile_observation_from_payload(raw)
     if not observation.present_fields:
         return None
-    observed_at = post.fetched_at
+    observed_at = observed_at or post.fetched_at
     snapshot, created, changed = record_profile_snapshot(
         account=post.author,
         observation=observation,

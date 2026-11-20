@@ -131,8 +131,8 @@ def test_confirmed_review_conflicting_version_or_variant_remains_unresolved(fiel
     assert not EventDossierClaim.objects.filter(scope_key__startswith="pulse-event-member-v1:").exists()
 
 
-@pytest.mark.parametrize("new_version", [None, "A"])
-def test_existing_confirmed_legacy_release_is_reused_for_new_finding(new_version):
+@pytest.mark.parametrize("review_version,new_version,should_merge", [(None, None, True), (None, "A", True), ("A", None, True), ("A", "B", False)])
+def test_existing_confirmed_legacy_release_is_reused_for_new_finding(review_version, new_version, should_merge):
     from django.utils import timezone
 
     from core.event_dossiers import (
@@ -162,7 +162,7 @@ def test_existing_confirmed_legacy_release_is_reused_for_new_finding(new_version
     complete_review(old.pk, expected_current_review_id=None, display_title="Model A", review_state="confirmed",
                     evidence_cutoff_at=timezone.now(), method_version="test", actor="test", reason="Reviewed",
                     claims=[ClaimDecision(old_claim.pk, "accepted", "Source")],
-                    product_release=ProductReleaseInput(observed_name="Model A", product_key=product.product_key))
+                    product_release=ProductReleaseInput(observed_name="Model A", product_key=product.product_key, version_label=review_version))
     new_post = Post.objects.create(tweet_id="legacy-event-new", text="Model A is available")
     PostBrandProduct.objects.create(post=new_post, brand=brand, product=product, observed_name="Model A",
                                     source_evidence={}, verification_policy_version="test")
@@ -172,14 +172,20 @@ def test_existing_confirmed_legacy_release_is_reused_for_new_finding(new_version
     saved = persist_classified_release_findings(source={"kind": "post", "id": new_post.pk}, revision_id="b" * 64,
                                                content_fingerprint="c" * 64, extraction_version="test", findings=[item])
     anchor_id = saved["findings"][0]["anchor_claim_id"]
-    assert resolve_saved_release_finding(claim_id=anchor_id)["status"] == "matched"
+    resolved = resolve_saved_release_finding(claim_id=anchor_id)
+    if not should_merge:
+        assert resolved["status"] == "unresolved"
+        assert EventDossier.objects.filter(merged_into__isnull=True).count() == 2
+        return
+    assert resolved["status"] == "matched"
     result = reconcile_product_release_events(claim_id=anchor_id, candidate_limit=10, claim_limit=50, max_merges=1, max_seconds=5)
-    if new_version is None:
+    if should_merge:
         assert result["status"] == "merged" and result["dossier_id"] == str(old.pk)
         assert EventDossier.objects.get(pk=old.pk).sources.count() == 2
     else:
         assert result["merged_ids"] == []
         assert EventDossier.objects.filter(merged_into__isnull=True).count() == 2
+    assert EventDossier.objects.get(pk=old.pk).current_review_id is not None
 
 
 def test_exact_post_product_evidence_resolves_without_creating_duplicate():

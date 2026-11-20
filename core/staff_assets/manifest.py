@@ -5,6 +5,7 @@ from collections import Counter
 from pathlib import Path
 
 from core.person_identity import IdentityConflict
+from core.person_names import digest
 from core.staff_assets.intake import (
     ELIGIBLE,
     ingest_record,
@@ -15,8 +16,30 @@ from core.staff_assets.intake import (
 from core.staff_assets.media import record_media
 
 
+def unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate key in JSON input")
+        result[key] = value
+    return result
+
+
 def load_manifest(path):
-    value = json.loads(Path(path).read_text())
+    value = json.loads(Path(path).read_text(), object_pairs_hook=unique_json_object)
+    if value.get("schema") == "record-job-history/v1":
+        allowed = {
+            "schema",
+            "people",
+            "catalogue_aliases",
+            "primary_language_assignment",
+            "name_review",
+        }
+        if not isinstance(value.get("people"), list) or set(value) - allowed:
+            raise ValueError(
+                "Expected record-job-history/v1 people and supported preparation options"
+            )
+        return value
     if value.get("schema") != "staff-intake/v1" or not isinstance(
         value.get("people"), list
     ):
@@ -29,7 +52,56 @@ def load_manifest(path):
     return value
 
 
-def import_manifest(manifest, *, apply=False, asset_root=None):
+def import_manifest(
+    manifest,
+    *,
+    apply=False,
+    asset_root=None,
+    inventory=None,
+    fresh_language=False,
+    selected_brands=None,
+    language_exclusions=None,
+    audited_names=None,
+    review_provenance=None,
+):
+    if manifest.get("schema") == "record-job-history/v1":
+        from core.staff_assets.job_history import prepare_job_history
+
+        if apply:
+            raise ValueError(
+                "Job-history proposal is preview-only; staging apply is a later phase"
+            )
+        if inventory is None:
+            raise ValueError(
+                "Job-history preview requires an explicit saved target inventory"
+            )
+        name_review = manifest.get("name_review")
+        if name_review is not None:
+            if not fresh_language:
+                raise ValueError("Name review requires the fresh language assessment")
+            from core.staff_assets.job_history_names import validate_name_review
+
+            reviewed_exclusions = validate_name_review(name_review, manifest["people"])
+            if (
+                language_exclusions is not None
+                and language_exclusions != reviewed_exclusions
+            ):
+                raise ValueError("Conflicting name-review decisions")
+            language_exclusions = reviewed_exclusions
+        return prepare_job_history(
+            manifest["people"],
+            inventory,
+            aliases=manifest.get("catalogue_aliases"),
+            primary_language_assignment=None
+            if fresh_language
+            else manifest.get("primary_language_assignment"),
+            fresh_language=fresh_language,
+            selected_brands=selected_brands,
+            language_exclusions=language_exclusions,
+            audited_names=audited_names,
+            review_provenance=review_provenance,
+            name_review_digest=digest(name_review) if name_review is not None else None,
+        )
     counts = Counter()
     records = []
     for record in manifest["people"]:

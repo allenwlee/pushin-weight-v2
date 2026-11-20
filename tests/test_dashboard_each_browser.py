@@ -272,14 +272,15 @@ EACH_CHART_STATE = """() => {
     })),
     labels: chart.data.labels.length,
     lastTick: x.ticks.length ? x.ticks[x.ticks.length - 1].value : null,
+    lastTickText: x.ticks.length ? x.ticks[x.ticks.length - 1].label : null,
     tickCount: x.ticks.length,
     legend: [...document.querySelectorAll('[data-each-legend] > *')].map((node) => node.textContent.trim()),
   };
 }"""
 
 FIXED_COLORS = {
-    "#cbd5e1": ("Unclassified", "Undetected"),
-    "#000000": ("Neutral", "Other", "No assigned topic", "No product signal"),
+    "#8290a7": ("Unclassified", "Undetected"),
+    "#25334b": ("Neutral", "Other", "No assigned topic", "No product signal"),
 }
 
 
@@ -307,10 +308,153 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
               const canvas = document.querySelector('[data-each-canvas]');
               const chart = canvas && window.Chart && Chart.getChart(canvas);
               const selected = document.querySelector('[data-each-tab][aria-selected="true"]');
-              return Boolean(chart && chart.data.datasets.length && (!tab || selected.dataset.eachTab === tab));
+              const root = document.querySelector('[data-pw-each-chart]');
+              return Boolean(chart && chart.data.datasets.length && (!tab ||
+                selected.dataset.eachTab === tab) && root.dataset.committedTab === selected.dataset.eachTab &&
+                !root.querySelector('.each-chart-panel').hasAttribute('aria-busy') &&
+                !root.querySelector('.each-chart-face').classList.contains('is-turning-in') &&
+                !root.querySelector('.each-chart-face').classList.contains('is-turning-out'));
             }""",
             arg=tab,
         )
+
+    def test_sparse_one_day_uses_exact_hourly_areas_in_both_modes_and_locales(self):
+        from datetime import datetime, timedelta
+
+        from core.classification_contract import (
+            CONTRACT_VERSION,
+            PROMPT_VERSION,
+            TAXONOMY_VERSION,
+        )
+        from core.models import (
+            Post,
+            PostBrand,
+            PostBrandClassificationState,
+            PostBrandSignal,
+            PostTypeKey,
+        )
+
+        Brand.objects.get_or_create(nickname='llama', defaults={'display_name': 'Meta Llama', 'accent_color': '#0089f4'})
+        # Derive the request's real 24-hour coverage boundary; authored counts
+        # below are the independent oracle, not values read from a live page.
+        raw = self.client.get('/dashboard/each/chart/', {
+            'brand': 'llama', 'tab': 'lang', 'window': 1, 'locale': 'en',
+        }).json()
+        self.assertEqual(len(raw['days']), 288)
+        start = datetime.fromisoformat(raw['days'][0])
+        PostBrand.objects.filter(brand_id='llama').delete()
+        for key in ('releases_updates', 'opinions_reactions'):
+            PostTypeKey.objects.get_or_create(key=key)
+        # At each hour: one English release at minute0, nine Japanese opinions
+        # at minute5. There are no posts in the other ten five-minute buckets.
+        for hour in range(24):
+            for ordinal in range(10):
+                post = Post.objects.create(
+                    tweet_id=f'each-hourly-{hour}-{ordinal}',
+                    created_at=start + timedelta(hours=hour, minutes=0 if ordinal == 0 else 5, seconds=1),
+                    lang_detected='en' if ordinal == 0 else 'ja',
+                    text='Synthetic sparse chart post.',
+                )
+                PostBrand.objects.create(post=post, brand_id='llama')
+                PostBrandClassificationState.objects.create(
+                    post=post, brand_id='llama', contract_version=CONTRACT_VERSION,
+                    taxonomy_version=TAXONOMY_VERSION, prompt_version=PROMPT_VERSION,
+                    model='fixture', input_context_fingerprint=f'{hour * 10 + ordinal + 1:064x}',
+                    outcome='classified', sentiment_id='positive',
+                )
+                PostBrandSignal.objects.create(
+                    post=post, brand_id='llama', sentiment_id='positive',
+                    post_type_id='releases_updates' if ordinal == 0 else 'opinions_reactions',
+                )
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for width, locale, note in (
+                    (1440, 'en', '1-hour totals.'), (390, 'zh_cn', '每小时汇总。'),
+                    (390, 'ja', '1時間ごとの集計。'),
+                ):
+                    context = self._context(browser)
+                    page = context.new_page()
+                    page.set_viewport_size({'width': width, 'height': 1000})
+                    for tab, first, second in (
+                        ('lang', 'en', 'ja'),
+                        ('post_types', 'releases_updates', 'opinions_reactions'),
+                    ):
+                        with self.subTest(width=width, locale=locale, tab=tab):
+                            with page.expect_response(lambda response: '/dashboard/each/chart/' in response.url and response.status == 200) as response:
+                                page.goto(f'{self.live_server_url}/dashboard/each?brand=llama&tab={tab}&window=1&locale={locale}', wait_until='networkidle')
+                            source = response.value.json()
+                            self.assertEqual(len(source['days']), 288, 'The API retains raw five-minute precision')
+                            self.assertEqual(sum(source['totals']), 240)
+                            self.assertEqual(sum(source['series'][first]), 24)
+                            self.assertEqual(sum(source['series'][second]), 216)
+                            self._wait_for_chart(page, tab)
+                            percent = page.evaluate("""() => {
+                              const c=Chart.getChart(document.querySelector('[data-each-canvas]'));
+                              return {length:c.data.labels.length, type:c.config.type,
+                                entries:Object.fromEntries(c.data.datasets.map((d,i)=>[d.categoryKey,
+                                  {values:d.data,segments:c.getDatasetMeta(i).dataset.segments.length,fill:d.fill}])),
+                                lastTick:c.scales.x.ticks.at(-1).value};
+                            }""")
+                            self.assertEqual(percent['length'], 24, 'Sparse five-minute columns must become hourly area points')
+                            self.assertEqual(page.locator('[data-each-bucket-note]').inner_text().strip(), note)
+                            self.assertEqual(percent['type'], 'line')
+                            self.assertTrue(all(item['fill'] == 'stack' for item in percent['entries'].values()))
+                            self.assertEqual(percent['entries'][first]['values'], [10] * 24)
+                            self.assertEqual(percent['entries'][second]['values'], [90] * 24)
+                            self.assertEqual(percent['entries'][first]['segments'], 1)
+                            self.assertEqual(percent['entries'][second]['segments'], 1)
+                            self.assertEqual(percent['lastTick'], 23, 'The latest bucket stays on the time axis')
+                            page.locator('[data-each-mode=volume]').check()
+                            self._wait_for_chart(page, tab)
+                            volume = page.evaluate("""() => Object.fromEntries(Chart.getChart(document.querySelector('[data-each-canvas]')).data.datasets.map(d=>[d.categoryKey,d.data]))""")
+                            self.assertEqual(volume[first], [1] * 24)
+                            self.assertEqual(volume[second], [9] * 24)
+                            page.locator('[data-each-mode=percent]').check()
+                            self._wait_for_chart(page, tab)
+                            self.assertEqual(page.evaluate("Chart.getChart(document.querySelector('[data-each-canvas]')).data.labels.length"), 24)
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_plot_height_and_left_legend_stay_fixed_for_every_tab_size_and_locale(self):
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for width in (1440, 390):
+                    for locale in ('en', 'zh_cn', 'ja'):
+                        context = self._context(browser)
+                        page = context.new_page()
+                        page.set_viewport_size({'width': width, 'height': 1000})
+                        page.goto(f'{self.live_server_url}/dashboard/each?brand=deepseek&window=7&locale={locale}', wait_until='networkidle')
+                        tabs = page.locator('[data-each-tab]')
+                        for index in range(tabs.count()):
+                            tab = tabs.nth(index).get_attribute('data-each-tab')
+                            with self.subTest(width=width, locale=locale, tab=tab):
+                                tabs.nth(index).click()
+                                self._wait_for_chart(page, tab)
+                                geometry = page.evaluate("""() => {
+                                  const c=Chart.getChart(document.querySelector('[data-each-canvas]'));
+                                  const r=c.canvas.getBoundingClientRect();
+                                  return {height:r.height,top:r.top+c.chartArea.top,bottom:r.top+c.chartArea.bottom,
+                                    rows:[...document.querySelectorAll('[data-each-category]')].map(b=>{
+                                      const q=b.getBoundingClientRect(),label=b.querySelector('span');
+                                      return {key:b.dataset.eachCategory,top:q.top,bottom:q.bottom,center:(q.top+q.bottom)/2,
+                                        clipped:label.scrollWidth>label.clientWidth+1};
+                                    }),keys:c.data.datasets.map(d=>d.categoryKey)};
+                                }""")
+                                self.assertAlmostEqual(geometry['height'], 420, delta=1)
+                                self.assertEqual([row['key'] for row in geometry['rows']], geometry['keys'][::-1])
+                                count = len(geometry['rows'])
+                                for i, row in enumerate(geometry['rows']):
+                                    expected = (geometry['top'] + geometry['bottom']) / 2 if count == 1 else geometry['top'] + i * (geometry['bottom'] - geometry['top']) / (count - 1)
+                                    self.assertAlmostEqual(row['center'], expected, delta=1)
+                                    self.assertFalse(row['clipped'])
+                                    if i:
+                                        self.assertLessEqual(geometry['rows'][i - 1]['bottom'], row['top'] + 1, f'Legend overlap: {width}/{locale}/{tab}')
+                        context.close()
+            finally:
+                browser.close()
 
     def test_every_tab_uses_the_shared_axis_and_area_style(self):
         with sync_playwright() as playwright:
@@ -334,19 +478,21 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
                         tabs.nth(index).click()
                         self._wait_for_chart(page, tab)
                         state = page.evaluate(EACH_CHART_STATE)
+                        self.assertAlmostEqual(page.locator('[data-each-canvas]').bounding_box()['height'], 420, delta=1, msg='The plot height must stay fixed across category counts')
+                        self.assertTrue(page.locator('[data-each-bucket-note]').is_hidden())
                         self.assertEqual(state["yPosition"], "right")
                         self.assertIs(state["yBorder"], False)
                         self.assertEqual(state["gridDash"], [1, 3])
                         self.assertTrue(state["tooltip"], "the category tooltip stays")
                         for dataset in state["datasets"]:
-                            self.assertEqual(dataset["borderWidth"], 1, dataset)
+                            self.assertEqual(dataset["borderWidth"], 2, dataset)
                             self.assertEqual(dataset["pointRadius"], 0, dataset)
                             self.assertEqual(dataset["monotone"], "monotone", dataset)
-                            self.assertTrue(dataset["label"][:1].isupper(), dataset)
+                            self.assertEqual(dataset["label"][:1], dataset["label"][:1].upper(), dataset)
                             for color, names in FIXED_COLORS.items():
                                 if dataset["label"] in names:
                                     self.assertEqual(dataset["color"], color, dataset)
-                        self.assertTrue(all(text[:1].isupper() for text in state["legend"] if text), state["legend"])
+                        self.assertTrue(all(text[:1] == text[:1].upper() for text in state["legend"] if text), state["legend"])
                         # Percent mode caps the stack at 100; volume mode leaves it open.
                         self.assertEqual(state["yMax"], 100)
                         page.locator('[data-each-mode="volume"]').check()
@@ -373,7 +519,501 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_failed_tab_switch_names_the_retained_chart_in_notice_and_accessible_label(self):
+        from tests.general_style_browser import open_page
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, old_label, requested_label in (
+                    ("en", "Sentiment", "Product"),
+                    ("zh_cn", "情绪", "产品"),
+                    ("ja", "感情", "製品"),
+                ):
+                    with self.subTest(locale=locale):
+                        run = open_page(browser, self.live_server_url, reduced_motion="reduce")
+                        page = run.page
+                        page.goto(
+                            f"{self.live_server_url}/dashboard/each?brand=deepseek&locale={locale}&window=7",
+                            wait_until="networkidle",
+                        )
+                        self._wait_for_chart(page, "sentiment")
+                        previous_values = page.evaluate("""() => {
+                          const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                          window.__retainedEachChart = chart;
+                          return chart.data.datasets.map(dataset => dataset.data);
+                        }""")
+                        button = page.locator("[data-each-category]").first
+                        pinned = button.get_attribute("data-each-category")
+                        button.click()
+                        run.context.route(
+                            "**/dashboard/each/chart/**",
+                            lambda route: route.fulfill(
+                                status=503,
+                                content_type="application/json",
+                                body='{"error":"chart_timeout"}',
+                            ),
+                        )
+                        page.locator('[data-each-tab="product_labels"]').click()
+                        page.wait_for_function("""() => {
+                          const panel = document.querySelector('.each-chart-panel');
+                          const status = document.querySelector('[data-each-status]');
+                          return !panel.hasAttribute('aria-busy') && !status.hidden && status.textContent;
+                        }""")
+                        retained = page.evaluate("""() => {
+                          const root = document.querySelector('[data-pw-each-chart]');
+                          const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                          return {
+                            sameInstance: chart === window.__retainedEachChart,
+                            committedTab: root.dataset.committedTab,
+                            requestedTab: document.querySelector('[data-each-tab][aria-selected="true"]').dataset.eachTab,
+                            notice: document.querySelector('[data-each-status]').textContent,
+                            accessibleLabel: chart.canvas.getAttribute('aria-label'),
+                            values: chart.data.datasets.map(dataset => dataset.data),
+                            visible: chart.canvas.getBoundingClientRect().width > 0 && chart.canvas.getBoundingClientRect().height > 0
+                          };
+                        }""")
+                        self.assertTrue(retained["sameInstance"])
+                        self.assertTrue(retained["visible"])
+                        self.assertEqual(retained["committedTab"], "sentiment")
+                        self.assertEqual(retained["requestedTab"], "product_labels")
+                        self.assertEqual(retained["values"], previous_values)
+                        self.assertIn(old_label, retained["notice"])
+                        self.assertNotIn(requested_label, retained["notice"])
+                        self.assertIn(old_label, retained["accessibleLabel"])
+                        self.assertNotIn(requested_label, retained["accessibleLabel"])
+                        page.locator('[data-each-mode="volume"]').check()
+                        self.assertEqual(
+                            page.locator("[data-each-status]").inner_text(), retained["notice"]
+                        )
+                        self.assertIn(
+                            old_label, page.locator("[data-each-canvas]").get_attribute("aria-label")
+                        )
+                        self.assertEqual(
+                            page.locator(f'[data-each-category="{pinned}"]').get_attribute("aria-pressed"),
+                            "true",
+                        )
+                        self.assertEqual(run.errors, [])
+                        run.context.close()
+            finally:
+                browser.close()
+
+    def test_left_legend_matches_stack_and_emphasis_across_tabs_modes_sizes_locales(self):
+        import hashlib
+        from itertools import permutations
+
+        from tests.ui_assurance.each import (
+            EVIDENCE_PATH,
+            ROOT,
+            RUNTIME_PATH,
+            load_each_declaration,
+            load_seed_manifest,
+            runtime_identity,
+            write_each_runtime,
+        )
+
+        # A failed or skipped run must never inherit a prior browser proof.
+        RUNTIME_PATH.unlink(missing_ok=True)
+        EVIDENCE_PATH.unlink(missing_ok=True)
+        declaration = load_each_declaration()
+        seed = load_seed_manifest()
+        self.assertEqual(
+            hashlib.sha256((ROOT / seed["base_fixture"]).read_bytes()).hexdigest(),
+            seed["base_fixture_sha256"],
+        )
+        packet = {
+            "schema_version": "pushinweight.each-browser/v1",
+            "producer": "tests.test_dashboard_each_browser.DashboardEachGeneralStyleBrowserTests.test_left_legend_matches_stack_and_emphasis_across_tabs_modes_sizes_locales",
+            "identity": runtime_identity(declaration),
+            "cases": [], "errors": [], "external": [], "seed_post_count": 0,
+        }
+        from tests.each_area_fixture import seed_each_area_orm
+        from tests.general_style_browser import open_page
+
+        packet["seed_post_count"] = seed_each_area_orm(seed)
+        self.assertEqual(packet["seed_post_count"], sum(seed["counts"]))
+        expected_tabs = {
+            "sentiment", "post_types", "lang", "role", "audience_topics",
+            "geopolitical_modes", "product_labels", "untracked_brand_promotions",
+        }
+        output = Path(__file__).resolve().parents[1] / ".pytest-tmp"
+        output.mkdir(exist_ok=True)
+        geometry = """() => {
+          const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+          const canvas = chart.canvas.getBoundingClientRect();
+          const area = chart.chartArea;
+          const buttons = [...document.querySelectorAll('[data-each-category]')];
+          return {
+            viewportWidth: innerWidth, locale: document.body.dataset.pwLocale,
+            tab: document.querySelector('[data-each-tab][aria-selected="true"]').dataset.eachTab,
+            mode: document.querySelector('[data-each-mode]:checked').dataset.eachMode,
+            keys: chart.data.datasets.map(dataset => dataset.categoryKey),
+            labels: chart.data.datasets.map(dataset => dataset.label),
+            legend: buttons.map(button => ({
+              key: button.dataset.eachCategory, text: button.textContent.trim(),
+              top: button.getBoundingClientRect().top,
+              bottom: button.getBoundingClientRect().bottom,
+              center: (button.getBoundingClientRect().top + button.getBoundingClientRect().bottom) / 2,
+              right: button.getBoundingClientRect().right,
+              labelClipped: button.querySelector('span').scrollWidth > button.querySelector('span').clientWidth + 1
+            })),
+            plotTop: canvas.top + area.top, plotBottom: canvas.top + area.bottom,
+            plotLeft: canvas.left + area.left, canvasWidth: canvas.width,
+            visible: chart.data.datasets.every((_, index) => chart.isDatasetVisible(index)),
+            values: chart.data.datasets.map(dataset => dataset.data),
+            fills: chart.data.datasets.map(dataset => dataset.backgroundColor),
+            pageOverflow: document.documentElement.scrollWidth - innerWidth,
+            chartBusy: document.querySelector('.each-chart-panel').hasAttribute('aria-busy')
+          };
+        }"""
+        emphasis_state = """() => {
+          const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+          return {
+            values: chart.data.datasets.map(dataset => dataset.data),
+            visible: chart.data.datasets.every((_, index) => chart.isDatasetVisible(index)),
+            fills: chart.data.datasets.map(dataset => dataset.backgroundColor),
+            widths: chart.data.datasets.map(dataset => dataset.borderWidth),
+            pinned: [...document.querySelectorAll('[data-each-category][aria-pressed="true"]')]
+              .map(button => button.dataset.eachCategory)
+          };
+        }"""
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                run = open_page(
+                    browser, self.live_server_url,
+                    viewport={"width": 1440, "height": 960}, reduced_motion="reduce",
+                )
+                page = run.page
+                received = []
+                requests = []
+                page.on(
+                    "response",
+                    lambda response: received.append({"payload": response.json(), "url": response.url})
+                    if "/dashboard/each/chart/" in response.url and response.status == 200
+                    else None,
+                )
+                page.on(
+                    "request",
+                    lambda request: requests.append(request.url),
+                )
+                for locale in ("en", "zh_cn", "ja"):
+                    response = page.goto(
+                        f"{self.live_server_url}/dashboard/each?brand=deepseek&locale={locale}&window=7&timezone=Asia%2FTokyo",
+                        wait_until="networkidle",
+                    )
+                    self.assertEqual(response.status, 200)
+                    page.evaluate("() => document.fonts.ready")
+                    self._wait_for_chart(page, "sentiment")
+                    self.assertEqual(page.locator('.feed-row:not([data-synthesis-status="ready"])').count(), 0)
+                    tab_keys = page.locator("[data-each-tab]").evaluate_all(
+                        "buttons => buttons.map(button => button.dataset.eachTab)"
+                    )
+                    self.assertEqual(set(tab_keys), expected_tabs)
+                    for width in (1440, 390):
+                        page.set_viewport_size({"width": width, "height": 960})
+                        for tab in tab_keys:
+                            selected_tab = page.locator('[data-each-tab][aria-selected="true"]').get_attribute('data-each-tab')
+                            if selected_tab != tab:
+                                with page.expect_response(lambda response, tab=tab: '/dashboard/each/chart/' in response.url and f'tab={tab}&' in response.url) as requested:
+                                    page.locator(f'[data-each-tab="{tab}"]').click()
+                                source = requested.value.json()
+                                source_url = requested.value.url
+                            else:
+                                received_source = next(item for item in reversed(received) if item['payload']['tab'] == tab)
+                                source = received_source['payload']
+                                source_url = received_source['url']
+                            self._wait_for_chart(page, tab)
+                            self.assertEqual(source["tab"], tab)
+                            expected_keys = [entry["key"] for entry in source["entries"]]
+                            expected_labels = [entry["label"] for entry in source["entries"]]
+                            for mode in ("percent", "volume"):
+                                with self.subTest(locale=locale, width=width, tab=tab, mode=mode):
+                                    page.locator(f'[data-each-mode="{mode}"]').check()
+                                    page.mouse.move(1, 1)
+                                    page.wait_for_function(
+                                        """() => {
+                                          const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                                          return Math.abs(chart.width - chart.canvas.getBoundingClientRect().width) < 1 &&
+                                            Math.abs(chart.height - chart.canvas.getBoundingClientRect().height) < 1;
+                                        }"""
+                                    )
+                                    state = page.evaluate(geometry)
+                                    self.assertFalse(state["chartBusy"])
+                                    self.assertEqual(state["keys"], expected_keys)
+                                    self.assertEqual(state["labels"], expected_labels)
+                                    self.assertEqual(
+                                        [item["key"] for item in state["legend"]], expected_keys[::-1]
+                                    )
+                                    self.assertEqual(
+                                        [item["text"] for item in state["legend"]], expected_labels[::-1]
+                                    )
+                                    self.assertTrue(state["visible"])
+                                    self.assertGreater(state["canvasWidth"], 100)
+                                    self.assertLessEqual(state["pageOverflow"], 0)
+                                    entries = state["legend"]
+                                    self.assertGreater(len(entries), 1)
+                                    for index, entry in enumerate(entries):
+                                        expected_center = state["plotTop"] + index * (
+                                            state["plotBottom"] - state["plotTop"]
+                                        ) / (len(entries) - 1)
+                                        self.assertAlmostEqual(
+                                            entry["center"], expected_center, delta=1, msg=entry
+                                        )
+                                        self.assertFalse(entry["labelClipped"], entry)
+                                        self.assertLessEqual(entry["right"], state["plotLeft"])
+                                        if index:
+                                            self.assertLessEqual(
+                                                entries[index - 1]["bottom"], entry["top"] + 1,
+                                                f"Overlapping legend labels: {entries[index - 1]} / {entry}",
+                                            )
+                                    if "__unclassified__" in expected_keys:
+                                        self.assertEqual(entries[-1]["key"], "__unclassified__")
+                                    sums = [
+                                        sum(source["series"][key][index] for key in expected_keys)
+                                        for index in range(len(source["days"]))
+                                    ]
+                                    self.assertEqual(len(sums), 7)
+                                    self.assertTrue(all(total > 0 for total in sums), sums)
+                                    self.assertTrue(all(
+                                        sum(source["series"][key][index] > 0 for key in expected_keys) >= 2
+                                        for index in range(7)
+                                    ), f"A substantive multi-category area must span every day: {tab}")
+                                    for index, key in enumerate(expected_keys):
+                                        expected_values = [
+                                            count if mode == "volume" else (count * 100 / total if total else None)
+                                            for count, total in zip(source["series"][key], sums)
+                                        ]
+                                        self.assertEqual(state["values"][index], expected_values)
+
+                                    # Move the actual pointer over a populated bucket, so Chart.js
+                                    # creates its real tooltip through the normal interaction path.
+                                    point = page.evaluate(
+                                        """() => {
+                                          const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                                          const index = chart.data.labels.findIndex((_, i) =>
+                                            chart.data.datasets.some(dataset => Number(dataset.data[i]) > 0));
+                                          if (index < 0) return null;
+                                          const rect = chart.canvas.getBoundingClientRect();
+                                          return {
+                                            x: rect.left + Math.max(chart.chartArea.left + 1,
+                                              Math.min(chart.chartArea.right - 1, chart.scales.x.getPixelForValue(index))),
+                                            y: rect.top + (chart.chartArea.top + chart.chartArea.bottom) / 2
+                                          };
+                                        }"""
+                                    )
+                                    self.assertIsNotNone(point, f"No populated tooltip bucket: {tab}")
+                                    page.mouse.move(point["x"], point["y"])
+                                    page.wait_for_function(
+                                        """() => {
+                                          const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                                          return chart.tooltip.opacity > 0 &&
+                                            chart.tooltip.dataPoints.length === chart.data.datasets.length;
+                                        }"""
+                                    )
+                                    tooltip_keys = page.evaluate("""() => Chart.getChart(document.querySelector(
+                                      '[data-each-canvas]')).tooltip.dataPoints.map(item => item.dataset.categoryKey)""")
+                                    self.assertEqual(tooltip_keys, expected_keys[::-1])
+                                    tooltip = page.evaluate("""() => {
+                                      const tooltip = Chart.getChart(document.querySelector('[data-each-canvas]')).tooltip;
+                                      return {index: tooltip.dataPoints[0].dataIndex,
+                                        keys: tooltip.dataPoints.map(item => item.dataset.categoryKey),
+                                        body: tooltip.body.map(item => item.lines), footer: tooltip.footer};
+                                    }""")
+                                    page.mouse.move(1, 1)
+                                    request_count = len(requests)
+                                    category = "bug" if "bug" in expected_keys else expected_keys[0]
+                                    other = next(key for key in expected_keys if key != category)
+                                    button = page.locator(f'[data-each-category="{category}"]')
+                                    other_button = page.locator(f'[data-each-category="{other}"]')
+                                    category_index = expected_keys.index(category)
+                                    other_index = expected_keys.index(other)
+                                    button.hover()
+                                    hovered = page.evaluate(emphasis_state)
+                                    self.assertTrue(hovered["fills"][category_index].endswith(",0.48)"))
+                                    self.assertTrue(all(
+                                        fill.endswith(",0.055)") for index, fill in enumerate(hovered["fills"])
+                                        if index != category_index
+                                    ))
+                                    self.assertEqual(hovered["values"], state["values"])
+                                    self.assertTrue(hovered["visible"])
+                                    self.assertEqual(hovered["pinned"], [])
+                                    page.mouse.move(1, 1)
+                                    self.assertTrue(all(
+                                        fill.endswith(",0.34)") for fill in page.evaluate(emphasis_state)["fills"]
+                                    ))
+                                    button.click()
+                                    self.assertEqual(button.get_attribute("aria-pressed"), "true")
+                                    other_button.hover()
+                                    self.assertEqual(page.evaluate(emphasis_state)["widths"][other_index], 2.7)
+                                    page.mouse.move(1, 1)
+                                    self.assertEqual(page.evaluate(emphasis_state)["widths"][category_index], 2.7)
+                                    redraw_mode = "volume" if mode == "percent" else "percent"
+                                    page.locator(f'[data-each-mode="{redraw_mode}"]').check()
+                                    self.assertEqual(button.get_attribute("aria-pressed"), "true")
+                                    page.locator(f'[data-each-mode="{mode}"]').check()
+                                    self.assertEqual(button.get_attribute("aria-pressed"), "true")
+                                    button.click()
+                                    self.assertEqual(button.get_attribute("aria-pressed"), "false")
+                                    button.focus()
+                                    button.press("Enter")
+                                    self.assertTrue(button.evaluate("el => el.matches(':focus-visible')"))
+                                    self.assertEqual(button.get_attribute("aria-pressed"), "true")
+                                    button.press("Space")
+                                    self.assertEqual(button.get_attribute("aria-pressed"), "false")
+                                    page.mouse.move(1, 1)
+                                    final = page.evaluate(emphasis_state)
+                                    self.assertEqual(final["values"], state["values"])
+                                    self.assertTrue(final["visible"])
+                                    self.assertTrue(all(fill.endswith(",0.34)") for fill in final["fills"]))
+                                    self.assertEqual(len(requests), request_count, requests[request_count:])
+                                    # Save measured DOM/chart snapshots after real actions. The
+                                    # separate Each adapter derives obligations from these traces.
+                                    case = {
+                                        "locale": locale, "width": width, "tab": tab, "mode": mode,
+                                        "url": page.url, "source": source, "source_url": source_url, "geometry": state,
+                                        "tooltip_keys": tooltip_keys, "tooltip": tooltip,
+                                        "request_count": request_count, "traces": [],
+                                    }
+                                    def observe(category=category, other=other):
+                                        observed = page.evaluate(emphasis_state)
+                                        controls = page.evaluate("""() => ({
+                                          pin: document.querySelector('[data-each-category][aria-pressed="true"]')?.dataset.eachCategory || null,
+                                          hover: [...document.querySelectorAll('[data-each-category]')].find(el => el.matches(':hover'))?.dataset.eachCategory || null,
+                                          mode: document.querySelector('[data-each-mode]:checked').dataset.eachMode
+                                        })""")
+                                        aliases = {None: "none", category: "first", other: "other"}
+                                        observed["controls"] = {
+                                            "pin": aliases[controls["pin"]],
+                                            "hover": aliases[controls["hover"]],
+                                            "mode": controls["mode"],
+                                        }
+                                        observed["request_count"] = len(requests)
+                                        return observed
+
+                                    def move_hover(value, button=button, other_button=other_button):
+                                        # Re-enter after click/redraw even when the pointer's
+                                        # previous coordinates already fall on this button.
+                                        page.mouse.move(1, 1)
+                                        if value != "none":
+                                            (button if value == "first" else other_button).hover()
+
+                                    def apply(action, button=button, other_button=other_button,
+                                              observe=observe, move_hover=move_hover):
+                                        control, value = action.split(":", 1)
+                                        before = observe()["controls"]
+                                        if control == "hover":
+                                            move_hover(value)
+                                        elif control == "pin":
+                                            page.mouse.move(1, 1)
+                                            if before["pin"] != value:
+                                                selected = before["pin"] if value == "none" else value
+                                                (button if selected == "first" else other_button).click()
+                                            elif value == "none":
+                                                button.click()
+                                                button.click()
+                                            else:
+                                                chosen = button if value == "first" else other_button
+                                                chosen.click()
+                                                chosen.click()
+                                            move_hover(before["hover"])
+                                        elif control == "mode":
+                                            page.locator(f'[data-each-mode="{value}"]').check()
+                                            move_hover(before["hover"])
+                                        else:
+                                            raise AssertionError(action)
+                                        return {"action": action, "observed": observe()}
+
+                                    trace = {"initial": observe(), "steps": []}
+                                    for pin in ("none", "first", "other"):
+                                        trace["steps"].append(apply(f"pin:{pin}"))
+                                        for hover in ("none", "first", "other"):
+                                            trace["steps"].append(apply(f"hover:{hover}"))
+                                    for action in ("hover:none", "pin:none", "pin:first",
+                                                   f"mode:{redraw_mode}", f"mode:{mode}", "pin:none"):
+                                        trace["steps"].append(apply(action))
+                                    case["traces"].append(trace)
+                                    if not packet["cases"]:
+                                        for actions in permutations(("pin:first", "hover:other", "hover:none")):
+                                            apply("hover:none")
+                                            apply("pin:none")
+                                            ordered = {"initial": observe(), "steps": []}
+                                            for action in actions:
+                                                ordered["steps"].append(apply(action))
+                                            case["traces"].append(ordered)
+                                    apply("hover:none")
+                                    apply("pin:none")
+                                    packet["cases"].append(case)
+                                    if locale == "en" and tab == "product_labels" and mode == "percent":
+                                        page.locator("[data-pw-each-chart]").screenshot(
+                                            path=str(output / f"dashboard-each-b-left-legend-{width}.png"),
+                                        )
+                                        button.hover()
+                                        page.locator("[data-pw-each-chart]").screenshot(
+                                            path=str(output / f"dashboard-each-b-bug-emphasis-{width}.png"),
+                                        )
+                                        page.mouse.move(1, 1)
+                self.assertEqual(run.errors, [])
+                self.assertEqual(run.external, [])
+                packet["errors"] = list(run.errors)
+                packet["external"] = list(run.external)
+                write_each_runtime(declaration, packet)
+                run.context.close()
+            finally:
+                browser.close()
+
+    def test_partial_hour_uses_the_actual_harvest_end_on_axis_and_tooltip(self):
+        from datetime import datetime, timedelta
+        from unittest.mock import patch
+        from zoneinfo import ZoneInfo
+
+        from core.models import Post, PostBrand
+
+        baseline = self.client.get('/dashboard/each/chart/', {
+            'brand': 'deepseek', 'tab': 'lang', 'window': 1, 'locale': 'en',
+        }).json()
+        self.assertEqual(len(baseline['days']), 288)
+        end = datetime.fromisoformat(baseline['days'][-1]) + timedelta(minutes=5)
+        post = Post.objects.create(tweet_id='partial-hour-last-post', created_at=end - timedelta(minutes=1), lang_detected='en', text='Synthetic last covered post.')
+        PostBrand.objects.create(post=post, brand_id='deepseek')
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for lag in (5, 10):
+                    with patch('monitor.views._dashboard_now', return_value=end + timedelta(minutes=lag)):
+                        context = self._context(browser)
+                        page = context.new_page()
+                        with page.expect_response(lambda response: '/dashboard/each/chart/' in response.url and response.status == 200) as response:
+                            page.goto(f'{self.live_server_url}/dashboard/each?brand=deepseek&tab=lang&window=1&locale=en', wait_until='networkidle')
+                        source = response.value.json()
+                        self.assertEqual(len(source['days']), 288 - lag // 5)
+                        actual_end = datetime.fromisoformat(source['days'][-1]) + timedelta(minutes=5)
+                        self.assertEqual(actual_end, end)
+                        local_end = end.astimezone(ZoneInfo('Asia/Tokyo'))
+                        expected_clock = f"{local_end.hour % 12 or 12}:{local_end.minute:02d}{'am' if local_end.hour < 12 else 'pm'}"
+                        for mode in ('percent', 'volume', 'percent'):
+                            with self.subTest(lag=lag, mode=mode):
+                                page.locator(f'[data-each-mode={mode}]').check()
+                                self._wait_for_chart(page, 'lang')
+                                state = page.evaluate(EACH_CHART_STATE)
+                                self.assertEqual(state['labels'], 24)
+                                self.assertEqual(state['lastTickText'], expected_clock, 'Axis must not claim unharvested time')
+                                title = page.evaluate("""() => {
+                                  const c=Chart.getChart(document.querySelector('[data-each-canvas]'));
+                                  const datasetIndex=c.data.datasets.findIndex(d=>d.categoryKey==='en');
+                                  const index=c.data.labels.length-1, point=c.getDatasetMeta(datasetIndex).data[index];
+                                  c.tooltip.setActiveElements([{datasetIndex,index}],{x:point.x,y:point.y});
+                                  c.update('none');return c.tooltip.title;
+                                }""")
+                                self.assertTrue(title[0].endswith(' – ' + expected_clock))
+                        context.close()
+            finally:
+                browser.close()
+
     def test_newest_tick_is_kept_in_every_window_and_language(self):
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -403,17 +1043,25 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
                                     "() => JSON.parse(document.getElementById('each-initial-chart').textContent).days"
                                 )
                             )
-                            self.assertEqual(len(days), state["labels"])
+                            display_days = days[::12] if window == 1 else days
+                            self.assertEqual(len(display_days), state["labels"])
                             # Date axes end on the latest day; the 365-day axis labels month
                             # starts, so its newest tick is the latest month start.
                             newest = (
                                 max(index for index, day in enumerate(days) if day.endswith("-01"))
                                 if window == 365
-                                else len(days) - 1
+                                else len(display_days) - 1
                             )
                             self.assertEqual(state["lastTick"], newest)
                             self.assertGreaterEqual(state["tickCount"], 2)
                             if window == 1:
+                                self.assertEqual(len(days), 288, 'Raw API precision is preserved')
+                                end = (datetime.fromisoformat(days[-1]) + timedelta(minutes=5)).astimezone(ZoneInfo('Asia/Tokyo'))
+                                expected_clock = (
+                                    f"{end.hour % 12 or 12}:{end.minute:02d}{'am' if end.hour < 12 else 'pm'}"
+                                    if locale == 'en' else f'{end.hour:02d}:{end.minute:02d}'
+                                )
+                                self.assertEqual(state['lastTickText'], expected_clock, 'Hourly display must retain the exact latest harvest boundary')
                                 self.assertLessEqual(state["tickCount"], 8)
                 context.close()
             finally:

@@ -735,10 +735,12 @@ class Command(BaseCommand):
 
     @staticmethod
     def _enrichment_status(state):
+        from django.db.models import Q
         from core.models import PostEnrichmentState
         post_ids = list(dict.fromkeys(pid for unit in state["units"] for pid in unit["post_ids"]))
         complete = set(PostEnrichmentState.objects.filter(
-            post_id__in=post_ids, translation_status=PostEnrichmentState.Status.SUCCEEDED,
+            Q(translation_requested=False) | Q(translation_status=PostEnrichmentState.Status.SUCCEEDED),
+            post_id__in=post_ids,
             classification_status=PostEnrichmentState.Status.SUCCEEDED,
         ).values_list("post_id", flat=True))
         state["enrichment_pending_post_ids"] = [pid for pid in post_ids if pid not in complete]

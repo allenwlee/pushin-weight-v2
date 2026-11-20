@@ -4,10 +4,23 @@ import pytest
 
 from core.collection_groups import observation_group_outcomes, record_observation_group
 from core.collection_storage_migration import project_observation_groups_batch
+from core.data_source_backfill_upgrade import EXPAND
 from core.models import CollectionObservation, CollectionRequest, CollectionScopeRun
+from tests.collection_document_fixtures import historical_models
 from tests.test_collection_relational_storage import execution
 
-pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    pytest.mark.requires_postgres,
+    pytest.mark.parametrize("migration_rehearsal_schema", [EXPAND], indirect=True),
+]
+
+
+@pytest.fixture(autouse=True)
+def historical_projection_schema(migration_rehearsal_schema):
+    # The one-time copy reads the real pre-retirement columns in this schema.
+    with historical_models():
+        yield
 
 
 def observations():

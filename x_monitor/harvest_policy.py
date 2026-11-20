@@ -142,6 +142,24 @@ class AliasContext:
 
 
 @dataclass(frozen=True)
+class SearchAliasExclusion:
+    """Literal search-only exclusions scoped to a single contextual alias."""
+
+    alias: str
+    any_of: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not re.fullmatch(r"\w+(?:[.-]\w+)*", self.alias):
+            raise ValueError("invalid search exclusion alias")
+        if not self.any_of or any(
+            not re.fullmatch(r"\$?\w+(?: \w+)*", term)
+            or any(word.upper() in {"AND", "OR", "NOT"} for word in term.split())
+            for term in self.any_of
+        ):
+            raise ValueError("search exclusions must be literal terms")
+
+
+@dataclass(frozen=True)
 class BrandPolicy:
     """Per-brand authoring block.
 
@@ -171,6 +189,7 @@ class BrandPolicy:
     handle_tier: str = HANDLE_TIER_TOP
     version_family: VersionFamily | None = None
     alias_context: tuple[AliasContext, ...] = ()
+    search_alias_exclusions: tuple[SearchAliasExclusion, ...] = ()
     attribution_context: tuple[AliasContext, ...] = ()
     ignored_attribution_tokens: tuple[str, ...] = ()
     url_roots: tuple[str, ...] = ()
@@ -224,6 +243,14 @@ class BrandPolicy:
             if alias in seen:
                 raise ValueError(f"duplicate attribution context alias: {alias}")
             seen.add(alias)
+        excluded_aliases = set()
+        for rule in self.search_alias_exclusions:
+            if not isinstance(rule, SearchAliasExclusion):
+                raise TypeError("search_alias_exclusions entries must be SearchAliasExclusion")
+            alias = normalize_policy_token(rule.alias)
+            if alias not in {normalize_policy_token(r.alias) for r in self.alias_context} or alias in excluded_aliases:
+                raise ValueError(f"brand {self.nickname!r}: unknown or duplicate search exclusion alias {alias!r}")
+            excluded_aliases.add(alias)
         for root in self.url_roots:
             if not re.fullmatch(r"[a-z0-9.-]+(?:/[a-zA-Z0-9_.-]+)*", root):
                 raise ValueError("url_roots require a literal hostname and optional owner path")
@@ -448,6 +475,7 @@ def _load_brand_policy(nickname: str, raw: dict[str, Any]) -> BrandPolicy:
         handle_tier=str(raw.get("handle_tier", HANDLE_TIER_TOP) or HANDLE_TIER_TOP),
         version_family=version_family,
         alias_context=_load_alias_context(raw.get("alias_context", [])),
+        search_alias_exclusions=_load_search_alias_exclusions(raw.get("search_alias_exclusions", [])),
         attribution_context=_load_alias_context(raw.get("attribution_context", [])),
         ignored_attribution_tokens=_coerce_str_list(raw.get("ignored_attribution_tokens", []), "ignored_attribution_tokens", nickname),
         url_roots=_coerce_str_list(raw.get("url_roots", []), "url_roots", nickname),
@@ -476,6 +504,17 @@ def _load_bare_alias_groups(raw: Any) -> tuple[tuple[str, ...], ...]:
             raise ValueError("c_bare_alias_groups requires nonempty literal aliases")
         groups.append(tuple(group))
     return tuple(groups)
+
+
+def _load_search_alias_exclusions(raw: Any) -> tuple[SearchAliasExclusion, ...]:
+    if not isinstance(raw, list):
+        raise TypeError("search_alias_exclusions must be a list")
+    result = []
+    for entry in raw:
+        if not isinstance(entry, dict) or set(entry) != {"alias", "any_of"} or not isinstance(entry["any_of"], list):
+            raise ValueError("search_alias_exclusions require alias and any_of list")
+        result.append(SearchAliasExclusion(alias=entry["alias"], any_of=tuple(entry["any_of"])))
+    return tuple(result)
 
 
 def _load_alias_context(raw: Any) -> tuple[AliasContext, ...]:

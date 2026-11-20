@@ -522,6 +522,17 @@ _LANG_SYNONYMS: dict[str, str] = {
 }
 
 
+TRUSTED_SOURCE_LANGS = ("en", "ja", "es", "tr", "fr", "pt", "ko", "id", "ar", "pl")
+
+
+def post_source_language(detected, source):
+    """Use a provider language only when its code is unambiguous."""
+    if detected:
+        return detected
+    source = str(source or "").strip().lower()
+    return source if source in TRUSTED_SOURCE_LANGS else None
+
+
 def normalize_lang_detected(raw: object) -> str | None:
     """Return a validated primary code or Chinese script tag, or None."""
     if raw is None:

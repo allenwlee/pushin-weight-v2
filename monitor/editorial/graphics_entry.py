@@ -10,7 +10,18 @@ from django.utils.dateparse import parse_datetime
 from django.utils.timezone import is_aware
 
 from core.models import OriginalContent, OriginalContentRun, Person, Post
-from monitor.original_content import LOCALES, WORKFLOWS, digest, safe_source_url
+from monitor.original_content import (
+    LOCALES,
+    WORKFLOWS,
+    chatter_pool,
+    digest,
+    safe_source_url,
+)
+
+from .chatter_history import WORKFLOW as CHATTER_WORKFLOW
+from .chatter_history import read_source_memberships
+from .graphics_contracts import copy_writer_route
+from .voices import Voice
 
 
 def _limit(value, default):
@@ -23,25 +34,7 @@ def _limit(value, default):
     return str(min(number, Decimal(default)))
 
 
-def prepare_selected_story(*, content_id, run_id, locale, per_story_usd=None, daily_usd=None):
-    """Read a selected prepared output and bind its original packet to Post IDs.
-
-    This boundary neither selects another story nor persists or submits work.
-    The current Post's text is deliberately not substituted for the saved packet.
-    """
-    if locale not in LOCALES:
-        raise ValueError('unsupported locale')
-    run = OriginalContentRun.objects.filter(pk=run_id).first()
-    content = OriginalContent.objects.filter(pk=content_id).first()
-    if run is None or content is None or content.run_id != run.pk:
-        raise ValueError('content and run do not match')
-    if content.workflow_key not in WORKFLOWS.values() or content.status != 'prepared' or not content.story_id:
-        raise ValueError('content is not a prepared selected editorial story')
-    if not run.facts_as_of or not is_aware(run.facts_as_of):
-        raise ValueError('run requires an aware evidence cutoff')
-    selection, snapshot = content.selection, run.snapshot
-    if not isinstance(selection, dict) or not isinstance(snapshot, dict):
-        raise TypeError('invalid selected-story snapshot')
+def _manual_evidence(selection, snapshot, run):
     ids = selection.get('post_ids')
     if not isinstance(ids, list) or not ids or len(ids) > 50 or any(not isinstance(value, str) or not value for value in ids) or len(set(ids)) != len(ids):
         raise ValueError('invalid selected post IDs')
@@ -85,6 +78,117 @@ def prepare_selected_story(*, content_id, run_id, locale, per_story_usd=None, da
             'source_post_id': key,
             'snapshot_hash': digest(source),
         })
+    return sources, facts
+
+
+def _chatter_evidence(content, run, locale):
+    if content.consideration_state != 'selected' or not content.development_id:
+        raise ValueError('Chatter content is not a selected development')
+    source_locale, group = chatter_pool(content.source_locale_id, content.editorial_group)
+    # Resolve the saved voice/route directly. Loading today's profiles would change
+    # an already selected story when a configuration file is edited during a run.
+    try:
+        config = run.config_snapshot['editorial']
+        binding = f'chatter:{locale}'
+        voice = Voice.model_validate(run.config_snapshot['voices'][binding])
+        route = copy_writer_route(config.get('locale_routes', {}).get(binding) or config['routes']['chatter'])
+        if (voice.id != config['voices'][binding] or voice.track != 'chatter'
+                or voice.locale != locale or not voice.available or not voice.instructions.strip()):
+            raise ValueError('invalid saved voice')
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError('invalid saved Chatter writer binding') from exc
+    memberships = read_source_memberships(content)
+    if not memberships or not any(row.usage == 'consideration' for row, _ in memberships):
+        raise ValueError('selected Chatter story lacks considered sources')
+    sources = [source for _, source in memberships]
+    by_post = {row.post_id: (row, source) for row, source in memberships if row.post_id}
+    facts, identities = [], []
+    for number, (row, source) in enumerate(memberships, 1):
+        created = source['created_at']
+        if created is not None and parse_datetime(created) > run.facts_as_of:
+            raise ValueError('selected source snapshot is beyond the evidence cutoff')
+        identity = {'source_id': source['id'], 'post_id': row.post_id,
+                    'dossier_source_id': row.dossier_source_id,
+                    'snapshot_run_id': row.snapshot_run_id, 'source_hash': row.source_hash,
+                    'usage': row.usage}
+        identities.append(identity)
+        common = {
+            'status': 'saved_source_post' if row.post_id else 'saved_source_document',
+            'source_kind': source['kind'],
+            'source_id': source['id'], 'source_refs': [source['url']],
+            'snapshot_hash': row.source_hash, 'source_usage': row.usage,
+            'snapshot_run_id': row.snapshot_run_id,
+            'carrier_created_at': created, 'observed_at': source['observed_at'],
+            'source_language': source['source_language'],
+            'qualifiers': {key: source[key] for key in (
+                'verification_basis', 'excerpt_truncated', 'is_quote', 'is_reply', 'is_retweet')},
+            **({'source_post_id': row.post_id} if row.post_id else {'dossier_source_id': row.dossier_source_id}),
+        }
+        facts.append({**common, 'fact_id': f'F{number:02}',
+                      'supporting_passage': source['original_text'], 'speaker': source['author_handle'],
+                      'speaker_id': source['author_id'],
+                      'source_role': 'background' if row.usage == 'background' else 'original',
+                      'created_at': created,
+                      'attribution_gaps': ([] if source['author_handle'] or source['author_id'] else ['speaker_unavailable'])
+                      + ([] if created else ['passage_date_unavailable'])})
+        for field, role, suffix, speaker, post_id in [
+            ('stored_quote', 'quoted', 'Q', 'quoted_author_handle', 'quoted_post_id'),
+            ('local_parent', 'parent', 'P', 'parent_author_handle', 'parent_post_id'),
+        ]:
+            if source[field]:
+                linked = by_post.get(source[post_id])
+                passage_matches = linked and linked[1]['original_text'].startswith(source[field])
+                speaker_conflict = linked and source[speaker] and linked[1]['author_handle'] and source[speaker].casefold() != linked[1]['author_handle'].casefold()
+                fact = {**common, 'fact_id': f'F{number:02}-{suffix}',
+                        'supporting_passage': source[field], 'speaker': source[speaker],
+                        'speaker_id': None, 'attributed_post_id': source[post_id] or None,
+                        'source_role': role, 'created_at': None,
+                        'attribution_gaps': ['passage_date_unavailable']
+                        + ([] if source[speaker] else ['speaker_unavailable'])}
+                if passage_matches and not speaker_conflict:
+                    owner, original = linked
+                    fact.update(source_kind=original['kind'], source_id=original['id'],
+                        source_post_id=owner.post_id, source_refs=[original['url']],
+                        snapshot_hash=owner.source_hash, snapshot_run_id=owner.snapshot_run_id,
+                        source_usage=owner.usage, observed_at=original['observed_at'],
+                        source_language=original['source_language'], created_at=original['created_at'],
+                        speaker=original['author_handle'], speaker_id=original['author_id'],
+                        attribution_gaps=([] if original['created_at'] else ['passage_date_unavailable'])
+                        + ([] if original['author_handle'] or original['author_id'] else ['speaker_unavailable']))
+                elif linked:
+                    fact['attribution_gaps'].append('linked_source_conflict')
+                facts.append(fact)
+    return sources, facts, voice, route, {
+        'schema_version': 'graphics-chatter-source/v1', 'source_content_id': content.pk,
+        'source_run_id': run.pk, 'development_id': str(content.development_id),
+        'source_locale': source_locale, 'editorial_group': group, 'source_identities': identities,
+    }
+
+
+def prepare_selected_story(*, content_id, run_id, locale, per_story_usd=None, daily_usd=None):
+    """Resolve a selected saved packet without substituting mutable source text.
+
+    Chatter's hash-owned consideration reader and manual Graphics' Post snapshot
+    remain the authoritative boundaries; caller JSON cannot select another route.
+    """
+    if locale not in LOCALES:
+        raise ValueError('unsupported locale')
+    run = OriginalContentRun.objects.filter(pk=run_id).first()
+    content = OriginalContent.objects.filter(pk=content_id).first()
+    if run is None or content is None or content.run_id != run.pk:
+        raise ValueError('content and run do not match')
+    if content.workflow_key not in WORKFLOWS.values() or content.status != 'prepared' or not content.story_id:
+        raise ValueError('content is not a prepared selected editorial story')
+    if not run.facts_as_of or not is_aware(run.facts_as_of):
+        raise ValueError('run requires an aware evidence cutoff')
+    selection, snapshot = content.selection, run.snapshot
+    if not isinstance(selection, dict) or not isinstance(snapshot, dict):
+        raise TypeError('invalid selected-story snapshot')
+    chatter = None
+    if run.workflow_key == CHATTER_WORKFLOW:
+        sources, facts, voice, route, chatter = _chatter_evidence(content, run, locale)
+    else:
+        sources, facts = _manual_evidence(selection, snapshot, run)
     person_ids = selection.get('person_ids', [])
     if not isinstance(person_ids, list) or len(person_ids) > 5:
         raise ValueError('invalid person identities')
@@ -94,7 +198,7 @@ def prepare_selected_story(*, content_id, run_id, locale, per_story_usd=None, da
         raise ValueError('invalid person identities') from exc
     if found != set(person_ids):
         raise ValueError('missing selected person identity')
-    return {
+    request = {
         'content_id': content.pk,
         'run_id': run.pk,
         'workflow_key': content.workflow_key,
@@ -106,7 +210,7 @@ def prepare_selected_story(*, content_id, run_id, locale, per_story_usd=None, da
         'person_ids': person_ids,
         'sources': sources,
         'handoff': {
-            'subject': selection.get('summary') or content.subject_key,
+            'subject': (selection.get('subject') if chatter else None) or selection.get('summary') or content.subject_key,
             'locale': locale,
             'fact_items': facts,
             'evidence_status': 'saved selected source packet',
@@ -114,6 +218,11 @@ def prepare_selected_story(*, content_id, run_id, locale, per_story_usd=None, da
         'per_story_usd': _limit(per_story_usd, '4'),
         'daily_usd': _limit(daily_usd, '40'),
     }
+    if chatter is not None:
+        request['chatter'] = chatter
+        request['writer_route'] = route.model_dump(mode='json')
+        request['handoff'].update(voice=voice.model_dump(mode='json'), voice_hash=voice.digest)
+    return request
 
 
 def advance_package(request):

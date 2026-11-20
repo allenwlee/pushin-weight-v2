@@ -111,7 +111,8 @@ def test_verified_video_uses_selected_still_as_poster(client, graphic_edition):
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize('viewport', [{'width': 390, 'height': 844}, {'width': 1440, 'height': 900}])
-def test_story_video_keeps_poster_without_prefetching(live_server, graphic_edition, settings, viewport):
+@pytest.mark.parametrize('surface', ['story', 'archive'])
+def test_story_video_keeps_poster_without_prefetching(live_server, graphic_edition, settings, viewport, surface):
     from playwright.sync_api import sync_playwright
 
     edition, still, storage, _ = graphic_edition
@@ -123,7 +124,8 @@ def test_story_video_keeps_poster_without_prefetching(live_server, graphic_editi
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport=viewport, extra_http_headers={'X-Forwarded-Proto': 'https'})
         page.on('request', lambda request: requests.append(request.url))
-        url = live_server.url + reverse('editorial_story', kwargs={'story_id': edition.story_id})
+        path = reverse('editorial_story', kwargs={'story_id': edition.story_id}) if surface == 'story' else '/chatter/'
+        url = live_server.url + path
         page.goto(url, wait_until='networkidle')
         element = page.locator('video')
         assert element.count() == 1 and element.is_visible()

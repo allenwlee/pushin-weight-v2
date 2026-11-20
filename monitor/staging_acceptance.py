@@ -347,7 +347,9 @@ def _safe_enrichment_facts(value: Any) -> tuple[dict[str, Any], ...]:
         raise StagingAcceptanceError("invalid_enrichment_facts")
     result: list[dict[str, Any]] = []
     for raw in value:
-        if not isinstance(raw, Mapping) or set(raw) != _FACT_KEYS:
+        if not isinstance(raw, Mapping) or set(raw) not in (
+            _FACT_KEYS, _FACT_KEYS | {"translation_requested"}
+        ):
             raise StagingAcceptanceError("invalid_enrichment_facts")
         post_id = str(raw.get("post_id") or "")
         lane = raw.get("lane")
@@ -364,6 +366,7 @@ def _safe_enrichment_facts(value: Any) -> tuple[dict[str, Any], ...]:
             enrichment_stage_outcome(
                 translation_status=translation_status,
                 classification_status=classification_status,
+                translation_requested=raw.get("translation_requested", True),
             )
         except ValueError as exc:
             raise StagingAcceptanceError("invalid_enrichment_facts") from exc
@@ -374,6 +377,7 @@ def _safe_enrichment_facts(value: Any) -> tuple[dict[str, Any], ...]:
                 "translation_status": translation_status,
                 "classification_status": classification_status,
                 "output_complete": output_complete,
+                **({"translation_requested": raw["translation_requested"]} if "translation_requested" in raw else {}),
             }
         )
     if len({fact["post_id"] for fact in result}) != len(result):
@@ -536,6 +540,7 @@ def evaluate_staging_acceptance(
             and enrichment_stage_outcome(
                 translation_status=fact["translation_status"],
                 classification_status=fact["classification_status"],
+                translation_requested=fact.get("translation_requested", True),
             )
             == outcome
         )
@@ -603,6 +608,7 @@ def evaluate_staging_acceptance(
         enrichment_stage_outcome(
             translation_status=fact["translation_status"],
             classification_status=fact["classification_status"],
+            translation_requested=fact.get("translation_requested", True),
         )
         == "failed"
         for fact in accepted_facts
@@ -617,6 +623,7 @@ def evaluate_staging_acceptance(
         enrichment_stage_outcome(
             translation_status=fact["translation_status"],
             classification_status=fact["classification_status"],
+            translation_requested=fact.get("translation_requested", True),
         )
         == "pending"
         for fact in accepted_facts

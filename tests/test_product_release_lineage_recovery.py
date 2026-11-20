@@ -122,8 +122,8 @@ def test_online_index_covers_preexisting_lineage_claims(monkeypatch):
 
     from tests.test_product_release_lineage import _two_saved_findings
 
-    old = [("core", "0227_pulse_product_category_guard")]
-    new = [("core", "0231_lineage_fanin_index")]
+    old = [("core", "0235_pulse_product_category_guard")]
+    new = [("core", "0239_lineage_fanin_index")]
     MigrationExecutor(connection).migrate(old)
     try:
         # Simulate the prior writer, which predates the new job operation.

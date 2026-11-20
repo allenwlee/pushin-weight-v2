@@ -355,3 +355,34 @@ def test_scheduled_extractor_resumes_legacy_native_account_cursor():
     assert attempt.status == "completed" and attempt.policy_version == POLICY_VERSION
     assert attempt.decision["offering_categories"] == ["model-other"]
     assert OfficialCompanyAccountState.objects.get(account=account).status == "review_needed"
+
+
+def test_scheduled_evaluation_does_not_repeat_unresolved_expired_call():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.official_company_accounts import claim_account
+    from tests.account_factory import x_verification_id
+
+    x_verification_id("Business")
+    account = Account.objects.create(
+        author_id="874001", handle="queue_claim_test",
+        bio="We are an AI lab developing speech models.",
+    )
+    state = enqueue_account(account)
+    cfg = config()
+    attempt = claim_account(state.pk, cfg=cfg.official_company, budget_scope="interrupted")
+    assert attempt is not None
+    OfficialCompanyAccountState.objects.filter(pk=state.pk).update(
+        claim_expires_at=timezone.now() - timedelta(seconds=1)
+    )
+    call = Mock(side_effect=AssertionError("unknown call must not be repeated"))
+    runner = CycleRunner(cfg=cfg, cycle_kind="scheduled", _official_company_call=call)
+    result = runner._run_official_company_discovery(
+        run_id="expired-unknown", deadline=runner.cfg.harvest.start_deadline()
+    )
+    assert result["attempted"] == 0
+    call.assert_not_called()
+    attempt.refresh_from_db()
+    assert attempt.status == "reserved" and attempt.actual_usd is None

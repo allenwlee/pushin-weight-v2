@@ -80,7 +80,7 @@ def require_fence(row):
     return current
 
 
-def _completed_text_cost(response, request_metadata):
+def completed_text_cost(response, request_metadata):
     """Missing or invalid billing evidence keeps the full reservation."""
     usage = response.get("usage") if isinstance(response, dict) else None
     if not isinstance(usage, dict):
@@ -204,12 +204,20 @@ def reserve_graphics_call(
         raise ValueError("invalid Graphics search reservation")
     run_cap = _finite_limit(per_run_limit, Decimal(4))
     daily_cap = min(_finite_limit(daily_limit, Decimal(40)), _finite_limit(configured_daily_limit, Decimal(40)))
+    from .graphics_chatter import accounting_config
+
+    # Resolve the source before taking any Graphics locks. Source collection
+    # already owns source-run -> Chatter-budget -> provider lock ordering.
+    chatter_cfg = accounting_config(OriginalContentRun.objects.get(pk=run.pk))
+    from .chatter_accounting import admit, budget_scope
+
+    scope = budget_scope(chatter_cfg) if chatter_cfg else "editorial"
     now = timezone.now()
     day = now.date()
     identity = f"{_GRAPHICS_PREFIX}{run.pk}:{stage}"
     lane = _GRAPHICS_REVIEW if review else _GRAPHICS_CREATE
     with transaction.atomic():
-        advisory_lock(f"content-budget:editorial:{day}")
+        graphics_budget_lock(scope, day)
         advisory_lock("editorial-provider-inflight")
         run = OriginalContentRun.objects.select_for_update().get(pk=run.pk)
         if run.execution_state != "running" or not run.lease_until or run.lease_until <= now:
@@ -230,6 +238,16 @@ def reserve_graphics_call(
         ).filter(Q(state="sent") | Q(state="reserved", claim_expires_at__gt=now))
         if active.filter(run=run).exists():
             raise CapacityHeld("graphics run already in flight")
+        # Staging's Chatter caller owns an exclusive provider lane. Honor that
+        # contract in both directions without counting Graphics' own social-brief calls.
+        chatter_active = OriginalContentCall.objects.filter(
+            workflow_key__in=["chatter-discovery", "social-brief"], state="sent",
+        ).exclude(request_identity__startswith=_GRAPHICS_PREFIX)
+        chatter_active.filter(
+            Q(claim_expires_at__lte=now) | Q(run__lease_until__lte=now)
+        ).update(state="ambiguous", error_code="lease_expired_after_send")
+        if chatter_active.exists():
+            raise CapacityHeld("Chatter provider already in flight")
         if review:
             if active.count() >= 1:
                 raise CapacityHeld("graphics review capacity exhausted")
@@ -247,10 +265,14 @@ def reserve_graphics_call(
             )
             claim = claim_trend_narrative_provider_call(previous.pk, owner=owner, now=now, lease_seconds=lease_seconds)
             return (claim or previous), bool(claim)
-        EditorialBudget.objects.get_or_create(day=day)
-        budget = EditorialBudget.objects.select_for_update().get(pk=day)
+        budget = None
+        if chatter_cfg:
+            admit(chatter_cfg, ceiling)
+        else:
+            EditorialBudget.objects.get_or_create(day=day)
+            budget = EditorialBudget.objects.select_for_update().get(pk=day)
         spent = OriginalContentCall.objects.filter(run=run, request_identity__startswith=_GRAPHICS_PREFIX).aggregate(total=Sum("reserved_usd"))["total"] or Decimal(0)
-        if spent + ceiling > run_cap or _graphics_daily_total(day, budget) + ceiling > daily_cap:
+        if spent + ceiling > run_cap or (budget is not None and _graphics_daily_total(day, budget) + ceiling > daily_cap):
             raise BudgetHeld("graphics budget exhausted")
         from monitor.trend_narrative_lifecycle import (
             claim_trend_narrative_provider_call,
@@ -261,7 +283,7 @@ def reserve_graphics_call(
             run=run, stage=f"gfx:{run.pk}:{stage}", batch_key=lane,
             request_identity=identity, request_hash=request_hash,
             request_packet=request_packet, now=now, workflow_key=workflow_key,
-            workflow_version="graphics-package/v1", budget_scope="editorial",
+            workflow_version="graphics-package/v1", budget_scope=scope,
             reserved_usd=ceiling, provider=provider, model=model,
         )
         if call is None:
@@ -274,12 +296,18 @@ def reserve_graphics_call(
         )
         if call is None:
             raise BudgetHeld("graphics claim conflict")
-        budget.reserved_usd += ceiling
-        budget.calls += int(stage not in {"S1", "S2"})
-        budget.media_calls += int(kind == "media")
-        budget.save()
+        if budget is not None:
+            budget.reserved_usd += ceiling
+            budget.calls += int(stage not in {"S1", "S2"})
+            budget.media_calls += int(kind == "media")
+            budget.save()
         return call, True
 
+
+
+def graphics_budget_lock(scope, day):
+    advisory_lock(f"content-budget:editorial:{day}" if scope == "editorial"
+                  else "content-budget:" + scope)
 
 
 def fail_graphics_presend_call(call_id, *, owner, fence, error_code, now=None):
@@ -295,7 +323,7 @@ def fail_graphics_presend_call(call_id, *, owner, fence, error_code, now=None):
     if not observed.budget_day:
         raise ValueError("graphics call has no budget day")
     with transaction.atomic():
-        advisory_lock(f"content-budget:editorial:{observed.budget_day}")
+        graphics_budget_lock(observed.budget_scope, observed.budget_day)
         call = OriginalContentCall.objects.select_for_update().get(pk=call_id)
         if not call.request_identity.startswith(_GRAPHICS_PREFIX):
             raise ValueError("not a graphics call")
@@ -315,9 +343,10 @@ def fail_graphics_presend_call(call_id, *, owner, fence, error_code, now=None):
             or call.claim_expires_at <= now
         ):
             return False
-        budget = EditorialBudget.objects.select_for_update().get(pk=call.budget_day)
-        budget.reserved_usd -= call.reserved_usd
-        budget.save(update_fields=["reserved_usd"])
+        if call.budget_scope == "editorial":
+            budget = EditorialBudget.objects.select_for_update().get(pk=call.budget_day)
+            budget.reserved_usd -= call.reserved_usd
+            budget.save(update_fields=["reserved_usd"])
         call.state = "failed"
         call.error_code = error_code
         call.actual_usd = Decimal(0)
@@ -361,7 +390,7 @@ def complete_graphics_call(
     actual_usd, receipt = (_graphics_billing_receipt(observed.provider, actual_usd)
                            if actual_usd is not None else (None, None))
     with transaction.atomic():
-        advisory_lock(f"content-budget:editorial:{observed.budget_day}")
+        graphics_budget_lock(observed.budget_scope, observed.budget_day)
         call = OriginalContentCall.objects.select_for_update().get(pk=call_id)
         if call.state == "completed":
             return (call.claim_owner == owner and call.claim_fence == fence
@@ -375,9 +404,10 @@ def complete_graphics_call(
         ):
             return False
         if actual_usd is not None:
-            budget = EditorialBudget.objects.select_for_update().get(pk=call.budget_day)
-            budget.reserved_usd += actual_usd - call.reserved_usd
-            budget.save(update_fields=["reserved_usd"])
+            if call.budget_scope == "editorial":
+                budget = EditorialBudget.objects.select_for_update().get(pk=call.budget_day)
+                budget.reserved_usd += actual_usd - call.reserved_usd
+                budget.save(update_fields=["reserved_usd"])
             provenance = {**call.provenance, 'graphics_billing_receipt': receipt}
             OriginalContentCall.objects.filter(pk=call_id).update(
                 reserved_usd=actual_usd, actual_usd=actual_usd, provenance=provenance)
@@ -393,7 +423,7 @@ def record_graphics_video_cost(call_id, *, request_id, actual_usd):
     if not observed.budget_day:
         raise ValueError('video call has no budget day')
     with transaction.atomic():
-        advisory_lock(f'content-budget:editorial:{observed.budget_day}')
+        graphics_budget_lock(observed.budget_scope, observed.budget_day)
         call = OriginalContentCall.objects.select_for_update().get(pk=call_id)
         if (not call.request_identity.startswith(_GRAPHICS_PREFIX)
                 or not call.request_identity.endswith((':V1', ':V-B'))
@@ -405,9 +435,10 @@ def record_graphics_video_cost(call_id, *, request_id, actual_usd):
         if call.actual_usd is not None:
             return (call.actual_usd == actual
                     and call.provenance.get('graphics_billing_receipt') == receipt)
-        budget = EditorialBudget.objects.select_for_update().get(pk=call.budget_day)
-        budget.reserved_usd += actual - call.reserved_usd
-        budget.save(update_fields=['reserved_usd'])
+        if call.budget_scope == "editorial":
+            budget = EditorialBudget.objects.select_for_update().get(pk=call.budget_day)
+            budget.reserved_usd += actual - call.reserved_usd
+            budget.save(update_fields=['reserved_usd'])
         call.actual_usd = call.reserved_usd = actual
         call.provenance = {**call.provenance, 'graphics_billing_receipt': receipt}
         call.save(update_fields=['actual_usd', 'reserved_usd', 'provenance', 'updated_at'])
@@ -495,7 +526,8 @@ def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):
                 run__lease_until__lt=timezone.now(),
             ).exclude(request_identity__startswith=_GRAPHICS_PREFIX).update(state="ambiguous", error_code="lease_expired")
             if OriginalContentCall.objects.filter(
-                budget_scope="editorial"
+                Q(budget_scope="editorial")
+                | Q(workflow_key__in=["chatter-discovery", "social-brief"])
             ).filter(
                 Q(state="sent") | Q(state="reserved", request_identity__startswith=_GRAPHICS_PREFIX,
                                      claim_expires_at__gt=timezone.now(), run__lease_until__gt=timezone.now())
@@ -522,7 +554,7 @@ def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):
                 call.refresh_from_db()
                 import_call(call, run, request_metadata=request_metadata)
         raise
-    cost = _completed_text_cost(response, request_metadata) if kind == "text" else None
+    cost = completed_text_cost(response, request_metadata) if kind == "text" else None
     charged = min(call.reserved_usd, cost) if cost is not None else call.reserved_usd
     with transaction.atomic():
         advisory_lock(f"content-budget:editorial:{call.budget_day}")

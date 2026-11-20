@@ -11,6 +11,13 @@ import pytest
 from django.db import connection
 from django.utils import timezone
 
+from tests.test_graphics_chatter_adapter import (
+    frozen_chatter as frozen_chatter,  # noqa: PLC0414
+)
+from tests.test_graphics_chatter_adapter import (
+    prepared,
+)
+
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
 WORKER = '''
@@ -19,6 +26,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'project.settings')
 import django
 django.setup()
 from core.models import OriginalContentRun
+from celery import current_task
 from monitor.editorial import graphics_dispatch, graphics_pipeline
 from monitor.editorial.graphics_packages import claim_package, release_package
 from django.db import transaction
@@ -45,6 +53,7 @@ def fake_advance(run_id):
             outcome = dict(run.outcome)
             outcome['probe_completions'] = outcome.get('probe_completions', 0) + 1
             outcome['probe_worker'] = owner
+            outcome['probe_timelimit'] = current_task.request.timelimit
             run.outcome = outcome
             run.save(update_fields=['outcome'])
     finally:
@@ -74,11 +83,79 @@ def wait_until(predicate, timeout=30):
     raise AssertionError('timed out waiting for Graphics queue integration')
 
 
+@pytest.fixture
+def local_broker(tmp_path):
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        port = sock.getsockname()[1]
+    with (tmp_path / 'broker.log').open('w') as log:
+        redis = subprocess.Popen(['redis-server', '--port', str(port), '--bind', '127.0.0.1',
+                                  '--save', '', '--appendonly', 'no'], stdout=log, stderr=log)
+        try:
+            wait_until(lambda: subprocess.run(
+                ['redis-cli', '-p', str(port), 'ping'], stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, check=False,
+            ).returncode == 0)
+            yield f'redis://127.0.0.1:{port}/0'
+        finally:
+            redis.terminate()
+            redis.wait(timeout=5)
+
+
+@pytest.mark.skipif(os.getenv('GRAPHICS_QUEUE_INTEGRATION') != '1', reason='opt-in real broker test')
+def test_actual_creation_dispatch_sends_saved_c1_deadline_to_broker(frozen_chatter, local_broker, monkeypatch):
+    from celery import Celery
+
+    from core.models import OriginalContentCall, OriginalContentRun
+    from monitor import tasks
+    from monitor.editorial.graphics_dispatch import dispatch_creation
+    from monitor.editorial.graphics_packages import materialize_package
+
+    assert connection.settings_dict['NAME'].startswith('test_pw_graphics_')
+    row, _, _ = frozen_chatter
+    native, _ = materialize_package(prepared(row, 'ja'))
+    assert native.snapshot['request']['writer_route']['timeout_seconds'] == 300
+    manual = OriginalContentRun.objects.create(
+        source_cycle_id=str(uuid4()), workflow_key='graphics-package', scope_key=str(uuid4()),
+        facts_as_of=timezone.now(), packet_schema_version=1, snapshot={}, execution_state='pending',
+    )
+    producer = Celery('graphics-deadline-producer', broker=local_broker)
+    # Redirect only the task's app; production dispatch/apply_async build the message.
+    monkeypatch.setattr(type(tasks.advance_graphics_package._get_current_object()), '_app', producer)
+    try:
+        with producer.connection_for_read() as broker, broker.SimpleQueue('graphics-creation') as queue:
+            def sent_limits(run):
+                assert dispatch_creation(run_id=run.pk)
+                message = queue.get(block=True, timeout=5)
+                try:
+                    assert message.headers['task'] == 'monitor.tasks.advance_graphics_package'
+                    assert message.payload[0] == [run.pk]
+                    return message.headers['timelimit']
+                finally:
+                    message.ack()
+
+            assert sent_limits(native) == [315, 310]
+            now = timezone.now()
+            call = OriginalContentCall.objects.create(
+                run=native, stage=f'gfx:{native.pk}:C1', request_identity=f'graphics:{native.pk}:C1',
+                request_hash='a' * 64, state='reserved', reserved_at=now,
+            )
+            assert sent_limits(native) == [315, 310]
+            call.state, call.sent_at = 'ambiguous', now
+            call.save(update_fields=['state', 'sent_at'])
+            assert sent_limits(native) == [150, 145]
+            assert sent_limits(manual) == [150, 145]
+    finally:
+        producer.close()
+
+
 @pytest.mark.skipif(os.getenv('GRAPHICS_QUEUE_INTEGRATION') != '1', reason='opt-in real worker test')
 def test_two_workers_overlap_and_recover_after_broker_restart(tmp_path, monkeypatch):
     from celery import Celery
 
     from core.models import OriginalContentRun
+    from monitor import tasks
+    from monitor.editorial.graphics_dispatch import dispatch_creation
 
     producer = None
 
@@ -117,10 +194,7 @@ def test_two_workers_overlap_and_recover_after_broker_restart(tmp_path, monkeypa
         wait_until(lambda: (tmp_path / 'workers.log').read_text().count(' ready.') >= 2)
         assert all(p.poll() is None for p in processes), 'worker exited; see worker log'
         producer = Celery('graphics-test-producer', broker=broker_url)
-        def dispatch_creation(*, run_id):
-            producer.send_task('monitor.tasks.advance_graphics_package', args=[run_id],
-                               queue='graphics-creation', retry=False)
-            return True
+        monkeypatch.setattr(type(tasks.advance_graphics_package._get_current_object()), '_app', producer)
         first = make_run()
         assert dispatch_creation(run_id=first.pk)
         def running():
@@ -137,6 +211,7 @@ def test_two_workers_overlap_and_recover_after_broker_restart(tmp_path, monkeypa
         first.refresh_from_db()
         assert first.outcome['probe_completions'] == 1
         assert first.outcome['overlap_worker'] != first.outcome['probe_worker']
+        assert first.outcome['probe_timelimit'] == [150, 145]
         redis.terminate()
         redis.wait(timeout=5)
         second = make_run()
@@ -145,6 +220,7 @@ def test_two_workers_overlap_and_recover_after_broker_restart(tmp_path, monkeypa
         wait_until(redis_ready)
         wait_until(lambda: completed(second), timeout=35)
         assert second.outcome['probe_completions'] == 1
+        assert second.outcome['probe_timelimit'] == [150, 145]
     finally:
         for process in processes:
             process.terminate()

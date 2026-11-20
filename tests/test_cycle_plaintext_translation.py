@@ -23,7 +23,7 @@ def test_post_fetch_passes_the_pinned_direct_gemma_route_to_translator_factory(
 ):
     """M18 pin: the real post-fetch caller passes its loaded role config."""
     post = Post.objects.create(tweet_id="deepinfra-translator-wiring", text="hello")
-    PostEnrichmentState.objects.create(
+    PostEnrichmentState.objects.create(translation_requested=True,
         post=post,
         classification_status=PostEnrichmentState.Status.SUCCEEDED,
     )
@@ -54,7 +54,7 @@ def test_post_fetch_passes_the_pinned_direct_gemma_route_to_translator_factory(
 def test_post_fetch_plaintext_publishes_exact_text_or_records_failure(monkeypatch, fail_ja):
     source = '  "First paragraph"\n\nSecond paragraph.\n'
     post = Post.objects.create(tweet_id="plaintext-cycle", text=source, lang="en")
-    PostEnrichmentState.objects.create(
+    PostEnrichmentState.objects.create(translation_requested=True,
         post=post, classification_status=PostEnrichmentState.Status.SUCCEEDED,
     )
     calls = []
@@ -110,6 +110,7 @@ def test_post_fetch_plaintext_publishes_exact_text_or_records_failure(monkeypatc
                 "post_id": post.pk,
                 "lane": "carryover",
                 "translation_status": PostEnrichmentState.Status.SUCCEEDED,
+                "translation_requested": True,
                 "classification_status": PostEnrichmentState.Status.SUCCEEDED,
                 "output_complete": True,
             }
@@ -120,7 +121,7 @@ def test_expired_literal_deadline_does_not_spend_attempt_or_create_artifact(monk
     from x_monitor.config import EnrichmentAttemptDeadline, EnrichmentConfig
 
     post = Post.objects.create(tweet_id="literal-not-sent", text="A short update", lang="en")
-    state = PostEnrichmentState.objects.create(
+    state = PostEnrichmentState.objects.create(translation_requested=True,
         post=post, classification_status=PostEnrichmentState.Status.SUCCEEDED,
     )
 
@@ -157,7 +158,7 @@ def test_expired_literal_deadline_does_not_spend_attempt_or_create_artifact(monk
 
 def test_exhausted_llm_call_budget_is_not_counted_as_provider_attempt(monkeypatch):
     post = Post.objects.create(tweet_id="literal-budget-not-sent", text="An update", lang="en")
-    state = PostEnrichmentState.objects.create(
+    state = PostEnrichmentState.objects.create(translation_requested=True,
         post=post, classification_status=PostEnrichmentState.Status.SUCCEEDED,
     )
 
@@ -191,7 +192,7 @@ def test_cycle_short_post_finishes_before_long_retry_and_reuses_saved_chunks(mon
     long_post = Post.objects.create(tweet_id="long-cycle", text=long_source, lang="en")
     short_post = Post.objects.create(tweet_id="short-cycle", text="Small update", lang="en")
     for post in (long_post, short_post):
-        PostEnrichmentState.objects.create(
+        PostEnrichmentState.objects.create(translation_requested=True,
             post=post, classification_status=PostEnrichmentState.Status.SUCCEEDED,
         )
 
@@ -258,7 +259,7 @@ def test_continuous_worker_advances_all_long_posts_with_bounded_parallel_calls(m
         for word in ("alpha", "bravo", "gamma")
     ]
     for post in posts:
-        PostEnrichmentState.objects.create(post=post, classification_status="succeeded")
+        PostEnrichmentState.objects.create(translation_requested=True, post=post, classification_status="succeeded")
     lock = threading.Lock()
     first_calls = threading.Barrier(2)
     entered = set()
@@ -312,7 +313,7 @@ def test_chunk_cache_rejects_changed_source_model_and_stale_claim():
 
     source = "a" * 5_100
     post = Post.objects.create(tweet_id="chunk-fence", text=source, lang="en")
-    state = PostEnrichmentState.objects.create(
+    state = PostEnrichmentState.objects.create(translation_requested=True,
         post=post,
         claim_run_id="owner-1",
         claim_expires_at=timezone.now() + timedelta(minutes=5),
@@ -360,7 +361,7 @@ def test_post_fetch_does_not_publish_literal_response_after_claim_is_reassigned(
         text_en="newer English",
         text_zh_cn="较新的中文",
     )
-    state = PostEnrichmentState.objects.create(
+    state = PostEnrichmentState.objects.create(translation_requested=True,
         post=post,
         classification_status=PostEnrichmentState.Status.SUCCEEDED,
     )
@@ -421,7 +422,7 @@ def test_semantic_rejection_cannot_publish_from_real_post_fetch(monkeypatch, fai
     if failure == "pronunciation":
         source = "Pronunciation guide\nWidget → ウィジェット"
     post = Post.objects.create(tweet_id="invariant-" + failure, text=source, lang="ja" if failure == "language" else "en")
-    PostEnrichmentState.objects.create(post=post, classification_status=PostEnrichmentState.Status.SUCCEEDED)
+    PostEnrichmentState.objects.create(translation_requested=True, post=post, classification_status=PostEnrichmentState.Status.SUCCEEDED)
     calls = []
 
     class RawClient:

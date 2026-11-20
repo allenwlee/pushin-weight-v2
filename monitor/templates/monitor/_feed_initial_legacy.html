@@ -67,7 +67,7 @@
       {% endfor %}
     </td>
     <td>
-      {% if row.lang_detected %}
+      {% if row.lang_detected and row.is_translated and row.text_translated != row.text_original %}
         <div class="lang-sub">{% trans "translated from:" %} [{{ row.lang_detected }}]</div>
       {% endif %}
       <div class="cell-truncated" data-pw-cell-truncated>

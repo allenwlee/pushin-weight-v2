@@ -53,6 +53,8 @@ verify_serving_environment(environ.Env.ENVIRON)
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-only-change-in-production-xmonitor-v2")
 DEBUG = env("DEBUG")
+TRUST_RENDER_CLIENT_IP = env.bool("TRUST_RENDER_CLIENT_IP", default=False)
+POST_TRANSLATION_DAILY_REQUEST_LIMIT = env.int("POST_TRANSLATION_DAILY_REQUEST_LIMIT", default=1000)
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", ".onrender.com"])
 
 USE_TZ = True
@@ -267,7 +269,7 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 min hard cap per cycle
 # Exceed the headline task's 12-minute hard limit so a worker loss can safely
 # redeliver the envelope after its irreversible per-window slots are visible.
-CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 15 * 60}
+CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 15 * 60, "queue_order_strategy": "priority"}
 
 # Render cron is the only production scheduler. Keep beat empty so a future
 # worker cannot silently create a second 15-minute harvest scheduler.
@@ -277,9 +279,12 @@ PRODUCT_RELEASE_BACKGROUND_ENABLED = env.bool("PRODUCT_RELEASE_BACKGROUND_ENABLE
 # A local file store only; separate services still require a verified transport.
 # An empty path reports unavailable and never implies running/stopped.
 PULSE_CONTROL_DIRECTORY = env("PULSE_CONTROL_DIRECTORY", default="")
+PULSE_CONTROL_R2_BUCKET = env("PULSE_CONTROL_R2_BUCKET", default="")
+PULSE_CONTROL_R2_KEY = env("PULSE_CONTROL_R2_KEY", default="pulse/control-v1.json")
 GRAPHICS_RECONCILER_ENABLED = env.bool("GRAPHICS_RECONCILER_ENABLED", default=False)
 GRAPHICS_REQUIRE_SHARED_MEDIA = env.bool("GRAPHICS_REQUIRE_SHARED_MEDIA", default=False)
 CELERY_TASK_ROUTES = {
+    "monitor.tasks.chatter_stage": {"queue": "trend-narratives"},
     "monitor.tasks.advance_graphics_package": {"queue": "graphics-creation"},
     "monitor.tasks.submit_graphics_video": {"queue": "graphics-creation"},
     "monitor.tasks.poll_graphics_video": {"queue": "graphics-creation"},

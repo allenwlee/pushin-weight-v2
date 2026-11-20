@@ -152,8 +152,9 @@ def test_recurring_resume_keeps_current_slot_but_new_day_starts_new_collection(
     from core.models import CollectionRun
 
     settings.BENCHMARK_COLLECTION_ENABLED = True
-    source = typed_job().source
-    source.enabled, source.adapter_key = True, "arena-history-v1"
+    # Exercise this scheduling invariant through the current typed inventory API.
+    source, _ = DataSource.objects.get_or_create(id="openrouter", defaults={"name": "OpenRouter", "source_type": "benchmark"})
+    source.enabled, source.adapter_key = True, "fixture-inventory-v1"
     source.save()
     job = register_job(
         job_key="typed-slots",
@@ -193,3 +194,25 @@ def test_recurring_resume_keeps_current_slot_but_new_day_starts_new_collection(
     assert original.status == "partial" and original.coverage_state == "partial"
     assert latest.scheduled_slot_at == tomorrow.replace(hour=10)
     assert original.attempts.count() == 2 and latest.attempts.count() == 1
+
+
+@pytest.mark.parametrize("change", [
+    {"operation": "model_inventory"}, {"source_id": "github"}, {"purpose": "catalog"},
+    {"instruction_version": 1}, {"owner_kind": "account"}, {"definition": {"version": 2, "options": {"workflow_version": "chatter-v1"}}},
+    {"max_bytes": None}, {"max_seconds": None},
+])
+def test_only_ranked_chatter_request_and_item_budgets_can_be_absent(change):
+    from core.collection_instructions import validate_settings
+
+    values = {"instruction_version": 2, "owner_kind": "source", "source_id": "x", "purpose": "content",
+        "operation": "chatter_search", "mode": "manual", "schedule_kind": "manual", "schedule_driver": "manual",
+        "definition": {"version": 2, "options": {"workflow_version": "chatter-trends-sources-v1"}},
+        "max_requests": None, "max_items": None, "max_bytes": 8_000_000, "max_seconds": 600}
+    validate_settings(CollectionJob(**values))
+    if change.get("owner_kind") == "account":
+        from monitor.cycle import persist_x_post
+
+        post, _ = persist_x_post({"id": "8993", "text": "fixture owner", "author_id": "8994", "author_handle": "typed_owner"})
+        change = {**change, "owner_account_id": post.author_id}
+    with pytest.raises(ValueError, match="invalid typed budget|job account ownership mismatch"):
+        validate_settings(CollectionJob(**{**values, **change}))

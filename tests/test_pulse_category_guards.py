@@ -11,8 +11,8 @@ def historical_category_rows():
     """Build old rows before the current guard, as an existing database would."""
     from django.db.migrations.executor import MigrationExecutor
 
-    previous = [("core", "0226_chart_native_lookup_index")]
-    current = [("core", "0232_pending_publication_admission_index")]
+    previous = [("core", "0234_each_signal_aggregation")]
+    current = [("core", "0240_pending_publication_admission_index")]
     MigrationExecutor(connection).migrate(previous)
     try:
         for code in ("llm-model", "other-ai-model", "agent-harness"):
@@ -67,8 +67,8 @@ def test_legacy_value_is_readable_but_explicit_same_value_update_is_rejected():
     from django.db.migrations.executor import MigrationExecutor
 
     executor = MigrationExecutor(connection)
-    previous = [("core", "0226_chart_native_lookup_index")]
-    current = [("core", "0232_pending_publication_admission_index")]
+    previous = [("core", "0234_each_signal_aggregation")]
+    current = [("core", "0240_pending_publication_admission_index")]
     executor.migrate(previous)
     try:
         legacy = ProductType.objects.get(code="llm-model")

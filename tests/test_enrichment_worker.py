@@ -13,7 +13,8 @@ from monitor.enrichment_queue import (
     finish_enrichment_stage,
     mark_stage_started,
 )
-from tests.test_post_enrichment_queue import _cfg, _state
+from tests.test_post_enrichment_queue import _cfg
+from tests.test_post_enrichment_queue import _requested_state as _state
 from x_monitor.attribution import LLMCallBudgetExhausted
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -440,7 +441,8 @@ def test_scheduled_worker_excludes_backfill_owned_states(seeded_policy_keywords)
 
     state = _state("backfill-owner")
     state.source_collection_job = ready_job()
-    state.save(update_fields=["source_collection_job"])
+    state.translation_requested = False
+    state.save(update_fields=["source_collection_job", "translation_requested"])
     assert (
         claim_enrichment_states(
             cfg=_cfg().harvest.enrichment, run_id="scheduled", fair_queue=True

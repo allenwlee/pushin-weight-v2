@@ -65,6 +65,7 @@
   var synthesisFlushTimer = null;
   var synthesisPollTimers = [];
   var synthesisControllers = [];
+  var translationIntents = Object.create(null);
   var SYNTHESIS_POLL_DELAYS = [2000, 4000, 8000, 16000, 30000, 30000];
 
   function csrfToken() {
@@ -99,6 +100,9 @@
     var synthesis = result.synthesis || {};
     var literal = result.literal || {};
     if (text) {
+      var selectedKey = text.getAttribute('data-translation-selected') === '1' ||
+        text.getAttribute('data-layer-selected-by-user') === '1'
+        ? text.getAttribute('data-layer-key') : null;
       if (typeof result.language_undetected === 'boolean') {
         text.setAttribute('data-language-display', result.language_display || '');
         text.setAttribute('data-language-undetected', result.language_undetected ? '1' : '0');
@@ -107,10 +111,11 @@
       if (synthesis.en) text.setAttribute('data-commentary-en', synthesis.en);
       if (synthesis['zh-cn']) text.setAttribute('data-commentary-zh-cn', synthesis['zh-cn']);
       if (synthesis.ja) text.setAttribute('data-commentary-ja', synthesis.ja);
-      if (literal.en) text.setAttribute('data-text-en', literal.en);
-      if (literal['zh-cn']) text.setAttribute('data-literal-cn', literal['zh-cn']);
-      if (literal.ja) text.setAttribute('data-text-ja', literal.ja);
-      text.setAttribute('data-layer-idx', '0');
+      if (literal.en && !text.getAttribute('data-text-en')) text.setAttribute('data-text-en', literal.en);
+      if (literal['zh-cn'] && !text.getAttribute('data-literal-cn')) text.setAttribute('data-literal-cn', literal['zh-cn']);
+      if (literal.ja && !text.getAttribute('data-text-ja')) text.setAttribute('data-text-ja', literal.ja);
+      if (selectedKey) selectTextLayer(text, selectedKey);
+      else text.setAttribute('data-layer-idx', '0');
       renderTextLayer(text);
     }
     var meta = $('.meta', row);
@@ -389,6 +394,7 @@
     div.setAttribute('data-unsanctioned', row.unsanctioned ? '1' : '');
     div.setAttribute('data-enrichment-status', row.enrichment_status || 'succeeded');
     div.setAttribute('data-synthesis-status', row.synthesis_status || 'not_requested');
+    div.setAttribute('data-translation-status', row.translation_status || 'not_requested');
     div.setAttribute('data-tint', tint);
     div.innerHTML = renderRowHtml(row);
     return div;
@@ -695,6 +701,7 @@
               escapeHtml((initialText || '').toString()) +
             '</div>' +
             '<div class="engagement">' +
+              '<button type="button" class="post-translate" data-post-translate>' + escapeHtml(translationLabel('not_requested')) + '</button>' +
               '<a class="feed-x-link" href="https://x.com/i/web/status/' +
                 encodeURIComponent(row.tweet_id || '') + '" target="_blank"' +
                 ' rel="noopener noreferrer" aria-label="' +
@@ -1217,6 +1224,91 @@
       escapeHtml(layer.value);
   }
 
+  function selectTextLayer(el, key) {
+    var index = textLayers(el).findIndex(function (layer) { return layer.key === key; });
+    if (index >= 0) el.setAttribute('data-layer-idx', String(index));
+  }
+
+  function translationLabel(status) {
+    var locale = currentLocale();
+    var labels = locale === 'ja' || locale === 'ja-JP'
+      ? { pending: '翻訳中…', ready: '翻訳を表示', failed: '翻訳を再試行', deferred: '後でもう一度お試しください', unsupported: '翻訳は利用できません', unavailable: '翻訳は利用できません', not_requested: '翻訳' }
+      : locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans'
+        ? { pending: '翻译中…', ready: '显示翻译', failed: '重试翻译', deferred: '请稍后再试', unsupported: '无法翻译', unavailable: '无法翻译', not_requested: '翻译' }
+        : { pending: 'Translating…', ready: 'Show translation', failed: 'Retry translation', deferred: 'Try again later', unsupported: 'Translation unavailable', unavailable: 'Translation unavailable', not_requested: 'Translate' };
+    return labels[status] || labels.not_requested;
+  }
+
+  function translationLocale() {
+    var locale = currentLocale();
+    if (locale === 'ja' || locale === 'ja-JP') return 'ja';
+    if (locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans') return 'zh-cn';
+    return 'en';
+  }
+
+  function setTranslationStatus(row, status) {
+    if (status === 'processing') status = 'pending';
+    row.setAttribute('data-translation-status', status);
+    var button = $('[data-post-translate]', row);
+    if (button) {
+      button.textContent = translationLabel(status);
+      button.setAttribute('aria-busy', status === 'pending' ? 'true' : 'false');
+      button.disabled = status === 'unsupported' || status === 'unavailable';
+    }
+  }
+
+  function requestTranslation(row, pollAttempt, selection, locale, generation, pollGeneration) {
+    if (!row.isConnected || generation !== synthesisGeneration || currentLocale() !== locale || row.getAttribute('data-translation-poll-generation') !== pollGeneration) return;
+    var id = row.getAttribute('data-tweet-id');
+    fetch('/api/v2/post-translation-demands/', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+      body: JSON.stringify({ post_ids: [id], poll_only: pollAttempt > 0, locale: locale }),
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok && payload.status !== 'deferred') throw new Error('translation request failed');
+        return payload;
+      });
+    }).then(function (payload) {
+      if (!row.isConnected || generation !== synthesisGeneration || currentLocale() !== locale || row.getAttribute('data-translation-poll-generation') !== pollGeneration) return;
+      if (payload.status === 'deferred') {
+        setTranslationStatus(row, 'deferred');
+        delete translationIntents[id];
+        return;
+      }
+      var result = payload && payload.results && payload.results[0];
+      if (!result) throw new Error('translation response invalid');
+      var waitingForRequest = result.status === 'not_requested' && pollAttempt > 0 && translationIntents[id] === locale;
+      setTranslationStatus(row, waitingForRequest ? 'pending' : result.status);
+      var text = $('.text[data-text-cycle]', row);
+      if (text && result.literal) {
+        var previousLayer = text.getAttribute('data-layer-key');
+        if (result.literal.en) text.setAttribute('data-text-en', result.literal.en);
+        if (result.literal['zh-cn']) text.setAttribute('data-literal-cn', result.literal['zh-cn']);
+        if (result.literal.ja) text.setAttribute('data-text-ja', result.literal.ja);
+        if (result.status === 'ready' && text.getAttribute('data-translation-selection') === selection) {
+          text.setAttribute('data-translation-selected', '1');
+          selectTextLayer(text, translationLocale() === 'zh-cn' ? 'literal_cn' : translationLocale() === 'ja' ? 'literal_ja' : 'en');
+          delete translationIntents[id];
+        } else if (previousLayer) {
+          selectTextLayer(text, previousLayer);
+        }
+        renderTextLayer(text);
+      }
+      if ((result.status === 'pending' || waitingForRequest) && pollAttempt < SYNTHESIS_POLL_DELAYS.length) {
+        var delay = SYNTHESIS_POLL_DELAYS[pollAttempt];
+        setTimeout(function () { requestTranslation(row, pollAttempt + 1, selection, locale, generation, pollGeneration); }, delay);
+      } else if (result.status === 'pending' || waitingForRequest) {
+        setTranslationStatus(row, 'deferred');
+        delete translationIntents[id];
+      } else if (result.status === 'deferred' || result.status === 'unsupported' || result.status === 'unavailable' || result.status === 'failed') {
+        delete translationIntents[id];
+      }
+    }).catch(function () {
+      if (row.isConnected && generation === synthesisGeneration && row.getAttribute('data-translation-poll-generation') === pollGeneration) setTranslationStatus(row, 'failed');
+    });
+  }
+
   function advanceTextLayer(el) {
     var layers = textLayers(el);
     if (layers.length < 2) return;
@@ -1232,6 +1324,35 @@
       paintSignals(row);
       attachCellClickHandlers(row);
       formatRowTimestamp(row, now);
+      var button = $('[data-post-translate]', row);
+      if (button && button.getAttribute('data-translation-bound') !== '1') {
+        button.setAttribute('data-translation-bound', '1');
+        setTranslationStatus(row, row.getAttribute('data-translation-status') || 'not_requested');
+        var id = row.getAttribute('data-tweet-id');
+        var hasIntent = translationIntents[id] === currentLocale();
+        if (row.getAttribute('data-translation-status') === 'pending' || hasIntent) {
+          var text = $('.text[data-text-cycle]', row);
+          var resumed = hasIntent ? '1' : 'not-selected';
+          if (hasIntent) setTranslationStatus(row, 'pending');
+          if (resumed === '1') text.setAttribute('data-translation-selection', resumed);
+          row.setAttribute('data-translation-poll-generation', '1');
+          requestTranslation(row, 1, resumed, currentLocale(), synthesisGeneration, '1');
+        }
+        button.addEventListener('click', function (event) {
+          event.stopPropagation();
+          var pending = row.getAttribute('data-translation-status') === 'pending';
+          var postId = row.getAttribute('data-tweet-id');
+          if (pending && translationIntents[postId] === currentLocale()) return;
+          var text = $('.text[data-text-cycle]', row);
+          var selection = String(Number(text.getAttribute('data-translation-selection') || '0') + 1);
+          text.setAttribute('data-translation-selection', selection);
+          translationIntents[postId] = currentLocale();
+          setTranslationStatus(row, 'pending');
+          var pollGeneration = String(Number(row.getAttribute('data-translation-poll-generation') || '0') + 1);
+          row.setAttribute('data-translation-poll-generation', pollGeneration);
+          requestTranslation(row, pending ? 1 : 0, selection, currentLocale(), synthesisGeneration, pollGeneration);
+        });
+      }
     });
     observeSynthesisRows(rows);
     if (typeof document.dispatchEvent === 'function') {
@@ -1364,6 +1485,10 @@
         if (e.target.closest('.pw-inspection-trigger')) return;
         var row = el.closest('.feed-row');
         if (!row) return;
+        delete translationIntents[row.getAttribute('data-tweet-id')];
+        el.setAttribute('data-layer-selected-by-user', '1');
+        el.removeAttribute('data-translation-selected');
+        el.setAttribute('data-translation-selection', String(Number(el.getAttribute('data-translation-selection') || '0') + 1));
         if (!el.classList.contains('is-expanded')) {
           var rowHeight = row.getBoundingClientRect().height;
           var textHeight = el.getBoundingClientRect().height;
@@ -1519,12 +1644,8 @@
     if (!root) return;
     var body = $('[data-pw-feed-body]', root);
     if (!body) return;
-    resetSynthesisDemand();
-    // Clear the body but preserve the first batch (already rendered by
-    // Jinja). For the simplest behavior, refetch from the server and
-    // replace the entire body. U4 (2026-07-16): pass the current
-    // control-panel filter so the immediate refetch honors it (was
-    // previously fetching the un-filtered feed on every toggle).
+    // Keep the current rows and their requests active until replacement succeeds.
+    // The refetch uses the current control-panel filters.
     var filterSnapshot = filters || filtersForEvent();
     return runFeedRequest(filterSnapshot, { cursor: null }, function (payload, committedFilters) {
       replaceRows(body, payload.rows);
@@ -1735,7 +1856,18 @@
       }
       var currentBody = $('[data-pw-feed-body]');
       if (currentBody) {
-        observeSynthesisRows($$('.feed-row[data-pw-feed-row]', currentBody));
+        var rows = $$('.feed-row[data-pw-feed-row]', currentBody);
+        observeSynthesisRows(rows);
+        rows.forEach(function (row) {
+          if (row.getAttribute('data-translation-status') !== 'pending') return;
+          var id = row.getAttribute('data-tweet-id');
+          var text = $('.text[data-text-cycle]', row);
+          var selection = translationIntents[id] === currentLocale() && text
+            ? text.getAttribute('data-translation-selection') : 'not-selected';
+          var pollGeneration = String(Number(row.getAttribute('data-translation-poll-generation') || '0') + 1);
+          row.setAttribute('data-translation-poll-generation', pollGeneration);
+          requestTranslation(row, 1, selection, currentLocale(), synthesisGeneration, pollGeneration);
+        });
       }
     });
   }

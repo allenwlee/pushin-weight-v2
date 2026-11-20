@@ -468,6 +468,13 @@ def _integrate_acquisition_run(run_id):
     links = list(run.job.dossier_claim_links.select_related("claim__event_dossier_source"))
     totals = {"observations": 0, "dossiers": 0, "products_resolved": 0,
               "registration_failures": 0}
+    if run.job.targets.filter(target_role="model_collection").exists():
+        from core.product_release_hf_collection import integrate_collection
+
+        for observation in run.observations.filter(projection_kind="hf-release-collection-v1"):
+            totals["observations"] += 1
+            totals["products_resolved"] += integrate_collection(observation)
+        return totals
     selected_search_repos = set()
     for observation in run.observations.all().order_by("pk"):
         exact = observation.projection_kind == "hf-release-exact-v1"
@@ -583,6 +590,16 @@ def _integrate_acquisition_run(run_id):
                         totals["registration_failures"] += 1
                         logging.getLogger(__name__).exception(
                             "Expanded metadata registration failed for capture %s", observation.pk,
+                        )
+                    try:
+                        from core.product_release_hf_collection import queue_collection
+
+                        collection_job = queue_collection(captured_claim.pk, observation.pk)
+                        _dispatch_if_enabled(collection_job)
+                    except Exception:
+                        totals["registration_failures"] += 1
+                        logging.getLogger(__name__).exception(
+                            "Model-collection registration failed for capture %s", observation.pk,
                         )
                     try:
                         from core.product_release_hf_card import queue_card
@@ -1028,6 +1045,10 @@ def drain_due_hf_acquisitions(*, client, limit=10, execute=False, job_ids=None):
                             result = execute_owner(job.pk, client=client)
                         else:
                             result = execute_github_repository(job.pk, client=client)
+                    elif job.targets.filter(target_role="model_collection").exists():
+                        from core.product_release_hf_collection import execute_collection
+
+                        result = execute_collection(job.pk, client=client)
                     elif job.targets.filter(target_role="model_card").exists():
                         from core.product_release_hf_card import execute_card
 

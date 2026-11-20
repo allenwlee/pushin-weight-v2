@@ -214,6 +214,11 @@ def _snapshot(row):
 def read_status(*, directory=None):
     """Read without creating a directory, lock, or default running state."""
     try:
+        from monitor import pulse_control_r2
+
+        if pulse_control_r2.configured(directory):
+            row, _ = pulse_control_r2.read()
+            return _snapshot(row)
         return _snapshot(_read(_directory(directory)))
     except PulseControlUnavailable as exc:
         empty = dict.fromkeys(_FIELDS)
@@ -221,14 +226,18 @@ def read_status(*, directory=None):
         return {**empty, "status": "unavailable", "observed_at": _now(), "error": str(exc)}
 
 
-def initialize(*, directory, state, actor, reason):
+def initialize(*, directory=None, state, actor, reason):
     """Explicit operator/test setup; never called by readers or request handlers."""
-    root = _directory(directory)
+    from monitor import pulse_control_r2
+
     row = dict.fromkeys(_FIELDS)
     row.update(schema_version=1, desired_state=state, desired_revision=1,
                requested_at=_now(), requested_by=actor, reason=reason,
                diagnostics=[], discarded_diagnostics=0)
     _validate(row)
+    if pulse_control_r2.configured(directory):
+        return _snapshot(pulse_control_r2.initialize(row))
+    root = _directory(directory)
     try:
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
     except OSError as exc:
@@ -240,6 +249,19 @@ def initialize(*, directory, state, actor, reason):
     return _snapshot(row)
 
 
+def _update(change, directory):
+    from monitor import pulse_control_r2
+
+    if pulse_control_r2.configured(directory):
+        return _snapshot(pulse_control_r2.update(change))
+    root = _directory(directory)
+    with _locked(root):
+        row = _read(root)
+        if change(row) is not False:
+            _write(root, row)
+    return _snapshot(row)
+
+
 def request_state(state, *, expected_revision, actor, reason, directory=None):
     """Record an explicit user request without claiming processor acknowledgement."""
     _revision(expected_revision)
@@ -247,31 +269,30 @@ def request_state(state, *, expected_revision, actor, reason, directory=None):
         raise ValueError("invalid_control_state")
     _text(actor, 128)
     _text(reason, 1000)
-    root = _directory(directory)
-    with _locked(root):
-        row = _read(root)
+
+    def change(row):
         if row["desired_revision"] != expected_revision:
             raise PulseControlConflict("control_revision_changed")
         row.update(desired_state=state, desired_revision=expected_revision + 1,
                    requested_at=_now(), requested_by=actor, reason=reason)
-        _write(root, row)
-    return _snapshot(row)
+
+    return _update(change, directory)
 
 
 def acknowledge(revision, *, boundary, directory=None):
     """Processor-only acknowledgement after observing this revision at a safe boundary."""
     _revision(revision)
     _text(boundary, 128)
-    root = _directory(directory)
-    with _locked(root):
-        row = _read(root)
+
+    def change(row):
         if row["desired_revision"] != revision:
             raise PulseControlConflict("control_revision_changed")
-        if row["acknowledged_revision"] != revision:
-            row.update(acknowledged_state=row["desired_state"], acknowledged_revision=revision,
-                       acknowledged_at=_now(), boundary=boundary)
-            _write(root, row)
-    return _snapshot(row)
+        if row["acknowledged_revision"] == revision:
+            return False
+        row.update(acknowledged_state=row["desired_state"], acknowledged_revision=revision,
+                   acknowledged_at=_now(), boundary=boundary)
+
+    return _update(change, directory)
 
 
 def record_diagnostic(*, stage, code, message, references=None, observed=None, expected=None, directory=None):
@@ -282,12 +303,13 @@ def record_diagnostic(*, stage, code, message, references=None, observed=None, e
         "observed": observed, "expected": expected,
     }
     _validate_diagnostic(diagnostic)
-    root = _directory(directory)
-    with _locked(root):
-        row = _read(root)
+
+    def change(row):
+        if any(item["id"] == diagnostic["id"] for item in row["diagnostics"]):
+            return False
         row["diagnostics"].append(diagnostic)
         removed = max(0, len(row["diagnostics"]) - MAX_DIAGNOSTICS)
         row["diagnostics"] = row["diagnostics"][-MAX_DIAGNOSTICS:]
         row["discarded_diagnostics"] += removed
-        _write(root, row)
-    return _snapshot(row)
+
+    return _update(change, directory)

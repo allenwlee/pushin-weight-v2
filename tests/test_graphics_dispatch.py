@@ -12,6 +12,7 @@ from monitor.editorial import graphics_dispatch
 def test_creation_dispatch_uses_dedicated_queue(monkeypatch):
     task = SimpleNamespace(apply_async=Mock())
     monkeypatch.setattr(tasks, 'advance_graphics_package', task)
+    monkeypatch.setattr(graphics_dispatch, '_creation_limits', lambda run_id: {})
     assert graphics_dispatch.dispatch_creation(run_id=71, content_id=29)
     task.apply_async.assert_called_once_with(args=[71], queue='graphics-creation', expires=900, retry=False)
 
@@ -19,6 +20,7 @@ def test_creation_dispatch_uses_dedicated_queue(monkeypatch):
 def test_broker_failure_reports_false(monkeypatch):
     task = SimpleNamespace(apply_async=Mock(side_effect=OSError('unavailable')))
     monkeypatch.setattr(tasks, 'advance_graphics_package', task)
+    monkeypatch.setattr(graphics_dispatch, '_creation_limits', lambda run_id: {})
     assert not graphics_dispatch.dispatch_creation(run_id=71, content_id=29)
 
 

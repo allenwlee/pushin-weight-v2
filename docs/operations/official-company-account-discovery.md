@@ -137,7 +137,9 @@ python manage.py official_co_account_extraction refresh-owner
 
 Provisioning refuses to replace an existing record. After an explicitly authorized credential repair, use `provision-owner --replace-owner-credential` with the replacement pair in the process environment. It does not modify another application's tokens. The stored client ID must match the configured one before renewal.
 
-The adapter uses the token response's `expires_in`, renews within five minutes of expiry, and saves both rotated tokens in one database transaction. It can also renew once after a rejected access token. A durable in-flight marker prevents concurrent refresh. An uncertain refresh response, process crash during renewal, decryption failure or rejected credential stops automatic renewal instead of repeatedly using a possibly invalidated refresh token. Operator recovery is required in that case.
+An access-only consumer can reuse an existing unexpired owner access token without becoming another token-renewal process. Set `PUSHINWEIGHT_X_LIST_ACCESS_ONLY=true` for that consumer, configure its own encryption key and the matching client ID, and call `OwnerTokenStore.provision(access_token=..., expires_at=...)` with the original numeric expiry. The store refuses a refresh token in this mode and does not require a client secret. Both values stay encrypted in the existing credential record. An expired snapshot fails before API access; `refresh()` refuses before changing the record or sending a request. This setting describes which credentials are stored, not a reduction of the access token's OAuth permissions. Existing consumers default to managed renewal when the setting is absent.
+
+In managed mode, the adapter uses the token response's `expires_in`, renews within five minutes of expiry, and saves both rotated tokens in one database transaction. It can also renew once after a rejected access token. A durable in-flight marker prevents concurrent refresh. An uncertain refresh response, process crash during renewal, decryption failure or rejected credential stops automatic renewal instead of repeatedly using a possibly invalidated refresh token. Operator recovery is required in that case.
 
 A recognized `spend-cap-reached` list response reports `deferred_billing` and leaves a ready credential usable. If it occurs during owner, list or membership reads, every claimed item returns to verification without consuming an add attempt, and the whole list waits 24 hours. A later scheduled cycle reports the saved cooldown without contacting X; when due, the normal lane rechecks membership before delivery. A positive account balance alone does not prove that an X spending cap has cleared.
 
@@ -191,3 +193,45 @@ Before a list write, the adapter checks the authenticated user's stable ID and t
 Registration reuses stable official organization edges and explicitly reviewed candidate mappings. Name/slug/role conflicts require review. It does not infer legal ownership percentages, create a BrandCompany ownership edge, or assign a specific product. The two new account references—account state and list intent—must join the benchmark branch's provider-neutral migration inventory before that migration integrates. This feature uses the current schema through shared identity functions.
 
 Existing official X app setup and locally verified list access are documented in the plan. [X's OAuth2 documentation](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code) describes the standard two-hour access-token lifetime and refresh flow; actual runtime lifetime comes from the token response.
+
+## Frozen evaluation queue pass
+
+The one-time pass uses `DEEPINFRA_ON_DEMAND` and the separate `deepinfra-on-demand` provider state. Scheduled discovery continues to use `DEEPINFRA_API_KEY` and its existing `deepinfra` state. Neither credential falls back to the other. A provider block in one lane does not clear or change the other lane's block. The pass maintains its own daily and per-batch budget records using the configured limits, as well as its frozen-run ceiling; its spending and reservations do not consume scheduled discovery's budget records.
+
+The configured daily limit applies separately to each lane, so their combined daily spend can exceed that single limit. Set the pass's own authorized run ceiling accordingly.
+
+After fixing an on-demand provider error, read `blocked_reason` and `updated_at` from the `deepinfra-on-demand` row in `official_company_provider_states`. Clear only that observed block with `python manage.py official_company_queue_pass resume-provider --manifest /secure/operator/queue.json --expected-provider-error deepinfra_http_status_402 --expected-provider-updated-at '2026-11-18T15:49:38.123456+09:00'`, substituting the exact observed error and timestamp. This checks the current on-demand key and the manifest's database identity, and yields to an active harvest. It does not clear failed-attempt reservations; reconcile any uncertain cost before continuing. Do not use the scheduled lane's `resume-model` action for an on-demand block.
+
+If the on-demand key is rotated, the next `run` detects the new key revision and requires a fresh one-account verification; `resume-provider` intentionally refuses to clear a block associated with the old key. Reconcile any unresolved prior attempt before running with the new key.
+
+The one-time queue pass freezes the eligible priority 1–3 states, including delayed retries and active claims. Its manifest belongs in a restricted, durable operator directory; use a new path for each run. A manifest records the database identity, evidence hashes, starting statuses and an aggregate USD ceiling. The first successful verification also writes a checksum-protected `.verification.json` receipt beside the manifest, bound to the model and credential revision. Preserve both together in the same restricted directory; neither should be committed. The process never registers accounts, verifies HF identities, or writes to X lists.
+
+Before freezing or running, independently verify the target database and the scheduled service’s `X_MONITOR_DEPLOYMENT_ENVIRONMENT` without printing credentials; explicitly set that same value in the operator process. The manifest binds that value and database identity, and refuses a mismatched process. Verify the deployed revision, model, credential revision, provider status, effective prices and daily/per-cycle limits before any paid call. Resolve a provider block only after correcting its cause. Choose an authorized run ceiling including conservative outstanding reservations, then freeze before the verification call:
+
+```bash
+python manage.py official_company_queue_pass freeze --manifest /secure/operator/queue.json --total-limit-usd 2
+python manage.py official_company_queue_pass report --manifest /secure/operator/queue.json
+python manage.py official_company_queue_pass run --manifest /secure/operator/queue.json --limit 1 --seconds 60
+```
+
+The first run performs at most one evaluation. Inspect its validated decision, usage, provider gate and reservations before continuing. A changed model or credential revision requires another one-account verification. A rejection or review-needed decision can verify the evaluator. The ceiling in the example is illustrative, not spending authorization. A non-completed or uncertain first attempt stops the batch; investigate and reconcile its provider outcome and reservation before any retry. Never erase a reservation merely to make progress.
+
+Subsequent bounded `run` commands use the same manifest and an explicit limit and deadline. Each invocation releases the independent discovery lock after every model call, waits between calls, and stops immediately if the lock is busy. It yields while the harvest writer lock is held, for the first two minutes after each scheduled quarter hour, and near the next scheduled tick based on the model timeout. Neither the harvest lock nor the production cron is controlled by this command. A delayed scheduled run can still start between the last check and a model call, so this reduces contention rather than proving it impossible. Monitor natural harvest cycles and scheduled discovery against the agreed baseline; stop running batches if collection or discovery is adversely affected. Restart by using the same manifest and inspecting `report`; do not create a new snapshot to represent an interrupted run. The report includes every frozen state and its starting tier, current disposition, recorded evaluator attempts and the aggregate budget ledger. The ledger’s normal cost is calculated from reported token usage and configured rates, not a provider invoice; explicitly reconciled costs use the recorded provider evidence. Verify current effective rates before dispatch. An evaluator invocation is not necessarily a physical provider request; unknown outcomes remain explicitly unknown. Changed evidence and settled/suppressed states are not re-evaluated under stale evidence. New arrivals are outside the frozen set. An unknown provider outcome is not proof that no call occurred.
+
+A model call with unknown spend retains its budget reservation. Queue-pass attempts with unknown spend cannot be retried by either the batch or the scheduled evaluator until reconciled; an expired claim alone is not evidence of a safe retry. Existing completed historical retry behavior outside this pass is unchanged.
+
+If a failed attempt has a known cost and its cause has been investigated, record that decision before continuing with other frozen accounts:
+
+```bash
+python manage.py official_company_queue_pass acknowledge --manifest /secure/operator/queue.json --attempt-id 123 --reason 'Invalid response investigated; continue with remaining accounts'
+```
+
+The acknowledgement is bound to this run and saved in a restricted, checksum-protected sidecar beside the manifest. Keep it with the manifest and verification receipt. It does not retry or change the failed account. An attempt with unknown cost cannot be acknowledged this way and needs reconciliation through the applicable operator recovery before further dispatch.
+
+To reconcile an uncertain charge, obtain provider evidence for the exact attempt and actual billed amount (including confirmed zero, if supported by that evidence). Do not estimate it or assume a failed request was free. The following example records an evidenced USD 0.0001 and leaves the model outcome unresolved:
+
+```bash
+python manage.py official_company_queue_pass reconcile --manifest /secure/operator/queue.json --attempt-id 123 --actual-usd 0.0001 --reason 'Provider receipt reference: example-123'
+```
+
+This settles the reservation and records evidence in a restricted `.reconciled.json` sidecar. It does not manufacture a model decision or retry the account. For a now-known-cost failure, use `acknowledge` after investigation before resuming other accounts. If the provider cannot establish the charge, keep the reservation and stop; do not guess.

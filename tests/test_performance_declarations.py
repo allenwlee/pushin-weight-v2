@@ -94,6 +94,26 @@ def test_general_candidate_preserves_pro_workloads_and_checks_immutable_assets()
     }
 
 
+def test_chatter_candidate_preserves_general_and_measures_the_archive() -> None:
+    from bridgewright.performance.contracts import PerformanceDeclaration
+
+    general = _load("declaration.general-candidate.json")
+    chatter = _load("declaration.chatter-candidate.json")
+    PerformanceDeclaration.model_validate(chatter)
+    assert chatter["scenarios"][:4] == general["scenarios"]
+    assert {key: value for key, value in chatter.items() if key != "scenarios"} == {
+        key: value for key, value in general.items() if key != "scenarios"
+    }
+    for scenario, baseline in zip(chatter["scenarios"][4:], general["scenarios"][2:], strict=True):
+        assert scenario["id"] == baseline["id"].replace("general-", "chatter-")
+        assert scenario["route"] == baseline["route"].replace("/general/", "/chatter/")
+        assert scenario["actions"] == [{
+            "kind": "press", "target": ".archive-list .editorial-story:first-child .editorial-sources > summary", "value": "Enter"
+        }]
+        for key in ("runs", "required_metrics", "metric_engines", "budgets", "lighthouse_assertions"):
+            assert scenario[key] == baseline[key]
+
+
 def test_performance_scenarios_seed_conflicting_locale_and_legacy_state() -> None:
     for name in ("declaration.json", "declaration.staging.json"):
         declaration = _load(name)
@@ -125,3 +145,133 @@ def test_performance_scenarios_seed_conflicting_locale_and_legacy_state() -> Non
             assert legacy["window"] == 365
             assert legacy["filters"] == {"brands": ["qwen"], "window": 365}
             assert legacy["pulseBrands"] == ["qwen"]
+
+
+def test_each_candidate_preserves_four_workloads_and_measures_rich_each_legend() -> None:
+    import hashlib
+    from urllib.parse import parse_qs, urlparse
+
+    from bridgewright.performance.contracts import PerformanceDeclaration
+    from django.contrib.staticfiles.storage import ManifestStaticFilesStorage
+    from django.core.files.base import ContentFile
+
+    root = Path(__file__).parents[1]
+    general = _load("declaration.general-candidate.json")
+    each = _load("declaration.each-candidate.json")
+    PerformanceDeclaration.model_validate(each)
+
+    # Extending candidate coverage must never alter existing workloads, budgets,
+    # cache requirements, metric engines, run counts, or device profiles.
+    assert each["scenarios"][:4] == general["scenarios"]
+    assert {key: value for key, value in each.items() if key not in {"scenarios", "fixture"}} == {
+        key: value for key, value in general.items() if key not in {"scenarios", "fixture"}
+    }
+    assert each["fixture"] == {
+        "path": "tests/fixtures/performance_assurance/each-seed.json",
+        "sha256": hashlib.sha256((root / "tests/fixtures/performance_assurance/each-seed.json").read_bytes()).hexdigest(),
+    }
+    seed_recipe = json.loads((root / each["fixture"]["path"]).read_text())
+    assert seed_recipe["schema_version"] == "pushinweight.performance-seed/v1"
+    inputs = {item["id"]: item for item in seed_recipe["inputs"]}
+    assert len(inputs) == len(seed_recipe["inputs"]) == 12
+    assert {key: item["path"] for key, item in inputs.items()} == {
+        "base-oracle": "docs/ideation/mockups/06-tier1-composed.v22-master.html",
+        "base-fixture": "tests/golden/v22_mockup_fixture.json",
+        "base-oracle-reader": "tests/mockup_spec.py",
+        "base-seeder": "tests/v22_support.py",
+        "each-manifest": "tests/fixtures/ui_assurance/each-fixture.json",
+        "each-seeder": "tests/each_area_fixture.py",
+        "general-contract": "tests/fixtures/general_feed_contract.json",
+        "general-seeder": "tests/general_helpers.py",
+        "combined-seeder": "tests/each_performance_fixture.py",
+        "harvest-coverage-seeder": "tests/test_chart_harvest_coverage.py",
+        "ping-delay-bootstrap": "tests/fixtures/performance_assurance/ping-delay-bootstrap.js",
+        "preview-transport": "tests/ui_assurance/local_preview.py",
+    }
+    for item in inputs.values():
+        assert item["sha256"] == hashlib.sha256((root / item["path"]).read_bytes()).hexdigest(), item["path"]
+    bootstrap = seed_recipe["fixture_bootstrap"]
+    assert bootstrap["input"] == "ping-delay-bootstrap"
+    assert bootstrap["sha256"] == inputs["ping-delay-bootstrap"]["sha256"]
+    assert bootstrap["transport_input"] == "preview-transport"
+    assert bootstrap["target"] == "CSSStyleDeclaration.prototype.setProperty(--pw-ping-delay, value, priority)"
+    assert bootstrap["numeric_lexeme_width"] == bootstrap["maximum_numeric_digits"] == 40
+    assert bootstrap["raw_max_characters"] == 42
+    assert bootstrap["phase_ms"] == [-2250, 0]
+    assert "execution cost remain in the measurement" in bootstrap["injection"]
+    assert "Object.is" in bootstrap["transformation"] and "negative zero" in bootstrap["transformation"]
+    assert "Remove documentElement and throw" in bootstrap["invalid_input"]
+    assert seed_recipe["entrypoint"] == {
+        "call": "tests.each_performance_fixture.seed_each_performance_orm(now=captured_preview_seed_time)",
+        "returns": "captured_preview_seed_time", "inputs": ["combined-seeder"],
+    }
+    recipe = {step["id"]: step for step in seed_recipe["recipe"]}
+    assert list(recipe) == ["general-clock", "base", "base-synthesis", "terminal-translation-failure", "each", "general", "general-closed-job", "harvest-coverage"]
+    assert recipe["base"]["call"] == "tests.v22_support.seed_real_home_orm(tests.v22_support.fixture_from_oracle())"
+    assert recipe["base-synthesis"]["for_each"] == 'post in Post.objects.filter(tweet_id__startswith="u3-post-")'
+    assert recipe["base-synthesis"]["call"] == 'tests.general_helpers.saved_commentary(post, texts={"en": post.commentary_en, "zh-cn": post.commentary_zh_cn, "ja": f"保存されたテスト用解説 {post.pk}"})'
+    assert recipe["base-synthesis"]["expected_status"] == "ready"
+    terminal = seed_recipe["fixture_conditions"]["terminal_translation_failure"]
+    assert terminal["record"] == recipe["terminal-translation-failure"]["record"]
+    assert recipe["terminal-translation-failure"]["writer"] == "core.models.PostEnrichmentState.objects.create"
+    assert terminal["record"] == {
+        "post_id": "u3-post-0", "translation_requested": True,
+        "translation_status": "failed", "translation_attempts": 3,
+        "translation_first_attempt_at": "captured_preview_seed_time",
+        "translation_last_attempt_at": "captured_preview_seed_time",
+        "translation_next_attempt_at": None,
+        "translation_error_code": "fixture_terminal_translation_failure",
+        "classification_status": "succeeded", "classification_attempts": 1,
+        "classification_first_attempt_at": "captured_preview_seed_time",
+        "classification_last_attempt_at": "captured_preview_seed_time",
+        "classification_next_attempt_at": None,
+    }
+    assert "preview/test condition only" in terminal["policy"]
+    assert recipe["each"]["call"] == "tests.each_area_fixture.seed_each_area_orm(json.loads(each_manifest))"
+    assert recipe["each"]["expected_return"] == 62
+    assert recipe["general-clock"]["assign"] == "tests.general_helpers.NOW = captured_preview_seed_time"
+    assert recipe["general"]["for_each"] == 'post_id, category in general_contract["sections"].items()'
+    assert recipe["general"]["call"] == "tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(post_id, category))"
+    assert recipe["general-closed-job"]["call"] == 'tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(general_contract["closed_job"], brand="claude"))'
+    assert recipe["harvest-coverage"]["call"] == "tests.test_chart_harvest_coverage.record_harvest(captured_preview_seed_time, finished_at=captured_preview_seed_time, staggered=False)"
+    assert seed_recipe["time_policy"]["kind"] == "frozen-preview-test-clock"
+    assert seed_recipe["time_policy"]["general_override"] == {
+        "symbol": "tests.general_helpers.NOW", "value": "captured preview seed time",
+    }
+    assert {name for names in seed_recipe["workloads"].values() for name in names} == {
+        case["id"] for case in each["scenarios"]
+    }
+    seed = json.loads((root / inputs["each-manifest"]["path"]).read_text())
+    assert seed["brand"] == "deepseek" and seed["days"] == 7
+    assert seed["counts"] == [8, 9, 10, 8, 9, 10, 8]
+    assert sum(seed["counts"]) == 62 and "bug" in seed["products"]
+
+    additions = each["scenarios"][4:]
+    assert [case["id"] for case in additions] == ["each-desktop", "each-mobile"]
+    assert [case["profile"] for case in additions] == ["desktop", "mobile"]
+    expected_assets = []
+    for filename in ("pw-each-chart.js", "pw-each-chart.css"):
+        asset = root / "monitor/static" / filename
+        hashed = ManifestStaticFilesStorage().hashed_name(filename, content=ContentFile(asset.read_bytes()))
+        expected_assets.append({
+            "path": "/static/" + hashed, "policy": "immutable",
+            "min_max_age_seconds": 31_536_000, "must_reuse": True,
+        })
+    for case, locale in zip(additions, ("en", "zh_cn"), strict=True):
+        route = urlparse(case["route"])
+        assert route.path == "/dashboard/each"
+        assert parse_qs(route.query) == {
+            "brand": ["deepseek"], "locale": [locale], "window": ["7"],
+            "tab": ["product_labels"], "timezone": ["Asia/Tokyo"],
+        }
+        assert case["actions"] == [{"kind": "click", "target": '[data-each-category="bug"]'}]
+        assert case["cache_expectations"] == expected_assets
+        original = next(item for item in general["scenarios"] if item["id"] == "general-" + case["profile"])
+        for field in ("runs", "required_metrics", "metric_engines", "web_vitals_metrics", "lighthouse_assertions", "budgets"):
+            assert case[field] == original[field]
+        assert case["network_expectations"] == [
+            {"path": "/dashboard/each/chart/", "max_requests": 2, "max_bytes": 500_000},
+            {"path": "/api/v2/dashboard/each/headline/", "max_requests": 0, "max_bytes": 0},
+            {"path": "/feed/", "max_requests": 0, "max_bytes": 0},
+            {"path": "/chart.html", "max_requests": 0, "max_bytes": 0},
+        ]

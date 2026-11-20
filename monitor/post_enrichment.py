@@ -108,13 +108,15 @@ def literal_translation_complete(
 
 
 def enrichment_stage_outcome(
-    *, translation_status: Any, classification_status: Any
+    *, translation_status: Any, classification_status: Any, translation_requested: bool = True
 ) -> str:
     """Collapse the two durable stage states into one safe outcome."""
 
-    statuses = (translation_status, classification_status)
-    if any(status not in _STAGE_STATUSES for status in statuses):
+    if not isinstance(translation_requested, bool) or any(
+        status not in _STAGE_STATUSES for status in (translation_status, classification_status)
+    ):
         raise ValueError("invalid enrichment stage status")
+    statuses = (translation_status if translation_requested else "succeeded", classification_status)
     if "failed" in statuses:
         return "failed"
     if statuses == ("succeeded", "succeeded"):
@@ -129,10 +131,14 @@ def enrichment_fact_terminal_complete(fact: Mapping[str, Any]) -> bool:
         outcome = enrichment_stage_outcome(
             translation_status=fact.get("translation_status"),
             classification_status=fact.get("classification_status"),
+            translation_requested=fact.get("translation_requested", True),
         )
     except ValueError:
         return False
-    return outcome == "succeeded" and fact.get("output_complete") is True
+    return outcome == "succeeded" and (
+        fact.get("translation_requested", True) is False
+        or fact.get("output_complete") is True
+    )
 
 
 def _field(prefix: str, name: str) -> str:

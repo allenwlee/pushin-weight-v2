@@ -7,13 +7,15 @@ import time
 from datetime import datetime
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import BooleanField, Count, Exists, OuterRef, Q
+from django.db.models.expressions import RawSQL
 from django.utils import timezone
 
 from core.models import (
     Account,
     AccountProfileSnapshot,
     OfficialCompanyAccountState,
+    OfficialCompanyAttempt,
     OfficialCompanyScan,
     Post,
 )
@@ -262,14 +264,14 @@ def enqueue_incremental(*, limit=100, deadline=None):
     return count
 
 
-def build_discovery_call(cfg):
+def build_discovery_call(cfg, *, credential_env="DEEPINFRA_API_KEY"):
     from core.targeted_extraction import build_targeted_extraction_calls
     from x_monitor.deepinfra import DeepInfraChatCompletionsClient
 
     if not cfg.enabled:
         return None
     client = DeepInfraChatCompletionsClient.from_env(
-        model=cfg.model, request_profile="deepseek_0731"
+        model=cfg.model, request_profile="deepseek_0731", credential_env=credential_env
     )
     call = build_targeted_extraction_calls(
         client=client, roles={ROLE: cfg}, timeout_seconds=cfg.request_timeout_seconds
@@ -298,6 +300,35 @@ def drain_accounts(*, cfg, call, limit, budget_scope, initial=False, deadline=No
             | Q(claim_expires_at__isnull=True)
             | Q(claim_expires_at__lte=now)
         )
+        .annotate(
+            unresolved_claim=Exists(
+                OfficialCompanyAttempt.objects.filter(
+                    state_id=OuterRef("pk"),
+                    status="reserved",
+                    actual_usd__isnull=True,
+                    reserved_usd__gt=0,
+                    claim_token=OuterRef("claim_token"),
+                )
+            )
+        )
+        .annotate(
+            unresolved_queue_pass=Exists(
+                OfficialCompanyAttempt.objects.filter(
+                    state_id=OuterRef("pk"),
+                    actual_usd__isnull=True,
+                    reserved_usd__gt=0,
+                )
+                .annotate(
+                    queue_pass_key=RawSQL(
+                        """jsonb_path_exists(budget_keys, '$[*] ? (@ starts with "queue-pass:")')""",
+                        [],
+                        output_field=BooleanField(),
+                    )
+                )
+                .filter(queue_pass_key=True)
+            )
+        )
+        .filter(unresolved_claim=False, unresolved_queue_pass=False)
     )
     if initial:
         qs = qs.filter(initial_scan_id=INITIAL_KEY)

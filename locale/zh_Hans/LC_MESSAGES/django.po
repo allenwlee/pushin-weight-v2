@@ -285,7 +285,9 @@ msgid "Arena evaluation history"
 msgstr "Arena 评估历史"
 
 #: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
-msgid "Published score, uncertainty and reported battles · overall text, no style control"
+msgid ""
+"Published score, uncertainty and reported battles · overall text, no style "
+"control"
 msgstr "发布的评分、置信区间及对战数 · 综合文本，无风格控制"
 
 #: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
@@ -305,8 +307,12 @@ msgid "Arena score and reported battles"
 msgstr "Arena 评分与报告的对战数"
 
 #: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
-msgid "Battles are reported comparisons, not unique people or exact daily new battles. Unknown score anchors break comparison segments."
-msgstr "对战数是报告中的比较次数，并非独立用户数或精确的每日新增对战数。评分锚点不明时，比较曲线会断开。"
+msgid ""
+"Battles are reported comparisons, not unique people or exact daily new "
+"battles. Unknown score anchors break comparison segments."
+msgstr ""
+"对战数是报告中的比较次数，并非独立用户数或精确的每日新增对战数。评分锚点不明"
+"时，比较曲线会断开。"
 
 #: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
 msgid "Change from reference-week average (%)"
@@ -409,282 +415,353 @@ msgid "relative to fixed raw reference-week means"
 msgstr "相对固定的原始参考周平均值"
 
 #: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
-msgid "A common complete reference week is unavailable. Raw values remain inspectable."
+msgid ""
+"A common complete reference week is unavailable. Raw values remain "
+"inspectable."
 msgstr "完整的共同参考周不可用。仍可查看原始数值。"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "%(count)s days"
 msgstr "%(count)s 天"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "%(count)s hrs"
 msgstr "%(count)s 小时"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "%(count)s min"
 msgstr "%(count)s 分钟"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "A closer look"
 msgstr "详细解读"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Agent"
 msgstr "智能体"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Agent access is not available for this section yet."
 msgstr "此栏目暂未开放智能体访问。"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Ask what’s happening…"
 msgstr "问问有什么新鲜事…"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Chatter"
 msgstr "热议"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Chatter is currently unavailable."
 msgstr "热议暂不可用。"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Close navigation"
 msgstr "关闭导航"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Closed"
 msgstr "闭源"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Commentary"
 msgstr "解读"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Commentary is shown in"
 msgstr "解读语言："
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Commentary versions"
 msgstr "解读版本"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Copy link"
 msgstr "复制链接"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Date unavailable"
 msgstr "日期未知"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Details from this source"
 msgstr "来源详情"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Ends"
 msgstr "结束"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "English"
 msgstr "英语"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Explore the current model signals in Pro."
 msgstr "前往 Pro 查看当前模型动向。"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Fetched"
 msgstr "收录时间"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Fetched %(time)s ago"
 msgstr "%(time)s前收录"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Free stuff"
 msgstr "福利"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "General"
 msgstr "综合"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Human"
 msgstr "人类"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "I am"
 msgstr "我是"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Jobs"
 msgstr "招聘"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Just listed %(time)s ago!"
 msgstr "刚刚收录：%(time)s前！"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Language"
 msgstr "语言"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Legacy commentary"
 msgstr "旧版解读"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Live: end time unavailable"
 msgstr "进行中：结束时间未知"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Live: ends in %(time)s"
 msgstr "进行中：%(time)s后结束"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Local"
 msgstr "本地"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "More"
 msgstr "更多"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Navigation"
 msgstr "导航"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "No matching posts yet."
 msgstr "暂无符合条件的帖子。"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Open"
 msgstr "开放"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Open Pro"
 msgstr "打开 Pro"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Open original post"
 msgstr "查看原帖"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Original source"
 msgstr "原始内容"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Page assistant is unavailable"
 msgstr "页面助手暂不可用"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Permanent link"
 msgstr "永久链接"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Post"
 msgstr "帖子"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Post by"
 msgstr "发布者"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Postponed"
 msgstr "已延期"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Published"
 msgstr "发布时间"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Pulse"
 msgstr "脉动"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Reading"
 msgstr "阅读"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Refresh"
 msgstr "刷新"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Revision"
 msgstr "版本"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Saved commentary is not available for this Post."
 msgstr "此帖暂无已保存的解读。"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Saved revision"
 msgstr "已保存版本"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Saved translation"
 msgstr "已保存译文"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Settings"
 msgstr "设置"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Shown in"
 msgstr "显示语言"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Sign in"
 msgstr "登录"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Sign out"
 msgstr "退出登录"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Skip to content"
 msgstr "跳至内容"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Source text"
 msgstr "来源原文"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Start time unavailable"
 msgstr "开始时间未知"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Starts"
 msgstr "开始"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Starts in %(time)s"
 msgstr "%(time)s后开始"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Timezone"
 msgstr "时区"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Toggle navigation"
 msgstr "展开或收起导航"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Unconfirmed"
 msgstr "未经确认"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Unconfirmed source claim"
 msgstr "来源说法尚未确认"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Visit source"
 msgstr "访问来源"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Weights"
 msgstr "权重"
 
-#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+#: monitor/general_views.py monitor/templates/monitor/general.html
+#: monitor/templates/monitor/content/detail.html
 msgid "Who’s moving"
 msgstr "人事动态"
 
@@ -714,7 +791,8 @@ msgid "Forecasts are not available yet."
 msgstr "预测尚未开放。"
 
 #: monitor/templates/monitor/general/_pulse_framework.html
-msgid "Each forecast will show its target, time window, sources and uncertainty."
+msgid ""
+"Each forecast will show its target, time window, sources and uncertainty."
 msgstr "每项预测将展示目标、时间范围、来源和不确定性。"
 
 #: monitor/templates/monitor/general/_pulse_framework.html
@@ -894,7 +972,9 @@ msgid "no data"
 msgstr "无数据"
 
 #: monitor/templates/monitor/general/_pulse_framework.html
-msgid "Arena rank carries the last published snapshot between observations; other missing dates remain gaps."
+msgid ""
+"Arena rank carries the last published snapshot between observations; other "
+"missing dates remain gaps."
 msgstr "Arena 排名在观测点之间沿用最近公布值；其他缺失日期保留为空缺。"
 
 #: monitor/templates/monitor/general/_pulse_framework.html
@@ -1042,11 +1122,14 @@ msgid "votes"
 msgstr "票"
 
 #: core/chart_engine.py
-msgid "Brand posts represent broader brand discussion; historical collection may be incomplete."
+msgid ""
+"Brand posts represent broader brand discussion; historical collection may be "
+"incomplete."
 msgstr "品牌帖子包含更广泛的品牌讨论；历史采集数据可能不完整。"
 
 #: core/chart_engine.py
-msgid "Arena rank carries the last published rank only between recorded snapshots."
+msgid ""
+"Arena rank carries the last published rank only between recorded snapshots."
 msgstr "Arena 排名仅在已记录的快照之间沿用最近公布的排名。"
 
 #: core/chart_engine.py
@@ -1427,3 +1510,24 @@ msgstr "部分谱系证据无效，需要调查。"
 #: monitor/pulse_views.py
 msgid "Some non-X lineage evidence is pending; automatic recovery is not available yet."
 msgstr "部分非 X 谱系证据仍在等待处理；自动恢复尚不可用。"
+
+msgid "Source language"
+msgstr "来源语言"
+
+msgid "Group"
+msgstr "分组"
+
+msgid "Rest"
+msgstr "其他"
+
+msgid "Giants"
+msgstr "巨头"
+
+msgid "Read in"
+msgstr "阅读语言"
+
+msgid "Show"
+msgstr "显示"
+
+msgid "Chatter updates are delayed. The latest available story is shown."
+msgstr "Chatter 更新延迟，当前显示最近发布的报道。"

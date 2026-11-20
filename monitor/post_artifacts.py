@@ -23,7 +23,7 @@ from core.models import (
     PostTranslationText,
 )
 from monitor.post_enrichment import commentary_is_distinct, present_text
-from x_monitor.translator import normalize_lang_detected
+from x_monitor.translator import normalize_lang_detected, post_source_language
 
 SUPPORTED_CONTENT_LOCALES = ("en", "zh-cn", "ja")
 
@@ -96,6 +96,7 @@ def persist_literal_translation_chunk(
     with transaction.atomic():
         claim = PostEnrichmentState.objects.select_for_update().filter(
             post_id=post_id, claim_run_id=str(expected_claim_run_id)[:128],
+            translation_requested=True,
             translation_status=PostEnrichmentState.Status.PENDING,
             claim_expires_at__gt=timezone.now(),
         ).first()
@@ -203,6 +204,7 @@ def publish_literal_translation(
             )
             if (
                 claim is None
+                or not claim.translation_requested
                 or claim.claim_run_id != str(expected_claim_run_id)[:128]
                 or claim.translation_status != PostEnrichmentState.Status.PENDING
                 or claim.claim_expires_at is None
@@ -299,6 +301,7 @@ def record_literal_translation_failure(
             )
             if (
                 claim is None
+                or not claim.translation_requested
                 or claim.claim_run_id != str(expected_claim_run_id)[:128]
                 or claim.translation_status != PostEnrichmentState.Status.PENDING
                 or claim.claim_expires_at is None
@@ -519,11 +522,19 @@ def read_post_content_many(
         post_id = str(post.pk)
         translation = translations.get(post_id)
         synthesis = syntheses.get(post_id)
+        stale_translation = bool(
+            translation is not None
+            and translation.source_content_fingerprint != source_content_fingerprint(post)
+        )
         literal = (
+            {} if stale_translation else
             {row.locale: row.text for row in translation.texts.all()}
             if translation is not None
             else _legacy_literal(post)
         )
+        # The current source is authoritative even when a cached translation
+        # is incomplete or belongs to an older version of the post.
+        literal.update(source_literal(post))
         rich = (
             {row.locale: row.text for row in synthesis.texts.all()}
             if synthesis is not None
@@ -542,7 +553,7 @@ def read_post_content_many(
         projections[post_id] = PostContentProjection(
             literal=literal,
             synthesis=rich,
-            literal_source="normalized" if translation is not None else "legacy",
+            literal_source="stale" if stale_translation else "normalized" if translation is not None else "legacy",
             synthesis_source="normalized" if synthesis is not None else "legacy",
             synthesis_status=status,
             synthesis_attempts=attempts,
@@ -551,11 +562,25 @@ def read_post_content_many(
     return projections
 
 
+def source_literal(post: Post) -> dict[str, str]:
+    """Return source text only when the detected language identifies the locale."""
+    source = _literal_text(post.text)
+    raw = str(post_source_language(post.lang_detected, post.lang) or "").strip().lower().replace("_", "-")
+    language = normalize_lang_detected(raw)
+    if source is None:
+        return {}
+    if language in {"en", "ja"}:
+        return {language: source}
+    # The normalizer maps generic 'zh' to Hans. That inference is not
+    # sufficient to assert the source uses simplified Chinese.
+    if raw in {"zh-hans", "zh-cn"}:
+        return {"zh-cn": source}
+    return {}
+
+
 def _legacy_literal(post: Post) -> dict[str, str]:
     values = {"en": post.text_en, "zh-cn": post.text_zh_cn}
-    language = normalize_lang_detected(post.lang_detected)
-    if language == "ja" and present_text(post.text):
-        values["ja"] = post.text
+    values.update(source_literal(post))
     return {
         locale: value
         for locale, raw in values.items()

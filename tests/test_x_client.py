@@ -778,11 +778,14 @@ class TestWalkSearch:
         client = self._client()
         # Characterization: an underfilled final page can still advertise a
         # continuation, so max_pages exhaustion is unfinished coverage.
+        count = 0
         def infinite_pages(*args, **kwargs):
+            nonlocal count
+            count += 1
             return {
-                "tweets": [_tweet("1")],
+                "tweets": [_tweet(str(count))],
                 "has_next_page": True,
-                "next_cursor": "always-more",
+                "next_cursor": str(count),
             }
 
         with patch.object(client, "_get", side_effect=infinite_pages) as mock_get:
@@ -835,11 +838,14 @@ class TestWalkSearch:
         # defensive cap must be 2 even if has_next_page stays True.
         client = self._client()
 
+        count = 0
         def infinite_pages(*args, **kwargs):
+            nonlocal count
+            count += 1
             return {
-                "tweets": [_tweet("1")],
+                "tweets": [_tweet(str(count))],
                 "has_next_page": True,
-                "next_cursor": "always-more",
+                "next_cursor": str(count),
             }
 
         with patch.object(client, "_get", side_effect=infinite_pages) as mock_get:
@@ -1171,3 +1177,29 @@ def test_normalize_tweet_empty_or_malformed_entities(value):
     from x_monitor.x_client import _normalize_tweet
     assert _normalize_tweet({"id": "1", "entities": value})["entities"] == {}
     assert _normalize_tweet({"id": "1"})["entities"] == {}
+
+
+def test_unbounded_search_uses_shared_paginator_and_stops_repeated_cursor():
+    client = XClient(api_key="fixture-only", max_retries=0)
+    with patch.object(client, "_get", side_effect=[
+        {"tweets": [_tweet("9001")], "has_next_page": True, "next_cursor": "same"},
+        {"tweets": [_tweet("9002")], "has_next_page": True, "next_cursor": "same"},
+    ]) as get:
+        pages = list(client.run_search_pages("literal", max_results=None, max_pages=None, since_time=1, until_time=2))
+    assert get.call_count == 2
+    assert pages[-1].continuation_invalid is True
+    assert pages[-1].has_more is True
+    assert get.call_args.kwargs == {}  # The existing _get call shape remains positional.
+    assert get.call_args.args[1]["query"] == "literal since_time:1 until_time:2"
+
+
+def test_default_search_iterator_keeps_fifty_result_limit():
+    client = XClient(api_key="fixture-only", max_retries=0)
+    with patch.object(client, "_get", side_effect=[
+        {"tweets": [_tweet(str(i)) for i in range(20)], "has_next_page": True, "next_cursor": "a"},
+        {"tweets": [_tweet(str(i)) for i in range(20, 40)], "has_next_page": True, "next_cursor": "b"},
+        {"tweets": [_tweet(str(i)) for i in range(40, 60)], "has_next_page": True, "next_cursor": "c"},
+    ]) as get:
+        pages = list(client.run_search_pages("literal"))
+    assert sum(len(page.items) for page in pages) == 50
+    assert get.call_count == 3 and pages[-1].clipped is True

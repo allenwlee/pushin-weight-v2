@@ -32,6 +32,7 @@ from core.models import (
     CollectionJobTarget,
     CollectionRun,
     CollectionScopeRun,
+    OriginalContentCall,
     SearchQuery,
 )
 
@@ -330,6 +331,9 @@ def claim_job(
                 or job.source_id == "x" and job.purpose == "content"
                 and job.operation == "x_cycle" and job.mode == "recurring"
                 and manual_authorized
+                or job.source_id == "x" and job.purpose == "content"
+                and job.operation == "chatter_search" and job.mode in {"manual", "recurring"}
+                and manual_authorized
             )
             and (not bounded_campaign or job.campaign_id is not None),
             "typed claim requires a supported sealed campaign and operation",
@@ -484,6 +488,8 @@ def claim_job(
             marker_kind, marker_phase = "x_backfill_execution", "typed-backfill-v1"
         elif job.source_id == "x" and job.operation == "x_cycle":
             marker_kind, marker_phase = "x_cycle_execution", "typed-x-cycle-v1"
+        elif job.source_id == "x" and job.operation == "chatter_search":
+            marker_kind, marker_phase = "chatter_execution", "typed-chatter-v1"
         else:
             raise ValueError("typed collection claim has no execution marker")
         if (
@@ -493,6 +499,7 @@ def claim_job(
             or job.operation == "match_crosswalk"
             or job.source_id == "x" and job.operation == "x_backfill"
             or job.source_id == "x" and job.operation == "x_cycle"
+            or job.source_id == "x" and job.operation == "chatter_search"
         ) and not run.scopes.filter(
             scope_kind=marker_kind, scope_key="execution", phase=marker_phase,
         ).exists():
@@ -1005,7 +1012,44 @@ def checkpoint_scope(
         from core.collection_datasets import resolve_dataset
 
         if typed:
-            if scope_kind == "metric_fetch":
+            if scope_kind == "chatter_trends":
+                require(
+                    run.job.source_id == "x" and run.job.purpose == "content"
+                    and run.job.operation == "chatter_search" and run.content_run_id is not None
+                    and run.content_run.workflow_key == "chatter-discovery"
+                    and run.content_run.scope_key == "chatter:personalized-trends:v1"
+                    and run.job.definition.get("options", {}).get("workflow_version") == "personalized-trends-v1"
+                    and scope_key == "personalized-trends-v1"
+                    and ownership == {"content_run_id": run.content_run_id}
+                    and projection_contract is None and resource_observation is None,
+                    "personalized trends scope requires its sealed authored-run ownership",
+                )
+            elif scope_kind in {"chatter_search", "chatter_tool"}:
+                require(
+                    run.job.source_id == "x" and run.job.purpose == "content"
+                    and run.job.operation == "chatter_search" and run.content_run_id is not None
+                    and projection_contract is None and resource_observation is None
+                    and set(ownership) == {"query_id", "content_call_id"},
+                    "Chatter scope requires its typed authored-run ownership",
+                )
+                call_stage = "discovery"
+                if run.content_run.scope_key == "chatter:personalized-trends:v1":
+                    from monitor.editorial.chatter_trends import read_ranked_batch
+
+                    batch = read_ranked_batch(run.content_run_id)
+                    require(ownership["content_call_id"] == batch["rank_call_id"],
+                            "Chatter source scope differs from saved ranking")
+                    call_stage = "trends-ranking-v1"
+                require(
+                    type(ownership["content_call_id"]) is int
+                    and OriginalContentCall.objects.filter(pk=ownership["content_call_id"],
+                        run_id=run.content_run_id, stage=call_stage,
+                        **({"state": "completed"} if call_stage == "trends-ranking-v1" else {})).exists()
+                    and (ownership["query_id"] is None or type(ownership["query_id"]) is int
+                         and SearchQuery.objects.filter(pk=ownership["query_id"], query_id__startswith="chatter:").exists()),
+                    "Chatter scope query or call belongs to another execution",
+                )
+            elif scope_kind == "metric_fetch":
                 require(
                     run.job.purpose == "metric"
                     and (
@@ -1398,6 +1442,11 @@ def finish_run(
                 job.source_id == "x" and job.purpose == "content"
                 and job.operation == "x_cycle" and request_count is not None
             )
+            chatter = (
+                job.source_id == "x" and job.purpose == "content"
+                and job.operation == "chatter_search" and run.content_run_id is not None
+                and request_count is not None
+            )
             product_match = (
                 job.purpose == "catalog" and job.operation == "match_crosswalk"
                 and request_count == 0
@@ -1416,7 +1465,7 @@ def finish_run(
                     or job.source_id == "openrouter" and job.operation == "model_inventory"
                 ))
                 or metric_collection or model_history or github_catalog or x_backfill
-                or x_cycle
+                or x_cycle or chatter
                 or product_match or release_acquisition or lineage_wakeup,
                 "typed completion needs a supported collection operation",
             )

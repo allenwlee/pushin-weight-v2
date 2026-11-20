@@ -122,6 +122,11 @@ def brand_query_blocks(brand: BrandPolicy) -> list[BrandQueryBlock]:
         spec = XQuerySpec(
             brands={brand.nickname: kept},
             alias_context={brand.nickname: rules} if rules else {},
+            search_alias_exclusions={brand.nickname: {
+                normalize_policy_token(rule.alias): rule.any_of
+                for rule in brand.search_alias_exclusions
+                if normalize_policy_token(rule.alias) in {normalize_policy_token(t) for t in kept}
+            }} if brand.search_alias_exclusions else {},
             c_bare_aliases=handles,
             not_include=list(brand.not_include),
         )
