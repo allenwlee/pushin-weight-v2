@@ -74,9 +74,9 @@ def _saved_config(run, cfg):
     if not current.chatter.enabled:
         return None
     saved = EditorialConfig.model_validate(run.config_snapshot["editorial"])
-    from .chatter_trends import TRENDS_SCOPE, workflow_version
+    from .chatter_trends import RANKED_SCOPES, workflow_version
 
-    expected = workflow_version() if run.scope_key == TRENDS_SCOPE else digest(prompts())
+    expected = workflow_version(saved.chatter.discovery_lane) if run.scope_key in RANKED_SCOPES else digest(prompts())
     if run.workflow_version != expected:
         raise ValueError("Chatter prompt version changed during this run")
     return saved
@@ -129,8 +129,9 @@ def _incumbents():
 
 def _history(cutoff, *, lane="semantic-v1"):
     rows = competition_board(cutoff, lane=lane)
-    scope = "chatter:personalized-trends:v1" if lane == "personalized-trends-v1" else SCOPE
-    stage = "trends-ranking-v1" if lane == "personalized-trends-v1" else "discovery"
+    from .chatter_history import history_lane
+
+    scope, stage, _, _ = history_lane(lane)
     incumbents = _incumbents()
     by_development = {str(row.development_id): row for row in rows}
     by_development.update({str(row.development_id): row for row in incumbents.values()})
@@ -202,7 +203,7 @@ def _consider(run, story, pitch, source_ids, kind, call, position=None):
 
         batch = read_ranked_batch(run.pk)
         member = next((lead for lead in batch["leads"] if lead["rank"] == position), None)
-        if (call.pk != batch["rank_call_id"] or member is None
+        if (member is None or call.pk != member.get("rank_call_id", batch["rank_call_id"])
                 or pitch.get("headline_ids") != member["headline_ids"]):
             raise ValueError("personalized trend membership mismatch")
     story = EditorialStory.objects.select_for_update().get(pk=story.pk)
@@ -267,9 +268,29 @@ def _consider(run, story, pitch, source_ids, kind, call, position=None):
 
 
 def _discover_trends_and_queue_gathering(run, cfg, *, transport, x_client, enqueue, resume=False):
-    from .chatter_trends import discover_trends
+    from .chatter_trends import (
+        CAPTURE_SCOPE,
+        DECISION_SCOPE,
+        discover_trends,
+        envelope_for,
+    )
 
-    result = discover_trends(run.pk, cfg=cfg, transport=transport)
+    if run.scope_key == DECISION_SCOPE:
+        if not (cfg or load_editorial_config()).chatter.enabled:
+            return {"status": "disabled"}
+        from .chatter_window_runs import decide_window
+
+        result = decide_window(run.pk, transport=transport, resume=resume)
+    else:
+        result = discover_trends(run.pk, cfg=cfg, transport=transport)
+    if run.scope_key == CAPTURE_SCOPE:
+        # Wake the coincident decision at its first terminal receipt; the timed
+        # delivery reserved at dispatch covers a lost or slow capture.
+        if run.interval.minute % 30 == 0 and result["status"] in {"captured", "held"}:
+            decision = OriginalContentRun.objects.filter(scope_key=DECISION_SCOPE, interval=run.interval).first()
+            if decision:
+                enqueue("discover", envelope_for(decision))
+        return result
     if result["status"] == "ranked":
         arguments = (run.pk, True) if resume else (run.pk,)
         enqueue("gather", *arguments)
@@ -286,7 +307,7 @@ def run_chatter(envelope, *, cfg=None, transport=None, x_client=None, enqueue=en
     cfg = cfg or load_editorial_config()
     if not cfg.chatter.enabled:
         return {"status": "disabled"}
-    if cfg.chatter.discovery_lane == "personalized-trends-v1":
+    if envelope.get("lane",cfg.chatter.discovery_lane) in {"personalized-trends-v1","personalized-trends-v2"}:
         from .chatter_trends import envelope_for, reserve_due_slot
 
         if envelope.get("schema_version") != 1 or envelope.get("dry_run") is not False:
@@ -296,6 +317,8 @@ def run_chatter(envelope, *, cfg=None, transport=None, x_client=None, enqueue=en
             if envelope != envelope_for(run):
                 raise ValueError("Chatter due-slot envelope changed")
         else:
+            if cfg.chatter.discovery_lane == "personalized-trends-v2":
+                raise ValueError("rolling discovery requires its reserved slot")
             run, _ = reserve_due_slot(envelope["source_cycle_id"], datetime.fromisoformat(envelope["cutoff"]),
                                        cfg=cfg, purpose=envelope["credential_purpose"])
         return _discover_trends_and_queue_gathering(run, cfg, transport=transport,
@@ -368,9 +391,9 @@ def resume_chatter_discovery(
 ):
     """Explicitly continue a held reply; never send the discovery request again."""
     run = OriginalContentRun.objects.get(pk=run_id, workflow_key=WORKFLOW)
-    from .chatter_trends import TRENDS_SCOPE
+    from .chatter_trends import RANKED_SCOPES
 
-    if run.scope_key == TRENDS_SCOPE:
+    if run.scope_key in RANKED_SCOPES:
         return _discover_trends_and_queue_gathering(run, cfg, transport=transport,
             x_client=x_client, enqueue=enqueue, resume=True)
     configured = cfg is not None
@@ -860,9 +883,9 @@ def _queue_writers(run, cfg, enqueue):
         pairs = pairs[:trial.publication_limit]
     planned = [f"{row.pk}:{locale}" for row, locale in pairs]
     _update(run, planned_writers=planned, **deferred)
-    from .chatter_trends import TRENDS_SCOPE
+    from .chatter_trends import RANKED_SCOPES
 
-    if run.scope_key == TRENDS_SCOPE:
+    if run.scope_key in RANKED_SCOPES:
         for row, locale in pairs:
             write_chatter(row.pk, locale, cfg=cfg, enqueue=enqueue)
         return
@@ -920,9 +943,9 @@ def write_chatter(content_id, locale, *, cfg=None, transport=None, enqueue=enque
     cfg = _saved_config(run, cfg)
     if cfg is None:
         return {"status": "disabled"}
-    from .chatter_trends import TRENDS_SCOPE
+    from .chatter_trends import RANKED_SCOPES
 
-    if run.scope_key == TRENDS_SCOPE:
+    if run.scope_key in RANKED_SCOPES:
         from .graphics_chatter import record_ready
         from .graphics_entry import run_selected_story
 

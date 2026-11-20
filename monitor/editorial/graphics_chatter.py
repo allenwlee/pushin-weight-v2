@@ -54,14 +54,15 @@ def published_text(run, content):
 
 def accounting_config(run):
     """Only the registered personalized source lane owns the routine exception."""
-    from .chatter_trends import TRENDS_SCOPE
+    from .chatter_trends import DECISION_SCOPE, RANKED_SCOPES, ROLLING_LANE
     from .config import EditorialConfig
 
     source = source_for_run(run)
-    if source is None or source.run.scope_key != TRENDS_SCOPE:
+    if source is None or source.run.scope_key not in RANKED_SCOPES:
         return None
     cfg = EditorialConfig.model_validate(source.run.config_snapshot['editorial'])
-    if cfg.chatter.discovery_lane != 'personalized-trends-v1':
+    expected = ROLLING_LANE if source.run.scope_key == DECISION_SCOPE else 'personalized-trends-v1'
+    if cfg.chatter.discovery_lane != expected:
         raise ValueError('invalid personalized Chatter origin')
     return cfg
 
@@ -73,11 +74,11 @@ def record_ready(text):
     from core.models import OriginalContentRun
 
     from .chatter_chain import _record_ready
-    from .chatter_trends import TRENDS_SCOPE
+    from .chatter_trends import RANKED_SCOPES
 
     package = text.narrative.run
     source = source_for_run(package)
-    if source is None or source.run.scope_key != TRENDS_SCOPE:
+    if source is None or source.run.scope_key not in RANKED_SCOPES:
         return
     with transaction.atomic():
         run = OriginalContentRun.objects.select_for_update().get(pk=source.run_id)

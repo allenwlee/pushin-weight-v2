@@ -25,17 +25,17 @@ def _send(task, args, countdown=0, priority=None):
         logger.exception("editorial queue dispatch failed")
 
 
-def dispatch_chatter_cycle(source_cycle_id, started, *, kind, dry_run, task=None):
+def dispatch_chatter_cycle(source_cycle_id, started, *, kind, dry_run, task=None, cfg=None):
     """Isolated start notification on the existing fifteen-minute harvest clock."""
     if kind != "scheduled" or dry_run:
         return {"status": "ineligible"}
     try:
-        cfg = load_editorial_config()
+        cfg = cfg or load_editorial_config()
         if not cfg.chatter.enabled:
             return {"status": "disabled"}
-        if cfg.chatter.discovery_lane == "personalized-trends-v1":
+        if cfg.chatter.discovery_lane in {"personalized-trends-v1", "personalized-trends-v2"}:
             return dispatch_chatter_due_slot(source_cycle_id, started, cfg=cfg, task=task,
-                purpose="on-demand" if cfg.chatter.trial else "scheduled", recover_pending=True)
+                purpose="on-demand" if cfg.chatter.trial and cfg.chatter.discovery_lane == "personalized-trends-v1" else "scheduled", recover_pending=True)
         if task is None:
             from monitor.tasks import chatter_stage
             task = chatter_stage
@@ -56,6 +56,32 @@ def dispatch_chatter_due_slot(source_cycle_id, started, *, cfg=None, task=None, 
     cfg = cfg or load_editorial_config()
     if not cfg.chatter.enabled:
         return {"status": "disabled"}
+    if cfg.chatter.discovery_lane == "personalized-trends-v2":
+        from datetime import UTC, timedelta
+
+        from django.utils import timezone
+
+        from .chatter_trends import CAPTURE_SCOPE, DECISION_SCOPE
+
+        if task is None:
+            from monitor.tasks import chatter_stage
+            task = chatter_stage
+        tick = started.astimezone(UTC)
+        slot = tick.replace(minute=tick.minute // 15 * 15, second=0, microsecond=0)
+        capture, _ = reserve_due_slot(source_cycle_id, started, cfg=cfg, purpose=purpose, scope=CAPTURE_SCOPE)
+        decision = None
+        if slot.minute % 30 == 0:
+            decision, created = reserve_due_slot(source_cycle_id, started, cfg=cfg, purpose=purpose, scope=DECISION_SCOPE)
+            if created:
+                from .chatter_trends import envelope_for
+
+                delay = max(0, (slot + timedelta(minutes=5) - timezone.now()).total_seconds())
+                transaction.on_commit(lambda: _send(task, ["discover", envelope_for(decision)], countdown=delay, priority=0))
+        enqueued = capture.interval == slot and _enqueue_chatter_start(capture, task)
+        if recover_pending:
+            recover_chatter_starts(cfg=cfg, task=task)
+        return {"status":"enqueued" if enqueued else "already_dispatched", "run_id":capture.pk,
+                "decision_run_id":decision.pk if decision else None}
     run, created = reserve_due_slot(source_cycle_id, started, cfg=cfg, purpose=purpose)
     if task is None:
         from monitor.tasks import chatter_stage
@@ -92,7 +118,6 @@ def _enqueue_chatter_start(run, task):
     from core.models import CollectionRun, OriginalContentCall, OriginalContentRun
 
     from .chatter_trends import (
-        Checkpoint,
         checkpoint,
         envelope_for,
         read_ranked_batch,
@@ -134,7 +159,7 @@ def _enqueue_chatter_start(run, task):
             if not source_resume_is_safe(current):
                 error = "source_send_requires_reconciliation"
         if error:
-            state = Checkpoint.model_validate({**state.model_dump(), "phase": "held", "error_code": error})
+            state = type(state).model_validate({**state.model_dump(), "phase": "held", "error_code": error})
             current.outcome = {**current.outcome, "phase": "held", "error_code": error,
                                "trends": state.model_dump(mode="json")}
             current.discovery_state = "failed"
@@ -157,7 +182,7 @@ def _enqueue_chatter_start(run, task):
             stage, args = "resume-discovery", [current.pk]
         else:
             stage, args = "discover", [envelope_for(current)]
-        state = Checkpoint.model_validate({**state.model_dump(), "last_enqueue_at": now})
+        state = type(state).model_validate({**state.model_dump(), "last_enqueue_at": now})
         current.outcome = {**current.outcome, "trends": state.model_dump(mode="json")}
         current.save(update_fields=["outcome", "updated_at"])
         transaction.on_commit(lambda: _send(task, [stage, *args], priority=0))
@@ -174,10 +199,10 @@ def recover_chatter_starts(*, cfg=None, task=None, limit=4):
 
     from core.models import CollectionRun, OriginalContentRun
 
-    from .chatter_trends import TRENDS_SCOPE
+    from .chatter_trends import ROLLING_LANE, ROLLING_SCOPES, TRENDS_SCOPE
 
     cfg = cfg or load_editorial_config()
-    if not cfg.chatter.enabled or cfg.chatter.discovery_lane != "personalized-trends-v1":
+    if not cfg.chatter.enabled or cfg.chatter.discovery_lane not in {ROLLING_LANE,"personalized-trends-v1"}:
         return {"enqueued": 0}
     if type(limit) is not int or not 1 <= limit <= 10:
         raise ValueError("Chatter recovery limit exceeded")
@@ -188,7 +213,7 @@ def recover_chatter_starts(*, cfg=None, task=None, limit=4):
     count = 0
     now = timezone.now()
     candidates = OriginalContentRun.objects.filter(
-        scope_key=TRENDS_SCOPE, interval__gte=now - timedelta(days=8),
+        scope_key__in=ROLLING_SCOPES if cfg.chatter.discovery_lane == ROLLING_LANE else (TRENDS_SCOPE,), interval__gte=now - timedelta(days=8),
     ).filter(
         Q(outcome__trends__phase__in=["queued", "observing", "observed", "ranking"])
         | Q(outcome__trends__phase__in=["ranked", "empty"],

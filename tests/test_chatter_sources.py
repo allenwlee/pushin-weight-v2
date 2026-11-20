@@ -48,6 +48,7 @@ def test_source_session_records_one_request_and_no_raw_response_or_profile(monke
     from tests.test_chatter_accounting import policy
     from tests.test_original_content_consideration import consideration
 
+    archives_before = CollectionEvidenceArchive.objects.count()
     run = consideration().run
     cfg = policy(20)
     cfg.chatter = cfg.chatter.model_copy(update={"source_request_limit": 4})
@@ -80,7 +81,7 @@ def test_source_session_records_one_request_and_no_raw_response_or_profile(monke
     request = CollectionRequest.objects.get(pk=token.pk)
     assert request.reserved_usd > 0 and request.estimated_usd > 0
     assert request.archive_id is None and request.response_sha256
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert CollectionEvidenceArchive.objects.count() == archives_before
     appearance = CollectionObservation.objects.get(request=request)
     assert appearance.source_identifier == "123" and appearance.receipt_ordinal == 0
     session.ingest(

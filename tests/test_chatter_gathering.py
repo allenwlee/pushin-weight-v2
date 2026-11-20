@@ -515,9 +515,9 @@ def test_frozen_real_trend_controls_separate_lexical_support_and_window_eligibil
         ("nvidia", ["NVIDIA", "英伟达", "輝達", "英偉達", "エヌビディア"]),
         ("anthropic", ["Anthropic"]),
     ):
-        brand = Brand.objects.create(nickname=key)
+        brand, _ = Brand.objects.get_or_create(nickname=key)
         for alias in aliases:
-            BrandSearchTerm.objects.create(brand=brand, term=alias)
+            BrandSearchTerm.objects.get_or_create(brand=brand, term=alias)
     cutoff = datetime.fromisoformat(saved["cutoff"])
     sources = {post["tweet_id"]: post for post in saved["posts"]}
     lexical, eligible = [], []

@@ -28,14 +28,18 @@ def _saved_c1(content, producer, pack):
     ):
         raise ValueError('C1 producer does not match content')
     packet = call.request_packet
-    if not isinstance(packet, dict) or set(packet) != {'schema_version', 'request_json'} or packet['schema_version'] != 'graphics-request/v1':
-        raise ValueError('invalid saved C1 request packet')
-    wire = packet['request_json']
-    if not isinstance(wire, str) or hashlib.sha256(wire.encode()).hexdigest() != call.request_hash:
-        raise ValueError('saved C1 request hash mismatch')
+    if isinstance(packet, dict) and packet.get('schema_version') == 'graphics-request/v2':
+        from .graphics_generation import reconstruct_request
+        body = reconstruct_request(packet, call.request_hash)
+    else:
+        if not isinstance(packet, dict) or set(packet) != {'schema_version', 'request_json'} or packet['schema_version'] != 'graphics-request/v1':
+            raise ValueError('invalid saved C1 request packet')
+        wire = packet['request_json']
+        if not isinstance(wire, str) or hashlib.sha256(wire.encode()).hexdigest() != call.request_hash:
+            raise ValueError('saved C1 request hash mismatch')
+        body = json.loads(wire)
     if not isinstance(call.response_payload, dict) or digest(call.response_payload) != call.response_hash:
         raise ValueError('saved C1 response hash mismatch')
-    body = json.loads(wire)
     user_messages = [item for item in body['messages'] if item.get('role') == 'user']
     if len(user_messages) != 1:
         raise ValueError('invalid C1 user message')

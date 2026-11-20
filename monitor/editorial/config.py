@@ -58,8 +58,8 @@ class Route(BaseModel):
 class ChatterTrial(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     scope: str = Field(min_length=1, max_length=70, pattern=r"^chatter-[a-z0-9-]+$")
-    limit_usd: float = Field(gt=0, le=20)
-    carry_usd: float = Field(ge=0, le=20)
+    limit_usd: float = Field(gt=0, le=50)
+    carry_usd: float = Field(ge=0, le=50)
     publication_limit: int | None = Field(
         default=None, strict=True, ge=1, le=18, exclude_if=lambda value: value is None
     )
@@ -69,7 +69,7 @@ class ChatterWorkflow(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     enabled: bool = False
     activated_at: AwareDatetime | None = None
-    discovery_lane: Literal["semantic-v1", "personalized-trends-v1"] = "semantic-v1"
+    discovery_lane: Literal["semantic-v1", "personalized-trends-v1", "personalized-trends-v2"] = "semantic-v1"
     discovery: Route | None = None
     ranking: Route | None = None
     selector: Route | None = None
@@ -97,7 +97,7 @@ class ChatterWorkflow(BaseModel):
                 and self.selector != self.ranking
             ):
                 raise ValueError("Chatter selection route must use Grok or its accepted personalized ranking route")
-            if self.discovery_lane == "personalized-trends-v1" and (
+            if self.discovery_lane in {"personalized-trends-v1", "personalized-trends-v2"} and (
                 self.ranking is None
                 or self.ranking.endpoint != "https://openrouter.ai/api/v1/chat/completions"
                 or self.ranking.model != "openai/gpt-6-sol"

@@ -163,6 +163,7 @@ def _validated_ranked_execution(run, execution, requests, purpose):
     from .chatter_trends import read_ranked_batch
 
     batch = read_ranked_batch(run.pk)
+    origins = {lead.get("rank_call_id",batch["rank_call_id"]) for lead in batch["leads"]}
     now = timezone.now()
     definition = execution.job.definition
     options = definition.get("options") if isinstance(definition, dict) else None
@@ -180,7 +181,7 @@ def _validated_ranked_execution(run, execution, requests, purpose):
                 or request.archive_id is None or request.body_lost or not request.selection_accounted
                 or not request.response_sha256
                 or request.scope_run.run_id != execution.pk
-                or request.scope_run.content_call_id != batch["rank_call_id"]
+                or request.scope_run.content_call_id not in origins
                 or request.archive.encoding != "selected-json-canonical-v1"
                 or request.archive.capture_kind != "chatter_source_projection"
                 or request.archive.byte_count != len(bytes(request.archive.body))):
@@ -195,7 +196,7 @@ def source_resume_is_safe(run):
     from .chatter_trends import checkpoint
 
     try:
-        if run.scope_key != "chatter:personalized-trends:v1":
+        if run.scope_key not in {"chatter:personalized-trends:v1", "chatter:personalized-trends:decision:v2"}:
             return False
         purpose = checkpoint(run).credential_purpose
         executions = list(CollectionRun.objects.filter(content_run=run).exclude(
@@ -230,7 +231,8 @@ class SourceSession:
         self.run, self.cfg = run, cfg
         self.started_monotonic = time.monotonic()
         self.purpose = purpose
-        self.ranked_lane = run.scope_key == "chatter:personalized-trends:v1"
+        self.lead_rank_call_id = None
+        self.ranked_lane = run.scope_key in {"chatter:personalized-trends:v1", "chatter:personalized-trends:decision:v2"}
         self._transport = transport or https_request
         self.policy_reader = policy_reader
         self.rates = load_pricing(repo_root=settings.BASE_DIR)
@@ -275,7 +277,7 @@ class SourceSession:
                 "schedule_driver": "external_render_cron"
                 if mode == "recurring"
                 else "manual",
-                "interval_seconds": (3600 if self.ranked_lane else 900) if mode == "recurring" else None,
+                "interval_seconds": (1800 if run.scope_key == "chatter:personalized-trends:decision:v2" else 3600 if self.ranked_lane else 900) if mode == "recurring" else None,
                 "max_requests": None if self.ranked_lane else cfg.chatter.source_request_limit,
                 "max_bytes": 8_000_000,
                 "max_seconds": 600,
@@ -411,7 +413,7 @@ class SourceSession:
         self.last_request, self.last_receipt_at = request, request.received_at
         return value
 
-    def search_pages(self, query):
+    def search_pages(self, query, *, rank_call_id=None):
         """Replay exact captured requests through the shared paginator before new I/O."""
         from x_monitor.twitterapi_credentials import require_twitterapi_api_key
 
@@ -433,6 +435,7 @@ class SourceSession:
             return original_get(path, params)
 
         self.client._get = get
+        self.lead_rank_call_id = rank_call_id
         try:
             for page in self.client.run_search_pages(query, max_results=None, max_pages=None):
                 if self.last_receipt_at:
@@ -441,12 +444,17 @@ class SourceSession:
                 yield page
         finally:
             self.client._get = original_get
+            self.lead_rank_call_id = None
 
     def scope(self, name, query=None, *, tool=False, start=None, end=None):
         query_row = save_query(query) if query else None
-        call = OriginalContentCall.objects.filter(
-            run=self.run, stage="trends-ranking-v1" if self.ranked_lane else "discovery"
-        ).first()
+        if self.ranked_lane:
+            from .chatter_trends import read_ranked_batch
+
+            origin_id = self.lead_rank_call_id or read_ranked_batch(self.run.pk)["rank_call_id"]
+            call = OriginalContentCall.objects.get(pk=origin_id)
+        else:
+            call = OriginalContentCall.objects.filter(run=self.run, stage="discovery").first()
         ownership = {
             "query_id": query_row.pk if query_row else None,
             "content_call_id": call.pk if call else None,

@@ -1017,9 +1017,11 @@ def checkpoint_scope(
                     run.job.source_id == "x" and run.job.purpose == "content"
                     and run.job.operation == "chatter_search" and run.content_run_id is not None
                     and run.content_run.workflow_key == "chatter-discovery"
-                    and run.content_run.scope_key == "chatter:personalized-trends:v1"
-                    and run.job.definition.get("options", {}).get("workflow_version") == "personalized-trends-v1"
-                    and scope_key == "personalized-trends-v1"
+                    and (run.content_run.scope_key, scope_key) in {
+                        ("chatter:personalized-trends:v1", "personalized-trends-v1"),
+                        ("chatter:personalized-trends:capture:v2", "personalized-trends-v2"),
+                    }
+                    and run.job.definition.get("options", {}).get("workflow_version") == scope_key
                     and ownership == {"content_run_id": run.content_run_id}
                     and projection_contract is None and resource_observation is None,
                     "personalized trends scope requires its sealed authored-run ownership",
@@ -1033,18 +1035,23 @@ def checkpoint_scope(
                     "Chatter scope requires its typed authored-run ownership",
                 )
                 call_stage = "discovery"
-                if run.content_run.scope_key == "chatter:personalized-trends:v1":
+                call_owner = {"run_id":run.content_run_id}
+                if run.content_run.scope_key in {"chatter:personalized-trends:v1", "chatter:personalized-trends:decision:v2"}:
                     from monitor.editorial.chatter_trends import read_ranked_batch
 
                     batch = read_ranked_batch(run.content_run_id)
-                    require(ownership["content_call_id"] == batch["rank_call_id"],
+                    origins = {lead.get("rank_call_id", batch["rank_call_id"]) for lead in batch["leads"]}
+                    require(ownership["content_call_id"] in origins,
                             "Chatter source scope differs from saved ranking")
-                    call_stage = "trends-ranking-v1"
+                    call_stage = "trends-ranking-v1" if batch["schema_version"] == 1 else "trends-ranking-v2"
+                    if batch["schema_version"] == 2:
+                        # A drained lead can point to a previously verified ranking.
+                        call_owner = {"run__scope_key":run.content_run.scope_key, "run__interval__lte":run.content_run.interval}
                 require(
                     type(ownership["content_call_id"]) is int
                     and OriginalContentCall.objects.filter(pk=ownership["content_call_id"],
-                        run_id=run.content_run_id, stage=call_stage,
-                        **({"state": "completed"} if call_stage == "trends-ranking-v1" else {})).exists()
+                        stage=call_stage, **call_owner,
+                        **({"state": "completed"} if call_stage.startswith("trends-ranking") else {})).exists()
                     and (ownership["query_id"] is None or type(ownership["query_id"]) is int
                          and SearchQuery.objects.filter(pk=ownership["query_id"], query_id__startswith="chatter:").exists()),
                     "Chatter scope query or call belongs to another execution",

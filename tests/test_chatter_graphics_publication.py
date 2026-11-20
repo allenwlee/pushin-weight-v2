@@ -479,3 +479,128 @@ def test_late_decoded_video_attaches_to_its_older_pinned_edition_without_moving_
     assets = graphics_assets(saved_edition(primary))
     assert assets.video.pk == job.pk and assets.still.text_id == primary.pk
     assert OriginalContentCall.objects.filter(run=run, stage__endswith=":V1").count() == 1
+
+
+@pytest.mark.parametrize("with_cast,image_status", [(True, 200), (False, 200), (True, 400), (True, "changed_cast_bytes")])
+def test_rolling_edition_owns_one_writer_pitch_and_its_video_inputs(
+    frozen_chatter, monkeypatch, editorial_storage, tmp_path, with_cast, image_status,
+):
+    import base64
+    import hashlib
+
+    from monitor.editorial.chatter_trends import DECISION_SCOPE, ROLLING_LANE
+    from monitor.editorial.graphics_contracts import WRITER_LED
+    from monitor.editorial.graphics_generation import REFERENCE_VIDEO_MODEL, VIDEO_MODEL
+    from monitor.editorial.graphics_packages import (
+        claim_package,
+        materialize_package,
+        release_package,
+    )
+    from monitor.editorial.graphics_video import submit_video_job
+    from tests.editorial_support import person_photo
+    from tests.test_chatter_pool_readers import published
+
+    row, _, _ = frozen_chatter
+    personalized(row, "en", "giant")
+    person, _, photo = person_photo("Source Maker", photo=with_cast)
+    subject = "Source Maker announces a preview"
+    if image_status == "changed_cast_bytes":
+        from core.models import Account
+        from tests.test_person_identity import link
+
+        link(person, Account.objects.create(author_id="97222", handle="sourcemaker", normalized_handle="sourcemaker"), "confirmed")
+        subject = "@sourcemaker announces a preview"
+    row.selection.update(subject=subject, source_identities=[{
+        "post_id": "98001", "person_links": [{"person_id": str(person.pk), "role": "mentioned",
+                                             "resolution_status": "confirmed"}]}])
+    row.save(update_fields=["selection"])
+    row.run.config_snapshot["editorial"]["chatter"]["discovery_lane"] = ROLLING_LANE
+    row.run.scope_key = DECISION_SCOPE
+    row.run.save(update_fields=["scope_key", "config_snapshot"])
+    monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", "shared")
+    run, output = materialize_package(prepared(row))
+    copy = copy_result()
+    motion = "The winner springs over the counter. Hold the headline on the last beat."
+    copy.update(schema_version=WRITER_LED, candidates=[
+        {**copy["candidates"][0], "still_pitch": "An illustrated counter.", "motion_prompt": motion}])
+    fake, images = media_transport(copy, first_image_status=image_status)
+    keys = {k: "fixture" for k in ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "XAI_API_KEY_PW")}
+    sent = []
+
+    def transport(endpoint, key, body, **kwargs):
+        sent.append(body)
+        if len(sent) == 2:
+            fake(endpoint, key, body, **kwargs)  # legacy fixture's unused G0
+            status, raw = fake(endpoint, key, body, **kwargs)
+            result = json.loads(raw)
+            message = result["choices"][0]["message"]
+            design = json.loads(message["content"])
+            design["treatments"] = design["treatments"][:1]
+            message["content"] = json.dumps(design)
+            return status, json.dumps(result).encode()
+        return fake(endpoint, key, body, **kwargs)
+
+    assert advance_step(run.pk, keys=keys, transport=transport)["stage"] == "C1"
+    text = output.localized_texts.get()
+    assert text.headline == copy["candidates"][0]["headline"]
+    if image_status == "changed_cast_bytes":
+        from django.core.files.storage import storages
+
+        assert advance_step(run.pk, keys=keys, transport=transport)["stage"] == "source_lookup"
+        with storages["staff_media"].open(photo.media.storage_name, "wb") as stream:
+            stream.write(b"changed")
+        blocked = advance_step(run.pk, keys=keys, transport=transport)
+        assert blocked["stage"] == "G1" and blocked["state"] == "skipped"
+        assert list(output.localized_texts.values_list("pk", flat=True)) == [text.pk]
+        assert len(sent) == 1
+        return
+    assert [advance_step(run.pk, keys=keys, transport=transport)["stage"] for _ in range(3)] == [
+        "source_lookup", "G1", "I-A"]
+    assert len(images) == 1
+    if image_status == 400:
+        assert pending_action(run.pk)["action"] == "review"
+        assert not run.provider_calls.filter(stage__endswith=":I-B").exists()
+        return
+
+    assert advance_step(run.pk, keys=keys, transport=transport)["next_action"] == "video"
+    newer = published("giant", "98995")
+    assert OriginalContentSelection.objects.get(scope_key="featured:social-brief:en:giant:en").text_id == newer.pk
+    claim = claim_package(run.pk, owner="rolling-video")
+    video = []
+    try:
+        result = submit_video_job(run.pk, text.pk, owner=claim.owner, fence=claim.fence, api_key="fixture",
+            transport=lambda _url, _key, body, **_kw: (video.append(body) or 200, b'{"request_id":"rolling-clip"}'))
+    finally:
+        release_package(run.pk, owner=claim.owner, fence=claim.fence)
+    assert result["state"] == "pending"
+    assert video[0]["prompt"].endswith(motion) and video[0]["duration"] == 5 and video[0]["resolution"] == "720p"
+    assert video[0]["model"] == (REFERENCE_VIDEO_MODEL if with_cast else VIDEO_MODEL)
+    if with_cast:
+        writer_input = sent[0]["messages"][-1]["content"][1]["image_url"]["url"]
+        identity = video[0]["reference_images"][0]["url"]
+        assert identity == writer_input == images[0]["images"][0]["url"]
+        assert hashlib.sha256(base64.b64decode(identity.split(",")[1])).hexdigest() == photo.media_id
+        assert video[0]["image"]["url"] != identity
+    else:
+        assert "reference_images" not in video[0]
+    assert not run.provider_calls.filter(stage__endswith=":G0").exists()
+    import subprocess
+
+    import imageio_ffmpeg
+
+    from monitor.editorial.graphics_reading import graphics_assets
+    from monitor.editorial.graphics_video import poll_video_job
+    from monitor.editorial.readers import find_saved_edition
+
+    movie = tmp_path / "archive.mp4"
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-f", "lavfi", "-i",
+        "color=c=red:s=32x32:r=5:d=5", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-y", str(movie)],
+        check=True, capture_output=True)
+    polled = poll_video_job(result["job_id"], api_key="fixture",
+        transport=lambda *_args, **_kw: (200, b'{"status":"done","video":{"url":"https://example.test/movie"}}'),
+        fetch=lambda *_args, **_kw: (movie.read_bytes(), "https://example.test/movie", "video/mp4"))
+    assert polled["state"] == "completed"
+    edition = find_saved_edition(row.story_id, "chatter", locale="en", pinned=text.public_id)
+    assets = graphics_assets(edition)
+    assert assets.video.text_id == assets.still.text_id == text.pk
+    assert assets.video.provenance["decode_receipt"]["input_still_sha256"] == assets.still.generated_sha256
