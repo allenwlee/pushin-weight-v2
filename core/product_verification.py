@@ -630,8 +630,13 @@ def _upsert_hf_product(
         raise ValueError("product_owner_conflict")
     if product.repo_id not in (None, repo_id):
         raise ValueError("product_repository_conflict")
-    if product.product_type_code not in (None, product_type):
+    legacy_types = {"llm-model": "model-llm", "other-ai-model": "model-other"}
+    existing_type = product.product_type_code
+    if legacy_types.get(existing_type, existing_type) not in (None, product_type):
         raise ValueError("product_type_conflict")
+    if existing_type in legacy_types:
+        # Preserve the historical Product row while accepting its equivalent category.
+        defaults.pop("product_type_id", None)
     product.repo_id = repo_id
     defaults["raw"] = {
         **(product.raw if isinstance(product.raw, dict) else {}),
@@ -639,7 +644,11 @@ def _upsert_hf_product(
     }
     for field, value in defaults.items():
         setattr(product, field, value)
-    product.save()
+    if existing_type in legacy_types:
+        # The database rejects even a no-op write of a retired category.
+        product.save(update_fields=set(defaults) | {"repo_id", "updated_at"})
+    else:
+        product.save()
     return product
 
 
@@ -709,11 +718,16 @@ def _proposal_categories(proposal: ProductVerificationProposal) -> list[str]:
         filters["brand_id"] = proposal.proposed_brand_id
     else:
         filters["brand_discovery_candidate_id"] = proposal.proposed_candidate_id
-    return list(
-        RareTypeCategoryAssignment.objects.filter(**filters)
-        .values_list("category", flat=True)
-        .distinct()[:2]
-    )
+    recorded = RareTypeCategoryAssignment.objects.filter(**filters).values_list("category", flat=True).distinct()
+    translated = set()
+    for code in recorded:
+        if code == "agent-harness":
+            translated.update(("agent", "harness"))
+        else:
+            translated.add({"llm-model": "model-llm", "other-ai-model": "model-other"}.get(code, code))
+        if len(translated) > 1:
+            break
+    return sorted(translated)
 
 
 def _release_claim(proposal: ProductVerificationProposal) -> None:

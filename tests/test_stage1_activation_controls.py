@@ -45,7 +45,11 @@ def test_checked_in_activation_controls_are_fail_closed() -> None:
         ("render.yaml", "pushinweight-harvest"),
     ):
         environment = _service_environment(blueprint_name, service_name)
-        assert {key: environment[key] for key in CONTROL_VALUES} == CONTROL_VALUES
+        expected = {**CONTROL_VALUES}
+        if blueprint_name == "render.yaml":
+            # The configured ceiling is dormant while targeted extraction is disabled.
+            expected["X_MONITOR_TARGETED_EXTRACTION_MAX_CALLS_PER_CYCLE"] = "20"
+        assert {key: environment[key] for key in expected} == expected
 
 
 def test_fail_closed_environment_loads_without_opening_a_lane(monkeypatch) -> None:

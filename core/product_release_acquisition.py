@@ -30,7 +30,7 @@ def _dispatch_if_enabled(job):
         )
 
 
-def queue_after_commit(claim_id, *, provider="hf"):
+def queue_after_commit(claim_id, *, provider="hf", exact_only=False):
     """Register follow-up after the evidence commits; never call a provider here.
 
     Failed registration leaves the saved claim available to the recovery sweep.
@@ -41,7 +41,14 @@ def queue_after_commit(claim_id, *, provider="hf"):
 
     def enqueue():
         try:
+            if exact_only:
+                from core.models import EventDossierClaim
+
+                claim = EventDossierClaim.objects.select_related("event_dossier_source__post", "source_archive").get(pk=claim_id)
+                if not _source_bound_hf_repo(claim):
+                    return
             job = (queue_github_repository(claim_id) if provider == "github"
+                   else queue_hf_name_search(claim_id, exact_only=True) if exact_only
                    else queue_hf_name_search(claim_id))
         except Exception:  # Preserve committed collection evidence; recovery can retry.
             logging.getLogger(__name__).exception(
@@ -463,8 +470,22 @@ def _integrate_acquisition_run(run_id):
     )
 
     run = models.CollectionRun.objects.select_related("job").get(pk=run_id)
-    if run.job.operation != "release_acquisition" or run.job.source_id != "hf":
-        raise ValueError("HF release acquisition run required")
+    if run.job.operation != "release_acquisition" or run.job.source_id not in {"hf", "github"}:
+        raise ValueError("release acquisition run required")
+    if run.job.source_id == "github":
+        owner_profile = run.job.targets.filter(target_role="publisher_profile").exists()
+        projection = "github-release-owner-v1" if owner_profile else "github-release-exact-v1"
+        observations = run.observations.filter(projection_kind=projection)
+        count = 0
+        for observation in observations:
+            if owner_profile:
+                from core.product_release_github_owner import integrate_owner
+
+                integrate_owner(observation)
+            else:
+                integrate_github_capture(observation)
+            count += 1
+        return {"observations": count, "dossiers": 0, "products_resolved": 0, "registration_failures": 0}
     links = list(run.job.dossier_claim_links.select_related("claim__event_dossier_source"))
     totals = {"observations": 0, "dossiers": 0, "products_resolved": 0,
               "registration_failures": 0}
@@ -473,7 +494,11 @@ def _integrate_acquisition_run(run_id):
 
         for observation in run.observations.filter(projection_kind="hf-release-collection-v1"):
             totals["observations"] += 1
-            totals["products_resolved"] += integrate_collection(observation)
+            applied = integrate_collection(observation)
+            if applied is None:
+                totals["awaiting_identity"] = True
+            else:
+                totals["products_resolved"] += applied
         return totals
     selected_search_repos = set()
     for observation in run.observations.all().order_by("pk"):
@@ -763,15 +788,33 @@ def _apply_acquisition_integration(run_id):
             return {"status": "retry_limit", "registration_failures": 0}
         if scope.outcome == "pending" and scope.retry_at and scope.retry_at > timezone.now():
             return {"status": "cooldown", "registration_failures": 0}
+        from core.product_release_pipeline import ReleaseIdentityBusy
+
         try:
             with transaction.atomic():
                 result = _integrate_acquisition_run(run_id)
+        except ReleaseIdentityBusy:
+            scope.outcome = "pending"
+            scope.execution_state = "pending"
+            scope.coverage_state = "partial"
+            scope.retry_at = timezone.now() + timedelta(seconds=5)
+            scope.error_code = "identity_busy"
+            scope.enumeration_complete = False
+            scope.save(update_fields=["outcome", "execution_state", "coverage_state", "retry_at", "error_code", "enumeration_complete"])
+            return {"status": "busy", "registration_failures": 0}
         except Exception:
             import logging
 
             logging.getLogger(__name__).exception("Release integration failed for run %s", run_id)
             result = {"registration_failures": 1}
-        if result["registration_failures"]:
+        if result.get("awaiting_identity") and not result["registration_failures"]:
+            scope.outcome = "pending"
+            scope.execution_state = "pending"
+            scope.coverage_state = "partial"
+            scope.retry_at = timezone.now() + timedelta(hours=6)
+            scope.error_code = "awaiting_product_identity"
+            scope.enumeration_complete = False
+        elif result["registration_failures"]:
             scope.raw_count += 1
             scope.outcome = "failed" if scope.raw_count >= 3 else "pending"
             scope.execution_state = "failed" if scope.outcome == "failed" else "pending"
@@ -978,6 +1021,7 @@ def execute_hf_name_search(job_id, *, client):
 
 def drain_due_hf_acquisitions(*, client, limit=10, execute=False, job_ids=None):
     """Select a finite page of due HF or GitHub jobs; preview makes no calls."""
+    from datetime import timedelta
     from uuid import UUID
 
     from django.db.models import Exists, OuterRef, Q
@@ -1015,9 +1059,49 @@ def drain_due_hf_acquisitions(*, client, limit=10, execute=False, job_ids=None):
     jobs = qs.exclude(targets__target_role="registration_sweep").filter(
         ~Q(last_attempt__status="failed") | Q(projection_pending=True) | Q(integration_pending=True)
     ).order_by("created_at", "pk")
+    from monitor.pulse_processing import identity_control_selected
+
+    stopped = False
+    if identity_control_selected():
+        from monitor.pulse_control import read_status
+
+        stopped = read_status()["status"] in {"stopped", "stop_requested", "unavailable"}
+    if stopped and job_ids is None:
+        # Identity is deliberately paused, but new source captures may continue.
+        ordered_jobs = jobs.filter(integration_pending=False).iterator(chunk_size=100)
+    elif limit > 1:
+        # Reserve one position for older saved identity work, then alternate
+        # with fresh capture work so neither backlog can monopolize the batch.
+        pending_jobs = jobs.filter(integration_pending=True)
+        def cool_excluded(candidate):
+            if execute:
+                models.CollectionScopeRun.objects.filter(
+                    Q(retry_at__isnull=True) | Q(retry_at__lte=now),
+                    run__job=candidate, scope_kind="release_integration", outcome="pending",
+                ).update(retry_at=now + timedelta(hours=6), error_code="source_excluded")
+
+        def fair_jobs():
+            selected = None
+            # A bounded page advances past rejected history without retry costs.
+            for candidate in pending_jobs[:25]:
+                if _has_eligible_claim(candidate):
+                    selected = candidate
+                    yield candidate
+                    break
+                cool_excluded(candidate)
+            yield from jobs.filter(integration_pending=False).iterator(chunk_size=100)
+            remaining = pending_jobs.exclude(pk=selected.pk) if selected else pending_jobs
+            for candidate in remaining[:25]:
+                if _has_eligible_claim(candidate):
+                    yield candidate
+                else:
+                    cool_excluded(candidate)
+        ordered_jobs = fair_jobs()
+    else:
+        ordered_jobs = jobs.iterator(chunk_size=100)
     rows = []
     skipped_excluded = 0
-    for job in jobs.iterator(chunk_size=100):
+    for job in ordered_jobs:
         if not _has_eligible_claim(job):
             skipped_excluded += 1
             continue
@@ -1083,17 +1167,56 @@ def _source_bound_hf_repo(claim):
     if post is None:
         return None
     candidates = []
+    packet = None
     if claim.source_locator:
         candidates.append(_repo_from_hf_url(claim.source_locator))
     if claim.source_archive_id:
         packet = read_document(claim.source_archive)
         if isinstance(packet, dict) and isinstance(packet.get("record"), dict):
             candidates.append(packet["record"].get("candidate_repo_id"))
+        if isinstance(packet, dict) and isinstance(packet.get("finding"), dict):
+            candidates.append(packet["finding"].get("candidate_repo_id"))
+    candidates = [value for value in candidates if value]
     for repo in candidates:
         if (isinstance(repo, str) and REPO_ID.fullmatch(repo)
                 and source_repo_evidence(post, repo)["exact_hf_repo_link"]):
             return repo
-    return None
+    # The current classifier has no repository field. Only a single saved
+    # finding and a single source link whose model name agrees can establish a
+    # bounded acquisition lead; the capture is not itself a Product match.
+    if (candidates or not isinstance(packet, dict) or packet.get("schema") != "pulse-release-intake-v1"
+            or not isinstance(packet.get("finding"), dict)):
+        return None
+    finding = packet["finding"]
+    if finding.get("category") not in {"model-llm", "model-other"}:
+        return None
+    from core.models import EventDossierClaim
+    from core.product_verification import _walk_strings
+    import re
+
+    anchors = EventDossierClaim.objects.filter(
+        event_dossier_source__post_id=post.pk, extraction_version=claim.extraction_version,
+        scope_key__startswith="pulse-finding-v1:",
+    ).values_list("scope_key", flat=True).distinct()[:2]
+    if len(list(anchors)) != 1:
+        return None
+    urls = [url for value in [post.text or "", *_walk_strings(post.entities or {})]
+            for url in re.findall(r"https?://[^\s<>\"']+", value)]
+    repos = {repo for url in urls if (repo := _repo_from_hf_url(url)) and REPO_ID.fullmatch(repo)}
+    if len(repos) != 1:
+        return None
+    repo = repos.pop()
+    name = finding.get("observed_name")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    namespace, model = repo.split("/", 1)
+    clean_name = name.strip()
+    if clean_name.casefold().startswith(namespace.casefold() + " "):
+        clean_name = clean_name[len(namespace):].strip()
+    if (len(clean_name) < 4 or not re.match(r"^" + re.escape(clean_name) + r"(?:$|[-_. ])", model, re.IGNORECASE)
+            or not source_repo_evidence(post, repo)["exact_hf_repo_link"]):
+        return None
+    return repo
 
 
 def link_source_reported_parent(claim, parent_observation):
@@ -1424,7 +1547,12 @@ def link_reviewed_github_product(observation, row):
     """Reuse a uniquely reviewed dedicated mapping without creating a review."""
     from core import models
     from core.collection_identity import DEDICATED_ROLES, qualified_catalog_ownership
+    from monitor.pulse_processing import identity_application_active, identity_control_selected
 
+    if identity_control_selected() and not identity_application_active():
+        from core.product_release_pipeline import ReleaseIdentityBusy
+
+        raise ReleaseIdentityBusy("Pulse identity control must guard GitHub mapping")
     owner_id = row.get("owner", {}).get("id") if isinstance(row.get("owner"), dict) else None
     if type(owner_id) is not int or owner_id <= 0 or type(row.get("id")) is not int:
         return None
@@ -1533,8 +1661,12 @@ def execute_github_repository(job_id, *, client):
     if not _has_eligible_claim(job):
         return {"outcome": "excluded", "physical_requests": 0}
     if job.last_success_id:
-        observation = job.last_success.observations.get(projection_kind="github-release-exact-v1")
-        integrate_github_capture(observation)
+        from monitor.pulse_processing import identity_control_selected
+
+        if identity_control_selected():
+            integrate_acquisition_run(job.last_success_id)
+        else:
+            integrate_github_capture(job.last_success.observations.get(projection_kind="github-release-exact-v1"))
         return {"outcome": "found", "run_id": str(job.last_success_id), "physical_requests": 0}
     attempts = models.CollectionAttempt.objects.filter(run__job=job).count()
     checkpointed = bool(job.last_attempt_id and job.last_attempt.completed_at is None
@@ -1545,11 +1677,10 @@ def execute_github_repository(job_id, *, client):
     run = models.CollectionRun.objects.get(pk=lease.run_id)
     scope = run.scopes.get(scope_kind="release_acquisition", scope_key="execution")
     if scope.outcome == "found" and scope.enumeration_complete:
-        observation = run.observations.get(projection_kind="github-release-exact-v1")
-        integrate_github_capture(observation)
         prior = sum(run.attempts.exclude(pk=lease.attempt_id).values_list("actual_requests", flat=True))
         finish_run(lease, typed=True, status="success", request_count=prior,
                    selected_count=1, success_count=1, physical_accounting_complete=True)
+        integrate_acquisition_run(run.pk)
         return {"outcome": "found", "run_id": str(run.pk), "physical_requests": 0}
     target = job.targets.get(target_role="exact_repository")
     budget = Budget(client, max_requests=job.max_requests, max_seconds=job.max_seconds,
@@ -1582,7 +1713,7 @@ def execute_github_repository(job_id, *, client):
             )
 
             enqueue_authorized_release_projection(lease, observation)
-            integrate_github_capture(observation)
+            _defer_acquisition_integration(run.pk, "capture_pending")
         scope.outcome = outcome
         scope.error_code = None if outcome == "found" else outcome
         scope.enumeration_complete = outcome == "found"
@@ -1598,6 +1729,8 @@ def execute_github_repository(job_id, *, client):
                retry_at=None if success or attempts + 1 >= 3 else retry_at,
                request_count=prior + physical, selected_count=int(success), success_count=int(success),
                error_code=None if success else outcome, physical_accounting_complete=response is not None)
+    if success:
+        integrate_acquisition_run(run.pk)
     return {"outcome": outcome, "run_id": str(run.pk), "physical_requests": physical}
 
 
@@ -1663,11 +1796,41 @@ def queue_github_repository(claim_id):
         if job.state == "paused" and not job.runs.exists():
             job = set_job_state(job.pk, "ready")
     if job.last_success_id:
-        integrate_github_capture(job.last_success.observations.get(projection_kind="github-release-exact-v1"))
+        integrate_acquisition_run(job.last_success_id)
     return job
 
 
-def queue_hf_name_search(claim_id):
+def _retain_pulse_hf_lead(claim, repo):
+    """Freeze the exact source link that justified this acquisition target."""
+    import json
+
+    from core.collection_capture import archive_document
+    from core.event_dossiers import add_claim, attach_source
+    from core.measurement_taxonomy import digest
+    from core.product_release_pipeline import canonical_dossier
+    from core.product_verification import source_repo_evidence
+
+    post = claim.event_dossier_source.post
+    evidence = source_repo_evidence(post, repo)
+    if not evidence["exact_hf_repo_link"]:
+        raise ValueError("Exact source-bound repository required")
+    packet = {"schema": "pulse-hf-source-link-v1", "post_id": post.pk, "repo_id": repo,
+              "matched_urls": evidence["matched_hf_urls"], "post_text": post.text or "", "entities": post.entities or {}}
+    body = json.dumps(packet, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
+    if len(body) > 1048576:
+        raise ValueError("Source link evidence exceeds capture limit")
+    archive = archive_document(body, encoding="selected-json-canonical-v1", capture_kind="pulse_hf_source_link")
+    url = evidence["matched_hf_urls"][0]
+    dossier = canonical_dossier(claim.event_dossier_source.event_dossier_id)
+    source = attach_source(dossier.pk, post_id=post.pk)
+    return add_claim(source.pk, claim_kind="release_context",
+                     scope_key="pulse-hf-source-link-v1:" + digest([str(claim.pk), repo.casefold(), archive.content_sha256]),
+                     assertion_text="Saved post includes a link to this Hugging Face repository",
+                     source_excerpt=url, source_locator=url, extraction_version="pulse-hf-source-link-v1",
+                     source_archive_id=archive.pk)
+
+
+def queue_hf_name_search(claim_id, *, exact_only=False):
     """Queue a bounded source-linked exact lookup, or search the reported name."""
     from django.db import transaction
 
@@ -1691,7 +1854,14 @@ def queue_hf_name_search(claim_id):
         latest = dossier.intake_decisions.order_by("-recorded_at", "-pk").first()
         if latest and latest.outcome in {"non_release", "scam"}:
             raise ValueError("Excluded release is not eligible for acquisition")
+        if (exact_only or claim.scope_key.startswith("pulse-finding-v1:")) and claim.event_dossier_source.post_id:
+            # Lock the source through validation and capture so the saved
+            # evidence and the sealed target describe the same Post revision.
+            post = models.Post.objects.select_for_update(no_key=True).get(pk=claim.event_dossier_source.post_id)
+            claim.event_dossier_source.post = post
         repo = _source_bound_hf_repo(claim)
+        if exact_only and not repo:
+            raise ValueError("Exact source-bound repository required")
         if is_repo_lead and not repo:
             raise ValueError("Repository lead is not present in the source post")
         if is_name_lead and not _source_bound_raw_name(claim):
@@ -1725,6 +1895,9 @@ def queue_hf_name_search(claim_id):
             }],
         )
         link_claim_to_job(claim.pk, job.pk)
+        if repo and claim.scope_key.startswith("pulse-finding-v1:"):
+            lead = _retain_pulse_hf_lead(claim, repo)
+            link_claim_to_job(lead.pk, job.pk)
         if job.state == "paused" and not job.runs.exists():
             job = set_job_state(job.pk, "ready")
     if job.last_success_id:
@@ -1788,7 +1961,8 @@ def queue_saved_release_claims(*, limit=100, after=None, persist=False):
                 (TextEvidence(f"event_dossier_claims:{claim.pk}", "release_extraction", claim.assertion_text),),
             ))
             leads = search_leads(candidate) if candidate else ()
-            eligible = bool(leads and leads[0]["eligible"])
+            exact_repo = (_source_bound_hf_repo(claim) if claim.scope_key.startswith("pulse-finding-v1:") else None)
+            eligible = bool(exact_repo or (leads and leads[0]["eligible"]))
         if latest and latest.outcome in {"non_release", "scam"}:
             outcome = "excluded"
         elif not eligible:

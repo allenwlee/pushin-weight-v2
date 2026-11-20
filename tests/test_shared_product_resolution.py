@@ -173,10 +173,6 @@ def test_existing_confirmed_legacy_release_is_reused_for_new_finding(review_vers
                                                content_fingerprint="c" * 64, extraction_version="test", findings=[item])
     anchor_id = saved["findings"][0]["anchor_claim_id"]
     resolved = resolve_saved_release_finding(claim_id=anchor_id)
-    if not should_merge:
-        assert resolved["status"] == "unresolved"
-        assert EventDossier.objects.filter(merged_into__isnull=True).count() == 2
-        return
     assert resolved["status"] == "matched"
     result = reconcile_product_release_events(claim_id=anchor_id, candidate_limit=10, claim_limit=50, max_merges=1, max_seconds=5)
     if should_merge:
@@ -494,6 +490,10 @@ def test_missing_version_evidence_merges_same_product_event(anchor_index):
                                                    content_fingerprint="c" * 64, extraction_version="test", findings=[item])
         outcomes.append(resolve_saved_release_finding(claim_id=saved["findings"][0]["anchor_claim_id"]))
     assert outcomes[0]["product_key"] == outcomes[1]["product_key"]
+    limited = reconcile_product_release_events(claim_id=outcomes[anchor_index]["anchor_claim_id"], candidate_limit=1,
+                                               claim_limit=50, max_merges=1, max_seconds=5.0)
+    assert limited["status"] == "candidate_limit" and limited["more_remaining"]
+    assert EventDossier.objects.filter(merged_into__isnull=True).count() == 2
     result = reconcile_product_release_events(claim_id=outcomes[anchor_index]["anchor_claim_id"], candidate_limit=10, claim_limit=50,
                                               max_merges=1, max_seconds=5.0)
     assert len(result["merged_ids"]) == 1

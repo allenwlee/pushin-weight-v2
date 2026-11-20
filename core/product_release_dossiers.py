@@ -516,6 +516,17 @@ def persist_classified_release_findings(
             if finding["observed_name"]
             else None,
         )
+        # A source-linked category projection lets the restricted web login
+        # show this validated field without granting it raw archive access.
+        if len(body) <= 64 * 1024:
+            add_claim(linked.pk, claim_kind="release_context", scope_key=f"pulse-category-v1:{key}",
+                      assertion_text=finding["category"] or "unknown", source_excerpt=first["source_excerpt"],
+                      source_locator=first["source_locator"], extraction_version=revision,
+                      source_archive_id=archive.pk)
+        if source["kind"] == "post" and finding.get("category") in {"model-llm", "model-other"}:
+            from core.product_release_acquisition import queue_after_commit
+
+            queue_after_commit(anchor.pk, exact_only=True)
         claim_ids = []
         if issuer is not None:
             issuer_claim = add_claim(

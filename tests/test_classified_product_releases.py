@@ -1119,3 +1119,23 @@ def test_release_only_replay_is_idempotent_and_cannot_change_same_generation(mon
     with pytest.raises(ValueError, match='classification_release_only_generation_conflict'):
         cycle._publish_stage1_classification(**changed)
     assert read_publication_findings(state.pk) == before
+
+
+def test_classifier_publication_queues_single_exact_hf_link_without_provider_calls(monkeypatch, settings):
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    models.DataSource.objects.get_or_create(pk='hf', defaults={'name':'Hugging Face', 'source_type':'model_adoption'})
+    state, runner, transport = setup_cycle(monkeypatch)
+    state.post.text += ' https://huggingface.co/Qwen/Qwen4'
+    state.post.save(update_fields=['text'])
+    runner._run_post_fetch([], run_id='classifier-hf-handoff')
+    saved = read_publication_findings(state.post_id)
+    assert len(saved) == 1 and saved[0]['finding']['candidate_repo_id'] is None
+    job = models.CollectionJob.objects.get(targets__target_role='exact_model')
+    assert job.targets.get().native_identifier == 'Qwen/Qwen4'
+    assert job.dossier_claim_links.count() == 2
+    lead = job.dossier_claim_links.get(claim__scope_key__startswith='pulse-hf-source-link-v1:').claim
+    from core.collection_capture import read_document
+    models.Post.objects.filter(pk=state.post_id).update(text='changed after capture', entities={})
+    assert 'https://huggingface.co/Qwen/Qwen4' in read_document(lead.source_archive)['matched_urls']
+    assert not models.CollectionRequest.objects.exists()
+    assert len(transport.calls) == 2  # Both responses are local fixtures.

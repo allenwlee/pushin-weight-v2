@@ -12,7 +12,7 @@ def historical_category_rows():
     from django.db.migrations.executor import MigrationExecutor
 
     previous = [("core", "0234_each_signal_aggregation")]
-    current = [("core", "0240_pending_publication_admission_index")]
+    current = [("core", "0241_pulse_category_evidence_guard")]
     MigrationExecutor(connection).migrate(previous)
     try:
         for code in ("llm-model", "other-ai-model", "agent-harness"):
@@ -68,7 +68,7 @@ def test_legacy_value_is_readable_but_explicit_same_value_update_is_rejected():
 
     executor = MigrationExecutor(connection)
     previous = [("core", "0234_each_signal_aggregation")]
-    current = [("core", "0240_pending_publication_admission_index")]
+    current = [("core", "0241_pulse_category_evidence_guard")]
     executor.migrate(previous)
     try:
         legacy = ProductType.objects.get(code="llm-model")
@@ -210,3 +210,57 @@ def test_later_trigger_cannot_reparent_current_category():
             "CREATE TRIGGER zz_test_reparent BEFORE UPDATE ON product_types FOR EACH ROW EXECUTE FUNCTION pw_test_reparent()"
         )
         ProductType.objects.filter(pk=current.pk).update(code="model-llm")
+
+
+@pytest.mark.parametrize('updates', [
+    {'content_fingerprint': None},
+    {'content_fingerprint': int('1' * 64)},
+    {'extraction_version': None},
+    {'extraction_version': '\t'},
+    {'extraction_version': '\u0085'},
+    {'source': {'id': 'malformed-projection', 'other': 'x'}},
+])
+def test_projected_category_rejects_malformed_archived_packet(updates):
+    from core.event_dossiers import add_claim
+    from core.models import EventDossierClaim
+    from tests.test_pulse_readers import category_release
+
+    event = category_release('malformed-projection', packet_updates=updates)
+    anchor = EventDossierClaim.objects.get(event_dossier_source__event_dossier=event,
+                                            scope_key__startswith='pulse-finding-v1:')
+    with pytest.raises(ValueError, match='Invalid dossier claim'), transaction.atomic():
+        add_claim(anchor.event_dossier_source_id, claim_kind='release_context',
+                  scope_key='pulse-category-v1:' + 'a' * 64, assertion_text='model-llm',
+                  source_excerpt=anchor.source_excerpt, source_locator=anchor.source_locator,
+                  extraction_version=anchor.extraction_version, source_archive_id=anchor.source_archive_id)
+
+
+def test_large_finding_remains_saved_without_unsafe_category_projection():
+    from core.models import EventDossierClaim, Post
+    from core.product_release_dossiers import persist_classified_release_findings
+    from tests.test_pulse_finding_persistence import finding
+
+    post = Post.objects.create(tweet_id='large-pulse-packet', text='Released Model A')
+    item = finding()
+    item['assertions'] = [{**item['assertions'][0], 'assertion_text':str(i) + 'x' * 4096,
+                            'source_excerpt':str(i) + 'y' * 4096} for i in range(8)]
+    result = persist_classified_release_findings(source={'kind':'post', 'id':post.pk}, revision_id='b' * 64,
+        content_fingerprint='c' * 64, extraction_version='test', findings=[item])
+    assert result['findings']
+    assert EventDossierClaim.objects.filter(scope_key__startswith='pulse-finding-v1:').exists()
+    assert not EventDossierClaim.objects.filter(scope_key__startswith='pulse-category-v1:').exists()
+
+
+def test_projected_category_rejects_noncanonical_json():
+    import json
+    from core.event_dossiers import add_claim
+    from core.models import EventDossierClaim
+    from tests.test_pulse_readers import category_release
+
+    event = category_release('noncanonical-projection', body=lambda packet: json.dumps(packet, sort_keys=True).encode())
+    anchor = EventDossierClaim.objects.get(event_dossier_source__event_dossier=event, scope_key__startswith='pulse-finding-v1:')
+    with pytest.raises(ValueError, match='Invalid dossier claim'), transaction.atomic():
+        add_claim(anchor.event_dossier_source_id, claim_kind='release_context',
+                  scope_key='pulse-category-v1:' + 'a' * 64, assertion_text='model-llm',
+                  source_excerpt=anchor.source_excerpt, source_locator=anchor.source_locator,
+                  extraction_version=anchor.extraction_version, source_archive_id=anchor.source_archive_id)

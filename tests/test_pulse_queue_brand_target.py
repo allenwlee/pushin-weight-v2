@@ -44,3 +44,17 @@ def test_pulse_queue_skips_unattributed_posts_until_a_brand_is_saved(monkeypatch
     models.PostBrand.objects.create(post_id='await-brand-0', brand=brand)
     claimed = claim_enrichment_states(cfg=runner.cfg.harvest.enrichment, run_id='later-attribution')
     assert {str(item.pk) for item in claimed.states} == {'await-brand-0'}
+
+
+def test_scheduled_pulse_wakes_saved_acquisition_recovery(monkeypatch, settings):
+    state, runner, _transport = setup_cycle(monkeypatch)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    runner.cycle_kind = 'scheduled'
+    monkeypatch.setattr('core.collection_matching.drain_pending_publication_scopes', lambda **kw: {'status': 'idle'})
+    monkeypatch.setattr('monitor.pulse_processing.process_saved_findings', lambda **kw: {'status': 'running'})
+    dispatched = []
+    monkeypatch.setattr('core.product_release_acquisition.dispatch_due_recovery',
+                        lambda: dispatched.append(True) or {'status': 'scheduled'})
+    result = runner._run_post_fetch([], run_id='pulse-recovery-wakeup')
+    assert result['product_release_acquisition_dispatch']['status'] == 'scheduled'
+    assert dispatched == [True]

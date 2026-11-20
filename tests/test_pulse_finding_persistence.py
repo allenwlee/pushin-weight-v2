@@ -66,7 +66,7 @@ def test_saved_findings_replay_and_read_without_creating_products():
         == 1
     )
     assert models.EventDossier.objects.count() == 1
-    assert models.EventDossierClaim.objects.count() == 2
+    assert models.EventDossierClaim.objects.count() == 3
     assert not models.Product.objects.exists()
 
 
@@ -92,7 +92,7 @@ def test_single_finding_resource_observation_and_replay():
     archive = models.CollectionEvidenceArchive.objects.get(capture_kind="product_release_intake")
     assert models.EventDossier.objects.count() == 1
     assert models.EventDossierSource.objects.count() == 1
-    assert models.EventDossierClaim.objects.count() == 2
+    assert models.EventDossierClaim.objects.count() == 3
     assert models.CollectionEvidenceArchive.objects.count() == 1
     assert not models.Product.objects.exists()
     print(f"first/replay query counts and ms: {observations}; archive bytes: {archive.byte_count}")
@@ -187,7 +187,7 @@ def test_unnamed_finding_is_recoverable_and_changed_replay_is_rejected():
     item["category"] = "other"
     with pytest.raises(ValueError, match="changed evidence"):
         persist_classified_release_findings(**args, findings=[item])
-    assert models.EventDossierClaim.objects.count() == 2
+    assert models.EventDossierClaim.objects.count() == 3
 
 
 def test_different_offerings_share_post_but_keep_separate_evidence():
@@ -276,7 +276,7 @@ def test_assertion_order_does_not_change_saved_evidence():
         first["findings"][0]["anchor_claim_id"]
         == second["findings"][0]["anchor_claim_id"]
     )
-    assert models.EventDossierClaim.objects.count() == 3
+    assert models.EventDossierClaim.objects.count() == 4
 
 
 def test_observation_origin_and_post_canonicalization_keep_source_lineage():
@@ -377,3 +377,108 @@ def test_attributed_issuer_must_be_named_in_its_source_excerpt():
             findings=[item],
         )
     assert not models.EventDossier.objects.exists()
+
+
+def test_source_qualified_hf_repository_is_queued_from_saved_finding(monkeypatch, settings):
+    from core.product_release_dossiers import persist_classified_release_findings
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    models.DataSource.objects.get_or_create(pk='hf', defaults={'name':'Hugging Face', 'source_type':'model_adoption'})
+    post = models.Post.objects.create(tweet_id='pulse-exact-hf', text='Released Model A https://huggingface.co/acme/Model-A')
+    item = finding()
+    item['candidate_repo_id'] = 'acme/Model-A'
+    persist_classified_release_findings(source={'kind':'post', 'id':post.pk}, revision_id='b' * 64,
+        content_fingerprint='c' * 64, extraction_version='test', findings=[item])
+    job = models.CollectionJob.objects.get(targets__target_role='exact_model')
+    assert job.targets.get().native_identifier == 'acme/Model-A'
+    assert job.dossier_claim_links.count() == 2
+
+
+def test_finding_cannot_queue_repo_absent_from_saved_source(settings):
+    from core.product_release_dossiers import persist_classified_release_findings
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    models.DataSource.objects.get_or_create(pk='hf', defaults={'name':'Hugging Face', 'source_type':'model_adoption'})
+    post = models.Post.objects.create(tweet_id='pulse-wrong-hf', text='Released Model A https://huggingface.co/other/Model-A')
+    item = finding()
+    item['candidate_repo_id'] = 'acme/Model-A'
+    persist_classified_release_findings(source={'kind':'post', 'id':post.pk}, revision_id='b' * 64,
+        content_fingerprint='c' * 64, extraction_version='test', findings=[item])
+    assert not models.CollectionJob.objects.filter(operation='release_acquisition').exists()
+
+
+def test_multiple_findings_do_not_guess_which_offering_owns_hf_link(settings):
+    from core.product_release_dossiers import persist_classified_release_findings
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    models.DataSource.objects.get_or_create(pk='hf', defaults={'name':'Hugging Face', 'source_type':'model_adoption'})
+    post = models.Post.objects.create(tweet_id='pulse-ambiguous-hf', text='Released Model A https://huggingface.co/acme/Model-A')
+    first, second = finding(), finding(name='Model B', key='d' * 64)
+    persist_classified_release_findings(source={'kind':'post', 'id':post.pk}, revision_id='b' * 64,
+        content_fingerprint='c' * 64, extraction_version='test', findings=[first, second])
+    assert not models.CollectionJob.objects.filter(operation='release_acquisition').exists()
+
+
+def test_exact_hf_lead_survives_dossier_merge_before_registration(monkeypatch, settings):
+    from core.event_dossiers import create_dossier, identity_key
+    from core.product_release_acquisition import queue_hf_name_search
+    from core.product_release_dossiers import persist_classified_release_findings
+    from core.product_release_pipeline import merge_dossiers
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    monkeypatch.setattr('core.product_release_acquisition.queue_after_commit', lambda *args, **kwargs: None)
+    models.DataSource.objects.get_or_create(pk='hf', defaults={'name':'Hugging Face', 'source_type':'model_adoption'})
+    post = models.Post.objects.create(tweet_id='pulse-merged-hf', text='Released Model A https://huggingface.co/acme/Model-A')
+    item = finding()
+    item['candidate_repo_id'] = 'acme/Model-A'
+    saved = persist_classified_release_findings(source={'kind':'post', 'id':post.pk}, revision_id='b' * 64,
+        content_fingerprint='c' * 64, extraction_version='test', findings=[item])
+    original = saved['findings'][0]
+    target = create_dossier(event_kind='product_release', identity_key=identity_key('test', 'merged-hf-target'))
+    merge_dossiers(original['dossier_id'], target.pk, actor='fixture', reason='same release')
+    job = queue_hf_name_search(original['anchor_claim_id'], exact_only=True)
+    lead = job.dossier_claim_links.get(claim__scope_key__startswith='pulse-hf-source-link-v1:').claim
+    assert lead.event_dossier_source.event_dossier_id == target.pk
+    assert lead.event_dossier_source.post_id == post.pk
+
+
+def test_hf_registration_and_dossier_merge_do_not_deadlock(monkeypatch, settings):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from django.db import connections
+    from core import product_release_acquisition as acquisition
+    from core.event_dossiers import create_dossier, identity_key
+    from core.product_release_dossiers import persist_classified_release_findings
+    from core.product_release_pipeline import merge_dossiers
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    monkeypatch.setattr(acquisition, 'queue_after_commit', lambda *args, **kwargs: None)
+    models.DataSource.objects.get_or_create(pk='hf', defaults={'name':'Hugging Face', 'source_type':'model_adoption'})
+    post = models.Post.objects.create(tweet_id='pulse-concurrent-hf', text='Released Model A https://huggingface.co/acme/Model-A')
+    item = finding()
+    item['candidate_repo_id'] = 'acme/Model-A'
+    saved = persist_classified_release_findings(source={'kind':'post', 'id':post.pk}, revision_id='b' * 64,
+        content_fingerprint='c' * 64, extraction_version='test', findings=[item])['findings'][0]
+    target = create_dossier(event_kind='product_release', identity_key=identity_key('test', 'concurrent-hf-target'))
+    locked, resume = Event(), Event()
+    original = acquisition._retain_pulse_hf_lead
+    def pause_after_post_lock(*args, **kwargs):
+        locked.set()
+        assert resume.wait(10)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(acquisition, '_retain_pulse_hf_lead', pause_after_post_lock)
+    def register():
+        try:
+            return acquisition.queue_hf_name_search(saved['anchor_claim_id'], exact_only=True).pk
+        finally:
+            connections.close_all()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(register)
+        try:
+            assert locked.wait(10)
+            merge_dossiers(saved['dossier_id'], target.pk, actor='fixture', reason='same release')
+        finally:
+            resume.set()
+        job = models.CollectionJob.objects.get(pk=future.result(timeout=10))
+    lead = job.dossier_claim_links.get(claim__scope_key__startswith='pulse-hf-source-link-v1:').claim
+    assert lead.event_dossier_source.event_dossier_id == target.pk

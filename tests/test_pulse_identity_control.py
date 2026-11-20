@@ -1,11 +1,13 @@
 """Identity stop covers saved findings and saved acquisition recovery together."""
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from threading import Event
 
 import httpx
 import pytest
 from django.db import connection, connections, transaction
+from django.utils import timezone
 
 from core import models
 from core import product_release_acquisition as acquisition
@@ -117,7 +119,7 @@ def test_stopped_recovery_keeps_capture_pending_until_resume(control, monkeypatc
     monkeypatch.setattr(acquisition, "recover_release_registrations", lambda **kw: {})
     recovered = recover_due_product_releases()
     assert recovered["detection"]["status"] == "stopped"
-    assert recovered["jobs"][0]["integration"]["status"] == "stopped"
+    assert recovered["jobs"] == []  # Blocked identity work does not consume capture slots.
     assert recovered["provider_calls"] == 0
     scope.refresh_from_db()
     assert scope.outcome == "pending" and scope.raw_count == 0 and scope.retry_at is None
@@ -268,3 +270,121 @@ def test_unrelated_transaction_defers_lock_until_commit(control):
         assert not models.Product.objects.exists()
     assert models.Product.objects.get().repo_id == "lab/Model4"
     assert pulse_control.read_status()["status"] == "running"
+
+
+def test_github_capture_identity_waits_for_resume_without_refetch(control):
+    from core.collection_identity import review_github_mapping
+    from core.product_release_pipeline import persist_source
+    from core.product_release_sources import stored_posts
+    from tests.test_collection_identity import identities
+
+    _, _account, subject, repo = identities()
+    mapping = review_github_mapping(subject=subject, repo=repo, role="dedicated_model",
+        evidence_url="https://github.com/publisher/family", reviewed_by="fixture")
+    post = models.Post.objects.create(tweet_id="github-stopped-control", text="We release https://github.com/publisher/family")
+    # Saved post intake creates the report but the identity mapping must stay stopped.
+    persist_source(stored_posts([post.pk])[0])
+    lead = models.EventDossierClaim.objects.get(scope_key__startswith="github_repo_lead:", event_dossier_source__post=post)
+    job = acquisition.queue_github_repository(lead.pk)
+    requests = []
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json=repo)
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = acquisition.execute_github_repository(job.pk, client=client)
+    observation = models.CollectionObservation.objects.get(run_id=result["run_id"])
+    assert observation.product_id is None and observation.mapping_id is None
+    scope = observation.run.scopes.get(scope_kind="release_integration")
+    assert scope.outcome == "pending" and scope.raw_count == 0
+    request_state("running")
+    result = recover(job)
+    observation.refresh_from_db()
+    assert result["provider_calls"] == 0 and observation.mapping_id == mapping.pk
+    assert observation.product_id == subject.product.pk and len(requests) == 1
+
+
+def test_stopped_identity_does_not_starve_new_collection_jobs(control):
+    for name in ('BlockedA', 'BlockedB', 'BlockedC'):
+        job, scope, _ = captured_job(name=name)
+        assert scope.outcome == 'pending'
+    post = models.Post.objects.create(tweet_id='new-unblocked-capture', text='Announcing https://huggingface.co/lab/NewModel')
+    dossier, _, _ = record_release_report(post=post, record={'model_name':'NewModel', 'source_url':'https://huggingface.co/lab/NewModel'},
+        release_identity='new-unblocked-capture', observed_name='NewModel', source_url='https://huggingface.co/lab/NewModel',
+        maturity_code='unknown', release_value=None, release_precision='unknown', extraction_version='test')
+    claim = models.EventDossierClaim.objects.get(event_dossier_source__event_dossier=dossier, claim_kind_reference__code='release_report')
+    job = acquisition.queue_hf_name_search(claim.pk)
+    requests = []
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json={'id':'lab/NewModel'})
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = acquisition.drain_due_hf_acquisitions(client=client, execute=True, limit=3)
+    assert any(row['job_id'] == str(job.pk) and row['outcome'] == 'found' for row in result['jobs'])
+    assert len(requests) == 1
+
+
+@pytest.mark.parametrize('excluded_first', [False, True])
+def test_running_recovery_gives_saved_integration_and_new_capture_each_a_turn(control, excluded_first):
+    if excluded_first:
+        from core.product_release_pipeline import record_intake_decision
+        excluded, excluded_scope, _ = captured_job(name='ExcludedIntegration')
+        excluded_scope.retry_at = timezone.now() - timedelta(seconds=1)
+        excluded_scope.save(update_fields=['retry_at'])
+        linked = excluded.dossier_claim_links.select_related('claim__event_dossier_source').first().claim
+        record_intake_decision(linked.event_dossier_source.event_dossier_id, claim_id=linked.pk,
+                               outcome='non_release', actor='fixture', reason='not a release')
+    old, scope, _ = captured_job(name='NeedsIntegration')
+    new_ids = []
+    for number in range(3):
+        name = f'FreshModel{number}'
+        post = models.Post.objects.create(tweet_id=f'fair-{number}', text=f'Announcing https://huggingface.co/lab/{name}')
+        dossier, _, _ = record_release_report(post=post, record={'model_name':name, 'source_url':f'https://huggingface.co/lab/{name}'},
+            release_identity=f'fair-{number}', observed_name=name, source_url=f'https://huggingface.co/lab/{name}',
+            maturity_code='unknown', release_value=None, release_precision='unknown', extraction_version='test')
+        claim = models.EventDossierClaim.objects.get(event_dossier_source__event_dossier=dossier, claim_kind_reference__code='release_report')
+        new_ids.append(str(acquisition.queue_hf_name_search(claim.pk).pk))
+    request_state('running')
+    requests = []
+    def respond(request):
+        requests.append(request)
+        repo = request.url.path.removeprefix('/api/models/')
+        return httpx.Response(200, json={'id': repo})
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        result = acquisition.drain_due_hf_acquisitions(client=client, execute=True, limit=3)
+    assert any(row['job_id'] == str(old.pk) and row['integration']['status'] == 'complete' for row in result['jobs'])
+    assert any(row['job_id'] in new_ids and row['outcome'] == 'found' for row in result['jobs'])
+    assert requests
+
+
+def test_github_owner_capture_waits_for_identity_resume(control):
+    from core.product_release_github_owner import execute_owner
+    from core.product_release_pipeline import persist_source
+    from core.product_release_sources import stored_posts
+
+    request_state('running')
+    post = models.Post.objects.create(tweet_id='github-owner-control', author_handle='example_ai',
+        text='We released Example Agent today. https://github.com/Example/Example-Agent')
+    persist_source(stored_posts([post.pk])[0])
+    lead = models.EventDossierClaim.objects.get(scope_key__startswith='github_repo_lead:', event_dossier_source__post=post)
+    job = acquisition.queue_github_repository(lead.pk)
+    calls = []
+    def respond(request):
+        calls.append(request)
+        if request.url.path.startswith('/repos/'):
+            return httpx.Response(200, json={'id':123, 'full_name':'Example/Example-Agent', 'private':False,
+                                             'owner':{'id':12, 'login':'Example'}})
+        return httpx.Response(200, json={'id':12, 'login':'Example', 'twitter_username':'example_ai'})
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        assert acquisition.execute_github_repository(job.pk, client=client)['outcome'] == 'found'
+        owner_job = models.CollectionJob.objects.get(targets__target_role='publisher_profile')
+        request_state('stopped')
+        assert execute_owner(owner_job.pk, client=client)['outcome'] == 'found'
+    observation = models.CollectionObservation.objects.get(projection_kind='github-release-exact-v1')
+    assert observation.product_id is None
+    scope = models.CollectionScopeRun.objects.get(run__job=owner_job, scope_kind='release_integration')
+    assert scope.outcome == 'pending' and scope.raw_count == 0
+    request_state('running')
+    recovered = recover(owner_job)
+    observation.refresh_from_db()
+    assert recovered['provider_calls'] == 0 and observation.product_id is not None
+    assert len(calls) == 2

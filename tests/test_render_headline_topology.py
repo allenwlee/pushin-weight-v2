@@ -141,7 +141,11 @@ def test_enrichment_worker_has_one_process_and_no_collection_credentials():
             "key": "X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE", "sync": False,
         }
         assert "schedule" not in worker
-        assert not {"TWITTERAPI_IO_SCHEDULED_API_KEY", "TWITTERAPI_IO_ON_DEMAND_API_KEY", "CELERY_BROKER_URL"} & set(environment)
+        assert not {"TWITTERAPI_IO_SCHEDULED_API_KEY", "TWITTERAPI_IO_ON_DEMAND_API_KEY"} & set(environment)
+        if filename == "render.yaml":
+            assert "CELERY_BROKER_URL" not in environment
+        else:
+            assert environment["CELERY_BROKER_URL"]["fromService"]["name"] == "pushinweight-staging-headlines-broker"
 
 
 def test_about_backfill_hosts_have_explicit_production_identity():
@@ -195,7 +199,11 @@ def test_enrichment_workers_preserve_production_processing_configuration(monkeyp
     for path, name in [("render.yaml", "pushinweight-enrichment"), ("render-staging.yaml", "pushinweight-staging-enrichment")]:
         worker = effective(path, name)
         assert worker.harvest.enrichment.provider_calls_active is False
-        assert worker.llm == harvest.llm
+        if path == "render-staging.yaml":
+            assert worker.llm.classifier_pipeline == "compressed8_pulse_v1"
+            assert worker.llm.model_copy(update={"classifier_pipeline": harvest.llm.classifier_pipeline}) == harvest.llm
+        else:
+            assert worker.llm == harvest.llm
         assert worker.targeted_extraction == harvest.targeted_extraction
         assert worker.discovery.rare_types == harvest.discovery.rare_types
 
@@ -211,3 +219,23 @@ def test_enrichment_activation_survives_later_blueprint_sync(monkeypatch):
                 if "value" in row:
                     env.setenv(row["key"], str(row["value"]))
             assert load_config(Path("config.yaml")).harvest.enrichment.provider_calls_active is True
+
+
+def test_staging_pulse_uses_one_broker_and_shared_control_without_enabling_model_calls():
+    blueprint = yaml.safe_load(Path('render-staging.yaml').read_text(encoding='utf-8'))
+    services = {row['name']: row for row in blueprint['services']}
+    names = ('pushinweight-staging-web', 'pushinweight-staging-headlines',
+             'pushinweight-staging-enrichment', 'pushinweight-staging-harvest')
+    for name in names:
+        env = {entry['key']: entry for entry in services[name]['envVars'] if 'key' in entry}
+        assert env['PULSE_CONTROL_R2_BUCKET']['value'] == 'pushinweight-media-staging'
+        assert env['PRODUCT_RELEASE_BACKGROUND_ENABLED']['value'] == 'True'
+        assert env['X_MONITOR_CLASSIFIER_PIPELINE']['value'] == 'compressed8_pulse_v1'
+        assert env['CELERY_BROKER_URL']['fromService']['name'] == 'pushinweight-staging-headlines-broker'
+        if name != 'pushinweight-staging-web':
+            for key in ('R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'):
+                assert env[key]['fromService']['name'] == 'pushinweight-staging-web'
+    headline_env = {item['key']: item for item in services['pushinweight-staging-headlines']['envVars'] if 'key' in item}
+    enrichment_env = {item['key']: item for item in services['pushinweight-staging-enrichment']['envVars'] if 'key' in item}
+    assert headline_env['X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED']['value'] == 'False'
+    assert enrichment_env['X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE']['sync'] is False

@@ -3809,6 +3809,14 @@ class CycleRunner:
                 except Exception:  # Saved findings remain pending; collection continues.
                     logger.exception("Classified Pulse recovery failed")
                     result["product_release_recovery"] = {"status": "error"}
+                if self.cycle_kind == "scheduled":
+                    try:
+                        from core.product_release_acquisition import dispatch_due_recovery
+
+                        result["product_release_acquisition_dispatch"] = dispatch_due_recovery()
+                    except Exception:
+                        logger.exception("Post-collection release recovery dispatch failed")
+                        result["product_release_acquisition_dispatch"] = {"status": "error"}
                 return result
             from core.product_release_detection_queue import enqueue_posts
 

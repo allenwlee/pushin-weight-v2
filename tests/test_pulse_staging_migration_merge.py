@@ -15,7 +15,7 @@ def test_lineage_migration_preserves_chatter_and_restores_its_guard_on_rollback(
     from django.db.migrations.executor import MigrationExecutor
 
     previous = [('core', '0236_pulse_lineage_name_index')]
-    latest = [('core', '0240_pending_publication_admission_index')]
+    latest = [('core', '0241_pulse_category_evidence_guard')]
     try:
         MigrationExecutor(connection).migrate(previous)
         old = function_definition()

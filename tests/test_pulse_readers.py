@@ -58,7 +58,7 @@ def historical_product(**values):
         category, _ = ProductType.objects.get_or_create(code="model")
         product = Product.objects.create(product_type=category, **values)
     finally:
-        MigrationExecutor(connection).migrate([("core", "0240_pending_publication_admission_index")])
+        MigrationExecutor(connection).migrate([("core", "0241_pulse_category_evidence_guard")])
     return product
 
 

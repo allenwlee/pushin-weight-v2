@@ -477,7 +477,61 @@ def _saved_category(row):
     return category
 
 
+def _projected_categories(event_ids):
+    """Read only source-linked category claims, never restricted archive bytes."""
+    result = {event_id: {"categories": set(), "incomplete": False} for event_id in event_ids}
+    anchors = (EventDossierClaim.objects.filter(
+        Q(scope_key__startswith="pulse-finding-") | Q(extraction_version__startswith="pulse-classified-findings-"),
+        event_dossier_source__event_dossier_id__in=event_ids,
+        claim_kind_reference__code__in=("release_report", "release_signal"),
+    ).exclude(scope_key__startswith="pulse-assertion-v1:").annotate(
+        position=Window(RowNumber(), partition_by=[F("event_dossier_source__event_dossier_id")],
+                        order_by=[F("recorded_at").desc(), F("pk").desc()]),
+    ).filter(position__lte=CATEGORY_ANCHOR_LIMIT + 1).values(
+        "event_dossier_source__event_dossier_id", "event_dossier_source_id", "position", "scope_key",
+        "extraction_version", "source_archive_id", "source_archive__capture_kind", "source_archive__encoding"))
+    rows = list(anchors)
+    source_ids = {row["event_dossier_source_id"] for row in rows}
+    category_scopes = {"pulse-category-v1:" + row["scope_key"].rsplit(":", 1)[-1] for row in rows}
+    projections = EventDossierClaim.objects.filter(
+        event_dossier_source_id__in=source_ids, scope_key__in=category_scopes,
+        extraction_version__in={row["extraction_version"] for row in rows},
+        source_archive_id__in={row["source_archive_id"] for row in rows if row["source_archive_id"]},
+        claim_kind_reference__code="release_context",
+    ).values("event_dossier_source_id", "scope_key", "extraction_version", "source_archive_id", "assertion_text")
+    by_key = {}
+    for item in projections:
+        key = (item["event_dossier_source_id"], item["scope_key"], item["extraction_version"], item["source_archive_id"])
+        by_key.setdefault(key, []).append(item["assertion_text"])
+    for row in rows:
+        state = result[row["event_dossier_source__event_dossier_id"]]
+        scope, version = row["scope_key"], row["extraction_version"]
+        if (row["position"] > CATEGORY_ANCHOR_LIMIT or not re.fullmatch(r"pulse-finding-v1:[0-9a-f]{64}", scope)
+                or not re.fullmatch(r"pulse-classified-findings-v1:[0-9a-f]{64}", version)
+                or not row["source_archive_id"] or row["source_archive__capture_kind"] != "product_release_intake"
+                or row["source_archive__encoding"] != "selected-json-canonical-v1"):
+            state["incomplete"] = True
+            continue
+        key = (row["event_dossier_source_id"], "pulse-category-v1:" + scope.rsplit(":", 1)[-1],
+               version, row["source_archive_id"])
+        values = by_key.get(key, [])
+        if len(values) != 1 or values[0] not in CURRENT_CATEGORIES | {"unknown"}:
+            state["incomplete"] = True
+        elif values[0] != "unknown":
+            state["categories"].add(values[0])
+    return result
+
+
 def _saved_categories(event_ids):
+    from django.db import connection
+
+    # Source archives are owner-only. Use the narrow projection when the
+    # actual connection cannot read them (including staging's serving login).
+    if connection.vendor == "postgresql":
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT has_column_privilege(current_user, 'collection_evidence_archives', 'body', 'SELECT')")
+            if not cursor.fetchone()[0]:
+                return _projected_categories(event_ids)
     result = {
         event_id: {"categories": set(), "incomplete": False}
         for event_id in event_ids

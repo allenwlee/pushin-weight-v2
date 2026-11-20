@@ -58,7 +58,9 @@ def queue_owner(claim_id, observation_id):
         if job.state == "paused" and not job.runs.exists():
             job = set_job_state(job.pk, "ready")
     if job.last_success_id:
-        integrate_owner(job.last_success.observations.get(projection_kind="github-release-owner-v1"))
+        from core.product_release_acquisition import integrate_acquisition_run
+
+        integrate_acquisition_run(job.last_success_id)
     return job
 
 
@@ -123,7 +125,14 @@ def execute_owner(job_id, *, client):
     if not _has_eligible_claim(job):
         return {"outcome": "excluded", "physical_requests": 0}
     if job.last_success_id:
-        integrate_owner(job.last_success.observations.get(projection_kind="github-release-owner-v1"))
+        from monitor.pulse_processing import identity_control_selected
+
+        if identity_control_selected():
+            from core.product_release_acquisition import integrate_acquisition_run
+
+            integrate_acquisition_run(job.last_success_id)
+        else:
+            integrate_owner(job.last_success.observations.get(projection_kind="github-release-owner-v1"))
         return {"outcome": "found", "physical_requests": 0}
     attempts = models.CollectionAttempt.objects.filter(run__job=job).count()
     checkpointed = bool(job.last_attempt_id and job.last_attempt.completed_at is None
@@ -134,11 +143,12 @@ def execute_owner(job_id, *, client):
     run = models.CollectionRun.objects.get(pk=lease.run_id)
     scope = run.scopes.get(scope_kind="release_acquisition", scope_key="execution")
     if scope.outcome == "found" and scope.enumeration_complete:
-        observation = run.observations.get(projection_kind="github-release-owner-v1")
-        integrate_owner(observation)
         prior = sum(run.attempts.exclude(pk=lease.attempt_id).values_list("actual_requests", flat=True))
         finish_run(lease, typed=True, status="success", request_count=prior,
                    selected_count=1, success_count=1, physical_accounting_complete=True)
+        from core.product_release_acquisition import integrate_acquisition_run
+
+        integrate_acquisition_run(run.pk)
         return {"outcome": "found", "physical_requests": 0}
     target = job.targets.get(target_role="publisher_profile")
     owner = _owner_from_repository(target.evidence_observation)
@@ -173,7 +183,9 @@ def execute_owner(job_id, *, client):
             )
             if created:
                 link_request(observation, request, role="github_owner")
-            integrate_owner(observation)
+            from core.product_release_acquisition import _defer_acquisition_integration
+
+            _defer_acquisition_integration(run.pk, "capture_pending")
         scope.outcome = outcome
         scope.error_code = None if outcome == "found" else outcome
         scope.enumeration_complete = outcome == "found"
@@ -189,4 +201,8 @@ def execute_owner(job_id, *, client):
                retry_at=None if success or attempts + 1 >= 3 else retry_at,
                request_count=prior + physical, selected_count=int(success), success_count=int(success),
                error_code=None if success else outcome, physical_accounting_complete=response is not None)
+    if success:
+        from core.product_release_acquisition import integrate_acquisition_run
+
+        integrate_acquisition_run(run.pk)
     return {"outcome": outcome, "run_id": str(run.pk), "physical_requests": physical}

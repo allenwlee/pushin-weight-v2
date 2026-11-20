@@ -98,7 +98,7 @@ def integrate_collection(observation):
         return 0
     product = models.Product.objects.filter(repo_id__iexact=repo).select_related("product_type").first()
     if product is None or not product.brand_id:
-        return 0
+        return None  # Retain saved integration until identity becomes available.
     request = observation.inputs.select_related("input_request").get().input_request
     applied = 0
     for link in observation.run.job.dossier_claim_links.select_related("claim__event_dossier_source"):
@@ -214,7 +214,10 @@ def execute_collection(job_id, *, client):
                     and isinstance(title, str) and 2 <= len(title) <= 100
                     and re.match(r"^" + re.escape(title) + r"(?:$|[-_. ])", repo.split("/", 1)[1], re.IGNORECASE)):
                 candidates.append(slug)
-        if len(listing.payload) >= 20 or len(set(candidates)) != 1:
+        next_page = any(re.search(r'rel\s*=\s*["\']?next(?:["\']|[;,\s]|$)',
+                                  str(attempt.get("link", "")), re.IGNORECASE)
+                        for attempt in listing.attempts)
+        if len(listing.payload) >= 20 or next_page or len(set(candidates)) != 1:
             outcome = "found"  # no unambiguous publisher-named line
         else:
             slug = candidates[0]
@@ -244,6 +247,9 @@ def execute_collection(job_id, *, client):
             )
             if created:
                 link_request(observation, request_record, role="hf_model_collection")
+            from core.product_release_acquisition import _defer_acquisition_integration
+
+            _defer_acquisition_integration(run.pk, "capture_pending")
         success = outcome == "found"
         scope.outcome = outcome
         scope.error_code = None if success else outcome[:64]

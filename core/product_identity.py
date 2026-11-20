@@ -185,8 +185,7 @@ def resolve_saved_release_finding(*, claim_id):
         product is None
         and dossier.current_review_id is None
         and claim.event_dossier_source.post_id
-        and identity_is_specific
-        and name.casefold() in (claim.event_dossier_source.post.text or "").casefold()
+        and bool(name)
     ):
         from django.db.models import F, Q
 
@@ -211,6 +210,9 @@ def resolve_saved_release_finding(*, claim_id):
             prior_ids = set(prior.values_list("reported_product_id", flat=True).distinct()[:2])
             if not prior_ids or prior_ids == {candidates[0].product_id}:
                 product = candidates[0].product
+                # The verified edge names the exact Product even when a source
+                # reports its version separately or in quoted context.
+                identity_is_specific = True
                 identity_claim = prior.order_by("pk").first() if prior_ids else add_claim(
                     linked.pk,
                     claim_kind="release_context",
@@ -594,7 +596,7 @@ def reconcile_product_release_events(*, claim_id, candidate_limit, claim_limit, 
                 claim_id=claim_id, candidate_limit=candidate_limit, claim_limit=claim_limit,
                 max_merges=remaining_merges, deadline=deadline,
             )
-            if compatible["merged_ids"]:
+            if compatible["merged_ids"] or compatible["more_remaining"]:
                 result = {**compatible, "merged_ids": result["merged_ids"] + compatible["merged_ids"]}
     if monotonic() >= deadline:
         raise TimeoutError("Release reconciliation time budget exceeded")
@@ -860,7 +862,9 @@ def _reconcile_missing_release_metadata(*, claim_id, candidate_limit, claim_limi
         | Q(current_review__review_state="confirmed", current_review__product_release__product_id=product.product_key),
         merged_into__isnull=True,
     ).order_by("first_seen_at", "pk").values_list("pk", flat=True).distinct()[:candidate_limit + 1])
-    if len(ids) > candidate_limit or current.pk not in ids:
+    if len(ids) > candidate_limit:
+        return {"status": "candidate_limit", "merged_ids": [], "more_remaining": True}
+    if current.pk not in ids:
         return empty
     dossiers = list(EventDossier.objects.select_for_update(of=("self",)).filter(pk__in=ids).order_by("first_seen_at", "pk"))
     eligible = []
