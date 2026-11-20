@@ -288,6 +288,13 @@ def reserve_due_slot(source_cycle_id, started, *, cfg, purpose, scope=TRENDS_SCO
     return run, True
 
 
+def runs_in_trial(runs, scope):
+    """Match the active trial, or the standing lane with no trial grant."""
+    if scope is None:
+        return runs.filter(config_snapshot__editorial__chatter__trial=None)
+    return runs.filter(config_snapshot__editorial__chatter__trial__scope=scope)
+
+
 def validate_slot_authority(run, *, cfg, purpose):
     """A reused slot retains its credential purpose and complete trial grant."""
     state = checkpoint(run)

@@ -199,7 +199,12 @@ def recover_chatter_starts(*, cfg=None, task=None, limit=4):
 
     from core.models import CollectionRun, OriginalContentRun
 
-    from .chatter_trends import ROLLING_LANE, ROLLING_SCOPES, TRENDS_SCOPE
+    from .chatter_trends import (
+        ROLLING_LANE,
+        ROLLING_SCOPES,
+        TRENDS_SCOPE,
+        runs_in_trial,
+    )
 
     cfg = cfg or load_editorial_config()
     if not cfg.chatter.enabled or cfg.chatter.discovery_lane not in {ROLLING_LANE,"personalized-trends-v1"}:
@@ -226,6 +231,9 @@ def recover_chatter_starts(*, cfg=None, task=None, limit=4):
         pk__in=CollectionRun.objects.filter(completed_at__isnull=True, lease_expires_at__gt=now,
             content_run__isnull=False).exclude(job__job_key__startswith="chatter-personalized-trends:").values("content_run_id")
     ).order_by("interval")
+    if cfg.chatter.discovery_lane == ROLLING_LANE:
+        trial = cfg.chatter.trial
+        candidates = runs_in_trial(candidates, trial.scope if trial else None)
     # The enqueue budget counts eligible deliveries. Invalid rows are held and
     # removed from later scans; a separate finite scan cap bounds local work.
     for run in candidates[:100]:
@@ -245,17 +253,17 @@ def recover_chatter_starts(*, cfg=None, task=None, limit=4):
     return {"enqueued": count}
 
 
-def dispatch_chatter_stage(stage, *args):
+def dispatch_chatter_stage(stage, *args, countdown=0):
     from monitor.tasks import chatter_stage
 
-    priorities = {"select": 0, "resume-discovery": 0, "gather": 0, "review": 9}
+    priorities = {"discover": 0, "select": 0, "resume-discovery": 0, "gather": 0, "review": 9}
     if stage == "write":
         priority = 3 if args[-1] == "en" else 6
     else:
         if stage not in priorities:
             raise ValueError("unsupported Chatter stage")
         priority = priorities[stage]
-    transaction.on_commit(lambda: _send(chatter_stage, [stage, *args], priority=priority))
+    transaction.on_commit(lambda: _send(chatter_stage, [stage, *args], countdown=countdown, priority=priority))
 
 
 def dispatch_editorial(envelope):

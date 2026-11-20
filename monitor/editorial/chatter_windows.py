@@ -183,6 +183,7 @@ def apply_selection(packet, reply):
         i for g in groups for i in g.headline_ids
     ) != sorted(rows):
         raise ValueError("ranking must cover every headline exactly once")
+    explicit_priors = {group.prior_episode_id for group in groups if group.prior_episode_id}
     queued = []
     handled = set()
     for g in groups:
@@ -202,7 +203,14 @@ def apply_selection(packet, reply):
             if set(keys).intersection(e["wordings"])
         }
         if not prior and len(matches) == 1:
-            prior = next(iter(matches))
+            match = next(iter(matches))
+            if match in explicit_priors or match in handled:
+                # Another group explicitly owns this ID. An exact rerun of its
+                # evidence adds nothing, while a new grouping needs fresh wording.
+                if set(keys).issubset(earlier[match]["wordings"]):
+                    continue
+            else:
+                prior = match
         if prior:
             handled.add(prior)
         last = max(instant(x["last_seen"]) for x in members).isoformat()

@@ -95,6 +95,22 @@ def test_quarter_capture_and_half_hour_owner(rolling):
     assert OriginalContentRun.objects.filter(scope_key=CAPTURE_SCOPE).count() == 2
 
 
+def test_completed_capture_wakes_coincident_decision_through_worker_dispatch(rolling, django_capture_on_commit_callbacks):
+    from monitor.editorial.chatter_chain import run_chatter
+    from monitor.editorial.chatter_trends import envelope_for
+
+    with patch("django.utils.timezone.now", return_value=BOUNDARY + timedelta(minutes=1)):
+        capture = slot(rolling, BOUNDARY, CAPTURE_SCOPE)
+        decision = slot(rolling, BOUNDARY, DECISION_SCOPE)
+        captured, official, unused = discover(capture, rolling, official_response(1))
+        assert captured["status"] == "captured" and official.call_count == 1 and not unused.called
+        with patch("monitor.tasks.chatter_stage") as task, django_capture_on_commit_callbacks(execute=True):
+            result = run_chatter(envelope_for(capture), cfg=rolling)
+        assert result["status"] == "captured"
+        task.apply_async.assert_called_once_with(args=["discover", envelope_for(decision)],
+            queue="trend-narratives", expires=900, countdown=0, priority=0)
+
+
 def test_freeze_and_drain_without_paid_replay(rolling):
     now = BOUNDARY + timedelta(minutes=1)
     with patch("django.utils.timezone.now", return_value=now):
@@ -213,3 +229,114 @@ def test_unknown_ranking_is_held_without_automatic_duplicate(rolling):
         assert decide_window(decision.pk, transport=transport)["status"] == "held"
         assert decide_window(decision.pk, transport=transport)["status"] == "held"
         assert transport.call_count == 1
+
+
+@pytest.mark.parametrize("expires", [False, True])
+def test_presend_contention_retries_frozen_decision_only_before_next_boundary(
+    rolling, django_capture_on_commit_callbacks, expires
+):
+    from tests.test_graphics_accounting import make_run, reserve
+
+    now = BOUNDARY + timedelta(minutes=1)
+    ranker = Mock(return_value=ranking(2))
+    with patch("django.utils.timezone.now", return_value=now):
+        capture = slot(rolling, BOUNDARY, CAPTURE_SCOPE)
+        decision = slot(rolling, BOUNDARY, DECISION_SCOPE)
+        assert (
+            discover(capture, rolling, official_response(2))[0]["status"] == "captured"
+        )
+        blocker, _ = reserve(make_run())
+        with (
+            patch("monitor.tasks.chatter_stage") as task,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            waiting = decide_window(decision.pk, transport=ranker)
+            assert waiting["status"] == "waiting_capacity"
+            assert decide_window(decision.pk, transport=ranker) == waiting
+        task.apply_async.assert_called_once()
+        assert task.apply_async.call_args.kwargs["countdown"] == 60
+        assert not ranker.called and not decision.provider_calls.exists()
+        decision.refresh_from_db()
+        frozen = checkpoint(decision)
+    later = BOUNDARY + timedelta(minutes=30) if expires else now + timedelta(minutes=1)
+    with patch("django.utils.timezone.now", return_value=later):
+        blocker.delete()
+        result = decide_window(decision.pk, transport=ranker)
+        if expires:
+            assert result["error_code"] == "ranking_capacity_expired"
+            assert not ranker.called and not decision.provider_calls.exists()
+        else:
+            assert result["status"] == "ranked" and ranker.call_count == 1
+        decision.refresh_from_db()
+        assert checkpoint(decision).manifest == frozen.manifest
+        assert checkpoint(decision).freeze_at == frozen.freeze_at
+
+
+def test_financial_hold_before_send_never_schedules_capacity_retry(
+    rolling, django_capture_on_commit_callbacks
+):
+    from monitor.editorial.persistence import BudgetHeld
+
+    with patch(
+        "django.utils.timezone.now", return_value=BOUNDARY + timedelta(minutes=1)
+    ):
+        capture, decision = (
+            slot(rolling, BOUNDARY, CAPTURE_SCOPE),
+            slot(rolling, BOUNDARY, DECISION_SCOPE),
+        )
+        assert (
+            discover(capture, rolling, official_response(2))[0]["status"] == "captured"
+        )
+        with (
+            patch(
+                "monitor.editorial.chatter_accounting.admit",
+                side_effect=BudgetHeld("budget exhausted"),
+            ),
+            patch("monitor.tasks.chatter_stage") as task,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            assert decide_window(decision.pk, transport=Mock())["status"] == "held"
+            assert decide_window(decision.pk, transport=Mock())["status"] == "held"
+        assert not task.apply_async.called and not decision.provider_calls.exists()
+
+
+@pytest.mark.parametrize("standing", [False, True])
+def test_recovery_only_notifies_matching_trial_or_standing_scope(rolling, standing):
+    from monitor.editorial.dispatch import recover_chatter_starts
+
+    other_trial = rolling.chatter.trial.model_copy(
+        update={"scope": "chatter-other-watch"}
+    )
+    other = rolling.model_copy(
+        update={"chatter": rolling.chatter.model_copy(update={"trial": other_trial})}
+    )
+    regular = rolling.model_copy(
+        update={"chatter": rolling.chatter.model_copy(update={"trial": None})}
+    )
+    with patch("django.utils.timezone.now", return_value=BOUNDARY):
+        same = slot(rolling, BOUNDARY, DECISION_SCOPE)
+        slot(other, BOUNDARY - timedelta(minutes=30), DECISION_SCOPE)
+        no_trial = slot(regular, BOUNDARY - timedelta(minutes=60), DECISION_SCOPE)
+        with patch(
+            "monitor.editorial.dispatch._enqueue_chatter_start", return_value=True
+        ) as enqueue:
+            assert recover_chatter_starts(
+                cfg=regular if standing else rolling, task=Mock()
+            ) == {"enqueued": 1}
+        assert enqueue.call_count == 1 and enqueue.call_args.args[0].pk == (
+            no_trial.pk if standing else same.pk
+        )
+
+
+def test_abandoned_foreign_trial_does_not_stall_a_new_decision(rolling):
+    other = rolling.model_copy(
+        update={"chatter": rolling.chatter.model_copy(update={"trial": None})}
+    )
+    with patch(
+        "django.utils.timezone.now", return_value=BOUNDARY + timedelta(minutes=6)
+    ):
+        previous = slot(other, BOUNDARY - timedelta(minutes=30), DECISION_SCOPE)
+        current = slot(rolling, BOUNDARY, DECISION_SCOPE)
+        assert decide_window(current.pk, transport=Mock())["status"] == "empty"
+        previous.refresh_from_db()
+        assert checkpoint(previous).phase == "queued"

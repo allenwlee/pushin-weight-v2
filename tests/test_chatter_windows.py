@@ -109,3 +109,39 @@ def test_duplicate_response_ids_and_missing_rankings_fail_closed():
     with pytest.raises(ValueError):
         apply_selection(p, None)
     assert json.loads(selection_request(p)["user"])["prior_episodes"] == []
+
+
+def test_exact_wording_fallback_preserves_explicit_prior_match_in_later_group():
+    first = decision_packet([sample(0, "Original wording")], BASE, {})
+    saved = apply_selection(first, votes(first))["history"]
+    episode_id = saved["admitted"][0]["episode_id"]
+    packet = decision_packet(
+        [sample(30, "Original wording", "Reworded follow-up")],
+        BASE + timedelta(minutes=30),
+        saved,
+    )
+    reply = votes(packet)
+    reply["ranked_stories"][1]["prior_episode_id"] = episode_id
+    result = apply_selection(packet, reply)
+    assert result["leads"] == []
+    assert result["history"]["admitted"][0]["wordings"] == [
+        "original wording", "reworded follow-up"
+    ]
+
+
+def test_two_old_aliases_cannot_occupy_both_slots_for_one_pending_episode():
+    first = decision_packet([sample(0, "a", "b", "c", "alias c")], BASE, {})
+    first_reply = votes(first)
+    first_reply["ranked_stories"][2]["headline_ids"].append(4)
+    first_reply["ranked_stories"].pop()
+    history = apply_selection(first, first_reply)["history"]
+    pending_id = history["pending"][0]["episode_id"]
+    packet = decision_packet(
+        [sample(30, "c", "alias c", "new", "a")],
+        BASE + timedelta(minutes=30),
+        history,
+    )
+    admitted = apply_selection(packet, votes(packet))["leads"]
+    assert len(admitted) == 2
+    assert admitted[0]["episode_id"] == pending_id
+    assert admitted[1]["title"] == "new"
