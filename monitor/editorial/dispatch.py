@@ -35,7 +35,7 @@ def dispatch_chatter_cycle(source_cycle_id, started, *, kind, dry_run, task=None
             return {"status": "disabled"}
         if cfg.chatter.discovery_lane in {"personalized-trends-v1", "personalized-trends-v2"}:
             return dispatch_chatter_due_slot(source_cycle_id, started, cfg=cfg, task=task,
-                purpose="on-demand" if cfg.chatter.trial and cfg.chatter.discovery_lane == "personalized-trends-v1" else "scheduled", recover_pending=True)
+                purpose="on-demand" if cfg.chatter.trial else "scheduled", recover_pending=True)
         if task is None:
             from monitor.tasks import chatter_stage
             task = chatter_stage

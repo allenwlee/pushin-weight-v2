@@ -52,3 +52,20 @@ def test_watch_uses_scheduled_entrypoint_and_shared_trial(monkeypatch):
 def test_manual_watch_command_is_rejected_before_dispatch():
     with pytest.raises(CommandError, match="requires its own scheduled tick"):
         call_command("run_cycle", "--staging-chatter-watch", *ARGS)
+
+
+def test_bounded_watch_uses_on_demand_credential_purpose(monkeypatch):
+    from pathlib import Path
+    from django.conf import settings
+    from monitor.editorial import dispatch
+
+    cfg = watch.watch_profile(watch.load_editorial_config(Path(settings.BASE_DIR) / "config/editorial-chatter-staging.yaml"), *ARGS[2:])
+    observed = {}
+
+    def reserve(*args, **kwargs):
+        observed.update(kwargs)
+        return {"status": "enqueued"}
+
+    monkeypatch.setattr(dispatch, "dispatch_chatter_due_slot", reserve)
+    dispatch.dispatch_chatter_cycle("tick", START, kind="scheduled", dry_run=False, cfg=cfg)
+    assert observed["purpose"] == "on-demand"
