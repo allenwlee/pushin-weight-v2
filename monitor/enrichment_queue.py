@@ -12,7 +12,7 @@ from typing import Any
 
 from django.contrib.postgres.fields import ArrayField
 from django.db import transaction
-from django.db.models import CharField, Exists, Func, OuterRef, Q
+from django.db.models import CharField, Exists, F, Func, OuterRef, Q
 from django.utils import timezone
 
 from core.models import OriginalContentCall, PostBrand, PostEnrichmentState
@@ -212,9 +212,15 @@ def claim_enrichment_states(
             )
         elif fair_queue:
             cutoff = now - timedelta(minutes=cfg.fresh_minutes)
-            current = list(
-                eligible.filter(created_at__gte=cutoff)[: cfg.fresh_batch_size]
+            fresh = eligible.filter(created_at__gte=cutoff)
+            newest_count = (cfg.fresh_batch_size + 1) // 2
+            newest = list(fresh.order_by(F("post__created_at").desc(nulls_last=True), "-post_id")[:newest_count])
+            oldest = list(
+                fresh.exclude(pk__in=[state.pk for state in newest])[
+                    : cfg.fresh_batch_size - len(newest)
+                ]
             )
+            current = newest + oldest
             carryover = list(
                 eligible.filter(created_at__lt=cutoff)[
                     : cfg.batch_size - cfg.fresh_batch_size

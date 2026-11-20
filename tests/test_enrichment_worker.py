@@ -789,3 +789,48 @@ def test_pulse_concurrency_is_bound_to_pulse_budget_only():
     cfg.llm.classifier_pipeline = "compressed8_pulse_v1"
     changed.llm.classifier_pipeline = "compressed8_pulse_v1"
     assert config_fingerprint(cfg) != config_fingerprint(changed)
+
+
+def test_worker_shares_fresh_slots_between_newest_and_oldest_posts():
+    from core.models import Post
+
+    cfg = _cfg().harvest.enrichment.model_copy(update={'batch_size': 10, 'fresh_batch_size': 8})
+    now = timezone.now()
+    fresh = [_state(f'priority-fresh-{index:02d}') for index in range(12)]
+    publication_order = [8, 1, 10, 0, 7, 2, 11, None, 3, 10, 5, 6]
+    for index, state in enumerate(fresh):
+        PostEnrichmentState.objects.filter(pk=state.pk).update(created_at=now - timedelta(seconds=12-index))
+        value = publication_order[index]
+        Post.objects.filter(pk=state.pk).update(created_at=now - timedelta(seconds=12-value) if value is not None else None)
+    old = [_state(f'priority-old-{index:02d}') for index in range(3)]
+    PostEnrichmentState.objects.filter(pk__in=[state.pk for state in old]).update(created_at=now-timedelta(hours=2))
+    batch = claim_enrichment_states(cfg=cfg, run_id='priority', now=now, fair_queue=True)
+    assert batch.current_cycle_post_ids == tuple(fresh[index].pk for index in (6, 9, 2, 0, 1, 3, 4, 5))
+    assert len(batch.carryover_states) == 2
+
+
+def test_worker_dispatches_newest_and_oldest_fresh_posts_in_priority_order(monkeypatch):
+    from core.models import Post
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution
+
+    cfg = _cfg()
+    cfg.harvest.enrichment.batch_size = 4
+    cfg.harvest.enrichment.fresh_batch_size = 4
+    now = timezone.now()
+    states = [_state(f'worker-priority-{index}') for index in range(6)]
+    for index, state in enumerate(states):
+        PostEnrichmentState.objects.filter(pk=state.pk).update(
+            created_at=now-timedelta(seconds=6-index), translation_status='succeeded',
+        )
+        Post.objects.filter(pk=state.pk).update(created_at=now-timedelta(seconds=6-index))
+    captured = []
+
+    def classify(tweets, *args, **kwargs):
+        captured.extend(tweet['tweet_id'] for tweet in tweets)
+        return [{'valid': False} for _ in tweets]
+
+    monkeypatch.setattr(attribution, 'classify_batch_pragmatics_full', classify)
+    runner = CycleRunner(cfg=cfg, _post_fetch_clients={'translation': None, 'classification': object()})
+    runner._run_post_fetch([], run_id='worker-priority', fair_queue=True)
+    assert captured == [states[index].pk for index in (5, 4, 0, 1)]
