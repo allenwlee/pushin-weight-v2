@@ -22,7 +22,7 @@ from core.models import (
 from scripts.benchmark_download_collector.history import date_chunks
 
 HISTORY_SOURCES = ("github", "hf", "openrouter", "arena")
-MODEL_TYPES = {"llm-model", "other-ai-model"}
+MODEL_TYPES = {"llm-model", "other-ai-model", "model-llm", "model-other"}
 
 
 def _provider_pins(mappings):

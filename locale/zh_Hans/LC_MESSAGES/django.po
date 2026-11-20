@@ -1076,3 +1076,354 @@ msgstr "字节"
 #: monitor/templates/monitor/general/_pulse_framework.html
 msgid "Chart is busy. Try again shortly."
 msgstr "图表繁忙，请稍后重试。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "A stop defers new identity resolution. Collection, classification and saved discoveries continue."
+msgstr "停止后将暂缓新的身份解析。采集、分类和已保存的发布动态仍会继续。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Accepted evidence"
+msgstr "已采纳证据"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Acknowledged at"
+msgstr "确认时间"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Acknowledged revision"
+msgstr "已确认版本"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Additional ownership records"
+msgstr "另有归属记录"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Announcement"
+msgstr "公告"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Availability"
+msgstr "可用时间"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Brand pending"
+msgstr "品牌待确认"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Category pending"
+msgstr "类别待确认"
+
+#: monitor/pulse_views.py
+#, python-format
+msgid "Reported category: %(category)s"
+msgstr "来源报告的类别：%(category)s"
+
+#: monitor/pulse_views.py
+#, python-format
+msgid "Sources report different categories: %(categories)s."
+msgstr "来源报告了不同的类别：%(categories)s。"
+
+#: monitor/templates/monitor/pulse.html
+msgid "Category evidence is incomplete."
+msgstr "类别证据不完整。"
+
+#: monitor/pulse_views.py
+#, python-format
+msgid "Legacy category: %(code)s"
+msgstr "旧版类别：%(code)s"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Checked"
+msgstr "检查时间"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Choose a valid action and enter a reason."
+msgstr "请选择有效操作并填写原因。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Company pending"
+msgstr "公司待确认"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Confirmed"
+msgstr "已确认"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Control storage is unavailable. Processor state cannot be confirmed."
+msgstr "控制存储不可用，无法确认处理程序状态。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Control unavailable"
+msgstr "控制不可用"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Date pending"
+msgstr "日期待确认"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Discovered"
+msgstr "发现时间"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Expected"
+msgstr "预期值"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "First observed use"
+msgstr "首次观察到使用"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Flagged source"
+msgstr "已标记的来源"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Harness"
+msgstr "智能体框架"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Language model"
+msgstr "语言模型"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Latest discoveries"
+msgstr "最新发现"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Linked"
+msgstr "关联时间"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "More dated evidence is saved with this discovery."
+msgstr "此动态还保存了更多带日期的证据。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "More sources"
+msgstr "更多来源"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Name pending"
+msgstr "名称待确认"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "No diagnostics are available in the current snapshot."
+msgstr "当前快照中没有可用的诊断信息。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "No release discoveries yet"
+msgstr "暂无发布动态"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "No sources have been attached yet."
+msgstr "尚未关联来源。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Not a release"
+msgstr "非发布事件"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Not reviewed"
+msgstr "尚未审核"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Older diagnostics removed by retention"
+msgstr "按保留规则移除的旧诊断"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Older discoveries"
+msgstr "较早发现"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Original link unavailable"
+msgstr "原始链接不可用"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Other"
+msgstr "其他"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Other model"
+msgstr "其他模型"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pending review"
+msgstr "待审核"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Product identity pending"
+msgstr "产品身份待确认"
+
+#: monitor/templates/monitor/pulse.html
+msgid "Reported product identity — awaiting review"
+msgstr "来源报告的产品身份 — 等待审核"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Provisional"
+msgstr "暂定"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse control changed. Refresh Admin before trying again."
+msgstr "Pulse 控制状态已更改，请刷新管理页面后重试。"
+
+#: monitor/pulse_views.py
+msgid "Pulse control requires owner or staff access."
+msgstr "Pulse 控制需要所有者或管理人员权限。"
+
+#: monitor/pulse_views.py
+msgid "Pulse processing needs investigation."
+msgstr "Pulse 处理需要调查。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse control is unavailable. No stop or resume was confirmed."
+msgstr "Pulse 控制不可用，尚未确认停止或恢复。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse diagnostics"
+msgstr "Pulse 诊断"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse identity processing"
+msgstr "Pulse 身份解析"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Pulse processing"
+msgstr "Pulse 处理"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Reason"
+msgstr "原因"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "References"
+msgstr "关联记录"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Rejected evidence"
+msgstr "未采纳证据"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related discussion is separate from evidence accepted in a review."
+msgstr "相关讨论与审核中采纳的证据分别展示。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related source"
+msgstr "相关来源"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related sources"
+msgstr "相关来源"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Related sources are temporarily unavailable. Please try again."
+msgstr "暂时无法读取相关来源，请重试。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Release discoveries"
+msgstr "发布动态"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Release discoveries are temporarily unavailable. Please try again."
+msgstr "暂时无法读取发布动态，请重试。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Reported date"
+msgstr "来源报告的日期"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Reported release"
+msgstr "来源报告的发布"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Request resume"
+msgstr "请求恢复"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Request stop"
+msgstr "请求停止"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Requested revision"
+msgstr "请求版本"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Resume requested"
+msgstr "已请求恢复"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Retired"
+msgstr "已撤销"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Return to Admin"
+msgstr "返回管理页面"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Running"
+msgstr "运行中"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Saved discoveries, newest first. Pending details remain visible."
+msgstr "已保存的发现按最新顺序排列，待确认的详情仍会显示。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Saved release discoveries will appear here."
+msgstr "已保存的发布动态将显示在这里。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Source"
+msgstr "来源"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Sources refer to competing identities."
+msgstr "不同来源指向存在冲突的身份。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Stop requested"
+msgstr "已请求停止"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Stopped"
+msgstr "已停止"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Stored post"
+msgstr "已保存的帖子"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Superseded"
+msgstr "已被替代"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "This page link is invalid. Open the latest discoveries."
+msgstr "此页面链接无效，请打开最新发现。"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Uncertain evidence"
+msgstr "不确定的证据"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Unconfirmed report"
+msgstr "未经确认的报告"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Unresolved"
+msgstr "未解决"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Provider identity pending"
+msgstr "数据源身份待确认"
+
+#: monitor/pulse_views.py monitor/templates/monitor/pulse.html
+msgid "Saved provider identity"
+msgstr "已保存的数据源身份"
+
+#: monitor/pulse_views.py
+msgid "Lineage recovery paused after reaching its processing limit."
+msgstr "谱系恢复已达到处理上限并暂停。"
+
+#: monitor/pulse_views.py
+msgid "Some lineage evidence is invalid and needs investigation."
+msgstr "部分谱系证据无效，需要调查。"
+
+#: monitor/pulse_views.py
+msgid "Some non-X lineage evidence is pending; automatic recovery is not available yet."
+msgstr "部分非 X 谱系证据仍在等待处理；自动恢复尚不可用。"

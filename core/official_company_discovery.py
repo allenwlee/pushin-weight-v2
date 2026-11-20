@@ -21,7 +21,7 @@ from core.official_company_accounts import (
     ROLE,
     enqueue_account,
     evaluate_account,
-    hold_model_acceptances,
+    restore_model_acceptances,
     register_account,
 )
 from core.official_company_candidates import candidate_priorities
@@ -285,7 +285,7 @@ def drain_accounts(*, cfg, call, limit, budget_scope, initial=False, deadline=No
     now = timezone.now()
     result = {
         "attempted": 0, "registered": 0,
-        "held_for_review": hold_model_acceptances(limit=limit),
+        "restored_acceptances": restore_model_acceptances(limit=limit),
     }
     qs = (
         OfficialCompanyAccountState.objects.filter(
@@ -344,6 +344,7 @@ def register_ready_accounts(*, cfg, limit, deadline=None):
     registered = 0
     if not cfg.registration_enabled:
         return registered
+    restore_model_acceptances(limit=limit)
     ids = OfficialCompanyAccountState.objects.filter(status="accepted").order_by("updated_at").values_list("pk", flat=True)[:limit]
     for state_id in ids:
         if deadline and time.monotonic() + 1 > deadline:

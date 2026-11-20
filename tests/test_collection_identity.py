@@ -6,7 +6,7 @@ import pytest
 from django.core.management import call_command
 
 from core.account_identity import upsert_account
-from core.collection_identity import review_github_mapping
+from core.collection_identity import register_github_mapping, review_github_mapping
 from core.models import (
     Brand,
     BrandAccount,
@@ -35,7 +35,7 @@ def identities():
     role, _ = Role.objects.get_or_create(key="official")
     BrandAccount.objects.create(brand=brand, account=account, role=role)
     product = Product.objects.create(
-        brand=brand, repo_id="HFPublisher/Model", **product_type_fields(Product, "llm-model")
+        brand=brand, repo_id="HFPublisher/Model", **product_type_fields(Product, "model-llm")
     )
     subject = MeasurementSubject.objects.create(subject_kind="product", product=product)
     repo = {
@@ -72,7 +72,7 @@ def test_family_repository_maps_to_two_models_without_duplicate_native_identity(
     brand, account, subject, repo = identities()
     first = admit(subject, repo)
     second_product = Product.objects.create(
-        brand=brand, repo_id="HFPublisher/Model2", **product_type_fields(Product, "llm-model")
+        brand=brand, repo_id="HFPublisher/Model2", **product_type_fields(Product, "model-llm")
     )
     second_subject = MeasurementSubject.objects.create(
         subject_kind="product", product=second_product
@@ -96,6 +96,29 @@ def test_rename_is_alias_and_preserves_mapping_hash():
         "publisher/family",
         "publisher/renamed",
     }
+
+
+def test_registration_only_preserves_validation_and_never_queues_reconciliation(monkeypatch):
+    from unittest.mock import Mock
+
+    import core.product_release_source_queue as source_queue
+
+    _, _, subject, repo = identities()
+    queue = Mock()
+    monkeypatch.setattr(source_queue, "queue_reviewed_mapping", queue)
+    kwargs = {
+        "subject": subject, "repo": repo, "role": "dedicated_product",
+        "evidence_url": "https://github.com/publisher/family", "reviewed_by": "test",
+    }
+    mapping = register_github_mapping(**kwargs)
+    assert mapping.normalized_identifier == "123"
+    assert register_github_mapping(**kwargs).pk == mapping.pk
+    queue.assert_not_called()
+    with pytest.raises(ValueError, match="public"):
+        register_github_mapping(**{**kwargs, "repo": {**repo, "private": True}})
+    queue.assert_not_called()
+    assert review_github_mapping(**kwargs).pk == mapping.pk
+    queue.assert_called_once()
 
 
 @pytest.mark.parametrize("first_role,second_role", [

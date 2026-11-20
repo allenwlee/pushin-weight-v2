@@ -409,34 +409,11 @@ def enqueue_account(
         if created and str(account.author_id) in OWNER_ATTESTATIONS:
             _apply_owner_attestation(state)
         _hold_existing_tracked_account(state)
-        _hold_for_human_review(state)
     return state
 
 
-def _hold_for_human_review(state):
-    """Hold nominations unless owner settlement or verified HF proof applies."""
-    from core.official_company_hf import approved
-
-    if (
-        state.status == "accepted"
-        and state.model != "owner-attestation"
-        and not approved(state)
-    ):
-        state.status = "review_needed"
-        state.last_error = "human_review_required"
-        state.claim_token = ""
-        state.claim_expires_at = None
-        state.next_attempt_at = None
-        state.save(update_fields=[
-            "status", "last_error", "claim_token", "claim_expires_at",
-            "next_attempt_at", "updated_at",
-        ])
-        return True
-    return False
-
-
-def hold_model_acceptances(*, limit):
-    """Convert preexisting positives without spending or changing their evidence."""
+def restore_model_acceptances(*, limit):
+    """Resume accepted decisions previously held only for human review."""
     from django.db import transaction
 
     from core.models import OfficialCompanyAccountState
@@ -444,11 +421,19 @@ def hold_model_acceptances(*, limit):
     with transaction.atomic():
         states = list(
             OfficialCompanyAccountState.objects.select_for_update(skip_locked=True)
-            .filter(status="accepted")
-            .exclude(model="owner-attestation")
+            .filter(
+                status="review_needed",
+                last_error="human_review_required",
+                decision__outcome="accepted",
+            )
             .order_by("updated_at", "pk")[:limit]
         )
-        return sum(_hold_for_human_review(state) for state in states)
+        for state in states:
+            state.status = "accepted"
+            state.last_error = ""
+            state.next_attempt_at = None
+            state.save(update_fields=["status", "last_error", "next_attempt_at", "updated_at"])
+        return len(states)
 
 
 def _apply_owner_attestation(state):
@@ -642,12 +627,17 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
                 budget.save()
         # Unknown spend stays reserved even after a failed or stale response.
         decision = {}
+        raw_screen = None
+        recovery_audit = []
         if error is None:
             try:
                 value = {k: v for k, v in response.items() if k != "usage"}
                 if attempt.policy_version in {POLICY_VERSION, BLOCKCHAIN_POLICY_VERSION}:
                     from core.official_company_offerings import qualification_decision
+                    from core.official_company_response_recovery import recover_screen
 
+                    raw_screen = dict(response)
+                    value, recovery_audit = recover_screen(value, attempt.evidence)
                     value = qualification_decision(value, attempt.evidence)
                 decision = validate_decision(value, attempt.evidence)
             except (TypeError, ValueError, AttributeError):
@@ -656,10 +646,12 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
         attempt.status = "failed" if error else "completed"
         attempt.error_code = code
         attempt.decision = decision or (
-            {k: v for k, v in response.items() if k != "usage"}
+            dict(response)
             if isinstance(response, Mapping)
             else {}
         )
+        if decision and raw_screen is not None:
+            attempt.decision = {**decision, "raw_model_response": raw_screen, "recovery_audit": recovery_audit}
         attempt.completed_at = now
         attempt.save()
         if (
@@ -685,9 +677,6 @@ def complete_attempt(attempt_id, *, cfg, response=None, error=None):
             state.decision = decision
             state.last_error = ""
             state.next_attempt_at = None
-            if state.status == "accepted":
-                state.status = "review_needed"
-                state.last_error = "human_review_required"
         state.claim_token = ""
         state.claim_expires_at = None
         state.save()
@@ -789,7 +778,7 @@ def _hold_existing_tracked_account(state):
     return True
 
 
-def register_account(state_id, *, cfg):
+def register_account(state_id, *, cfg, select_for_list=False):
     from django.db import IntegrityError, transaction
     from django.db.models import Q
     from django.utils import timezone
@@ -824,8 +813,6 @@ def register_account(state_id, *, cfg):
                 .get(pk=state_id)
             )
             if state.status not in {"accepted", "registered"}:
-                return None
-            if _hold_for_human_review(state):
                 return None
             account = Account.objects.select_for_update().get(pk=state.account_id)
             x_account_identifier(account)
@@ -902,6 +889,7 @@ def register_account(state_id, *, cfg):
             ):
                 raise IdentityConflict("inconsistent_organization_edges")
             role, _ = Role.objects.get_or_create(key="official")
+            new_organization = brand is None and company is None
             if brand is None:
                 brand = Brand.objects.create(nickname=slug, display_name=name)
             if company is None:
@@ -913,15 +901,24 @@ def register_account(state_id, *, cfg):
             CompanyAccount.objects.get_or_create(
                 company=company, account=account, defaults={"role": role}
             )
+            if new_organization:
+                from core.publisher_accounts import link_brand_company
+
+                link_brand_company(brand=brand, company=company)
             state.registered_brand = brand
             state.registered_company = company
             state.status = "registered"
             state.save()
-            intent, _ = OfficialCompanyListIntent.objects.get_or_create(
-                list_id=int(cfg.list_id),
-                account=account,
-                defaults={"state": state, "evidence_hash": state.evidence_hash},
-            )
+            intent = OfficialCompanyListIntent.objects.select_for_update().filter(
+                list_id=int(cfg.list_id), account=account
+            ).first()
+            if intent is None and select_for_list:
+                intent = OfficialCompanyListIntent.objects.create(
+                    list_id=int(cfg.list_id), account=account,
+                    state=state, evidence_hash=state.evidence_hash,
+                )
+            if intent is None:
+                return state.pk
             # Do not clear suppression or manual-removal review on new evidence.
             if (
                 intent.status
@@ -945,7 +942,7 @@ def register_account(state_id, *, cfg):
                 intent.next_attempt_at = None
                 intent.attempts = 0
                 intent.save()
-            return intent.pk
+            return intent.pk if select_for_list else state.pk
     except (IdentityConflict, IntegrityError, ValueError) as exc:
         with transaction.atomic():
             state = OfficialCompanyAccountState.objects.select_for_update().get(

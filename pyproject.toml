@@ -34,6 +34,7 @@ dependencies = [
     "jsonschema>=4",
     "imageio-ffmpeg>=0.6,<1",
     "django-storages[s3]>=1.14.6,<2",
+    "tiktoken>=0.12,<1",
 ]
 
 [project.optional-dependencies]

@@ -410,8 +410,10 @@ def _retain_exact_hf_product(observation, payload):
     with transaction.atomic():
         observed = models.CollectionObservation.objects.select_for_update().get(pk=observation.pk)
         repo = observed.source_identifier
-        product, created = models.Product.objects.get_or_create(
-            repo_id=repo, defaults={"display_name": repo.split("/", 1)[1], "hf_type": "model"}
+        from core.product_identity import register_hf_product
+
+        product, created = register_hf_product(
+            repo, defaults={"display_name": repo.split("/", 1)[1], "hf_type": "model"}
         )
         product = models.Product.objects.select_for_update().get(pk=product.pk)
         models.MeasurementSubject.objects.get_or_create(
@@ -685,6 +687,47 @@ def _integrate_acquisition_run(run_id):
 
 
 def integrate_acquisition_run(run_id):
+    """Apply saved evidence under the selected route's shared identity control."""
+    from django.db import connection, transaction
+
+    from monitor.pulse_processing import (
+        identity_application,
+        identity_application_active,
+        identity_control_selected,
+    )
+
+    if not identity_control_selected():
+        return _apply_acquisition_integration(run_id)
+    if connection.in_atomic_block and not identity_application_active():
+        # Registration may run inside a caller's transaction. Commit its
+        # durable request before acquiring the global lock and any identity rows.
+        result = _defer_acquisition_integration(run_id, "transaction_pending")
+        transaction.on_commit(lambda: integrate_acquisition_run(run_id))
+        return result
+    with identity_application() as boundary:
+        if boundary.status != "running":
+            return _defer_acquisition_integration(run_id, boundary.status)
+        return _apply_acquisition_integration(run_id)
+
+
+def _defer_acquisition_integration(run_id, status):
+    """Retain a recovery request without spending a registration-failure retry."""
+    from core import models
+
+    scope, _ = models.CollectionScopeRun.objects.get_or_create(
+        run_id=run_id, scope_kind="release_integration", scope_key="post_capture",
+        defaults={"phase": "release-integration-v1"},
+    )
+    # A completed run may have just gained a new source claim. Pending/failed
+    # attempts retain their retry history and cooldown unchanged.
+    models.CollectionScopeRun.objects.filter(pk=scope.pk, outcome="complete").update(
+        outcome="pending", execution_state="pending", coverage_state="pending",
+        retry_at=None, enumeration_complete=False,
+    )
+    return {"status": status, "registration_failures": 0}
+
+
+def _apply_acquisition_integration(run_id):
     """Reconcile a saved run with durable, finite follow-up retries."""
     from datetime import timedelta
 

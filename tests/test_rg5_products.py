@@ -52,7 +52,7 @@ def test_metadata_keeps_original_gating_and_cannot_use_another_sources_library()
 
 def test_reparenting_changes_only_new_taxonomy_snapshots():
     product = Product.objects.create(
-        repo_id="rg5/taxonomy", **product_type_fields(Product, "llm-model")
+        repo_id="rg5/taxonomy", **product_type_fields(Product, "model-llm")
     )
     spec = {
         "reviewed_by": "fixture",

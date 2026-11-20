@@ -298,7 +298,7 @@ def review_catalog_mapping(
 
 
 @transaction.atomic
-def review_github_mapping(
+def register_github_mapping(
     *,
     subject,
     repo,
@@ -363,6 +363,20 @@ def review_github_mapping(
             "aliases": [full_name],
             "current_full_name": full_name,
         },
+    )
+    return mapping
+
+
+@transaction.atomic
+def review_github_mapping(
+    *, subject, repo, role, version_selector=None, evidence_url, reviewed_by,
+    allow_owner_transfer=False, identifier_metadata=None,
+):
+    """Register a reviewed mapping and reconcile previously saved releases."""
+    mapping = register_github_mapping(
+        subject=subject, repo=repo, role=role, version_selector=version_selector,
+        evidence_url=evidence_url, reviewed_by=reviewed_by,
+        allow_owner_transfer=allow_owner_transfer, identifier_metadata=identifier_metadata,
     )
     from core.product_release_source_queue import queue_reviewed_mapping
 

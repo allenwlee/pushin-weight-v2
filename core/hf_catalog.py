@@ -223,8 +223,10 @@ def persist_product(observation, entry, rules, payload, group):
         or brands != entry["brands"]
     ):
         raise ValueError("HF catalog scope changed during collection")
-    product, created = Product.objects.get_or_create(
-        repo_id=observation.source_identifier,
+    from core.product_identity import register_hf_product
+
+    product, created = register_hf_product(
+        observation.source_identifier,
         defaults={
             "publisher_account": org.account,
             "brand_id": resolve_brand(observation.source_identifier, entry, rules),

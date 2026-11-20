@@ -1,4 +1,6 @@
 code
-llm-model
-other-ai-model
-agent-harness
+model-llm
+model-other
+agent
+harness
+other

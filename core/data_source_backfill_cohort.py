@@ -102,12 +102,12 @@ def _configure_cohort(reference, preview, reviewed_by):
         product = Product.objects.create(product_key=PRODUCT, repo_id=IDENTIFIERS['hf'],
             brand_id='deepseek', publisher_account=account, hf_type='model',
             display_name=reference['product']['display_name'], private=False, disabled=False,
-            product_type_id=product_type_id('llm-model'),
+            product_type_id=product_type_id('model-llm'),
             created_at=aware_instant(reference['product']['created_at']),
             **metadata_references({'pipeline_tag': 'text-generation'}, source_id='hf'))
     require(product.repo_id == IDENTIFIERS['hf'] and product.brand_id == 'deepseek'
             and str(product.publisher_account_id) == PUBLISHER
-            and product.product_type_code == 'llm-model'
+            and product.product_type_code in {'llm-model', 'model-llm'}
             and product.private is False and product.disabled is False,
             'existing 0813 catalog conflicts with reviewed cohort')
     taxonomy = configure_taxonomy({'reviewed_by': reviewed_by,

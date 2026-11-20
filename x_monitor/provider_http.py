@@ -5,7 +5,7 @@ import json
 from urllib.parse import urlsplit
 
 ALLOWED_HOSTS = frozenset(
-    {"api.deepinfra.com", "openrouter.ai", "api.minimax.io", "api.openai.com", "api.x.ai"}
+    {"api.deepinfra.com", "openrouter.ai", "api.minimax.io", "api.openai.com", "api.x.ai", "api.typesafe.ai"}
 )
 
 

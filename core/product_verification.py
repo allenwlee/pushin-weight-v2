@@ -142,6 +142,24 @@ def _lock_proposal_dossier(proposal_id: int):
     return source_id
 
 
+def _prior_dossier_product(*, dossier_id, brand, observed_name, repo_id=None):
+    """Do not treat a dossier/brand pair as a unique Product assertion."""
+    proposals = list(ProductVerificationProposal.objects.filter(
+        source_dossier_id=dossier_id, review_status="approved", proposed_brand=brand,
+        resolved_product__isnull=False,
+    ).values("resolved_product_id", "observed_name", "candidate_repo_id"))
+    name = (observed_name or "").strip().casefold()
+    repo = (repo_id or "").casefold()
+    product_ids = {
+        row["resolved_product_id"] for row in proposals
+        if (name and (row["observed_name"] or "").strip().casefold() == name)
+        or (repo and (row["candidate_repo_id"] or "").casefold() == repo)
+    }
+    if len(product_ids) > 1:
+        raise ValueError("dossier_product_identity_conflict")
+    return next(iter(product_ids), None)
+
+
 @transaction.atomic
 def decide_product_proposal(
     *,
@@ -222,7 +240,9 @@ def decide_product_proposal(
                 company = Company.objects.get(pk=company_id)
             except Company.DoesNotExist as exc:
                 raise ProductReviewError("unknown Company") from exc
-            BrandCompany.objects.get_or_create(brand=brand, company=company)
+            from core.publisher_accounts import link_brand_company
+
+            link_brand_company(brand=brand, company=company)
         candidate = BrandDiscoveryCandidate.objects.select_for_update().get(
             pk=proposal.proposed_candidate_id
         )
@@ -253,16 +273,13 @@ def decide_product_proposal(
     product = None
     if proposal.source_dossier_id:
         EventDossier.objects.select_for_update().get(pk=proposal.source_dossier_id)
-        prior_product_id = (
-            ProductVerificationProposal.objects.filter(
-                source_dossier_id=proposal.source_dossier_id,
-                review_status="approved",
-                proposed_brand=brand,
-                resolved_product__isnull=False,
+        try:
+            prior_product_id = _prior_dossier_product(
+                dossier_id=proposal.source_dossier_id, brand=brand,
+                observed_name=proposal.observed_name, repo_id=repo_id,
             )
-            .values_list("resolved_product_id", flat=True)
-            .first()
-        )
+        except ValueError as exc:
+            raise ProductReviewError(str(exc)) from exc
         if prior_product_id is not None:
             product = Product.objects.select_for_update().get(pk=prior_product_id)
     if repo_id:
@@ -282,8 +299,10 @@ def decide_product_proposal(
             product.raw = proposal.hf_evidence
             product.save(update_fields=["repo_id", "raw", "updated_at"])
         else:
-            product, _created = Product.objects.get_or_create(
-                repo_id=repo_id,
+            from core.product_identity import register_hf_product
+
+            product, _created = register_hf_product(
+                repo_id,
                 defaults={
                     "brand": brand,
                     "display_name": proposal.observed_name,
@@ -295,12 +314,13 @@ def decide_product_proposal(
         if product.brand_id not in (None, brand.pk):
             raise ProductReviewError("repository belongs to another Brand")
     if product is None:
-        product = Product.objects.create(
-            repo_id=repo_id,
-            brand=brand,
-            display_name=proposal.observed_name,
-            product_type_id=product_type_id(product_type),
-            raw=proposal.hf_evidence if repo_id else None,
+        from core.product_identity import find_or_create_product
+
+        product, _created = find_or_create_product(
+            defaults={"repo_id": repo_id, "brand": brand, "display_name": proposal.observed_name,
+                      "product_type_id": product_type_id(product_type),
+                      "raw": proposal.hf_evidence if repo_id else None},
+            allow_new=True,
         )
     else:
         product.brand = brand
@@ -309,6 +329,9 @@ def decide_product_proposal(
             product.display_name = proposal.observed_name
         product.save(update_fields=["brand", "product_type", "display_name", "updated_at"])
 
+    from core.product_identity_locks import lock_product_evidence_names
+
+    lock_product_evidence_names([proposal.observed_name])
     PostBrandProduct.objects.get_or_create(
         post=proposal.source_post,
         brand=brand,
@@ -571,20 +594,15 @@ def _upsert_hf_product(
     metadata: dict[str, Any],
     product_type: str,
     source_dossier: EventDossier | None = None,
+    observed_name: str = "",
 ) -> Product:
     """Converge an exact repo with any approved X-only release Product."""
     product = None
     if source_dossier is not None:
         EventDossier.objects.select_for_update().get(pk=source_dossier.pk)
-        prior_product_id = (
-            ProductVerificationProposal.objects.filter(
-                source_dossier_id=source_dossier.pk,
-                review_status="approved",
-                proposed_brand=brand,
-                resolved_product__isnull=False,
-            )
-            .values_list("resolved_product_id", flat=True)
-            .first()
+        prior_product_id = _prior_dossier_product(
+            dossier_id=source_dossier.pk, brand=brand,
+            observed_name=observed_name, repo_id=repo_id,
         )
         if prior_product_id is not None:
             product = Product.objects.select_for_update().get(pk=prior_product_id)
@@ -602,10 +620,9 @@ def _upsert_hf_product(
     defaults = _product_defaults(metadata, brand=brand, hf_org=hf_org)
     defaults["product_type_id"] = product_type_id(product_type)
     if product is None:
-        product, _created = Product.objects.get_or_create(
-            repo_id=repo_id,
-            defaults=defaults,
-        )
+        from core.product_identity import register_hf_product
+
+        product, _created = register_hf_product(repo_id, defaults=defaults)
         product = Product.objects.select_for_update().get(pk=product.pk)
     if product.brand_id not in (None, brand.pk):
         raise ValueError("product_owner_conflict")
@@ -661,7 +678,11 @@ def attach_verified_product(
         metadata=metadata,
         product_type=product_type,
         source_dossier=source_dossier,
+        observed_name=observed_name,
     )
+    from core.product_identity_locks import lock_product_evidence_names
+
+    lock_product_evidence_names([observed_name])
     PostBrandProduct.objects.get_or_create(
         post=post,
         brand=brand,
@@ -901,7 +922,9 @@ def _finalize_new_publisher(
         )
         if existing_company_ids and hf_org.company_id not in existing_company_ids:
             raise ValueError("publisher_company_owner_conflict")
-        BrandCompany.objects.get_or_create(brand=brand, company_id=hf_org.company_id)
+        from core.publisher_accounts import link_brand_company
+
+        link_brand_company(brand=brand, company=hf_org.company)
 
     product = _upsert_hf_product(
         repo_id=proposal.candidate_repo_id,
@@ -910,7 +933,11 @@ def _finalize_new_publisher(
         metadata=model_payload,
         product_type=categories[0],
         source_dossier=proposal.source_dossier,
+        observed_name=proposal.observed_name,
     )
+    from core.product_identity_locks import lock_product_evidence_names
+
+    lock_product_evidence_names([proposal.observed_name])
     PostBrandProduct.objects.get_or_create(
         post=proposal.source_post,
         brand=brand,

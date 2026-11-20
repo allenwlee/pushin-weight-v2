@@ -119,8 +119,8 @@
       "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
     },
     "shared_product_types.csv": {
-      "rows": 3,
-      "sha256": "3e1861090aea5b1ed9f69ee2026ca4bd09d2749578158913fcf789d4ce672f77"
+      "rows": 5,
+      "sha256": "573df532c2701c225f6f4c7c44a065a5846b159450404775d7204422e3854b38"
     },
     "shared_product_relationship_types.csv": {
       "rows": 5,

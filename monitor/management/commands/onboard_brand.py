@@ -765,9 +765,9 @@ class Command(BaseCommand):
                         ] += 1
                 for repo_id in row.products:
                     namespace = repo_id.split("/", 1)[0]
-                    product, product_created = Product.objects.get_or_create(
-                        repo_id=repo_id
-                    )
+                    from core.product_identity import register_hf_product
+
+                    product, product_created = register_hf_product(repo_id, defaults={})
                     if not product_created and product.brand_id not in (
                         None,
                         brand.nickname,

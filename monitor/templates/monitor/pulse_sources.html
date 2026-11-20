@@ -1,0 +1,13 @@
+{% extends 'monitor/pulse_base.html' %}{% load i18n %}
+{% block title %}{% trans 'Related sources' %} · Pulse{% endblock %}
+{% block content %}
+<a href="{% url 'pulse' %}?locale={{ active_locale }}">← {% trans 'Release discoveries' %}</a>
+<div class="page-heading"><p class="eyebrow">PULSE</p><h1>{% trans 'Related sources' %}</h1><p class="muted">{% trans 'Related discussion is separate from evidence accepted in a review.' %}</p></div>
+{% if read_error %}<p class="notice" role="alert">{{ error_message }}</p>{% else %}
+{% for source in sources %}<article class="release-card" data-pulse-source="{{ source.id }}">
+<h2>{{ source.label }}</h2><p class="muted">{% trans 'Linked' %} {{ source.linked_label }}</p>
+<p>{% if source.supports_current_review %}{% trans 'Accepted evidence' %}{% else %}{% trans 'Related source' %}{% endif %}</p>
+<div class="source-actions">{% if source.post_id %}<a href="{% url 'post_detail' source.post_id %}?locale={{ active_locale }}">{% trans 'Stored post' %} →</a>{% endif %}{% if source.url %}<a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{% trans 'Original source' %} ↗</a>{% else %}<span class="muted">{% trans 'Original link unavailable' %}</span>{% endif %}</div>
+</article>{% empty %}<p class="empty">{% trans 'No sources have been attached yet.' %}</p>{% endfor %}
+{% if next_url %}<nav class="pagination"><a href="{{ next_url }}" data-pulse-next>{% trans 'More sources' %} →</a></nav>{% endif %}
+{% endif %}{% endblock %}

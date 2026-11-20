@@ -11,10 +11,10 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
-from core.models import PostEnrichmentState
+from core.models import PostBrand, PostEnrichmentState
 
 STAGES = ("translation", "classification")
 
@@ -25,6 +25,14 @@ def stage_due_q(stage: str, now: datetime) -> Q:
     return Q(**{f"{stage}_status": "pending"}) & (
         Q(**{f"{stage}_next_attempt_at__isnull": True})
         | Q(**{f"{stage}_next_attempt_at__lte": now})
+    )
+
+
+def scheduled_due_q(now: datetime) -> Q:
+    """Runnable scheduled work, including discovery-sentinel PostBrand rows."""
+    has_classification_target = Exists(PostBrand.objects.filter(post_id=OuterRef("post_id")))
+    return stage_due_q("translation", now) | (
+        stage_due_q("classification", now) & Q(has_classification_target)
     )
 
 
@@ -73,11 +81,12 @@ def claim_enrichment_states(
     )
     if post_ids is not None:
         available &= Q(post_id__in=post_ids)
-    due = stage_due_q("translation", now) | stage_due_q("classification", now)
     if source_collection_job_id is not None:
         # Historical jobs own request/replay timing in their collection budget.
         # Reusing a saved paid reply must not wait for the scheduled retry lane.
         due = Q(translation_status="pending") | Q(classification_status="pending")
+    else:
+        due = scheduled_due_q(now)
     quarantined = 0
     with transaction.atomic():
         # A crashed final attempt still terminates on the next claim. Retain

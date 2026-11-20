@@ -565,6 +565,7 @@ def _copy_claim(claim, source_id):
         not_after=claim.not_after,
         reported_brand_id=claim.reported_brand_id,
         reported_candidate_id=claim.reported_brand_discovery_candidate_id,
+        reported_product_id=claim.reported_product_id,
         source_archive_id=claim.source_archive_id,
         release_maturity_id=claim.release_maturity_reference_id,
     )

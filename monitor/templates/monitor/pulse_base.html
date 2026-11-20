@@ -1,0 +1,13 @@
+{% load static i18n %}
+<!doctype html>
+<html lang="{{ active_locale|slice:':2' }}">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Pulse{% endblock %} · Pushin' Weight</title>
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
+  <link rel="stylesheet" href="{% static 'pulse.css' %}">
+</head>
+<body>
+<header class="pulse-header"><a class="wordmark" href="{% url 'home' %}">PUSHINWEIGHT</a><nav aria-label="{% trans 'Language' %}"><a href="?locale=en" lang="en">EN</a><a href="?locale=zh_hans" lang="zh">中文</a><a href="?locale=ja" lang="ja">日本語</a></nav></header>
+<main class="pulse-main">{% block content %}{% endblock %}</main>
+</body></html>

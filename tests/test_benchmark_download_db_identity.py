@@ -42,7 +42,7 @@ def setup_spec():
         repo_id="lab/Model",
         publisher_account=org.account,
         brand=brand,
-        **product_type_fields(Product, "llm-model"),
+        **product_type_fields(Product, "model-llm"),
         private=False,
         disabled=False,
     )

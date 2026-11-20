@@ -625,13 +625,13 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
             product = subject.product
             require(
                 (
-                    product.product_type_code in {"llm-model", "other-ai-model", "agent-harness"}
+                    product.product_type_code in {"llm-model", "other-ai-model", "agent-harness", "model-llm", "model-other", "agent", "harness"}
                     or taxonomy.snapshot["products"][str(product.product_key)].get(
                         "model_kind_qualification"
                     )
                 )
                 if statistics
-                else product.product_type_code == "llm-model",
+                else product.product_type_code in {"llm-model", "model-llm"},
                 "product type is not reviewed as llm-model",
             )
             require(

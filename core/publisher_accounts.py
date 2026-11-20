@@ -3,7 +3,7 @@
 from django.db import transaction
 
 from core.account_identity import upsert_account
-from core.models import Account, CompanyAccount, Role
+from core.models import Account, BrandCompany, CompanyAccount, Role
 
 
 def publisher_links(
@@ -89,3 +89,8 @@ def register_publisher(
         account.provider_metadata = metadata
         account.save(update_fields=["provider_metadata"])
     return link, created
+
+
+def link_brand_company(*, brand, company):
+    """Reuse the established Brand–Company relationship for qualified callers."""
+    return BrandCompany.objects.get_or_create(brand=brand, company=company)

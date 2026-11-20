@@ -4,11 +4,11 @@ import json
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
-from django.db.models import Count, Min, Q
+from django.db.models import Count, Exists, Min, OuterRef, Q
 from django.utils import timezone
 
-from core.models import EnrichmentBudgetWindow, PostEnrichmentState
-from monitor.enrichment_queue import stage_due_q
+from core.models import EnrichmentBudgetWindow, PostBrand, PostEnrichmentState
+from monitor.enrichment_queue import scheduled_due_q
 
 
 class Command(BaseCommand):
@@ -20,9 +20,10 @@ class Command(BaseCommand):
         pending = states.filter(
             Q(translation_status="pending") | Q(classification_status="pending")
         )
-        due = pending.filter(
-            stage_due_q("translation", now) | stage_due_q("classification", now)
-        )
+        due = pending.filter(scheduled_due_q(now))
+        waiting_for_attribution = pending.exclude(pk__in=due.values("pk")).filter(
+            classification_status="pending",
+        ).filter(~Exists(PostBrand.objects.filter(post_id=OuterRef("post_id"))))
         completed = states.filter(
             translation_status="succeeded", classification_status="succeeded"
         )
@@ -30,7 +31,9 @@ class Command(BaseCommand):
             "observed_at": now.isoformat(),
             "pending_posts": pending.count(),
             "due_posts": due.count(),
-            "future_retry_posts": pending.exclude(pk__in=due.values("pk")).count(),
+            "waiting_for_attribution_posts": waiting_for_attribution.count(),
+            "future_retry_posts": pending.exclude(pk__in=due.values("pk"))
+                .exclude(pk__in=waiting_for_attribution.values("pk")).count(),
             "leased_posts": pending.filter(claim_expires_at__gt=now).count(),
             "oldest_pending_created_at": pending.aggregate(value=Min("created_at"))[
                 "value"

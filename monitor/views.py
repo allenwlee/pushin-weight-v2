@@ -840,7 +840,7 @@ def _dashboard_filter_entries(
     }
 
 
-def _resolve_locale(request: HttpRequest) -> str:
+def _resolve_locale(request: HttpRequest, *, persist: bool = True) -> str:
     """Read display locale from cookie or Django's active language.
 
     Priority: ?locale= query param > locale cookie > Django language > 'zh_cn'.
@@ -867,7 +867,7 @@ def _resolve_locale(request: HttpRequest) -> str:
         "ja-JP": "ja",
     }.get(normalized, "en")
     translation.activate(django_code)
-    if hasattr(request, "session"):
+    if persist and hasattr(request, "session"):
         request.session["_language"] = django_code
     return normalized
 
@@ -6057,6 +6057,7 @@ def _product_review_context(
     request: HttpRequest, proposal: ProductVerificationProposal | None = None
 ) -> dict[str, Any]:
     locale = _resolve_locale(request)
+    from monitor.pulse_views import admin_context
     copy_locale = "zh_hans" if locale in {"zh_cn", "zh-CN"} else locale
     from pathlib import Path
 
@@ -6133,6 +6134,7 @@ def _product_review_context(
     return {
         "active_locale": locale,
         "copy": _PRODUCT_REVIEW_COPY.get(copy_locale, _PRODUCT_REVIEW_COPY["en"]),
+        **admin_context(),
         "admin_copy": admin_copy,
         "accounts_tab": accounts_tab,
         "account_tabs": tabs,

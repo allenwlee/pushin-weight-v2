@@ -13,3 +13,6 @@ class MonitorConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "monitor"
     verbose_name = "x-monitor Dashboard & Harvest"
+
+    def ready(self) -> None:
+        from monitor import checks  # noqa: F401

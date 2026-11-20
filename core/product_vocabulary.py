@@ -1,12 +1,15 @@
 """Product classification boundaries; raw provider payloads remain with their capture."""
 
 from core.models import ModelGatingState, ProductRelationshipType, ProductType
+from core.official_company_offerings import TYPES
 from core.source_vocabulary import reference_id
 
 
 def product_type_id(code):
     if code is None:
         return None
+    if code not in TYPES:
+        raise ValueError("invalid_product_type")
     try:
         return ProductType.objects.only("id").get(code=code).pk
     except ProductType.DoesNotExist as exc:
@@ -22,14 +25,13 @@ def relationship_type_id(code):
 
 def product_type_choices():
     labels = {
-        "llm-model": "LLM model",
-        "other-ai-model": "Other AI model",
-        "agent-harness": "Agent harness",
+        "model-llm": "LLM model",
+        "model-other": "Other AI model",
+        "agent": "Agent",
+        "harness": "Harness",
+        "other": "Other",
     }
-    return [
-        (code, labels.get(code, code))
-        for code in ProductType.objects.order_by("code").values_list("code", flat=True)
-    ]
+    return [(code, labels[code]) for code in TYPES]
 
 
 def gating_state_id(value):
@@ -56,7 +58,10 @@ def metadata_references(values, *, source_id, create=True):
     ):
         if field in result:
             result[field + "_id"] = reference_id(
-                catalogue, source_id, result.pop(field), create=create,
+                catalogue,
+                source_id,
+                result.pop(field),
+                create=create,
             )
     for field in ("gated", "gated_status"):
         if field in result:
