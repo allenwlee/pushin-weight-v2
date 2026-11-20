@@ -31,6 +31,60 @@ class DashboardEachBrowserTests(StaticLiveServerTestCase):
         Brand.objects.create(nickname="untracked-demo", display_name="Untracked Demo")
         _clear_home_pulse_cache()
 
+    def test_meta_tab_switch_timing_with_normal_background_requests(self):
+        import json
+        from time import monotonic
+
+        from core.models import Post, PostBrand
+
+        meta, _ = Brand.objects.get_or_create(nickname="llama", defaults={"display_name": "Meta"})
+        for post in Post.objects.order_by("tweet_id")[:12]:
+            PostBrand.objects.get_or_create(post=post, brand=meta)
+        assets = load_pinned_assets()
+        timeline, timings = [], []
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = browser.new_context(viewport={"width": 1440, "height": 1000}, timezone_id="Asia/Tokyo")
+                # Only external dependency bytes are pinned. Every runtime
+                # feed/headline/demand request uses the real Django route.
+                for url, key in (("https://unpkg.com/htmx.org@1.9.10", "/__bridgewright_assets/htmx-1.9.10.js"),
+                                 ("https://unpkg.com/chart.js@4.4.0", "/__bridgewright_assets/chart-4.4.0.js")):
+                    context.route(url, lambda route, _request=None, key=key: route.fulfill(status=200, content_type="application/javascript", body=assets[key]))
+                page = context.new_page()
+                page.on("request", lambda r: timeline.append({"event": "request", "url": r.url, "at": monotonic()}))
+                page.on("response", lambda r: timeline.append({"event": "response", "url": r.url, "status": r.status, "at": monotonic()}))
+                response = page.goto(f"{self.live_server_url}/dashboard/each?brand=llama&window=7&locale=en&tab=sentiment", wait_until="networkidle")
+                self.assertEqual(response.status, 200)
+                settled = """tab => {
+                    const root=document.querySelector('[data-pw-each-chart]');
+                    const face=root&&root.querySelector('.each-chart-face');
+                    return root&&root.dataset.committedTab===tab&&
+                      !root.querySelector('.each-chart-panel').hasAttribute('aria-busy')&&
+                      !face.classList.contains('is-turning-in')&&!face.classList.contains('is-turning-out');
+                }"""
+                page.wait_for_function(settled, arg="sentiment")
+                for _round in range(3):
+                    for tab in ("post_types", "sentiment"):
+                        started = monotonic()
+                        with page.expect_response(lambda r, tab=tab: "/dashboard/each/chart/" in r.url and f"tab={tab}&" in r.url) as requested:
+                            page.locator(f'[data-each-tab="{tab}"]').click()
+                        self.assertEqual(requested.value.status, 200)
+                        self.assertEqual(requested.value.json()["brand"], "llama")
+                        self.assertGreater(sum(requested.value.json()["totals"]), 0)
+                        page.wait_for_function(settled, arg=tab)
+                        elapsed = monotonic()-started
+                        timings.append({"tab": tab, "seconds": elapsed})
+                        self.assertLess(elapsed, 5)
+                self.assertEqual(len(timings), 6)
+                self.assertEqual(sum(r["event"] == "request" and "/dashboard/each/chart/" in r["url"] for r in timeline), 7)
+                self.assertEqual(sum(r["event"] == "request" and "/dashboard/each?" in r["url"] for r in timeline), 1)
+                output = Path(__file__).resolve().parents[1] / ".pytest-tmp"
+                output.mkdir(exist_ok=True)
+                (output / "each-normal-background-timing.json").write_text(json.dumps({"timings": timings, "timeline": timeline, "scope": "Fixture functional timing; production-scale/public timing remains required"}, indent=2)+"\n")
+            finally:
+                browser.close()
+
     def test_tabs_and_pulse_keep_one_brand_with_visible_stacked_chart(self):
         assets = load_pinned_assets()
         with sync_playwright() as playwright:
@@ -310,7 +364,7 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
               const selected = document.querySelector('[data-each-tab][aria-selected="true"]');
               const root = document.querySelector('[data-pw-each-chart]');
               return Boolean(chart && chart.data.datasets.length && (!tab ||
-                selected.dataset.eachTab === tab) && (!root.dataset.committedTab || root.dataset.committedTab === selected.dataset.eachTab) &&
+                selected.dataset.eachTab === tab) && root.dataset.committedTab === selected.dataset.eachTab &&
                 !root.querySelector('.each-chart-panel').hasAttribute('aria-busy') &&
                 !root.querySelector('.each-chart-face').classList.contains('is-turning-in') &&
                 !root.querySelector('.each-chart-face').classList.contains('is-turning-out'));
@@ -519,6 +573,84 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_failed_tab_switch_names_the_retained_chart_in_notice_and_accessible_label(self):
+        from tests.general_style_browser import open_page
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, old_label, requested_label in (
+                    ("en", "Sentiment", "Product"),
+                    ("zh_cn", "情绪", "产品"),
+                    ("ja", "感情", "製品"),
+                ):
+                    with self.subTest(locale=locale):
+                        run = open_page(browser, self.live_server_url, reduced_motion="reduce")
+                        page = run.page
+                        page.goto(
+                            f"{self.live_server_url}/dashboard/each?brand=deepseek&locale={locale}&window=7",
+                            wait_until="networkidle",
+                        )
+                        self._wait_for_chart(page, "sentiment")
+                        previous_values = page.evaluate("""() => {
+                          const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                          window.__retainedEachChart = chart;
+                          return chart.data.datasets.map(dataset => dataset.data);
+                        }""")
+                        button = page.locator("[data-each-category]").first
+                        pinned = button.get_attribute("data-each-category")
+                        button.click()
+                        run.context.route(
+                            "**/dashboard/each/chart/**",
+                            lambda route: route.fulfill(
+                                status=503,
+                                content_type="application/json",
+                                body='{"error":"chart_timeout"}',
+                            ),
+                        )
+                        page.locator('[data-each-tab="product_labels"]').click()
+                        page.wait_for_function("""() => {
+                          const panel = document.querySelector('.each-chart-panel');
+                          const status = document.querySelector('[data-each-status]');
+                          return !panel.hasAttribute('aria-busy') && !status.hidden && status.textContent;
+                        }""")
+                        retained = page.evaluate("""() => {
+                          const root = document.querySelector('[data-pw-each-chart]');
+                          const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                          return {
+                            sameInstance: chart === window.__retainedEachChart,
+                            committedTab: root.dataset.committedTab,
+                            requestedTab: document.querySelector('[data-each-tab][aria-selected="true"]').dataset.eachTab,
+                            notice: document.querySelector('[data-each-status]').textContent,
+                            accessibleLabel: chart.canvas.getAttribute('aria-label'),
+                            values: chart.data.datasets.map(dataset => dataset.data),
+                            visible: chart.canvas.getBoundingClientRect().width > 0 && chart.canvas.getBoundingClientRect().height > 0
+                          };
+                        }""")
+                        self.assertTrue(retained["sameInstance"])
+                        self.assertTrue(retained["visible"])
+                        self.assertEqual(retained["committedTab"], "sentiment")
+                        self.assertEqual(retained["requestedTab"], "product_labels")
+                        self.assertEqual(retained["values"], previous_values)
+                        self.assertIn(old_label, retained["notice"])
+                        self.assertNotIn(requested_label, retained["notice"])
+                        self.assertIn(old_label, retained["accessibleLabel"])
+                        self.assertNotIn(requested_label, retained["accessibleLabel"])
+                        page.locator('[data-each-mode="volume"]').check()
+                        self.assertEqual(
+                            page.locator("[data-each-status]").inner_text(), retained["notice"]
+                        )
+                        self.assertIn(
+                            old_label, page.locator("[data-each-canvas]").get_attribute("aria-label")
+                        )
+                        self.assertEqual(
+                            page.locator(f'[data-each-category="{pinned}"]').get_attribute("aria-pressed"),
+                            "true",
+                        )
+                        self.assertEqual(run.errors, [])
+                        run.context.close()
+            finally:
+                browser.close()
 
     def test_left_legend_matches_stack_and_emphasis_across_tabs_modes_sizes_locales(self):
         import hashlib
@@ -697,19 +829,10 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
                                     ]
                                     self.assertEqual(len(sums), 7)
                                     self.assertTrue(all(total > 0 for total in sums), sums)
-                                    if tab == "role":
-                                        # Preserve production0227; its Role ID mismatch is outside this UI release.
-                                        self.assertEqual(set(expected_keys), {"other", "official", "staff", "community"})
-                                        self.assertEqual(source["counting_unit"], "posts")
-                                        self.assertEqual(source["totals"], seed["counts"])
-                                        self.assertEqual(source["series"]["other"], seed["counts"])
-                                        for role in ("official", "staff", "community"):
-                                            self.assertEqual(source["series"][role], [0] * 7)
-                                    else:
-                                        self.assertTrue(all(
-                                            sum(source["series"][key][index] > 0 for key in expected_keys) >= 2
-                                            for index in range(7)
-                                        ), f"A substantive multi-category area must span every day: {tab}")
+                                    self.assertTrue(all(
+                                        sum(source["series"][key][index] > 0 for key in expected_keys) >= 2
+                                        for index in range(7)
+                                    ), f"A substantive multi-category area must span every day: {tab}")
                                     for index, key in enumerate(expected_keys):
                                         expected_values = [
                                             count if mode == "volume" else (count * 100 / total if total else None)

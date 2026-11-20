@@ -542,3 +542,19 @@ def mark_run_demands_satisfied(run: TrendNarrativeRun, *, now=None) -> int:
             last_decision_reason="published_or_terminal",
         )
     return updated
+
+
+def record_visible_trend_narrative_demand(**kwargs) -> int:
+    """Best-effort Each visibility touch; a busy row cannot delay its headline."""
+    import logging
+
+    from monitor.each_request_budget import EachChartUnavailable, EachRequestBudget
+
+    try:
+        # Keep commit/rollback IO inside the same short allowance too.
+        with (EachRequestBudget(seconds=.25, lock_seconds=.15) as budget,
+              budget.query_scope(), transaction.atomic()):
+            return record_trend_narrative_demand(reason="visible", **kwargs)
+    except (EachChartUnavailable, IntegrityError):
+        logging.getLogger(__name__).info("each visible headline demand skipped: busy")
+        return 0

@@ -31,8 +31,9 @@ MODES = ("percent", "volume")
 EMPHASIS = ("none", "first", "other")
 SOURCE_PATHS = (
     "core/models.py", "core/classification_readers.py", "core/materializations.py",
-    "monitor/views.py", "monitor/urls.py",
-    "monitor/templates/monitor/dashboard_each.html",
+    "monitor/views.py", "monitor/urls.py", "monitor/each_chart_facts.py",
+    "monitor/each_headline.py", "monitor/each_request_budget.py",
+    "monitor/templates/monitor/dashboard_each.html", "monitor/templates/monitor/_each_headline.html",
     "monitor/static/pw-each-chart.js", "monitor/static/pw-each-chart.css",
     "monitor/static/pro-general.css", "monitor/static/home-v20.css",
     "monitor/static/site-footer.css", "monitor/static/pw-icons.js",
@@ -80,16 +81,6 @@ def runtime_identity(declaration):
     }
 
 
-def _checked_production_role_fixture(source, counts):
-    """Pin the preserved0227 Role output; its UUID/text mismatch stays deferred."""
-    keys = {entry["key"] for entry in source["entries"]}
-    assert keys == {"official", "staff", "community", "other"}, "Production Role entries changed"
-    assert source["counting_unit"] == "posts" and len(source["days"]) == 7
-    assert source["totals"] == counts, "Production Role totals changed"
-    assert source["series"]["other"] == counts, "Production Role Other counts changed"
-    assert all(source["series"][key] == [0] * 7 for key in keys - {"other"}), "Production Role classification changed"
-
-
 def _checked_state(state, case):
     """Check measured values against the HTTP payload, never against another model."""
     assert set(state["controls"]) == {"pin", "hover", "mode"}
@@ -116,6 +107,17 @@ def _checked_state(state, case):
         assert width == (2.7 if index == active_index else 2)
     assert len(state["fills"]) == len(keys)
     assert state["request_count"] == case["request_count"], "Each emphasis/mode triggered a request"
+
+
+def _checked_role_fixture(source, counts):
+    roles = ("official", "staff", "community", "other")
+    assert {entry["key"] for entry in source["entries"]} == set(roles), "Role entries changed"
+    assert source["counting_unit"] == "posts" and source["totals"] == counts
+    assert len(source["days"]) == len(counts) == 7
+    for index, role in enumerate(roles):
+        expected = [sum((ordinal+day) % len(roles) == index for ordinal in range(count))
+                    for day, count in enumerate(counts)]
+        assert source["series"][role] == expected, "Role counts differ from UUID-linked fixture"
 
 
 def validate_runtime(declaration, packet):
@@ -145,6 +147,8 @@ def validate_runtime(declaration, packet):
         assert source["brand"] == "deepseek" and source["tab"] == case["tab"]
         assert source["window_days"] == 7 and len(source["days"]) == 7
         assert sum(source["totals"]) == 62, "Seeded cohort was not read by the real route"
+        if case["tab"] == "role":
+            _checked_role_fixture(source, load_seed_manifest()["counts"])
         keys = [entry["key"] for entry in source["entries"]]
         labels = [entry["label"] for entry in source["entries"]]
         assert geometry["keys"] == keys and geometry["labels"] == labels
@@ -169,11 +173,8 @@ def validate_runtime(declaration, packet):
         assert geometry["canvasWidth"] > 100 and geometry["pageOverflow"] <= 0
         assert geometry["visible"] and not geometry["chartBusy"]
         assert geometry["plotBottom"] > geometry["plotTop"]
-        if case["tab"] == "role":
-            _checked_production_role_fixture(source, load_seed_manifest()["counts"])
-        else:
-            for bucket in range(7):
-                assert sum(source["series"][key][bucket] > 0 for key in keys) >= 2, "Each fixture lost its substantive daily stack"
+        for bucket in range(7):
+            assert sum(source["series"][key][bucket] > 0 for key in keys) >= 2, "Each fixture lost its substantive daily stack"
         for i, item in enumerate(legend):
             expected_center = geometry["plotTop"] + i * (geometry["plotBottom"] - geometry["plotTop"]) / (len(legend) - 1)
             assert abs(item["center"] - expected_center) <= 1

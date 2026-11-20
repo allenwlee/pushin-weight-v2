@@ -50,7 +50,7 @@ Occupied staging: if a staged route finds `staging` in use by an unrelated relea
 
 ## Delivery Exceptions
 
-Owner explicitly selected “direct to prod” and now requests LFG through production for the backend latency fix. Direct delivery remains selected; staging requirements are superseded, not passed. Preserve peer staging, Pulse/Chatter, collection behavior and all schedules/resources. This continuation authorizes required additive Each storage and provider-free initialization/maintenance; it needs fresh behavior-bearing verification and cannot reuse the chart-only source checks as proof of backend correctness.
+Owner explicitly selected “direct to prod” and now requests LFG through production for the backend latency fix. Direct delivery remains selected; staging requirements are superseded, not passed. Preserve peer staging, Pulse/Chatter, collection behavior and all schedules/resources. This continuation authorizes required additive Each storage and provider-free initialization/maintenance, including the exact-candidate home-counts preparation deployment before main/web activation; it needs fresh behavior-bearing verification and cannot reuse the chart-only source checks as proof of backend correctness.
 
 # Each dashboard saved counts, request isolation and chart presentation
 
@@ -81,6 +81,40 @@ for repair, never passing results. Verify the deployed revision and public
 browser behavior after direct release. Preserve Pulse and peer staging work.
 
 ## Active implementation amendment
+
+### Online preparation before web activation
+
+The wrapper-protected permanent test database was inspected read-only and has
+zero posts/brand-posts. Its old migration history and empty cohort cannot prove
+realistic-scale performance. No production restore or new full data copy is
+selected. Fixture tests remain on the new branch-specific databases.
+
+After implementation, local gates and code review, push the exact candidate
+feature commit and deploy that commit only to the existing production home-counts
+cron for additive schema/cache preparation. Preserve its command compatibility,
+schedule, resource plan and auto-deploy setting. The production web and other
+workers continue their current revision during this preparation; no collection
+operation is paused. Run one provider-free owner job to initialize the Each cache,
+measure an actual concurrent refresh under90s, validate indexed typed key pages,
+and observe current writer throughput. Keep the120s initial bootstrap cap.
+
+Use the candidate cron image for a bounded read-only operator probe of its real
+Django GET chart route against the existing production dataset. PostgreSQL
+connections enforce read-only transactions,4.5s statements and250ms lock waits;
+no test runner, fixture writer, providers or collection commands run there. The isolated operator process uses signed-cookie sessions because the ordinary locale resolver persists its session; the public production check separately retains normal database-backed sessions.
+Freeze Meta/DeepSeek×8tabs×7/30/365d×3rounds, stop on any error or≥5s result,
+require p95≤1.5s. Profile selected-data versus ranking SQL separately. The probe
+is pre-activation data-path evidence, not public web/browser evidence.
+
+Only after refresh/parity/throughput/latency checks pass, fast-forward main to
+that exact candidate (or a reviewed/tested descendant preserving peer changes),
+observe the web deployment, and verify public endpoints plus the actual normal
+background-request Sentiment↔Post Type browser interaction. Preserve prepared
+cache data on a web rollback; use the previous web revision and provider-free
+maintenance compatibility, not a destructive schema downgrade. A failed
+preparation gate keeps the current web running while the measured cause is
+repaired. Record all actual revision/service/settings observations in receipts.
+
 
 This amendment governs older delivery/status notes below. Existing U-IDs and
 KTDs remain stable. U1–U10 resume where their production behavior is absent;
@@ -568,7 +602,7 @@ are failures, never green.
 - Re-read current `core/models.py`, migration leaves, materialization lifecycle, serving grants, staging refresh policy, Each caller paths and active coordination claims. Record source/migration baseline. Select the actual next migration number then; `0226` and `0227` already exist. Preserve accepted independent changes.
 - Preserve the ignored KTD12 prototype/oracle and its hash on the authoritative root; locate it there rather than assuming `.context` is copied into this worktree. The owner-approved prototype remains immutable during implementation.
 - Capture a baseline diff/status and index before implementation; the current LFG request authorizes commits, pushes and direct production delivery for this bounded fix. Choose a uniquely named empty branch test database with fixtures under current AGENTS. The permanent shared DB is only for an explicitly compatible scale check through its wrapper; do not recreate October's temporary foreign migration loader.
-- Freeze scale acceptance workload: DeepSeek+Meta,8tabs,7/30/365d,Asia/Tokyo;3runs per combination on the same dataset/runtime, report cold/warm separately. Include1dfunctional/coverage and365dcoldheadline/ranking cases. Do not run an unbounded full-size HTTP workload on production. Synthetic fixture-scale checks may establish correctness; they do not substitute for the required realistic-scale performance proof.
+- Freeze scale acceptance workload: DeepSeek+Meta,8tabs,7/30/365d,Asia/Tokyo;3runs per combination on the same dataset/runtime, report cold/warm separately. Include1dfunctional/coverage and365dcoldheadline/ranking cases. Do not run an unbounded full-size HTTP workload on production. Synthetic fixture-scale checks establish correctness only; the online-preparation operator probe supplies required realistic-scale proof before web activation because the designated shared database is empty.
 - Validation: exact plan hash preserved, baseline/current-main ancestry recorded, no unrelated files/index entries moved, test connection explicitly names the task database, and no test can target production. No new product test is needed for this preparatory unit.
 
 ### U1. Reference oracle and parity net (no product change)
@@ -773,7 +807,7 @@ are failures, never green.
 
 ### U8. Release verification (only after an explicit owner delivery request)
 
-- Deliver directly to production; shared staging is excluded. After exact release/migration verification, initialize the new derived dataset with the bounded provider-free maintenance command on the verified production owner connection. Verify serving-role grants separately and confirm existing home-count maintenance picks up the dataset without changing its schedule. Use realistic compatible data for scale proof before promotion; no production HTTP sweep beyond the frozen bounded acceptance set.
+- Deliver directly to production; shared staging is excluded. After exact release/migration verification, initialize the new derived dataset with the bounded provider-free maintenance command on the verified production owner connection. Verify serving-role grants separately and confirm existing home-count maintenance picks up the dataset without changing its schedule. Use the reviewed candidate maintenance image and existing production data for read-only scale proof before web activation; no production HTTP sweep beyond the frozen bounded acceptance set.
 - Confirm the exact SHA is deployed on `pushinweight-web` and
   `pushinweight-home-counts`.
 - Confirm `django_migrations` has the new migration.

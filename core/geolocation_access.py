@@ -33,11 +33,12 @@ SOURCE_COLUMNS = {
 CATALOGUES = frozenset({"geolocations", "geolocation_alternate_names", "geolocation_policies", "django_migrations"})
 # Spending authority belongs to owner-connected enrichment processes, never web.
 OWNER_ONLY_TABLES = frozenset({"enrichment_budget_windows"})
+EACH_FACTS_VIEWS = frozenset({"each_brand_post_facts_source", "each_brand_post_facts"})
 SERVING_VIEWS = frozenset({
     "trend_narrative_versions", "brand_trend_narratives", "editorial_pictures",
     "trend_narrative_provider_calls", "trend_narrative_runs", "trend_narrative_visible_runs",
     "brand_trend_narrative_texts", "home_brand_time_counts",
-})
+}) | EACH_FACTS_VIEWS
 
 
 def verify_serving_environment(values):
@@ -109,6 +110,7 @@ def canonical_serving_columns():
 
 def serving_grants_ready(connection, *, schema="public"):
     """The migration ledger may commit before the owner's grant transaction."""
+    required_views = frozenset(BENCHMARK_VIEWS) | EACH_FACTS_VIEWS
     expected = {(table, column) for table, columns in canonical_serving_columns().items()
                 for column in columns}
     with connection.cursor() as cursor:
@@ -120,9 +122,9 @@ def serving_grants_ready(connection, *, schema="public"):
         columns_ready = expected.issubset(set(cursor.fetchall()))
         cursor.execute("""SELECT count(*) FROM pg_class c
             JOIN pg_namespace n ON n.oid=c.relnamespace
-            WHERE n.nspname=%s AND c.relkind='v' AND c.relname=ANY(%s)
-            AND has_table_privilege(current_user,c.oid,'SELECT')""", [schema, list(BENCHMARK_VIEWS)])
-        return columns_ready and cursor.fetchone()[0] == len(BENCHMARK_VIEWS)
+            WHERE n.nspname=%s AND c.relkind IN ('v','m') AND c.relname=ANY(%s)
+            AND has_table_privilege(current_user,c.oid,'SELECT')""", [schema, list(required_views)])
+        return columns_ready and cursor.fetchone()[0] == len(required_views)
 
 
 def apply_serving_grants(connection, role, *, schema="public"):

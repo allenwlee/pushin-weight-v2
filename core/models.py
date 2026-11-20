@@ -37,8 +37,8 @@ from urllib.parse import urlparse
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.indexes import GinIndex, GistIndex, OpClass
 from django.db import IntegrityError, models, router, transaction
-from django.db.models.functions import MD5, Upper
-from django.db.models.lookups import Exact, IsNull
+from django.db.models.functions import MD5, Coalesce, Upper
+from django.db.models.lookups import Exact, IsNull, LessThanOrEqual
 from django.utils import timezone
 
 from core.measurement_time import measurement_window
@@ -1954,6 +1954,13 @@ class TwitterListSyncState(models.Model):
 # ============================================================================
 
 
+_EACH_FACTS_SHORT_POST = models.Q(
+    LessThanOrEqual(models.Func("tweet_id", function="octet_length", output_field=models.IntegerField()), models.Value(256)),
+    LessThanOrEqual(Coalesce(models.Func("lang_detected", function="octet_length", output_field=models.IntegerField()), models.Value(0)), models.Value(256)),
+    LessThanOrEqual(Coalesce(models.Func("lang", function="octet_length", output_field=models.IntegerField()), models.Value(0)), models.Value(256)),
+)
+
+
 class Post(models.Model):
     tweet_id = models.TextField(primary_key=True)
     author_handle = models.CharField(
@@ -2081,6 +2088,17 @@ class Post(models.Model):
                 fields=["created_at"],
                 name="idx_posts_created_cover",
                 include=["tweet_id", "author"],
+            ),
+            models.Index(
+                fields=["created_at"],
+                name="idx_posts_each_facts_cover",
+                include=["tweet_id", "lang_detected", "lang", "author"],
+                condition=_EACH_FACTS_SHORT_POST,
+            ),
+            models.Index(
+                fields=["created_at"],
+                name="idx_posts_each_facts_wide",
+                condition=~_EACH_FACTS_SHORT_POST,
             ),
             models.Index(fields=["lang"], name="idx_posts_lang"),
             models.Index(fields=["lang_detected"], name="idx_posts_lang_detected"),

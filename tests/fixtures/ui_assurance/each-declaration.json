@@ -1,7 +1,7 @@
 {
   "schema_version": "bridgewright.assurance.declaration/v1",
   "profile": "stateful-ui-assurance/v1",
-  "source_revision": "worktree-sha256:9ac0c76fd0691de5134b43dfb52bb86b82e91e93626200bccdb972cda2b84c6a",
+  "source_revision": "worktree-sha256:a8d4a21467dffc379a58c23931391219e47745dcb72930a17f96800196f3587f",
   "fixture": {
     "path": "tests/fixtures/ui_assurance/each-fixture.json",
     "sha256": "698946a4176a66fac8972c2f97c769dc4c88ccd2a240860f8e1d12fcb9a1d4c4"

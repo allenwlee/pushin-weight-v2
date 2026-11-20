@@ -6,6 +6,7 @@ from io import StringIO
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import connection
 from django.utils import timezone
 
@@ -14,10 +15,11 @@ from core.models import Brand, MaterializationState, Post, PostBrand
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
 
-def run_refresh():
+def run_refresh(*, all_results=False, command="refresh_home_counts"):
     output = StringIO()
-    call_command("refresh_home_counts", stdout=output)
-    return json.loads(output.getvalue())
+    call_command(command, stdout=output)
+    result = json.loads(output.getvalue())
+    return result if all_results else result["home.brand_time_counts.v1"]
 
 
 def test_command_and_source_writer_leave_other_dataset_publication_unchanged():
@@ -271,7 +273,7 @@ def test_publication_exception_rolls_back_the_refresh_and_leaves_source_rows():
 
     with (
         connection.execute_wrapper(crash),
-        pytest.raises(RuntimeError, match="fault injection"),
+        pytest.raises(CommandError, match="Materialization refresh failed"),
     ):
         run_refresh()
     assert Post.objects.filter(pk=post.pk).exists()
@@ -419,12 +421,349 @@ def test_missing_state_repair_reports_busy_until_an_untracked_writer_commits():
 def test_missing_state_repair_requires_its_own_commit_before_counting():
     from django.db import transaction
 
+    from monitor.home_count_summary import refresh_home_counts
+
     history()
     MaterializationState.objects.all().delete()
-    with (
-        transaction.atomic(),
-        pytest.raises(RuntimeError, match="outside a transaction"),
-    ):
-        run_refresh()
+    with transaction.atomic():
+        with pytest.raises(RuntimeError, match="outside a transaction"):
+            refresh_home_counts()
+        with pytest.raises(CommandError, match="Materialization refresh failed"):
+            run_refresh()
     assert not MaterializationState.objects.exists()
     assert run_refresh()["status"] == "refreshed"
+
+
+@pytest.mark.parametrize("command", ["refresh_home_counts", "refresh_materializations"])
+def test_existing_maintenance_entry_runs_each_registered_dataset_once(command, monkeypatch):
+    from monitor.management.commands import refresh_materializations
+
+    calls = []
+
+    def observe(definition):
+        calls.append(definition)
+        return {"status": "busy"}
+
+    monkeypatch.setattr(refresh_materializations, "refresh_materialization", observe)
+    result = run_refresh(all_results=True, command=command)
+    expected = refresh_materializations.registered_definitions()
+    assert calls == list(expected)
+    assert result == {definition.dataset_key: {"status": "busy"} for definition in expected}
+
+
+def test_one_failed_dataset_does_not_skip_the_other(monkeypatch):
+    from monitor.management.commands import refresh_materializations
+
+    calls = []
+
+    def fail_first(definition):
+        calls.append(definition.dataset_key)
+        if len(calls) == 1:
+            raise RuntimeError("refresh failure")
+        return {"status": "busy"}
+
+    monkeypatch.setattr(refresh_materializations, "refresh_materialization", fail_first)
+    output = StringIO()
+    with pytest.raises(CommandError):
+        call_command("refresh_home_counts", stdout=output)
+    assert calls == [definition.dataset_key for definition in refresh_materializations.registered_definitions()]
+    assert json.loads(output.getvalue()) == {
+        calls[0]: {"status": "unavailable", "error": "RuntimeError"}, calls[1]: {"status": "busy"},
+    }
+
+
+def test_each_advance_barrier_busy_does_not_queue_a_later_source_writer(
+    alternate_materialization, monkeypatch,
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from dataclasses import replace
+    from threading import Event
+
+    from django.db import connections, transaction
+
+    from core import materializations
+
+    definition = replace(alternate_materialization, advance_barrier=True)
+    assert materializations.refresh_materialization(definition)["status"] == "refreshed"
+    state = MaterializationState.objects.get(pk=definition.dataset_key)
+    MaterializationState.objects.filter(pk=state.pk).update(cutoff=state.cutoff - timedelta(hours=1))
+    before = MaterializationState.objects.filter(pk=state.pk).values().get()
+    entered, release = Event(), Event()
+    attempts = []
+
+    def hold_source_transaction():
+        db = connections["default"]
+        try:
+            with transaction.atomic(), db.cursor() as cursor:
+                cursor.execute("LOCK TABLE materialization_fixture_inputs IN ROW EXCLUSIVE MODE")
+                entered.set()
+                assert release.wait(10)
+        finally:
+            db.close()
+
+    def later_writer():
+        db = connections["default"]
+        try:
+            with db.cursor() as cursor:
+                cursor.execute("SET statement_timeout = '500ms'")
+                cursor.execute("INSERT INTO materialization_fixture_inputs VALUES (10)")
+        finally:
+            db.close()
+
+    def between_attempts(delay):
+        assert not connection.in_atomic_block, "source locks must not survive an attempt"
+        assert delay == 0.2
+        if not attempts:
+            with ThreadPoolExecutor(max_workers=1) as writer_pool:
+                writer_pool.submit(later_writer).result(timeout=2)
+        attempts.append(delay)
+
+    monkeypatch.setattr(materializations.time, "sleep", between_attempts)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        held = pool.submit(hold_source_transaction)
+        try:
+            assert entered.wait(5)
+            assert materializations.refresh_materialization(definition) == {"status": "busy"}
+        finally:
+            release.set()
+        held.result(timeout=5)
+    assert len(attempts) == 9
+    after = MaterializationState.objects.filter(pk=state.pk).values().get()
+    assert after["cutoff"] == before["cutoff"]
+    assert after["published_generation"] == before["published_generation"]
+    assert after["source_generation"] > before["source_generation"]
+    assert materializations.refresh_materialization(definition)["status"] == "refreshed"
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT n FROM materialization_fixture_counts")
+        assert cursor.fetchone()[0] == 1
+
+
+def test_each_advance_barrier_commits_before_counting_and_generation_publication(
+    alternate_materialization,
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from dataclasses import replace
+
+    from django.db import connections
+
+    from core.materializations import refresh_materialization
+
+    definition = replace(alternate_materialization, advance_barrier=True, refresh_timeout="5s")
+    assert refresh_materialization(definition)["status"] == "refreshed"
+    state = MaterializationState.objects.get(pk=definition.dataset_key)
+    MaterializationState.objects.filter(pk=state.pk).update(cutoff=state.cutoff - timedelta(hours=1))
+    observed = []
+
+    def writer():
+        db = connections["default"]
+        try:
+            with db.cursor() as cursor:
+                cursor.execute("SET statement_timeout = '500ms'")
+                cursor.execute("INSERT INTO materialization_fixture_inputs VALUES (20)")
+        finally:
+            db.close()
+
+    def during_refresh(execute, sql, params, many, context):
+        result = execute(sql, params, many, context)
+        if sql.startswith("REFRESH MATERIALIZED VIEW"):
+            with connection.cursor() as cursor:
+                cursor.execute("SHOW statement_timeout")
+                observed.append(cursor.fetchone()[0])
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(writer).result(timeout=2)
+        return result
+
+    with connection.execute_wrapper(during_refresh):
+        assert refresh_materialization(definition)["status"] == "changed"
+    assert observed == ["5s"]
+    state.refresh_from_db()
+    assert state.source_generation > state.published_generation
+    assert refresh_materialization(definition)["status"] == "refreshed"
+
+
+def test_unchanged_cutoff_skips_the_source_barrier_even_when_history_is_dirty(
+    alternate_materialization,
+):
+    from dataclasses import replace
+
+    from core.materializations import refresh_materialization
+
+    definition = replace(alternate_materialization, advance_barrier=True)
+    assert refresh_materialization(definition)["status"] == "refreshed"
+    with connection.cursor() as cursor:
+        cursor.execute("INSERT INTO materialization_fixture_inputs VALUES (30)")
+    locks = []
+
+    def capture(execute, sql, params, many, context):
+        if sql.startswith("LOCK TABLE"):
+            locks.append(sql)
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(capture):
+        assert refresh_materialization(definition)["status"] == "refreshed"
+    assert locks == []
+
+
+def test_advance_publication_never_uses_a_clock_newer_than_its_source_barrier(
+    alternate_materialization,
+):
+    from dataclasses import replace
+    from datetime import datetime
+
+    from core.materializations import refresh_materialization
+
+    # A continuously advancing clock makes the midnight race reproducible
+    # without changing the machine or PostgreSQL clock.
+    definition = replace(
+        alternate_materialization,
+        advance_barrier=True,
+        cutoff_sql="clock_timestamp()",
+    )
+    barrier_times = []
+
+    def capture_barrier_clock(execute, sql, params, many, context):
+        result = execute(sql, params, many, context)
+        if sql.startswith("LOCK TABLE") and "IN SHARE MODE NOWAIT" in sql:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT clock_timestamp()")
+                barrier_times.append(cursor.fetchone()[0])
+        return result
+
+    with connection.execute_wrapper(capture_barrier_clock):
+        result = refresh_materialization(definition)
+    assert result["status"] == "refreshed"
+    assert len(barrier_times) == 1
+    assert datetime.fromisoformat(result["cutoff"]) <= barrier_times[0]
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_refresh_settings_are_scoped_and_bootstrap_has_its_own_cap(
+    alternate_materialization, failure,
+):
+    from dataclasses import replace
+
+    from core.materializations import refresh_materialization
+
+    definition = replace(
+        alternate_materialization,
+        refresh_timeout="90s", bootstrap_timeout="120s", refresh_work_mem="8MB",
+    )
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT current_setting('work_mem'),current_setting('statement_timeout')")
+        original = cursor.fetchone()
+    observed = []
+
+    def capture(execute, sql, params, many, context):
+        if sql.startswith("REFRESH MATERIALIZED VIEW"):
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT current_setting('work_mem'),current_setting('statement_timeout')")
+                observed.append(cursor.fetchone())
+            if failure:
+                raise RuntimeError("refresh settings fault injection")
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(capture):
+        if failure:
+            with pytest.raises(RuntimeError, match="settings fault injection"):
+                refresh_materialization(definition)
+        else:
+            assert refresh_materialization(definition)["status"] == "refreshed"
+            with connection.cursor() as cursor:
+                cursor.execute("INSERT INTO materialization_fixture_inputs VALUES (51)")
+            assert refresh_materialization(definition)["status"] == "refreshed"
+    assert observed == ([("8MB", "2min")] if failure else [("8MB", "2min"), ("8MB", "90s")])
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT current_setting('work_mem'),current_setting('statement_timeout')")
+        assert cursor.fetchone() == original
+
+
+def test_materialization_optional_settings_validate_and_homepage_defaults_hold():
+    from dataclasses import replace
+
+    from monitor.home_count_summary import HOME_COUNTS
+
+    assert HOME_COUNTS.refresh_timeout == "120s"
+    assert HOME_COUNTS.bootstrap_timeout is None
+    assert HOME_COUNTS.refresh_work_mem is None
+    assert HOME_COUNTS.advance_barrier is False
+    for field, invalid in (
+        ("refresh_timeout", "0s"), ("refresh_timeout", "90s; SELECT 1"),
+        ("bootstrap_timeout", "0s"), ("refresh_work_mem", "0MB"),
+        ("refresh_work_mem", "8MB; SELECT 1"), ("refresh_work_mem", "8 GB"),
+    ):
+        with pytest.raises(ValueError):
+            replace(HOME_COUNTS, **{field: invalid})
+
+
+def test_optional_memory_restores_inside_a_callers_existing_transaction(alternate_materialization):
+    from dataclasses import replace
+
+    from django.db import transaction
+
+    from core.materializations import refresh_materialization
+
+    definition = replace(alternate_materialization, refresh_timeout="90s", refresh_work_mem="8MB")
+    MaterializationState.objects.create(dataset_key=definition.dataset_key)
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("SELECT current_setting('work_mem'),current_setting('statement_timeout')")
+        previous = cursor.fetchone()
+        assert refresh_materialization(definition)["status"] == "refreshed"
+        cursor.execute("SELECT current_setting('work_mem'),current_setting('statement_timeout')")
+        assert cursor.fetchone() == previous
+
+
+def test_explicit_force_refreshes_clean_publication_concurrently_without_invalidation(
+    alternate_materialization,
+):
+    from dataclasses import replace
+
+    from core.materializations import refresh_materialization
+
+    definition = replace(
+        alternate_materialization,
+        refresh_timeout="90s", bootstrap_timeout="120s", refresh_work_mem="8MB",
+        advance_barrier=True,
+    )
+    assert refresh_materialization(definition)["status"] == "refreshed"
+    before = MaterializationState.objects.get(pk=definition.dataset_key)
+    settings_sql = "SELECT current_setting('work_mem'),current_setting('statement_timeout')"
+    with connection.cursor() as cursor:
+        cursor.execute(settings_sql)
+        original_settings = cursor.fetchone()
+    refreshes = []
+    observed_settings = []
+    locks = []
+
+    def capture(execute, sql, params, many, context):
+        if sql.startswith("LOCK TABLE"):
+            locks.append(sql)
+        if sql.startswith("REFRESH MATERIALIZED VIEW"):
+            refreshes.append(sql)
+            with connection.cursor() as cursor:
+                cursor.execute(settings_sql)
+                observed_settings.append(cursor.fetchone())
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(capture):
+        assert refresh_materialization(definition) == {
+            "status": "skipped", "cutoff": before.cutoff.isoformat(),
+        }
+        assert refreshes == []
+        skipped = MaterializationState.objects.get(pk=definition.dataset_key)
+        assert skipped.refreshed_at == before.refreshed_at
+        assert refresh_materialization(definition, force=True) == {
+            "status": "refreshed", "cutoff": before.cutoff.isoformat(),
+            "generation": before.source_generation,
+        }
+    assert refreshes == ['REFRESH MATERIALIZED VIEW CONCURRENTLY "materialization_fixture_counts"']
+    assert observed_settings == [("8MB", "90s")]
+    assert locks == [], "force must not invent a cutoff advance"
+    after = MaterializationState.objects.get(pk=definition.dataset_key)
+    assert (after.cutoff, after.source_generation, after.published_generation) == (
+        before.cutoff, before.source_generation, before.published_generation,
+    )
+    assert after.dirty_since == before.dirty_since is None
+    assert after.refreshed_at > before.refreshed_at
+    with connection.cursor() as cursor:
+        cursor.execute(settings_sql)
+        assert cursor.fetchone() == original_settings

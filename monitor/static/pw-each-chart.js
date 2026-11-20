@@ -8,6 +8,7 @@
   var face = root.querySelector('.each-chart-face');
   var legend = root.querySelector('[data-each-legend]');
   var status = root.querySelector('[data-each-status]');
+  var bucketNote = root.querySelector('[data-each-bucket-note]');
   var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-each-tab]'));
   var modes = Array.prototype.slice.call(root.querySelectorAll('[data-each-mode]'));
   var pulses = Array.prototype.slice.call(document.querySelectorAll('[data-pw-pulse-entry]'));
@@ -20,8 +21,10 @@
   var locale = document.body.dataset.pwLocale || 'en';
   var generation = 0;
   var controller = null;
+  var headlineController = null;
+  var headlineGeneration = 0;
+  var committedHeadline = selected;
   var chart = null;
-  var bucketNote = root.querySelector('[data-each-bucket-note]');
   var chartIdentity = '';
   var legendVersion = 0;
   var pinnedCategory = null;
@@ -42,9 +45,6 @@
 
   function setSelected(brand) {
     selected = brand;
-    if (chart) { chart.destroy(); chart = null; }
-    legend.replaceChildren();
-    root.dataset.selectedBrand = '';
     pulses.forEach(function (button) {
       button.setAttribute('aria-pressed', String(button.dataset.pwPulseEntry === brand));
     });
@@ -366,51 +366,89 @@
     return root.dataset.chartUrl + '?' + params.toString();
   }
 
+  function previousLabel(data) {
+    if (!data) return '';
+    var button = pulses.find(function (entry) { return entry.dataset.pwPulseEntry === data.brand; });
+    var name = button && button.querySelector('.pulse-chip-name');
+    var identity = [name ? name.textContent : data.brand, tabLabel(data.tab), data.window_days + 'd'].filter(Boolean).join(', ');
+    return /^zh/.test(locale) ? '显示上次结果（' + identity + '）' :
+      locale === 'ja' ? '前回の結果を表示（' + identity + '）' : 'Showing previous result (' + identity + ')';
+  }
+
   function refresh(turn) {
     var ticket = ++generation;
     if (controller) controller.abort();
     face.classList.remove('is-turning-out', 'is-turning-in');
-    controller = new AbortController();
-    setStatus(chart ? '' : root.dataset.chartLoading);
+    var requestController = new AbortController();
+    controller = requestController;
+    var expired = false;
+    var timer = window.setTimeout(function () { expired = true; requestController.abort(); }, 18000);
+    setStatus((root.dataset.chartLoading || 'Loading chart…') + (payload ? ' ' + previousLabel(payload) : ''));
     panel.setAttribute('aria-busy', 'true');
-    fetch(chartUrl(), { credentials: 'same-origin', signal: controller.signal })
-      .then(function (response) { if (!response.ok) throw new Error('chart request'); return response.json(); })
+    fetch(chartUrl(), { credentials: 'same-origin', signal: requestController.signal })
+      .then(function (response) {
+        return response.json().then(function (body) {
+          if (!response.ok) {
+            var error = new Error('chart request');
+            error.chartTimeout = body.error === 'chart_timeout';
+            throw error;
+          }
+          return body;
+        });
+      })
       .then(function (next) {
-        if (ticket !== generation) return;
-        if (next.brand !== selected || next.tab !== activeTab) throw new Error('stale chart');
+        if (ticket !== generation || expired) return;
+        if (next.brand !== selected || next.tab !== activeTab || Number(next.window_days) !== windowDays) throw new Error('stale chart');
         if (turn) turnTo(next, ticket); else render(next);
       })
       .catch(function (error) {
-        if (ticket === generation && error.name !== 'AbortError') {
-          if (chart) { chart.destroy(); chart = null; }
-          legend.replaceChildren();
-          setStatus(root.dataset.chartError);
+        if (ticket === generation && (expired || error.name !== 'AbortError')) {
+          setStatus((expired || error.chartTimeout ? root.dataset.chartTimeout : root.dataset.chartError) || 'Chart refresh failed');
+          if (payload) setStatus(status.textContent + ' ' + previousLabel(payload));
         }
       })
       .finally(function () {
+        window.clearTimeout(timer);
         if (ticket === generation) panel.removeAttribute('aria-busy');
       });
   }
 
+  function headlineStatus(message) {
+    var current = document.querySelector('[data-pw-headline]');
+    var notice = current && current.querySelector('[data-pw-headline-status]');
+    if (notice) { notice.textContent = message; notice.hidden = !message; }
+  }
+
   function refreshHeadline(brand) {
-    var ticket = generation;
-    var url = new URL(window.location.href);
+    var ticket = ++headlineGeneration;
+    if (headlineController) headlineController.abort();
+    var requestController = new AbortController();
+    headlineController = requestController;
+    var expired = false;
+    var timer = window.setTimeout(function () { expired = true; requestController.abort(); }, 4000);
+    var url = new URL(root.dataset.headlineUrl || '/api/v2/dashboard/each/headline/', window.location.href);
     url.searchParams.set('brand', brand);
-    fetch(url.toString(), { credentials: 'same-origin' })
-      .then(function (response) { if (!response.ok) throw new Error('headline request'); return response.text(); })
-      .then(function (html) {
-        if (ticket !== generation || selected !== brand) return;
-        var next = new DOMParser().parseFromString(html, 'text/html').querySelector('[data-pw-headline]');
+    url.searchParams.set('window', String(windowDays));
+    url.searchParams.set('locale', locale);
+    var oldIdentity = committedHeadline ? previousLabel({ brand: committedHeadline, window_days: windowDays }) : '';
+    headlineStatus((root.dataset.chartLoading || 'Loading…') + ' ' + oldIdentity);
+    fetch(url.toString(), { credentials: 'same-origin', signal: requestController.signal })
+      .then(function (response) { if (!response.ok) throw new Error('headline request'); return response.json(); })
+      .then(function (next) {
+        if (ticket !== headlineGeneration || selected !== brand || expired) return;
+        if (next.brand !== brand || Number(next.window_days) !== windowDays || next.locale !== locale) throw new Error('stale headline');
+        var fragment = new DOMParser().parseFromString(next.html, 'text/html').querySelector('[data-pw-headline]');
         var current = document.querySelector('[data-pw-headline]');
-        if (next && current) current.replaceWith(next);
+        if (!fragment || !current) throw new Error('missing headline');
+        current.replaceWith(fragment);
+        committedHeadline = brand;
       })
-      .catch(function () {
-        if (ticket === generation) {
-          var current = document.querySelector('[data-pw-headline]');
-          var items = current && current.querySelector('[data-pw-headline-items]');
-          if (items) items.replaceChildren();
+      .catch(function (error) {
+        if (ticket === headlineGeneration && (expired || error.name !== 'AbortError')) {
+          headlineStatus((root.dataset.headlineError || 'Headline refresh failed') + ' ' + oldIdentity);
         }
-      });
+      })
+      .finally(function () { window.clearTimeout(timer); });
   }
 
   tabs.forEach(function (button, index) {
@@ -435,7 +473,13 @@
     input.addEventListener('change', function () {
       if (!input.checked || mode === input.value) return;
       mode = input.value;
-      if (payload) render(payload);
+      if (payload) {
+        var currentStatus = status.textContent;
+        var statusHidden = status.hidden;
+        render(payload);
+        status.textContent = currentStatus;
+        status.hidden = statusHidden;
+      }
     });
   });
 

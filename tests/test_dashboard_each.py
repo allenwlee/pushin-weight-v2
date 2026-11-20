@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 import pytest
 from django.db import connection, transaction
-from django.db.models import QuerySet
 from django.test import Client, override_settings
 from django.test.utils import CaptureQueriesContext
 
@@ -133,120 +132,106 @@ class DashboardEachTests(PostgreSQLV22TestCase):
             ],
         )
 
-    def test_post_type_route_plans_for_all_rows_and_restores_outer_transaction(self):
-        original_iterator = QuerySet.iterator
+    def _assert_grouped_route_restores_settings(self, tab, days):
         observed = []
 
-        def inspect_iterator(queryset, *args, **kwargs):
-            if queryset.model is PostBrand:
+        def inspect_group(execute, sql, params, many, context):
+            if sql.lstrip().startswith("WITH facts AS"):
                 with connection.cursor() as cursor:
                     cursor.execute("SHOW cursor_tuple_fraction")
-                    observed.append(float(cursor.fetchone()[0]))
-            yield from original_iterator(queryset, *args, **kwargs)
+                    fraction = cursor.fetchone()[0]
+                    cursor.execute("SHOW enable_nestloop")
+                    observed.append((float(fraction), cursor.fetchone()[0]))
+            return execute(sql, params, many, context)
 
-        for days in (7, 30, 365):
-            with self.subTest(days=days), transaction.atomic():
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT set_config('cursor_tuple_fraction', '0.35', true)")
-                observed.clear()
-                with patch.object(QuerySet, "iterator", inspect_iterator), patch(
-                    "monitor.views._dashboard_now", return_value=NOW
-                ):
-                    response = self.client.get(
-                        "/dashboard/each/chart/",
-                        {"brand": self.minimax.nickname, "tab": "post_types",
-                         "window": days, "locale": "en", "tz": "Asia/Tokyo"},
-                    )
-                self.assertEqual(response.status_code, 200)
-                self.assertTrue(observed)
-                self.assertTrue(all(value == 1.0 for value in observed), observed)
-                self.assertEqual(sum(response.json()["totals"]), 3)
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT set_config('cursor_tuple_fraction', '0.35', true)")
+                cursor.execute("SHOW statement_timeout")
+                statement_before = cursor.fetchone()[0]
+                cursor.execute("SHOW lock_timeout")
+                lock_before = cursor.fetchone()[0]
+            with connection.execute_wrapper(inspect_group), patch(
+                "monitor.views._dashboard_now", return_value=NOW
+            ):
+                response = self.client.get(
+                    "/dashboard/each/chart/",
+                    {"brand": self.minimax.nickname, "tab": tab,
+                     "window": days, "locale": "en", "tz": "Asia/Tokyo"},
+                )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(sum(response.json()["totals"]), 3)
+            self.assertTrue(observed, "The production route must use grouped facts")
+            # A grouped SELECT consumes its full result; the former cursor
+            # planner override is obsolete. Preserve the caller's settings.
+            self.assertTrue(all(value == (0.35, "on") for value in observed), observed)
+            if tab == "post_types":
                 self.assertEqual(sum(response.json()["series"]["other"]), 2)
                 self.assertEqual(sum(response.json()["series"]["__unclassified__"]), 1)
-                with connection.cursor() as cursor:
-                    cursor.execute("SHOW cursor_tuple_fraction")
-                    self.assertEqual(float(cursor.fetchone()[0]), 0.35)
-
-    def test_language_and_role_routes_plan_for_full_result(self):
-        original_iterator = QuerySet.iterator
-        observed = []
-
-        def inspect_iterator(queryset, *args, **kwargs):
-            if queryset.model is PostBrand:
-                with connection.cursor() as cursor:
-                    cursor.execute("SHOW cursor_tuple_fraction")
-                    fraction = float(cursor.fetchone()[0])
-                    cursor.execute("SHOW enable_nestloop")
-                    observed.append((fraction, cursor.fetchone()[0]))
-            yield from original_iterator(queryset, *args, **kwargs)
-
-        for tab in ("lang", "role"):
-            with self.subTest(tab=tab), transaction.atomic():
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT set_config('cursor_tuple_fraction', '0.35', true)")
-                observed.clear()
-                with patch.object(QuerySet, "iterator", inspect_iterator), patch(
-                    "monitor.views._dashboard_now", return_value=NOW
+            with connection.cursor() as cursor:
+                for setting, expected in (
+                    ("cursor_tuple_fraction", "0.35"), ("enable_nestloop", "on"),
+                    ("statement_timeout", statement_before), ("lock_timeout", lock_before),
                 ):
-                    response = self.client.get(
-                        "/dashboard/each/chart/",
-                        {"brand": self.minimax.nickname, "tab": tab,
-                         "window": 30, "locale": "en", "tz": "Asia/Tokyo"},
-                    )
-                self.assertEqual(response.status_code, 200)
-                self.assertEqual(sum(response.json()["totals"]), 3)
-                self.assertTrue(observed)
-                self.assertTrue(all(value == (1.0, "off") for value in observed), observed)
-                with connection.cursor() as cursor:
-                    cursor.execute("SHOW cursor_tuple_fraction")
-                    self.assertEqual(float(cursor.fetchone()[0]), 0.35)
-                    cursor.execute("SHOW enable_nestloop")
-                    self.assertEqual(cursor.fetchone()[0], "on")
+                    cursor.execute(f"SHOW {setting}")
+                    self.assertEqual(cursor.fetchone()[0], expected)
 
-    def test_failed_post_type_route_restores_its_previous_cursor_plan(self):
+    def test_post_type_route_groups_all_rows_and_restores_outer_transaction(self):
+        for days in (1, 7, 30, 365):
+            with self.subTest(days=days):
+                self._assert_grouped_route_restores_settings("post_types", days)
+
+    def test_language_and_role_routes_group_full_results(self):
+        for tab in ("lang", "role"):
+            with self.subTest(tab=tab):
+                self._assert_grouped_route_restores_settings(tab, 30)
+
+    def _assert_failed_group_restores_settings(self, *, route):
         observed = []
 
-        def failed_iterator(queryset, *args, **kwargs):
-            if queryset.model is PostBrand:
-                with connection.cursor() as cursor:
-                    cursor.execute("SHOW cursor_tuple_fraction")
-                    observed.append(float(cursor.fetchone()[0]))
-                raise RuntimeError("owned iterator failure")
-            yield from ()
+        def failed_group(execute, sql, params, many, context):
+            if sql.lstrip().startswith("WITH facts AS"):
+                observed.append(sql)
+                raise RuntimeError("owned grouped reader failure")
+            return execute(sql, params, many, context)
 
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute("SELECT set_config('cursor_tuple_fraction', '0.35', true)")
-            with patch.object(QuerySet, "iterator", failed_iterator), self.assertRaisesRegex(
-                RuntimeError, "owned iterator failure"
-            ):
-                self.client.get(
-                    "/dashboard/each/chart/",
-                    {"brand": self.minimax.nickname, "tab": "post_types", "window": 7},
-                )
-            self.assertEqual(observed, [1.0])
-            with connection.cursor() as cursor:
-                cursor.execute("SHOW cursor_tuple_fraction")
-                self.assertEqual(float(cursor.fetchone()[0]), 0.35)
-
-    def test_post_type_consumer_error_restores_plan_while_traceback_is_alive(self):
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT set_config('cursor_tuple_fraction', '0.35', true)")
-            with patch.object(
-                PostBrandSignal.objects, "filter", side_effect=RuntimeError("edge read failure")
-            ):
+                cursor.execute("SHOW statement_timeout")
+                statement_before = cursor.fetchone()[0]
+                cursor.execute("SHOW lock_timeout")
+                lock_before = cursor.fetchone()[0]
+            with connection.execute_wrapper(failed_group):
                 try:
-                    _each_chart_payload(
-                        self.minimax.nickname, "post_types", 7, "en", now=NOW
-                    )
+                    if route:
+                        self.client.get(
+                            "/dashboard/each/chart/",
+                            {"brand": self.minimax.nickname, "tab": "post_types", "window": 7},
+                        )
+                    else:
+                        _each_chart_payload(
+                            self.minimax.nickname, "post_types", 7, "en", now=NOW,
+                        )
                 except RuntimeError as error:
-                    self.assertEqual(str(error), "edge read failure")
+                    self.assertEqual(str(error), "owned grouped reader failure")
+                    # Assert while the failed consumer's traceback is alive.
                     with connection.cursor() as cursor:
-                        cursor.execute("SHOW cursor_tuple_fraction")
-                        self.assertEqual(float(cursor.fetchone()[0]), 0.35)
+                        for setting, expected in (
+                            ("cursor_tuple_fraction", "0.35"),
+                            ("statement_timeout", statement_before), ("lock_timeout", lock_before),
+                        ):
+                            cursor.execute(f"SHOW {setting}")
+                            self.assertEqual(cursor.fetchone()[0], expected)
                 else:
-                    self.fail("Expected the owned edge-reader failure")
+                    self.fail("Expected the owned grouped-reader failure")
+            self.assertEqual(len(observed), 1)
+
+    def test_failed_post_type_route_restores_outer_settings(self):
+        self._assert_failed_group_restores_settings(route=True)
+
+    def test_post_type_consumer_error_restores_settings_while_traceback_is_alive(self):
+        self._assert_failed_group_restores_settings(route=False)
 
     def test_deepseek_three_day_ranking_is_shared_by_other_models(self):
         for index, (kind, age) in enumerate((
@@ -367,13 +352,12 @@ class DashboardEachTests(PostgreSQLV22TestCase):
             )
         self.assertEqual(sum(chart["totals"]), 1008)
         self.assertEqual(sum(chart["series"]["__unclassified__"]), 1006)
-        # A chart must aggregate current/legacy classifications in one query,
-        # rather than fetch another batch of scalar rows for every 1000 posts.
-        classification_reads = [
-            query["sql"] for query in queries.captured_queries
-            if "posts_brands_classification_states" in query["sql"]
-        ]
-        self.assertEqual(len(classification_reads), 1)
+        # The two data reads are health plus grouped facts, regardless of
+        # whether more than a feed page or scalar-reader chunk is requested.
+        data_reads = [query["sql"] for query in queries.captured_queries
+                      if "FROM materialization_state WHERE dataset_key=" in query["sql"]
+                      or query["sql"].lstrip().startswith("WITH facts AS")]
+        self.assertEqual(len(data_reads), 2)
 
         PostBrandClassificationState.objects.bulk_create([
             PostBrandClassificationState(
@@ -401,11 +385,10 @@ class DashboardEachTests(PostgreSQLV22TestCase):
             )
         self.assertEqual(sum(types["totals"]), 1008)
         self.assertEqual(sum(types["series"]["other"]), 1007)
-        edge_reads = [
-            query["sql"] for query in queries.captured_queries
-            if 'FROM "posts_brands_signals"' in query["sql"]
-        ]
-        self.assertEqual(len(edge_reads), 1)
+        data_reads = [query["sql"] for query in queries.captured_queries
+                      if "FROM materialization_state WHERE dataset_key=" in query["sql"]
+                      or query["sql"].lstrip().startswith("WITH facts AS")]
+        self.assertEqual(len(data_reads), 2)
 
     def test_public_route_and_endpoint_keep_home_intact(self):
         client = Client(HTTP_HOST="127.0.0.1")
@@ -510,7 +493,10 @@ class DashboardEachTests(PostgreSQLV22TestCase):
                 for timezone in ("UTC", "Asia/Tokyo", "America/Los_Angeles", "Pacific/Chatham"):
                     with self.subTest(brand=brand, days=days, timezone=timezone):
                         arguments = {"now": NOW, "bucket_timezone": timezone}
-                        with patch("monitor.views.aggregate_brand_sentiment_counts", return_value=None):
-                            reference = _each_chart_payload(brand, "sentiment", days, "en", **arguments)
+                        from tests.each_reference import reference_each_chart_payload
+
+                        reference = reference_each_chart_payload(
+                            brand, "sentiment", days, "en", **arguments,
+                        )
                         actual = _each_chart_payload(brand, "sentiment", days, "en", **arguments)
                         self.assertEqual(actual, reference)

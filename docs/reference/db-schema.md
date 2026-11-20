@@ -1,5 +1,11 @@
 # Database schema reference
 
+The [Each raw-fact views](#view-each-brand-post-facts) are defined by migration
+`0235_each_chart_facts` after the Pulse schema. Their20columns, indexes and
+publication behavior were checked on the branch-specific fixture database on
+November20,2026JST. This scoped update adds no ordinary tables and does not
+refresh the older inventory totals below.
+
 The [owner credential section](#table-official_company_owner_credentials) is verified against migration `0225_official_company_credential_provenance` and source revision `265bfa1c` on November 7, 2026 (JST), including the permanent local test database. That section has eight columns and no foreign keys; this scoped verification does not establish production deployment or refresh the older inventory totals below.
 
 The four release-study tables below are verified against schema `0206_product_release_study` on the staging candidate. The remaining inventory retains the older verification scope stated below and has known RG7 omissions; its older table/column totals are not current totals. See the [release-study reference](2026-10-29-223000-product-release-detection.md) for the complete current feature contract.
@@ -141,8 +147,8 @@ for staff. Job listings retain their own source text and language fields.
 ## Alphabetical table inventory
 
 Each of the 219 local physical core application tables appears once in this inventory and once in
-the detailed sections. All 219 have managed models; unmanaged source projections add no tables. The native view is
-listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The three [benchmark serving views](#benchmark-serving-views) are also outside the physical-table count.
+the detailed sections. All 219 have managed models; unmanaged source projections add no tables. The native derived views are
+listed separately: [home_brand_time_counts](#view-home_brand_time_counts) and [Each source/saved facts](#view-each-brand-post-facts). The three [benchmark serving views](#benchmark-serving-views) are also outside the physical-table count.
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
@@ -3678,6 +3684,63 @@ Django maps a composite key, but the view has no SQL PK or FK constraints.
 concurrent refresh after initial population. No additional named constraints or
 column defaults apply. The native view is separate from the application-table
 inventory and the compatibility views below.
+
+<a id="view-each-brand-post-facts"></a>
+
+### Each source and saved raw facts
+
+`each_brand_post_facts_source` is an ordinary SQL view of one post-brand pair's
+raw classification, language and author facts. `each_brand_post_facts` is its
+rebuildable materialized copy of closed history. The latter stores facts rather
+than final category totals; the reader groups the selected signature and applies
+the existing Python rules, preserving contract versions, aliases and exact count
+units. Original posts, assignments and typed concept relationships remain the
+source of truth. Neither view adds an ordinary table or JSON column.
+
+Definition: [0235_each_chart_facts](../../core/migrations/0235_each_chart_facts.py).
+Reader: [monitor/each_chart_facts.py](../../monitor/each_chart_facts.py). No Django
+model owns these native views. Native view columns are physically nullable and
+have no column defaults or SQL foreign-key/primary-key constraints; their source
+joins and expressions supply the following meanings.
+
+| SQL column | PostgreSQL type | Meaning |
+| --- | --- | --- |
+| `brand_id` | `varchar(64)` | Source `posts_brands.brand_id`, using its case-insensitive membership collation. |
+| `post_id` | `text` | Source post identity, paired with the brand. |
+| `created_at` | `timestamp with time zone` | Exact source publication time; no fixed-day rounding. |
+| `lang_detected` | `text` | Raw detected language, nullable. |
+| `lang` | `text` | Raw provider language used only by the trusted fallback rule. |
+| `author_account_key` | `uuid` | Existing account identity; Role resolves current brand-account membership by this UUID. |
+| `state_present` | `boolean` | Whether a case-insensitively associated classification state exists. |
+| `state_brand_id` | `text` | Literal stored state-brand spelling, preserving binary Sentiment ownership. |
+| `state_contract_version` | `varchar(64)` | Raw current-state contract identity. |
+| `state_taxonomy_version` | `varchar(64)` | Raw current-state taxonomy identity. |
+| `state_outcome` | `varchar(32)` | Raw classification outcome. |
+| `state_sentiment` | `text` | Raw state sentiment; an owned NULL does not fall through to history. |
+| `legacy_sentiment_brand_ids` | `text[]` | Binary-sorted literal signal-brand spellings. |
+| `legacy_sentiment_values` | `text[]` | Paired legacy sentiments, retaining NULL on absent/conflicting nonempty values. |
+| `post_type_keys` | `text[]` | Sorted distinct raw post-type edge keys. |
+| `product_label_keys` | `text[]` | Sorted distinct raw product-label keys. |
+| `audience_topic_edges` | `text[]` | Existing typed concept identities encoded with their scheme revisions; current keys resolve at read time. |
+| `geopolitical_mode_versions` | `text[]` | Raw taxonomy versions, paired with mode keys in stable edge order. |
+| `geopolitical_mode_keys` | `text[]` | Paired raw geopolitical-mode keys. |
+| `promotion_keys` | `text[]` | String members from the existing promotion array; malformed non-array data contributes no keys. |
+
+**Native indexes:** `each_brand_post_facts_key`, unique on `(brand_id,post_id)`,
+and `each_brand_post_facts_window` on `(brand_id,created_at)`. The former permits
+concurrent refresh; the latter bounds history reads. The ordinary source view
+has no independent indexes. Partial Post indexes `idx_posts_each_facts_cover`
+and `idx_posts_each_facts_wide` preserve a narrow covering path for compact values
+and an exact fallback for values too wide for that index; neither truncates data.
+
+Publication reuses the `each.brand_post_facts.v1` row in `materialization_state`.
+The saved prefix ends at the start of yesterday in UTC; recent posts and invalidated
+history are read live. Column-specific triggers leave recent writes out of the
+state-row update path and conservatively mark older changes. A nonwaiting barrier
+protects cutoff advances; busy writers defer maintenance. Initial population is
+bounded at120seconds, recurring refresh at90seconds, with transaction-local8MB
+work memory. Homepage defaults remain independent. Both views expose only their
+explicit projection through the existing restricted-serving grant mechanism.
 
 <a id="vocabularies"></a>
 

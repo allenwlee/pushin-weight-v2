@@ -32,12 +32,14 @@ verification; the Ollija plan guide owns delivery coordination only.
 
 The parent delivery workflow reads the selected target and current Ollija
 Delivery Guide from its plan before making Git or Render changes, and refreshes
-it with `ollija annotate-plan <plan-path> --check`. It pushes the exact
+it with `ollija annotate-plan <plan-path> --check`. On the staged route, it pushes the exact
 candidate SHA to `staging`, confirms the staging deployment reports that same
 SHA, and, only when the plan's recorded target is production, promotes the
 unchanged SHA to `main` after staging passes. The workflow confirms the
 configured Render services and health route for that candidate. A green build
-alone is not sufficient evidence of the intended deployment identity.
+alone is not sufficient evidence of the intended deployment identity. An explicit
+owner-selected direct route follows the plan without using shared staging; the
+Each preparation procedure below keeps web activation behind its data gates.
 
 ### Database credentials and migrations
 
@@ -645,3 +647,46 @@ roll back the application revision and suspend only the new count-maintenance
 job. The previous application can use the additive schema. Keep source data and
 existing harvest schedules intact; schema reversal is a separate controlled
 operation after consumers no longer use the view.
+
+
+## Each dashboard cache preparation and activation
+
+The deployed `refresh_home_counts` command remains a compatible entry point and
+runs the shared `refresh_materializations` command. It refreshes homepage counts
+and Each raw facts independently, reporting both dataset outcomes; one failure
+does not silently suppress the other. The existing maintenance cron keeps its
+schedule, resource plan and provider-free purpose.
+
+For an owner-selected direct release, prepare the exact reviewed candidate on
+that existing production cron before activating its web revision. The additive
+migration creates the Each source/saved views, invalidation and online indexes;
+current web and collection processes continue running. Preserve all service
+settings, auto-deploy behavior and peer staging. Do not apply a Blueprint or
+pause collection to get a stable cohort.
+
+A bounded owner one-off job from the verified candidate image can run:
+
+```sh
+python scripts/probes/each_dashboard_latency.py --prepare --expected-revision <full-candidate-sha>
+```
+
+Preparation uses the normal shared refresh path, then explicitly forces one
+concurrent refresh without fabricating source changes. The120second initial and
+90second recurring caps, generation check, dataset lock and8MB scoped memory
+remain enforced. Exact physical parity uses indexed256-key pages in one read-only
+snapshot with typed, binary-sensitive NULL-safe comparisons. A dirty generation,
+query timeout, parity discrepancy or elapsed cap is a failed preparation gate.
+
+The subsequent operator route probe opens PostgreSQL read-only sessions with
+4.5second statement and250millisecond lock limits. Its isolated loopback HTTP
+process uses signed-cookie sessions because locale resolution ordinarily writes
+a session. It makes no test-runner, fixture, provider or collection calls. This
+is pre-activation data-path proof; final public endpoint and browser checks must
+retain ordinary database-backed sessions and normal background requests.
+
+Only activate the web revision after actual realistic-data refresh, parity,
+writer-continuity and latency checks pass. Require p95≤1.5seconds and no request
+≥5seconds over the frozen Meta/DeepSeek tab/window set. Verify actual public
+Sentiment↔Post Type interactions after activation, not only component timings.
+For web rollback, retain additive cache storage and restore the previous compatible
+web revision; do not drop source data or reverse unrelated Pulse migrations.

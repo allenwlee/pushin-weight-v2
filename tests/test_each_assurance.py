@@ -154,25 +154,26 @@ def test_unknown_invariant_cannot_pass_generic_runtime_snapshot_validation():
         each.build_each_evidence(changed, packet())
 
 
-def test_preserved_production_role_fixture_checks_counts_and_entries():
+def test_uuid_role_fixture_rejects_incorrect_counts_and_missing_entries():
     from copy import deepcopy
 
     counts = [8, 9, 10, 8, 9, 10, 8]
     source = {
         "entries": [{"key": key} for key in ("other", "official", "staff", "community")],
         "counting_unit": "posts", "days": [str(i) for i in range(7)], "totals": counts[:],
-        "series": {"other": counts[:], "official": [0] * 7, "staff": [0] * 7, "community": [0] * 7},
+        "series": {"official": [2, 2, 2, 2, 3, 2, 2], "staff": [2, 3, 2, 2, 2, 3, 2],
+                   "community": [2, 2, 3, 2, 2, 3, 2], "other": [2, 2, 3, 2, 2, 2, 2]},
     }
-    each._checked_production_role_fixture(source, counts)
+    each._checked_role_fixture(source, counts)
     changed = deepcopy(source)
     changed["series"]["other"][0] -= 1
-    with pytest.raises(AssertionError, match="Other counts"):
-        each._checked_production_role_fixture(changed, counts)
+    with pytest.raises(AssertionError, match="Role counts"):
+        each._checked_role_fixture(changed, counts)
     changed = deepcopy(source)
-    changed["series"]["official"][0] = 1
-    with pytest.raises(AssertionError, match="classification changed"):
-        each._checked_production_role_fixture(changed, counts)
+    changed["series"]["official"][0] += 1
+    with pytest.raises(AssertionError, match="Role counts"):
+        each._checked_role_fixture(changed, counts)
     changed = deepcopy(source)
     changed["entries"].pop()
     with pytest.raises(AssertionError, match="entries changed"):
-        each._checked_production_role_fixture(changed, counts)
+        each._checked_role_fixture(changed, counts)
