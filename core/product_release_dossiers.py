@@ -563,7 +563,7 @@ def persist_classified_release_findings(
                 ).encode()
             ).hexdigest()
             if assertion_key in assertion_keys:
-                raise ValueError("Duplicate finding assertion")
+                continue
             assertion_keys.add(assertion_key)
             if values["claim_kind"] == "release_report":
                 values["release_maturity_id"] = ReleaseMaturity.objects.get(

@@ -213,7 +213,7 @@ def test_combined_multibrand_labels_keep_one_source_bound_post_promotion(promoti
     assert all("untracked_brand_promotions" not in brand for brand in (qwen, deepseek))
 
 
-def test_required_findings_missing_is_not_a_successful_empty_or_an_extra_call():
+def test_required_findings_missing_remains_unresolved_after_feed_classification():
     from x_monitor.compressed_classifier import run_case
 
     calls = []
@@ -225,7 +225,8 @@ def test_required_findings_missing_is_not_a_successful_empty_or_an_extra_call():
     result = run_case(case(), call, release_channels=("api", "weights"))
     assert not result["contract_valid"]
     assert "invalid_release_findings" in result["contract_errors"]
-    assert calls == ["ds"]
+    assert calls == ["ds", "jev"]
+    assert result["publication_result"]["release_unresolved"] is True
 
 
 def test_umbrella_names_are_visible_in_actual_questions_without_catalog_in_extraction():
@@ -383,3 +384,100 @@ def test_suite_question_and_category_distinguish_launches_from_components():
     assert 'existing component' in novelty and 'explicitly introduced' in novelty
     assert 'application feature' in categories['model-other']
     assert 'application features' in categories['other']
+
+
+def test_invalid_release_data_does_not_prevent_independent_feed_answers():
+    from x_monitor.compressed_classifier import run_case
+
+    calls = []
+
+    def call(provider, request, stage):
+        calls.append(provider)
+        return {"entities": []} if provider == "ds" else answers(request)
+
+    result = run_case(case(), call, release_channels=("api", "weights"))
+    assert calls == ["ds", "jev"]
+    assert result["publication_result"]["valid"] is True
+    assert result["publication_result"]["release_unresolved"] is True
+    assert "release_findings" not in result["publication_result"]
+    assert result["publication_result"]["by_brand"]["qwen"]["outcome"] == "classified"
+
+
+def test_completed_post_is_published_before_slow_sibling_finishes(monkeypatch):
+    import threading
+    from types import SimpleNamespace
+    from x_monitor import compressed_classifier as classifier
+
+    released = threading.Event()
+    published = threading.Event()
+    original = classifier._run_prepared_case
+
+    def run(sample, request, call, *, release_channels):
+        if sample["case_id"] == "slow":
+            assert released.wait(5)
+        return original(sample, request, call, release_channels=release_channels)
+
+    monkeypatch.setattr(classifier, "_run_prepared_case", run)
+    class Client:
+        release_channels = ("api", "weights")
+        request_identity = "fixture"
+        def messages_create(self, **kwargs):
+            import json
+            if kwargs["model"].startswith("deepseek"):
+                return extraction()
+            return answers(json.loads(kwargs["messages"][0]["content"]))
+
+    tweets = [
+        {"tweet_id": value, "text": case()["state"]["source_text"], "brand_ids": ["qwen"], "context": []}
+        for value in ("slow", "fast")
+    ]
+
+    def on_result(tweet, result):
+        if tweet["tweet_id"] == "fast":
+            assert result["valid"]
+            published.set()
+            released.set()
+
+    results = classifier.classify_batch(
+        tweets, [SimpleNamespace(brand_id="qwen", display_name="Qwen", is_sentinel=False)],
+        Client(), max_tokens=4096, max_workers=2, on_result=on_result,
+    )
+    assert published.is_set()
+    assert all(result["valid"] for result in results)
+
+
+def test_selected_production_configuration_runs_six_posts_concurrently(monkeypatch):
+    import threading
+    from pathlib import Path
+    from types import SimpleNamespace
+    from x_monitor import compressed_classifier as classifier
+    from x_monitor.config import load_config
+
+    cfg = load_config(Path("config.yaml")).harvest.enrichment
+    assert cfg.pulse_classification_concurrency == 6
+    gate = threading.Barrier(cfg.pulse_classification_concurrency, timeout=5)
+    original = classifier._run_prepared_case
+
+    def synchronized(sample, request, call, *, release_channels):
+        gate.wait()
+        return original(sample, request, call, release_channels=release_channels)
+
+    monkeypatch.setattr(classifier, "_run_prepared_case", synchronized)
+    class Client:
+        release_channels = ("api", "weights")
+        request_identity = "fixture"
+        def messages_create(self, **kwargs):
+            import json
+            if kwargs["model"].startswith("deepseek"):
+                return extraction()
+            return answers(json.loads(kwargs["messages"][0]["content"]))
+
+    tweets = [
+        {"tweet_id": str(index), "text": case()["state"]["source_text"], "brand_ids": ["qwen"], "context": []}
+        for index in range(cfg.pulse_classification_concurrency)
+    ]
+    results = classifier.classify_batch(
+        tweets, [SimpleNamespace(brand_id="qwen", display_name="Qwen", is_sentinel=False)],
+        Client(), max_tokens=4096, max_workers=cfg.pulse_classification_concurrency,
+    )
+    assert all(result["valid"] for result in results)

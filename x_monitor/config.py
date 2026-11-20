@@ -506,6 +506,7 @@ class EnrichmentConfig(BaseModel):
     fresh_minutes: int = Field(default=30, ge=1)
     translation_concurrency: int = Field(default=3, ge=1, le=20)
     classification_concurrency: int = Field(default=3, ge=1, le=20)
+    pulse_classification_concurrency: int = Field(default=6, ge=1, le=20)
     max_worker_processes: int = Field(default=1, ge=1, le=8)
     poll_seconds: int = Field(default=5, ge=1, le=60)
     max_calls_per_batch: int = Field(default=600, ge=1, le=1200)

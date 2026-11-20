@@ -4312,6 +4312,7 @@ def classify_batch_pragmatics_full(
     max_workers: int = 3,
     telemetry_context: dict[str, Any] | None = None,
     tracked_catalog_snapshot: dict[str, Any] | None = None,
+    on_result: Callable[[dict[str, Any], dict[str, Any]], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Classify batches with exactly two disjoint, concurrently scheduled roles.
 
@@ -4331,7 +4332,7 @@ def classify_batch_pragmatics_full(
         return classify_batch(
             tweets, brand_registry, anthropic_client, on_batch_error=on_batch_error,
             max_tokens=max_tokens, deadline=deadline, max_workers=max_workers, telemetry_context=telemetry_context,
-            tracked_catalog_snapshot=tracked_catalog_snapshot,
+            tracked_catalog_snapshot=tracked_catalog_snapshot, on_result=on_result,
         )
     selected_0731 = getattr(anthropic_client, "request_profile", None) == "deepseek_0731"
     if selected_0731 and model is None:

@@ -775,3 +775,17 @@ def test_capacity_validation_includes_commentary_deployment_overlap():
     assert EnrichmentConfig(max_worker_processes=4).translation_concurrency == 3
     with pytest.raises(ValidationError, match="Gemma"):
         EnrichmentConfig(max_worker_processes=5)
+
+
+def test_pulse_concurrency_is_bound_to_pulse_budget_only():
+    from copy import deepcopy
+    from monitor.enrichment_budget import config_fingerprint
+    from tests.test_post_enrichment_queue import _cfg
+
+    cfg = _cfg()
+    changed = deepcopy(cfg)
+    changed.harvest.enrichment.pulse_classification_concurrency = 9
+    assert config_fingerprint(cfg) == config_fingerprint(changed)
+    cfg.llm.classifier_pipeline = "compressed8_pulse_v1"
+    changed.llm.classifier_pipeline = "compressed8_pulse_v1"
+    assert config_fingerprint(cfg) != config_fingerprint(changed)

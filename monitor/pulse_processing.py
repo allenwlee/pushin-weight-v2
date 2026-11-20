@@ -94,7 +94,7 @@ def report_error(*, code, stage, post_id=None, run_id=None):
                 ("post_id", post_id), ("run_id", run_id),
             ) if value is not None},
         )
-    except pulse_control.PulseControlUnavailable:
+    except (pulse_control.PulseControlUnavailable, pulse_control.PulseControlConflict):
         logger.warning("Pulse diagnostic unavailable: %s", code)
 
 
