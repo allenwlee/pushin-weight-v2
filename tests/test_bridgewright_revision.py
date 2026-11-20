@@ -31,10 +31,12 @@ def test_revision_header_is_scoped_to_reader_pages(monkeypatch):
 
     home = middleware(factory.get("/?__bridgewright_revision_probe=before"))
     general = middleware(factory.get("/general/?lang=en"))
+    chatter = middleware(factory.get("/chatter/?lang=ja"))
     static = middleware(factory.get("/static/country-flags.svg"))
 
     assert home["X-Bridgewright-Revision"] == "c" * 40
     assert general["X-Bridgewright-Revision"] == "c" * 40
+    assert chatter["X-Bridgewright-Revision"] == "c" * 40
     assert "X-Bridgewright-Revision" not in static
 
 

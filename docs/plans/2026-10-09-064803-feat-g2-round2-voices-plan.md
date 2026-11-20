@@ -23,6 +23,8 @@ deepened: 2026-11-07
 
 ## Plain-English Summary
 
+Add `/chatter/` as a dedicated, newest-first list of published Chatter editions using General's existing header, navigation, colors, typography and story presentation. Reuse saved publication readers, source-pool controls, citations, media and signed pagination. Verify populated and empty pages locally, then deploy and check the page on staging. This page adds no storage or services and does not depend on the separate live-generation trial.
+
 Connect the accepted Chatter discovery method to the completed Copy Editor-led Graphics package. Every hour, collect the owner's personalized X trends and use the selected GPT ranking call to identify ten gathering leads. Resolve those leads into actual saved posts, then give the selected story to the existing package before C1 writes it. Readers receive one article with its still and five-second video through the existing Chatter feed.
 
 Graphics is already implemented. Its retained worktree is `.worktrees/feat/graphics-package-20261109`; its plan is `docs/plans/2026-11-09-013214-feat-graphics-package-20261109-plan.md` in that checkout. The package code is already on staging and main. Reuse its references, calls, publication, media storage, worker queues and recovery. The integration replaces Chatter's old writer followed by the `no_art` placeholder. Source-format, pool/history and locale adapters are part of that connection.
@@ -30,6 +32,8 @@ Graphics is already implemented. Its retained worktree is `.worktrees/feat/graph
 Verify the connection first with saved evidence and fake providers, then observe the candidate on staging and run one real selected story through article, citations, still and video. The owner approved an additional USD10 trial and API-only reuse of the existing intended-account credential; discovery has been captured and downstream proof remains active. This work adds no tables, columns or Render services. Two narrow migrations extend the existing appearance-kind constraint and source-operation guard. They record personalized trends truthfully and allow source pagination under explicit byte, time and financial bounds.
 
 ## Delivery Exceptions
+
+**U52 owner request — November 20:** create `/chatter` using General styling and list Chatter chronologically descending; LFG through staging. U52 is the current executable unit. U51 remains held with its ambiguous selector receipt and pending canonical credential-renewal decision; this request grants no OAuth renewal, generation, source retrieval or production action. Preserve staging `1a842e821f0a0693f60a1f583faabdc9acdf9453`, the Each schema and runtime fixes, and coordinate with G5 before staging movement. Use the existing canonical integration checkout and this plan; no parallel plan. A correct empty published archive is a valid page state, and publication examples belong only in the task's local fixture database.
 
 **U51 approval — November 19, 21:21 JST:** the owner approves both outstanding prerequisites: setup of the intended staging X authorization and an additional **USD10 aggregate live-trial ceiling**. This is a new finite allowance, not a renewal of the consumed historical USD20. Run at most two hourly personalized-trend discovery batches toward one English article, one still and one five-second video through the existing pipeline. Include authorization-validation, discovery, source lookup, selection, writing, media and advisory-review requests in that ceiling; retain reservations for unknown outcomes and never resend an ambiguous paid call. Use a new trial scope `chatter-staging-20261119-u51`, carrying any setup charges or unresolved reservations before dispatch. Provision only staging-owned encrypted token storage and preserve production’s rotating token pairs. The grant does not authorize production, X-list changes, staff import or a new recurring scheduler. Coordinate the shared staging target with G5; if interactive X sign-in becomes the remaining dependency, release the deployment lane while retaining this task’s authorization.
 
@@ -45,13 +49,15 @@ Current Chatter instructions below supersede the earlier semantic-discovery, old
 
 ## Goal Capsule
 
-**Objective:** staging readers can receive recurring, source-supported Chatter stories with an article and its generated still/video in the correct existing feed.
+**Objective:** staging readers can browse published Chatter editions newest first at `/chatter/`, using General's visual style. U45–U51 retain the separate article/media integration objective.
 
 **Means:** connect the accepted discovery and ranking route to the existing pre-C1 selected-story package (KTD29–KTD35).
 
 **Authority:** current owner instructions and the General Launch charter/index govern G2. This session owns integration and staging proof; P1 retains coordination. The endpoint is staging, with no production promotion.
 
-**Execution:** U45–U51 are the current Chatter units. Preserve other owners' files, active collection and existing index contents. Continue independent offline work if a live-proof prerequisite is unavailable.
+**Execution:** U52 is active; U51's live generation proof remains held under its recorded prerequisite. Preserve other owners' files, active collection and existing index contents.
+
+**Current executable scope:** U52 delivers the dedicated Chatter page independently of U51. The current request completes when that page's tests, review and staging proof pass; it does not close R88's unfinished real generation trial.
 
 **Stops:** do not send a paid request without reconciled validation authority or intended-environment credentials. Hold only the affected stage on an unknown sent outcome, invalid source ownership or identity conflict. A queued job or code deployment does not establish a completed article/media package.
 
@@ -98,6 +104,14 @@ The trends collector and accepted ranker are local experiments. Existing Chatter
 - R88. Observe the exact integrated candidate and one real cited article/still/five-second-video chain on staging before claiming completion.
 - R89. Preserve live harvesting and existing non-Chatter Graphics behavior, using existing tables, columns, durable storage, workers and scheduler resources.
 
+**Dedicated Chatter page**
+
+- R90. `/chatter/` and the slashless redirect expose published Chatter editions newest first, with stable ordering and bounded pagination; the featured pointer never changes archive order.
+- R91. The page uses General's existing masthead, navigation, colors, fonts and preferences, with usable desktop and mobile layouts.
+- R92. Preserve existing publication/access rules, locale fallback, independent source-pool and reading-language controls, citations and matching article/media links.
+- R93. Read saved publications only and present truthful empty/unavailable states; opening or paging the archive must cause no content, collection or generation writes.
+- R94. Observe the exact page revision on staging and verify chronological populated fixtures, signed pagination and existing General behavior locally before delivery.
+
 ### Scope Boundaries
 
 Include discovery promotion, deterministic source gathering, prepared-story adaptation and the reader/history/accounting links required by R77–R89. Existing Graphics owns article creation, reference preparation, rendering, video polling and review. The retained package plan governs its creative contract.
@@ -130,6 +144,10 @@ Headline-quality experiments, alerts/operations-dashboard redesign, correction-p
   Extend the existing read-only `editorial status --chatter-run ID` report through trusted source/producing links. Keep reported charges, configured estimates, open reservations and unknown charges distinct; count physical receipts once, including recorded official credential-refresh attempts. This is an operational CLI report, with no new persistence or public dashboard.
 
 - KTD39. Reuse `select_chatter`'s configured evidence-based selector, pool tagging/actions and audited code-keep branch after gathering for R82/R84–R85. Adapt its frozen discovery projection to ranked headline groups and actual source/history inputs; preserve source-language/group eligibility and selected/keep/no-story decisions. The accepted ranking call remains gathering-only. Existing selector calls are separately recorded and charged, not hidden inside the one-ranker claim. This preserves the existing pipeline rather than introducing a new rank-only election policy.
+
+- KTD40. Reuse `feed_payload` and its existing publication projection and signed cursor for R90/R92/R93; add no reader table, identity or publication writer. Existing `OriginalContentText`/`OriginalContent` and legacy `EditorialEdition` paths remain authoritative. The inspected publication UUID/status rules exclude drafts; no schema, index or new persistence is needed.
+- KTD41. Extend General's template with minimal content/head blocks for R91, keeping its default rendered shell and preferences on one path. Use the existing media/story partials and page-scoped CSS rather than copying the masthead or adopting a second UI stack. Shared JavaScript already supports an empty panel map.
+- KTD42. Preserve existing source-language/group defaults and publication-language independence for R92; the archive lists its selected pool's saved editions in publication order. Keep the current feature-access boundary and show the same unavailable state as General. This makes no new publication or authorization policy.
 
 ### High-Level Technical Design
 
@@ -246,6 +264,29 @@ Current C1 entry accepts three locales, but its prompt/schema is English-only. A
 
 ## Implementation Units
 
+### U52. Create the chronological Chatter page
+
+**Goal:** deliver R90–R94 through staging using the existing saved-content archive and General shell.
+**Requirements:** R90–R94; KTD40–KTD42.
+**Dependencies:** existing shared publication readers and General shell; independent of U51's held live trial.
+**Files:** `monitor/urls.py`, `monitor/general_views.py`, `monitor/templates/monitor/general.html`, `monitor/templates/monitor/general/_editorial_panel.html`, `monitor/templates/monitor/general/_editorial_story.html`, new `monitor/templates/monitor/chatter.html`, new `monitor/static/monitor/chatter.css`, `monitor/static/monitor/general.js` only for shared publication-time formatting, applicable locale catalogs, `tests/test_chatter_page.py`, `tests/test_chatter_page_browser.py`, and the existing General/Chatter assurance declarations and test membership.
+**Approach:**
+1. Add the dedicated GET route and reuse editorial access/filter, pool-control and `feed_payload` logic. Render only its already-ordered archive items, rather than prepending the hero/history. Keep existing General visibility behavior for unavailable content.
+2. Add small template blocks to General and extend that same template for Chatter. Reuse its JavaScript with no General post panels, and make existing server-rendered settings links retain the current page path. Link General's existing Chatter archive action to the new page; Pulse retains its current archive.
+3. Reuse the General story partial and existing media partial with a page-local media opt-in. Scope archive layout/styles to the new page. Display publication times with General's current timezone preference while retaining an explicit JST server fallback.
+4. Exercise real ORM publications and browser interactions, then apply existing review/delivery checks and verify the staged route with the existing allowed account. Do not seed staging publications or alter the held trial for page proof.
+**Patterns to follow:** `general_views.general`, `_settings_links`, `editorial.views.archive`, `editorial.views.pool_options`, `original_content_readers.shared_feed_payload`, `tests/test_general_browser.py`, `tests/test_general_editorial.py` and `tests/test_chatter_pool_browser.py`.
+**Execution note:** capture General in the real local browser before implementation, then start with the actual missing `/chatter/` route and a failing chronological reader test.
+**Test scenarios:**
+- Three published editions inserted out of publication order render newest first; an older featured edition stays in its chronological position.
+- More than one page, including equal publication timestamps, paginates without duplicates or omissions; corrupted and cross-filter cursors return a bounded error.
+- Draft/private evidence and Pulse never appear; sources, escaped copy and pinned story links remain correct.
+- Source language, group and publication language remain independent, with the established English/rest defaults and locale fallback.
+- Empty and unavailable pages are truthful; GET navigation/pagination cause no writes or provider calls.
+- Desktop and narrow mobile layouts use the same masthead palette/fonts; navigation, settings, source disclosure, timezone and language controls work without console errors or horizontal overflow.
+- General's existing default output and controls retain their behavior after the shared-shell/settings adaptation; page media is lazy and video uses the existing bounded asset route with no eager download.
+**Verification:** bounded ORM/query and real-browser evidence covers the new page and existing callers. Required UI assurance, performance, lint/system/migration-drift and review checks pass for the candidate. The exact staging route serves the candidate and its actual empty/populated state is recorded honestly.
+
 ### U45. Reconcile the integration base and freeze existing behavior
 
 **Goal:** establish a clean staging-compatible candidate while preserving the completed Graphics package and peer work.
@@ -358,7 +399,11 @@ The regression net covers existing manual Graphics callers, legacy Chatter histo
 
 Live acceptance is U51. Source-only inspection, saved audit counts, queued jobs and fake media do not satisfy it. Validation uses the remaining authorized aggregate allowance, with unknown charges retained. Show the exact selected prompt, source evidence, calls, output and costs in the local review artifact.
 
+For U52, page acceptance is independent of U51. Use the task-owned, small PostgreSQL fixture database and real Playwright routes to prove chronological content and shared controls. Run the existing affected/candidate UI assurance contract and a candidate-scoped performance check appropriate to the new archive query/assets; reuse unchanged Each evidence only with its original revision and scope. Staging verification uses the existing intended website account via credentials, without a new OAuth grant or allowlist change. Preserve failed Each live-refresh/latency findings as separate existing failures, not passed Chatter evidence.
+
 ## Definition of Done
+
+U52 completes independently when R90–R94's new page and existing-caller checks pass and the staged page is observed. This does not mark U51 or R88 complete.
 
 U45–U51's verification outcomes hold for the integrated candidate, including actual staging reader/media proof. Existing Graphics remains the sole article/media producer for this lane. The relevant existing callers pass their regression net, and the output links source consideration to producing run and actual citations/assets.
 

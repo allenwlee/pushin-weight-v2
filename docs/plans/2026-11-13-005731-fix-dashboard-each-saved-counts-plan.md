@@ -1391,3 +1391,27 @@ area. The boundary guard is<=12. New1/11/12/13bucket regression was red at12
 No server coverage policy or data is changed. The final combined candidate
 will replay the complete affected suite plus broader controls and fresh sealed
 performance measurements; do not reuse the failed affected run as a pass.
+
+
+### Combined candidate assembly — November20 10:11 JST
+
+Each product correction is committed as9ad005a0. Integrated reviewed G2 Chatter
+candidate f898b119 into this branch; the only conflict is the derived Each
+source_revision. Both declarations are structurally identical excluding that
+field, so regenerate it from the combined tree. Each/General/Chatter source
+identity validators all pass; no page or control contract is discarded.
+
+G2 reports its exact-f898 UI gate673tests+311subtests clean and is measuring
+its corrected private preview. Hold our lab/staging push until its release.
+Its initial private unlimited-thread preview can exceed existing media reader
+slots and return503 despite clean budget scores. Our fresh private preview
+therefore follows the checked bare sync Gunicorn serving model with one
+synchronous WSGI request at a time; inspect actual responses as well as sealed
+scores. This changes only a task-owned evidence helper, no deployed resource,
+reader concurrency bound, fixture, metric, budget or runtime code.
+
+Final focused correctness plus a separate native GPT adversarial recheck have
+zero outstanding findings. Both partial-hour endpoint and12bucket guard P2s
+are resolved. Receipt: /tmp/compound-engineering-501/ce-code-review/
+20261120-093500-fa94f6cd/review.json. External cross-model review was not run
+per owner direction; this is native-context corroboration, not cross-model.

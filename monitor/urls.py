@@ -5,7 +5,6 @@ return JSON; HTML partials for htmx swaps use a .html suffix on the same
 paths. Brand drill-down: /brands/<brand>/.
 """
 
-from django.shortcuts import redirect
 from django.urls import path
 
 from . import benchmark_views, content_views, general_views, single_brand_chart, views
@@ -13,6 +12,7 @@ from .editorial import views as editorial_views
 
 urlpatterns = [
     path("general/", general_views.general, name="general"),
+    path("chatter/", general_views.chatter, name="chatter"),
     path("general/feed/", general_views.feed, name="general_feed"),
     path("general/chart/", single_brand_chart.chart, name="general_chart"),
     path("general/chart/products/", single_brand_chart.products, name="general_chart_products"),

@@ -1,9 +1,9 @@
 {% load static i18n %}<!doctype html>
 <html lang="{{ locale }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PUSHINWEIGHT</title><link rel="icon" href="{% static 'favicon.svg' %}">
+<title>{% block title %}PUSHINWEIGHT{% endblock %}</title><link rel="icon" href="{% static 'favicon.svg' %}">
 <link rel="stylesheet" href="{% static 'fonts/pw-fonts.css' %}">
-<link rel="stylesheet" href="{% static 'monitor/general.css' %}"><link rel="stylesheet" href="{% static 'monitor/single-brand-chart.css' %}"><script src="{% static 'vendor/chartjs/chart.umd-4.4.0.min.js' %}" defer></script><script src="{% static 'monitor/general.js' %}" defer></script><script src="{% static 'monitor/single-brand-chart.js' %}" defer></script>
-</head><body class="general-page" data-audience="{{ state.audience }}" data-nav="rail" data-preferences-namespace="{{ preferences_namespace }}">
+<link rel="stylesheet" href="{% static 'monitor/general.css' %}">{% block page_assets %}<link rel="stylesheet" href="{% static 'monitor/single-brand-chart.css' %}"><script src="{% static 'vendor/chartjs/chart.umd-4.4.0.min.js' %}" defer></script><script src="{% static 'monitor/general.js' %}" defer></script><script src="{% static 'monitor/single-brand-chart.js' %}" defer></script>{% endblock %}
+</head><body class="{% block body_class %}general-page{% endblock %}" data-audience="{{ state.audience }}" data-nav="rail" data-preferences-namespace="{{ preferences_namespace }}">
 {% include 'monitor/_cyber_quan_sprite.html' %}
 <a class="skip-link" href="#page-sections">{% translate "Skip to content" %}</a>
 {% include 'monitor/general/_navigation.html' %}
@@ -20,6 +20,7 @@
   <a class="mobile-preferences" href="#general-settings" data-open-settings aria-label="{% translate 'Settings' %}">☷</a>
 </div></header>
 <main id="page-sections" tabindex="-1">
+  {% block page_content %}
   <div class="top-grid">
     {% include 'monitor/general/_editorial_panel.html' with panel=editorial.chatter %}
     {% include 'monitor/general/_editorial_panel.html' with panel=editorial.pulse %}
@@ -29,6 +30,7 @@
     <div class="opportunities-stack">{% include 'monitor/general/_panel.html' with feed=panels.free %}{% include 'monitor/general/_panel.html' with feed=panels.jobs %}</div>
     {% include 'monitor/general/_panel.html' with feed=panels.moving %}
   </div>
+  {% endblock %}
 </main>
 </div>
 <dialog id="weights-coming-soon" class="notice-dialog" aria-labelledby="weights-coming-soon-title"{% if initial_data.closed_weights_notice %} open{% endif %}>
