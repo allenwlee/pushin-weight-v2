@@ -1807,3 +1807,55 @@ records, while detected language remains absent, as in the pre-migration cohort.
 Do not retry or select a new cohort, and do not report enrichment acceptance as
 passed. Compare natural harvest/worker throughput separately without provider
 calls or pausing any live operation.
+
+
+### 2026-11-20 18:28 JST — production data gates passed; continuity check pending
+
+Current main advanced to the separately shipped Pulse/enrichment fix c4ac9c1d
+while preparation ran. Preserve both111c7149 and c4ac9c1d through the clean
+merge4d86032f. Every peer writer/config path remains byte-identical to current
+main. All42checked Each browser/performance source, asset, dependency and fixture
+paths remain byte-identical to75319511; retain its sealed evidence at that SHA.
+The incremental verifier received a focused native correctness and independent
+adversarial review, with no retained findings. Receipt:
+`/tmp/compound-engineering-501/ce-code-review/20261120-181103-0e86cbc5/`.
+Its working-tree file hashes match the committed7232f6ab delta exactly.
+
+Combined-reader/writer checks at4d86032f passed232tests and38subtests, including
+173required PostgreSQL checks with no skips/errors;40Ollija checks also passed.
+An earlier interrupted run failed because the shared local environment lacked
+its already-declared tiktoken dependency. Installing lockfile version0.14.0
+repaired that environment failure; no application or dependency-file edit was
+needed. Preserve failed-run evidence rather than labeling it a passed check.
+
+Production owner job `job-dc011gu7bikc73942pg0` succeeded from actual4d86032f
+image at18:26:11JST. The already populated cache correctly skipped initial
+rebuild (the earlier true first fill remains40.668s). Separately timed ANALYZE
+took2.606s and actual forced concurrent refresh69.880s. The complete original
+source comparison passed1,090,371rows/all20typed fields in149.549s under the
+unchanged300s total/3s statement/250ms lock/8MB limits. Source and published
+generations were0, with no dirty interval. Cache plus indexes occupy451,756,032
+bytes. Normal18:22maintenance independently reported both homepage and Each
+datasets skipped cleanly while retaining the legacy top-level JSON status.
+
+The frozen Meta/DeepSeek ×8tabs ×7/30/365days ×3rounds sweep passed144/144
+real Django chart GETs against existing production data: p95=1.4178364s,
+maximum=2.005879s, all HTTP200 with correct brand/tab/window identity. This
+is isolated read-only owner-image evidence with signed-cookie sessions; final
+public web/browser verification still requires normal database-backed sessions
+and normal background traffic.
+
+Three natural harvest cycles after0235 completed18calls each, inserting
+249/237/248posts in330.20/380.32/306.55s. No collection was paused. These
+observations do not establish that provider-dependent wall time improved.
+The fourth scheduled18:30cycle remains pending; finish the before/after
+throughput comparison before main activation. The fixed enrichment cohort's
+inconclusive/failed-artifact result remains as recorded above; do not retry it.
+
+This checkpoint changes only the plan. Reuse the4d86032f data-path and combined
+check evidence for its documentation-only descendant after verifying the diff;
+observe that descendant on the prepared cron and eventual web release. Keep
+main/web on c4ac9c1d until the remaining continuity check passes. Restore the
+preparation cron's branch to main only after main reaches the final release
+SHA. Public desktop/mobile/en/zh_cn/ja checks and actual deployed revision
+proof remain required. Record the future24hour check as pending, not completed.
