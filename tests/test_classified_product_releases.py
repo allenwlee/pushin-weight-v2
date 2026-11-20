@@ -1171,6 +1171,12 @@ def test_invalid_release_finding_publishes_feed_and_keeps_release_unresolved(mon
     rows = _enrich_posts_with_classifications(models.Post.objects.filter(pk=state.pk))
     assert rows[0]["classifications_by_brand"]["qwen"]["classification_status"] == "classified"
     assert rows[0]["classifications_by_brand"]["qwen"]["post_types"]
+    assert rows[0]["enrichment_stages"]["classification"][0] == "succeeded"
+    final = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment
+    final.changes_json.pop('feed_axes_complete')
+    final.save(update_fields=['changes_json'])
+    rows = _enrich_posts_with_classifications(models.Post.objects.filter(pk=state.pk))
+    assert rows[0]["enrichment_stages"]["classification"][0] == "succeeded"
 
 
 def test_fast_classification_is_saved_before_slow_sibling_finishes(monkeypatch):
@@ -1377,3 +1383,45 @@ def test_hf_name_match_preserves_conflicting_prior_identity(monkeypatch):
         event_dossier_source=anchor.event_dossier_source,
         scope_key='pulse-self-identity-v1:' + row['finding']['finding_key'],
     ).count() == 1
+
+
+def test_unresolved_promotion_saves_sentiment_without_changing_existing_promotion(monkeypatch, client):
+    state, runner, transport = setup_cycle(monkeypatch)
+    prior = models.PostUntrackedBrandPromotion.objects.create(
+        post=state.post, promotion_keys=['general'], evidence={'source': 'previous'},
+        contract_version='previous', taxonomy_version='previous', prompt_version='previous',
+        model='previous', provider_role='previous',
+    )
+    original = transport.messages_create
+
+    def uncertain_promotion(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['binding:missing_subject']['noul'] = 0.9
+        return result
+
+    transport.messages_create = uncertain_promotion
+    runner._run_post_fetch([], run_id='uncertain-promotion')
+    state.refresh_from_db()
+    assert state.classification_status == 'pending'
+    selected = models.PostBrandClassificationState.objects.get(post_id=state.pk, brand_id='qwen')
+    assert selected.sentiment_id == 'neutral'
+    assert models.PostBrandSignal.objects.filter(post_id=state.pk, post_type_id='releases_updates').exists()
+    prior.refresh_from_db()
+    assert prior.promotion_keys == ['general'] and prior.evidence == {'source': 'previous'}
+    assert read_publication_findings(state.pk)
+    from monitor.views import _enrich_posts_with_classifications
+
+    row = _enrich_posts_with_classifications(models.Post.objects.filter(pk=state.pk))[0]
+    assert row['classifications_by_brand']['qwen']['sentiments'] == ['neutral']
+    assert row['enrichment_stages']['classification'][0] == 'succeeded'
+    response = client.post('/api/v2/post-synthesis-demands/', data=json.dumps({
+        'post_ids': [state.pk], 'poll_only': True, 'locale': 'en',
+    }), content_type='application/json', secure=True)
+    assert response.status_code == 200
+    assert not any('analysis pending' in badge['message'].lower()
+                   for badge in response.json()['results'][0]['processing_badges'])
+    other = models.Brand.objects.create(nickname='unclassified-brand')
+    models.PostBrand.objects.create(post=state.post, brand=other)
+    row = _enrich_posts_with_classifications(models.Post.objects.filter(pk=state.pk))[0]
+    assert row['enrichment_stages']['classification'][0] == 'pending'

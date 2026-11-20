@@ -17,7 +17,7 @@ import json
 import ipaddress
 import logging
 import re
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
@@ -1236,6 +1236,45 @@ def _enrichment_status(
     return PostEnrichmentState.Status.PENDING
 
 
+def _feed_axes_complete_post_ids(post_ids: list[str], *, brand_pairs=None, state_rows=None) -> set[str]:
+    """Identify posts whose selected judgments explicitly saved the feed axes."""
+    if not post_ids:
+        return set()
+    from core.classification_contract import COMPRESSED_CLASSIFIER_REVISIONS
+
+    expected: dict[str, set[str]] = defaultdict(set)
+    actual: dict[str, set[str]] = defaultdict(set)
+    if brand_pairs is None:
+        brand_pairs = PostBrand.objects.filter(post_id__in=post_ids).values_list("post_id", "brand_id")
+    if state_rows is None:
+        state_rows = PostBrandClassificationState.objects.filter(post_id__in=post_ids).values(
+            "post_id", "brand_id", "selected_final_judgment__changes_json",
+            "selected_final_judgment__prompt_version", "selected_final_judgment__validation_state",
+        )
+    selected_ids = set(post_ids)
+    for post_id, brand_id in brand_pairs:
+        if str(post_id) not in selected_ids:
+            continue
+        expected[str(post_id)].add(str(brand_id))
+    # The preceding production release saved feed-only results without a
+    # marker; its validated combined final lacks a release output manifest.
+    for row in state_rows:
+        post_id = str(row["post_id"])
+        if post_id not in selected_ids:
+            continue
+        changes = row["selected_final_judgment__changes_json"]
+        if not isinstance(changes, dict):
+            continue
+        earlier_feed_only = (
+            row["selected_final_judgment__prompt_version"] == COMPRESSED_CLASSIFIER_REVISIONS[2]
+            and row["selected_final_judgment__validation_state"] == "validated"
+            and "release_output" not in changes
+        )
+        if changes.get("feed_axes_complete") is True or earlier_feed_only:
+            actual[post_id].add(str(row["brand_id"]))
+    return {post_id for post_id, brands in expected.items() if brands and brands <= actual[post_id]}
+
+
 def _enrichment_status_label(status: str, locale: str) -> str:
     """Return compact accessible copy without changing the feed layout."""
     if status == PostEnrichmentState.Status.PENDING:
@@ -1268,11 +1307,11 @@ _FIRST_ATTEMPT_PROCESSING_MINUTES = {
 }
 
 
-def _enrichment_stage_states(state: dict[str, Any], now: datetime) -> dict[str, tuple[str, int]]:
+def _enrichment_stage_states(state: dict[str, Any], now: datetime, *, feed_axes_complete: bool = False) -> dict[str, tuple[str, int]]:
     active = bool(state["claim_owner"] and state["claim_expires_at"] and state["claim_expires_at"] > now)
     return {
         stage: (
-            "not_requested" if stage == "translation" and not state.get("translation_requested", True) else "processing" if active and state[f"{stage}_status"] == "pending" else state[f"{stage}_status"],
+            "not_requested" if stage == "translation" and not state.get("translation_requested", True) else "succeeded" if stage == "classification" and feed_axes_complete else "processing" if active and state[f"{stage}_status"] == "pending" else state[f"{stage}_status"],
             state[f"{stage}_attempts"],
         )
         for stage in ("translation", "classification")
@@ -2118,6 +2157,8 @@ def _enrich_posts_with_classifications(
         ).values(
             "post_id", "brand_id", "taxonomy_version",
             "china_national_stance_id", "us_national_stance_id",
+            "selected_final_judgment__changes_json", "selected_final_judgment__prompt_version",
+            "selected_final_judgment__validation_state",
         )
     )
 
@@ -2146,9 +2187,14 @@ def _enrich_posts_with_classifications(
             "claim_owner", "claim_expires_at",
         )
     )
+    feed_axes_complete = _feed_axes_complete_post_ids(
+        [str(state["post_id"]) for state in enrichment_rows if state["classification_status"] != "succeeded"],
+        brand_pairs=((post.tweet_id, pb.brand_id) for post in posts for pb in post.brands.all()),
+        state_rows=current_state_rows,
+    )
     enrichment_by_tweet = {
         state["post_id"]: _enrichment_status(
-            state["translation_status"], state["classification_status"], state["translation_requested"]
+            state["translation_status"], "succeeded" if str(state["post_id"]) in feed_axes_complete else state["classification_status"], state["translation_requested"]
         )
         for state in enrichment_rows
     }
@@ -2158,7 +2204,7 @@ def _enrich_posts_with_classifications(
     }
     enrichment_now = django_timezone.now()
     enrichment_stages_by_tweet = {
-        state["post_id"]: _enrichment_stage_states(state, enrichment_now)
+        state["post_id"]: _enrichment_stage_states(state, enrichment_now, feed_axes_complete=str(state["post_id"]) in feed_axes_complete)
         for state in enrichment_rows
     }
 
@@ -5511,12 +5557,16 @@ def post_synthesis_demands(request: HttpRequest) -> JsonResponse:
         )
     projections = read_post_content_many(posts)
     inspected_at = django_timezone.now()
-    states = {
-        state["post_id"]: _enrichment_stage_states(state, inspected_at)
-        for state in PostEnrichmentState.objects.filter(post_id__in=unique_ids).values(
+    enrichment_states = list(PostEnrichmentState.objects.filter(post_id__in=unique_ids).values(
             "post_id", "translation_status", "translation_attempts", "translation_requested",
             "classification_status", "classification_attempts", "claim_owner", "claim_expires_at",
-        )
+        ))
+    feed_axes_complete = _feed_axes_complete_post_ids([
+        str(state["post_id"]) for state in enrichment_states if state["classification_status"] != "succeeded"
+    ])
+    states = {
+        state["post_id"]: _enrichment_stage_states(state, inspected_at, feed_axes_complete=str(state["post_id"]) in feed_axes_complete)
+        for state in enrichment_states
     }
     return JsonResponse(
         {

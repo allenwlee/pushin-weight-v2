@@ -471,6 +471,9 @@ def persist_v4_extensions(
                 final_judgment_id=final_judgment_id,
             )
 
+    if result.get("promotion_unresolved") is True:
+        return "preserved"
+
     promotions = result.get("untracked_brand_promotions")
     subjects = result.get("promoted_subjects")
     if not isinstance(promotions, list) or not isinstance(subjects, list):

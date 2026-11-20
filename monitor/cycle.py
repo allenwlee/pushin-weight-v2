@@ -515,6 +515,7 @@ def _persist_classification_trace(
     fingerprint: str,
     release_manifest: dict[str, Any] | None = None,
     release_unresolved: bool = False,
+    promotion_unresolved: bool = False,
 ) -> dict[str, Any]:
     """Persist primary → review → final history for every attributed brand.
 
@@ -536,6 +537,7 @@ def _persist_classification_trace(
             fingerprint=fingerprint,
             release_manifest=release_manifest,
             release_unresolved=release_unresolved,
+            promotion_unresolved=promotion_unresolved,
         )
     stages = {
         stage: _trace_stage_payload(trace, stage)
@@ -636,6 +638,7 @@ def _persist_two_role_classification_trace(
     fingerprint: str,
     release_manifest: dict[str, Any] | None = None,
     release_unresolved: bool = False,
+    promotion_unresolved: bool = False,
 ) -> dict[str, Any]:
     """Persist a matching content + brand-interpretation pair and final atomically."""
     stages = {stage: _trace_stage_payload(trace, stage) for stage in (
@@ -663,6 +666,8 @@ def _persist_two_role_classification_trace(
         # Only the publisher's source-bound answer supplies this metadata.
         # Never accept a provider/caller's arbitrary trace changes_json.
         metadata["final"]["changes_json"]["release_output"] = validate_output_manifest(release_manifest)
+    if observed_revisions == COMPRESSED_CLASSIFIER_REVISIONS and (release_unresolved or promotion_unresolved):
+        metadata["final"]["changes_json"]["feed_axes_complete"] = True
     expected_revisions = dict(zip(
         ("content", "brand_interpretation", "final"), observed_revisions,
         strict=True,
@@ -1244,6 +1249,7 @@ def _publish_stage1_classification(
                 fingerprint=fingerprint,
                 release_manifest=release_manifest,
                 release_unresolved=result.get("release_unresolved") is True,
+                promotion_unresolved=result.get("promotion_unresolved") is True,
             )
 
         content_provenance = _v4_stage_provenance(
@@ -1356,7 +1362,7 @@ def _publish_stage1_classification(
             from core.classified_product_releases import persist_publication_findings
 
             persist_publication_findings(post=post, findings=release_findings)
-        if cfg is not None and not result.get("release_unresolved"):
+        if cfg is not None and not result.get("release_unresolved") and not result.get("promotion_unresolved"):
             _finish_enrichment_stage(
                 post_ids=[post_id],
                 run_id=run_id,
@@ -4392,15 +4398,16 @@ class CycleRunner:
             if tid not in published_results:
                 publish_result(tweet, result)
             result, flag_result, removed_subjects = published_results[tid]
-            if flag_result is not None and flag_result.outcome in {"persisted", "cleared"}:
+            if flag_result is not None and flag_result.outcome in {"persisted", "cleared", "preserved"}:
                 counters["n_tracked_promotion_subjects_removed"] += removed_subjects
-                if not result.get("release_unresolved"):
+                if not result.get("release_unresolved") and not result.get("promotion_unresolved"):
                     classification_succeeded.add(tid)
-                counters[
-                    "n_unsanctioned_persisted"
-                    if flag_result.outcome == "persisted"
-                    else "n_unsanctioned_cleared"
-                ] += 1
+                if flag_result.outcome != "preserved":
+                    counters[
+                        "n_unsanctioned_persisted"
+                        if flag_result.outcome == "persisted"
+                        else "n_unsanctioned_cleared"
+                    ] += 1
                 if repair_manifest is not None or pulse_backfill:
                     # Exact Stage 1 repair is not a targeted-extraction run.
                     counters["n_classifications_published"] = (

@@ -677,13 +677,52 @@ def finish(case, prepared, raw_jev_document):
         if canonical is None:
             errors.append("canonical_classification_rejected")
     errors = list(dict.fromkeys(errors))
-    release_unresolved = bool(errors) and set(errors) <= {
-        "invalid_release_findings", "invalid_jev_answers", "release_questions_invalid",
-    } and all(key.startswith("release:") for key in invalid)
+    promotion_errors = {
+        "unresolved_post_promotion", "unresolved_promoted_subject",
+        "unsupported_subject_evidence", "promoted_subject_is_tracked",
+        "post_flags_subject_binding_disagreement", "promoted_subject_missing",
+        "inconsistent_post_promotions_across_brands",
+    }
+    release_errors = {"invalid_release_findings", "invalid_jev_answers", "release_questions_invalid"}
+    promotion_question_ids = {meta["missing_subject_question"]}
+    promotion_question_ids.update(
+        actual for mapping in meta["question_map"].values()
+        for key, actual in mapping.items() if key in POST_QUESTIONS
+    )
+    promotion_question_ids.update(
+        question for binding in meta["bindings"] for question in binding["questions"].values()
+    )
+    promotion_unresolved = bool(set(errors) & promotion_errors or set(invalid) & promotion_question_ids) and set(errors) <= (
+        promotion_errors | release_errors | {"content_parser_rejected"}
+    ) and all(key.startswith("release:") or key in promotion_question_ids for key in invalid)
+    if promotion_unresolved:
+        # Validate the independent brand axes without treating uncertain
+        # promotion data as a negative promotion decision.
+        feed_contract, feed_documents = _role_documents(case, by_brand, [], [])
+        try:
+            feed_content = parser._two_role_parse_fixed_slots(
+                feed_documents["content"], feed_contract, "content", request_profile="deepseek_0731"
+            )
+            feed_row = feed_content[str(case["case_id"])]
+            brand_row = parsed["brand_interpretation"][str(case["case_id"])]
+            merged = [{"brand_id": brand, **feed_row["by_brand"][brand],
+                       **brand_row["by_brand"][brand]} for brand in targets]
+            canonical = parser.parse_stage1_v4_classifications(merged, targets)
+            if canonical is None:
+                promotion_unresolved = False
+            else:
+                parsed["content"] = feed_content
+        except (ValueError, TypeError, KeyError):
+            promotion_unresolved = False
+    release_unresolved = bool(meta.get("release_error") or "release_questions_invalid" in errors) and set(errors) <= (
+        release_errors | (promotion_errors | {"content_parser_rejected"} if promotion_unresolved else set())
+    ) and all(key.startswith("release:") or (promotion_unresolved and key in promotion_question_ids) for key in invalid)
     publication = {"by_brand": canonical or {}, "untracked_brand_promotions": promotions,
-                   "promoted_subjects": subjects, "valid": not errors or release_unresolved}
+                   "promoted_subjects": subjects, "valid": not errors or release_unresolved or promotion_unresolved}
     if release_unresolved:
         publication["release_unresolved"] = True
+    if promotion_unresolved:
+        publication["promotion_unresolved"] = True
     if release_valid:
         publication["release_findings"] = tuple(selected_findings)
         publication["release_findings_version"] = SCHEMA
@@ -802,7 +841,7 @@ def classify_batch(tweets, brand_registry, client, *, max_tokens, on_batch_error
                 )
 
             output = _run_prepared_case(case, first, call, release_channels=channels)
-            if not output["contract_valid"] and not output["publication_result"].get("release_unresolved"):
+            if not output["contract_valid"] and not output["publication_result"].get("valid"):
                 partial = output["publication_result"]
                 if partial.get("release_independent_valid"):
                     return {"valid": False, "release_only": True,

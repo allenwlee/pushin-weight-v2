@@ -38,3 +38,38 @@ class PulsePipelineBrowserTests(StaticLiveServerTestCase):
                 self.assertEqual(link.get_attribute("href"), expected_url)
             finally:
                 browser.close()
+
+    def test_uncertain_promotion_shows_saved_feed_sentiment_and_no_analysis_pending(self):
+        from django.utils import timezone
+
+        with pytest.MonkeyPatch.context() as patch:
+            state, runner, transport = setup_cycle(patch)
+            state.post.created_at = timezone.now()
+            state.post.fetched_at = timezone.now()
+            state.post.save(update_fields=['created_at', 'fetched_at'])
+            original = transport.messages_create
+
+            def uncertain_promotion(**kwargs):
+                result = original(**kwargs)
+                if not kwargs['model'].startswith('deepseek'):
+                    result['answers']['binding:missing_subject']['noul'] = 0.9
+                return result
+
+            transport.messages_create = uncertain_promotion
+            runner._run_post_fetch([], run_id='browser-feed-partial')
+        state.refresh_from_db()
+        self.assertEqual(state.classification_status, 'pending')
+        with sync_playwright() as browser_api:
+            browser = browser_api.chromium.launch()
+            try:
+                page = browser.new_page(viewport={'width': 1440, 'height': 900})
+                self.assertEqual(page.goto(self.live_server_url + '/?locale=en').status, 200)
+                row = page.locator('[data-tweet-id="combined-cycle"]')
+                self.assertEqual(row.count(), 1)
+                self.assertTrue(row.is_visible())
+                self.assertIn('neutral', row.get_attribute('data-sentiments'))
+                self.assertIn('releases_updates', row.get_attribute('data-post-types'))
+                self.assertEqual(row.get_attribute('data-enrichment-status'), 'succeeded')
+                self.assertEqual(row.locator('[aria-label*="Analysis pending"]').count(), 0)
+            finally:
+                browser.close()

@@ -481,3 +481,91 @@ def test_selected_production_configuration_runs_six_posts_concurrently(monkeypat
         Client(), max_tokens=4096, max_workers=cfg.pulse_classification_concurrency,
     )
     assert all(result["valid"] for result in results)
+
+
+def test_uncertain_promotion_does_not_discard_valid_sentiment_and_post_type():
+    from x_monitor.compressed_classifier import run_case
+
+    def call(provider, request, stage):
+        if provider == 'ds':
+            return extraction()
+        response = answers(request)
+        response['answers']['binding:missing_subject']['noul'] = 0.9
+        return response
+
+    result = run_case(case(), call, release_channels=('api', 'weights'))
+    assert result['publication_result']['valid'] is True
+    assert result['publication_result']['promotion_unresolved'] is True
+    assert result['publication_result']['by_brand']['qwen']['sentiment'] == 'neutral'
+    assert 'releases_updates' in result['publication_result']['by_brand']['qwen']['post_types']
+
+
+def test_missing_promotion_answer_preserves_valid_feed_and_release_decisions():
+    from x_monitor.compressed_classifier import run_case
+
+    def call(provider, request, stage):
+        if provider == 'ds':
+            return extraction()
+        response = answers(request)
+        response['answers'].pop('binding:missing_subject')
+        return response
+
+    result = run_case(case(), call, release_channels=('api', 'weights'))
+    assert result['publication_result']['valid'] is True
+    assert result['publication_result']['promotion_unresolved'] is True
+    assert result['publication_result'].get('release_unresolved') is not True
+    assert result['publication_result']['release_independent_valid'] is True
+    assert result['publication_result']['by_brand']['qwen']['sentiment'] == 'neutral'
+
+
+def test_missing_sentiment_answer_is_not_treated_as_promotion_uncertainty():
+    from x_monitor.compressed_classifier import run_case
+
+    def call(provider, request, stage):
+        if provider == 'ds':
+            return extraction()
+        response = answers(request)
+        response['answers'].pop('positive')
+        response['answers'].pop('binding:missing_subject')
+        return response
+
+    result = run_case(case(), call, release_channels=('api', 'weights'))
+    assert result['publication_result']['valid'] is False
+    assert result['publication_result'].get('promotion_unresolved') is not True
+
+
+def test_missing_subject_binding_answer_keeps_independent_feed_axes():
+    from x_monitor.compressed_classifier import build_jev, finish
+
+    sample = case()
+    sample['state']['source_text'] = 'Qwen4 is useful. Try OrbitChat today!'
+    prepared = build_jev(sample, {'entities': [
+        {'name': 'OrbitChat', 'source': 'post', 'evidence': 'Try OrbitChat today!'},
+    ]})
+    response = answers(prepared['request'])
+    response['answers'].pop('binding:S0:pitch')
+    result = finish(sample, prepared, response)
+    assert result['publication_result']['valid'] is True
+    assert result['publication_result']['promotion_unresolved'] is True
+    assert result['publication_result']['by_brand']['qwen']['sentiment'] == 'neutral'
+
+
+def test_release_and_promotion_can_both_remain_unresolved_with_valid_feed():
+    from x_monitor.compressed_classifier import run_case
+
+    def call(provider, request, stage):
+        if provider == 'ds':
+            document = extraction()
+            document['release_findings'] = {'schema': 'invalid', 'findings': []}
+            return document
+        response = answers(request)
+        response['answers'].pop('binding:missing_subject')
+        return response
+
+    result = run_case(case(), call, release_channels=('api', 'weights'))
+    publication = result['publication_result']
+    assert publication['valid'] is True
+    assert publication['release_unresolved'] is True
+    assert publication['promotion_unresolved'] is True
+    assert 'release_findings' not in publication
+    assert publication['by_brand']['qwen']['sentiment'] == 'neutral'
