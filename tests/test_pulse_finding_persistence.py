@@ -499,3 +499,24 @@ def test_saved_pulse_sweep_does_not_expand_unverified_hf_name(settings):
     outcome = queue_saved_release_claims(limit=100, persist=True)
     assert outcome['queued'] == 0
     assert not models.CollectionJob.objects.filter(operation='release_acquisition').exists()
+
+
+def test_duplicate_identical_assertions_are_saved_once_and_remain_replayable():
+    from core.product_release_dossiers import persist_classified_release_findings, read_saved_release_findings
+
+    post = models.Post.objects.create(tweet_id="duplicate-finding", text="Released Model A")
+    value = finding()
+    value["assertions"].append(dict(value["assertions"][0]))
+    args = {
+        "source": {"kind": "post", "id": post.pk},
+        "revision_id": "d" * 64,
+        "content_fingerprint": "e" * 64,
+        "extraction_version": "classifier-v1",
+        "findings": [value],
+    }
+    first = persist_classified_release_findings(**args)
+    second = persist_classified_release_findings(**args)
+    assert first["findings"][0]["anchor_claim_id"] == second["findings"][0]["anchor_claim_id"]
+    saved = read_saved_release_findings(source=args["source"], revision_id=args["revision_id"])
+    assert saved[0]["finding"]["assertions"] == value["assertions"]
+    assert models.EventDossierClaim.objects.filter(scope_key__startswith="pulse-assertion-v1:").count() == 1

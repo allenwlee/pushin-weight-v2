@@ -514,6 +514,7 @@ def _persist_classification_trace(
     run_id: str,
     fingerprint: str,
     release_manifest: dict[str, Any] | None = None,
+    release_unresolved: bool = False,
 ) -> dict[str, Any]:
     """Persist primary → review → final history for every attributed brand.
 
@@ -534,6 +535,7 @@ def _persist_classification_trace(
             run_id=run_id,
             fingerprint=fingerprint,
             release_manifest=release_manifest,
+            release_unresolved=release_unresolved,
         )
     stages = {
         stage: _trace_stage_payload(trace, stage)
@@ -633,6 +635,7 @@ def _persist_two_role_classification_trace(
     run_id: str,
     fingerprint: str,
     release_manifest: dict[str, Any] | None = None,
+    release_unresolved: bool = False,
 ) -> dict[str, Any]:
     """Persist a matching content + brand-interpretation pair and final atomically."""
     stages = {stage: _trace_stage_payload(trace, stage) for stage in (
@@ -654,7 +657,7 @@ def _persist_two_role_classification_trace(
         raise ValueError("classification_trace_role_revision_mismatch")
     from core.classification_contract import COMPRESSED_CLASSIFIER_REVISIONS
 
-    if observed_revisions == COMPRESSED_CLASSIFIER_REVISIONS:
+    if observed_revisions == COMPRESSED_CLASSIFIER_REVISIONS and not release_unresolved:
         from core.classified_product_releases import validate_output_manifest
 
         # Only the publisher's source-bound answer supplies this metadata.
@@ -1170,6 +1173,11 @@ def _publish_stage1_classification(
         if (claim is None or claim.claim_run_id != str(run_id)[:128]
                 or claim.claim_expires_at is None or claim.claim_expires_at <= django_timezone.now()):
             return None
+        if result.get("release_unresolved") is True:
+            from core.classified_product_releases import _complete_release_publication
+
+            if _complete_release_publication(post_id) is not None:
+                return None
         expected = set(
             PostBrand.objects.filter(post_id=post_id).values_list(
                 "brand_id", flat=True
@@ -1219,7 +1227,7 @@ def _publish_stage1_classification(
         if is_combined != (tweet.get("_classification_pipeline") == "compressed8_pulse_v1"):
             raise ValueError("classification_release_producer_mismatch")
         release_findings = release_manifest = None
-        if is_combined:
+        if is_combined and not result.get("release_unresolved"):
             from core.classified_product_releases import prepare_publication_findings
 
             release_findings, release_manifest = prepare_publication_findings(post=post, tweet=tweet, result=result)
@@ -1235,6 +1243,7 @@ def _publish_stage1_classification(
                 run_id=run_id,
                 fingerprint=fingerprint,
                 release_manifest=release_manifest,
+                release_unresolved=result.get("release_unresolved") is True,
             )
 
         content_provenance = _v4_stage_provenance(
@@ -1343,11 +1352,11 @@ def _publish_stage1_classification(
             )
             if flag_result.outcome not in {"persisted", "cleared"}:
                 raise ValueError("classifier_flags_invalid")
-        if is_combined:
+        if is_combined and not result.get("release_unresolved"):
             from core.classified_product_releases import persist_publication_findings
 
             persist_publication_findings(post=post, findings=release_findings)
-        if cfg is not None:
+        if cfg is not None and not result.get("release_unresolved"):
             _finish_enrichment_stage(
                 post_ids=[post_id],
                 run_id=run_id,
@@ -4235,6 +4244,56 @@ class CycleRunner:
                     from monitor.pulse_processing import report_error
 
                     report_error(code=code, stage="classification", post_id=tweet["tweet_id"], run_id=run_id)
+        published_results = {}
+
+        def publish_result(tweet, result):
+            tid = str(tweet["tweet_id"])
+            if tid not in classification_publish_ids:
+                return
+            removed_subjects = 0
+            try:
+                if dispatch_guard is not None:
+                    dispatch_guard.lease.assert_held()
+                if isinstance(result, dict) and result.get("valid") is True and result.get("promoted_subjects"):
+                    from monitor.classification_persistence import (
+                        discard_tracked_promotion_subjects,
+                    )
+
+                    from monitor.promotion_subject_matcher import (
+                        PromotionSubjectMatcher,
+                    )
+
+                    original_count = len(result["promoted_subjects"])
+                    catalog = tweet.get("tracked_brand_catalog") or []
+                    matcher = PromotionSubjectMatcher(catalog) if classifier_profile == "compressed8_pulse_v1" else None
+                    result = discard_tracked_promotion_subjects(result, catalog, matcher=matcher)
+                    removed_subjects = original_count - len(result["promoted_subjects"])
+                publication_model = self.cfg.llm.classifier_model
+                if classifier_profile == "compressed8_pulse_v1":
+                    from x_monitor.compressed_classifier import COMBINED_MODEL
+
+                    publication_model = COMBINED_MODEL
+                flag_result = _publish_stage1_classification(
+                    post_id=tid,
+                    result=result if isinstance(result, dict) else {},
+                    tweet=tweet,
+                    model=publication_model,
+                    run_id=run_id,
+                    cfg=enrichment_cfg,
+                )
+            except (DatabaseError, ValueError, KeyError) as exc:
+                logger.warning("_run_post_fetch: Stage 1 publish failed for %s: %s", tid, exc)
+                classification_errors[tid] = (
+                    str(exc) if isinstance(exc, ValueError) and str(exc).startswith("classification_")
+                    else "classification_publication_conflict"
+                )[:128]
+                if classifier_profile == "compressed8_pulse_v1":
+                    from monitor.pulse_processing import report_error
+
+                    report_error(code="classification_publication_conflict", stage="publication", post_id=tid, run_id=run_id)
+                flag_result = None
+            published_results[tid] = (result, flag_result, removed_subjects)
+
         if classification_tweets and classifier_client is None:
             logger.warning("_run_post_fetch: no classifier client — skipping classify")
             self._error_counts["classifier_unavailable"] += 1
@@ -4266,12 +4325,21 @@ class CycleRunner:
                     model=self.cfg.llm.classifier_model,
                     on_batch_error=classification_failed,
                     deadline=classification_deadline,
-                    max_workers=enrichment_cfg.classification_concurrency,
+                    max_workers=(
+                        enrichment_cfg.pulse_classification_concurrency
+                        if classifier_profile == "compressed8_pulse_v1"
+                        else enrichment_cfg.classification_concurrency
+                    ),
                     telemetry_context={"stage": "post_fetch", "run_id": run_id},
                     tracked_catalog_snapshot=(
                         classification_catalog
                         if classifier_profile in {"deepseek_0731", "compressed8_pulse_v1"}
                         else None
+                    ),
+                    **(
+                        {"on_result": publish_result}
+                        if classifier_profile == "compressed8_pulse_v1" and repair_manifest is None
+                        else {}
                     ),
                 )
             except Exception as exc:
@@ -4321,51 +4389,13 @@ class CycleRunner:
             tid = tweet["tweet_id"]
             if tid not in classification_publish_ids:
                 continue
-            removed_subjects = 0
-            try:
-                if dispatch_guard is not None:
-                    dispatch_guard.lease.assert_held()
-                if isinstance(result, dict) and result.get("valid") is True and result.get("promoted_subjects"):
-                    from monitor.classification_persistence import (
-                        discard_tracked_promotion_subjects,
-                    )
-
-                    from monitor.promotion_subject_matcher import (
-                        PromotionSubjectMatcher,
-                    )
-
-                    original_count = len(result["promoted_subjects"])
-                    catalog = tweet.get("tracked_brand_catalog") or []
-                    matcher = PromotionSubjectMatcher(catalog) if classifier_profile == "compressed8_pulse_v1" else None
-                    result = discard_tracked_promotion_subjects(result, catalog, matcher=matcher)
-                    removed_subjects = original_count - len(result["promoted_subjects"])
-                publication_model = self.cfg.llm.classifier_model
-                if classifier_profile == "compressed8_pulse_v1":
-                    from x_monitor.compressed_classifier import COMBINED_MODEL
-
-                    publication_model = COMBINED_MODEL
-                flag_result = _publish_stage1_classification(
-                    post_id=tid,
-                    result=result if isinstance(result, dict) else {},
-                    tweet=tweet,
-                    model=publication_model,
-                    run_id=run_id,
-                    cfg=enrichment_cfg,
-                )
-            except (DatabaseError, ValueError, KeyError) as exc:
-                logger.warning("_run_post_fetch: Stage 1 publish failed for %s: %s", tid, exc)
-                classification_errors[tid] = (
-                    str(exc) if isinstance(exc, ValueError) and str(exc).startswith("classification_")
-                    else "classification_publication_conflict"
-                )[:128]
-                if classifier_profile == "compressed8_pulse_v1":
-                    from monitor.pulse_processing import report_error
-
-                    report_error(code="classification_publication_conflict", stage="publication", post_id=tid, run_id=run_id)
-                flag_result = None
+            if tid not in published_results:
+                publish_result(tweet, result)
+            result, flag_result, removed_subjects = published_results[tid]
             if flag_result is not None and flag_result.outcome in {"persisted", "cleared"}:
                 counters["n_tracked_promotion_subjects_removed"] += removed_subjects
-                classification_succeeded.add(tid)
+                if not result.get("release_unresolved"):
+                    classification_succeeded.add(tid)
                 counters[
                     "n_unsanctioned_persisted"
                     if flag_result.outcome == "persisted"

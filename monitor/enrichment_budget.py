@@ -31,6 +31,8 @@ def config_fingerprint(cfg) -> str:
     if llm.pop("classifier_pipeline", "two_role") == "compressed8_pulse_v1":
         llm["classifier_pipeline"] = "compressed8_pulse_v1"
         pricing += "+typesafe-2026-11-17-bound-v1"
+    else:
+        enrichment.pop("pulse_classification_concurrency", None)
     payload = {
         "enrichment": enrichment,
         "llm": llm,

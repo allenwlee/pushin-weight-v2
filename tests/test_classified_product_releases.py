@@ -1153,3 +1153,227 @@ def test_pulse_backfill_reuses_a_saved_empty_decision(monkeypatch):
         post_ids={state.post_id}, pulse_backfill=True)
     assert saved_result(state.post_id) == ("selected", ())
     assert len(transport.calls) == 2
+
+
+def test_invalid_release_finding_publishes_feed_and_keeps_release_unresolved(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    transport.document["release_findings"] = {"schema": "invalid", "findings": []}
+    runner._run_post_fetch([], run_id="partial-feed")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    assert len(transport.calls) == 2
+    assert models.PostBrandClassificationState.objects.filter(post_id=state.pk).exists()
+    assert selected_release_revision(state.pk) is None
+    assert read_publication_findings(state.pk) is None
+    assert not models.EventDossier.objects.exists()
+    from monitor.views import _enrich_posts_with_classifications
+
+    rows = _enrich_posts_with_classifications(models.Post.objects.filter(pk=state.pk))
+    assert rows[0]["classifications_by_brand"]["qwen"]["classification_status"] == "classified"
+    assert rows[0]["classifications_by_brand"]["qwen"]["post_types"]
+
+
+def test_fast_classification_is_saved_before_slow_sibling_finishes(monkeypatch):
+    import threading
+    import time
+    from django.db import close_old_connections
+    from x_monitor import compressed_classifier
+
+    state, runner, _ = setup_cycle(monkeypatch)
+    other = models.Post.objects.create(
+        tweet_id="slow-sibling", text=state.post.text, lang="en", lang_detected="en",
+    )
+    models.PostBrand.objects.create(post=other, brand_id="qwen")
+    models.PostEnrichmentState.objects.create(post=other, translation_status="succeeded")
+    release = threading.Event()
+    slow_started = threading.Event()
+    original = compressed_classifier._run_prepared_case
+
+    def delayed(sample, request, call, *, release_channels):
+        if sample["case_id"] == "slow-sibling":
+            slow_started.set()
+            assert release.wait(10)
+        return original(sample, request, call, release_channels=release_channels)
+
+    monkeypatch.setattr(compressed_classifier, "_run_prepared_case", delayed)
+    errors = []
+
+    def run():
+        close_old_connections()
+        try:
+            runner._run_post_fetch([], run_id="streaming-test")
+        except Exception as exc:
+            errors.append(exc)
+        finally:
+            close_old_connections()
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    try:
+        assert slow_started.wait(10)
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            if models.PostBrandClassificationState.objects.filter(post_id=state.pk).exists():
+                break
+            time.sleep(.05)
+        assert models.PostBrandClassificationState.objects.filter(post_id=state.pk).exists()
+        assert not models.PostBrandClassificationState.objects.filter(post_id=other.pk).exists()
+    finally:
+        release.set()
+        thread.join(timeout=15)
+    assert not thread.is_alive()
+    assert not errors
+    assert models.PostBrandClassificationState.objects.filter(post_id=other.pk).exists()
+
+
+@pytest.mark.parametrize("ambiguous", [False, True])
+def test_source_named_existing_hf_product_resolves_only_when_unique(monkeypatch, ambiguous):
+    from core.product_identity import resolve_saved_release_finding
+
+    state, runner, _ = setup_cycle(monkeypatch)
+    product = models.Product.objects.create(
+        display_name="Qwen4", brand_id="qwen", repo_id="Qwen/Qwen4", hf_type="model",
+    )
+    if ambiguous:
+        other = models.Brand.objects.create(nickname="other")
+        models.Product.objects.create(
+            display_name="Qwen4", brand=other, repo_id="other/Qwen4", hf_type="model",
+        )
+    runner._run_post_fetch([], run_id="hf-exact-identity")
+    rows = read_publication_findings(state.pk)
+    assert rows and len(rows) == 1
+    outcome = resolve_saved_release_finding(claim_id=rows[0]["anchor_claim_id"])
+    if ambiguous:
+        assert outcome["status"] == "unresolved"
+    else:
+        assert outcome["status"] == "matched"
+        assert outcome["product_id"] == product.pk
+        from core.pulse_readers import release_page
+
+        entry = next(row for row in release_page()["entries"] if row["id"] == outcome["dossier_id"])
+        assert entry["product_key"] == str(product.product_key)
+        assert entry["brand"]["id"] == "qwen"
+
+
+def test_unresolved_release_retry_preserves_previous_selected_release(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    runner._run_post_fetch([], run_id="first-complete")
+    previous = selected_release_revision(state.pk)
+    before = read_publication_findings(state.pk)
+    assert previous and before
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(
+        classification_status="pending", classification_next_attempt_at=None,
+    )
+    transport.document["release_findings"] = {"schema": "invalid", "findings": []}
+    runner._run_post_fetch([], run_id="incomplete-retry")
+    assert selected_release_revision(state.pk) == previous
+    assert read_publication_findings(state.pk) == before
+
+
+def test_feed_only_retry_preserves_prior_release_only(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+
+    def missing_feed_answer(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers'].pop('relevant')
+        return result
+
+    transport.messages_create = missing_feed_answer
+    runner._run_post_fetch([], run_id='release-only-first')
+    previous = selected_release_revision(state.pk)
+    assert previous and read_publication_findings(state.pk)
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    transport.messages_create = original
+    transport.document['release_findings'] = {'schema': 'invalid', 'findings': []}
+    runner._run_post_fetch([], run_id='feed-only-next')
+    assert models.PostBrandClassificationState.objects.filter(post_id=state.pk).exists()
+    assert selected_release_revision(state.pk) == previous
+    assert read_publication_findings(state.pk)
+
+
+def test_missing_release_answer_still_publishes_feed(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+
+    def missing_release_answer(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers'].pop('release:0:category')
+        return result
+
+    transport.messages_create = missing_release_answer
+    runner._run_post_fetch([], run_id='missing-release-answer')
+    state.refresh_from_db()
+    assert state.classification_status == 'pending'
+    assert models.PostBrandClassificationState.objects.filter(post_id=state.pk).exists()
+    assert selected_release_revision(state.pk) is None
+
+
+def test_hf_name_match_does_not_override_named_publisher(monkeypatch):
+    from core.product_identity import resolve_saved_release_finding
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    product = models.Product.objects.create(display_name='Qwen4', brand_id='qwen', repo_id='Qwen/Qwen4', hf_type='model')
+    statement = 'OtherCorp released Qwen4 weights today.'
+    state.post.text = statement
+    state.post.save(update_fields=['text'])
+    transport.document['entities'][0]['evidence'] = statement
+    finding = transport.document['release_findings']['findings'][0]
+    finding['assertions'][0]['source_excerpt'] = statement
+    finding['issuer_evidence'] = {'relation': 'attributed_party', 'source_locator': 'post',
+                                  'source_excerpt': statement, 'observed_name': 'OtherCorp'}
+    runner._run_post_fetch([], run_id='different-publisher')
+    row = read_publication_findings(state.pk)[0]
+    assert row['finding']['issuer_evidence']['observed_name'] == 'OtherCorp'
+    outcome = resolve_saved_release_finding(claim_id=row['anchor_claim_id'])
+    assert outcome.get('product_id') != product.pk
+
+
+def test_hf_name_match_does_not_override_nonmodel_category(monkeypatch):
+    from core.product_identity import resolve_saved_release_finding
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    models.Product.objects.create(display_name='Qwen4', brand_id='qwen', repo_id='Qwen/Qwen4', hf_type='model')
+    original = transport.messages_create
+
+    def app_category(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['release:0:category'] = answers(
+                json.loads(kwargs['messages'][0]['content']),
+                choices={'release:0:category': 'other'},
+            )['answers']['release:0:category']
+        return result
+
+    transport.messages_create = app_category
+    runner._run_post_fetch([], run_id='nonmodel-category')
+    row = read_publication_findings(state.pk)[0]
+    assert row['finding']['category'] == 'other'
+    assert resolve_saved_release_finding(claim_id=row['anchor_claim_id'])['status'] == 'unresolved'
+
+
+def test_hf_name_match_preserves_conflicting_prior_identity(monkeypatch):
+    from core.event_dossiers import add_claim
+    from core.product_identity import resolve_saved_release_finding
+
+    state, runner, _ = setup_cycle(monkeypatch)
+    models.Product.objects.create(display_name='Qwen4', brand_id='qwen', repo_id='Qwen/Qwen4', hf_type='model')
+    previous = models.Product.objects.create(display_name='Earlier model', brand_id='qwen')
+    runner._run_post_fetch([], run_id='prior-identity-conflict')
+    row = read_publication_findings(state.pk)[0]
+    anchor = models.EventDossierClaim.objects.get(pk=row['anchor_claim_id'])
+    add_claim(
+        anchor.event_dossier_source_id, claim_kind='release_context',
+        scope_key='pulse-self-identity-v1:' + row['finding']['finding_key'],
+        assertion_text='Previously selected product', source_excerpt=anchor.source_excerpt,
+        source_locator=anchor.source_locator, extraction_version='pulse-product-identity-v1',
+        source_archive_id=anchor.source_archive_id, reported_brand_id='qwen', reported_product_id=previous.pk,
+    )
+    outcome = resolve_saved_release_finding(claim_id=anchor.pk)
+    assert outcome['status'] == 'unresolved'
+    assert models.EventDossierClaim.objects.filter(
+        event_dossier_source=anchor.event_dossier_source,
+        scope_key='pulse-self-identity-v1:' + row['finding']['finding_key'],
+    ).count() == 1

@@ -9,7 +9,7 @@ import json
 import math
 import re
 import unicodedata
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from functools import lru_cache
 
@@ -677,8 +677,13 @@ def finish(case, prepared, raw_jev_document):
         if canonical is None:
             errors.append("canonical_classification_rejected")
     errors = list(dict.fromkeys(errors))
+    release_unresolved = bool(errors) and set(errors) <= {
+        "invalid_release_findings", "invalid_jev_answers", "release_questions_invalid",
+    } and all(key.startswith("release:") for key in invalid)
     publication = {"by_brand": canonical or {}, "untracked_brand_promotions": promotions,
-                   "promoted_subjects": subjects, "valid": not errors}
+                   "promoted_subjects": subjects, "valid": not errors or release_unresolved}
+    if release_unresolved:
+        publication["release_unresolved"] = True
     if release_valid:
         publication["release_findings"] = tuple(selected_findings)
         publication["release_findings_version"] = SCHEMA
@@ -699,7 +704,7 @@ def run_case(case, call, *, release_channels=None, max_tokens=parser.CLASSIFIER_
 def _run_prepared_case(case, request, call, *, release_channels):
     extraction = call("ds", request, "extraction")
     prepared = build_jev(case, extraction, release_channels=release_channels)
-    if not prepared["metadata"]["context_valid"] or prepared["metadata"]["release_error"]:
+    if not prepared["metadata"]["context_valid"]:
         result = finish(case, prepared, {})
         result["request_stages"] = ["extraction"]
         return result
@@ -738,7 +743,7 @@ def _case_for_tweet(tweet, catalog):
 
 
 def classify_batch(tweets, brand_registry, client, *, max_tokens, on_batch_error=None, deadline=None,
-                   max_workers=3, telemetry_context=None, tracked_catalog_snapshot=None):
+                   max_workers=3, telemetry_context=None, tracked_catalog_snapshot=None, on_result=None):
     """The shared entry point's selected route: one extraction/Jev pair per post.
 
     The same wrapper reserves and accounts for every physical attempt. It does
@@ -797,7 +802,7 @@ def classify_batch(tweets, brand_registry, client, *, max_tokens, on_batch_error
                 )
 
             output = _run_prepared_case(case, first, call, release_channels=channels)
-            if not output["contract_valid"]:
+            if not output["contract_valid"] and not output["publication_result"].get("release_unresolved"):
                 partial = output["publication_result"]
                 if partial.get("release_independent_valid"):
                     return {"valid": False, "release_only": True,
@@ -824,4 +829,12 @@ def classify_batch(tweets, brand_registry, client, *, max_tokens, on_batch_error
                 release(*pair)
 
     with ThreadPoolExecutor(max_workers=min(max(1, max_workers), len(tweets))) as executor:
-        return list(executor.map(classify, tweets))
+        if on_result is None:
+            return list(executor.map(classify, tweets))
+        futures = {executor.submit(classify, tweet): index for index, tweet in enumerate(tweets)}
+        results = [None] * len(tweets)
+        for future in as_completed(futures):
+            index = futures[future]
+            results[index] = future.result()
+            on_result(tweets[index], results[index])
+        return results

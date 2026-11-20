@@ -255,6 +255,41 @@ def resolve_saved_release_finding(*, claim_id):
             trusted_finding = bool(published and any(
                 row["anchor_claim_id"] == str(claim.pk) for row in published
             ))
+    if (
+        product is None and trusted_finding and identity_is_specific
+        and dossier.current_review_id is None and not identity_conflict and not brand_id and not attributed_name
+        and not (isinstance(issuer, dict) and issuer.get("observed_name"))
+        and finding.get("category") in {"model-llm", "model-other"}
+        and finding.get("novelty") != "unresolved"
+    ):
+        from core.event_dossiers import add_claim
+
+        matches = list(Product.objects.filter(display_name__iexact=name)[:2])
+        if (
+            len(matches) == 1 and matches[0].brand_id and matches[0].hf_type == "model"
+            and (matches[0].repo_id or "").casefold().endswith("/" + name.casefold())
+        ):
+            linked = dossier.sources.get(post_id=claim.event_dossier_source.post_id)
+            prior = EventDossierClaim.objects.filter(
+                event_dossier_source=linked,
+                scope_key="pulse-self-identity-v1:" + finding["finding_key"],
+                extraction_version="pulse-product-identity-v1",
+                source_archive_id=claim.source_archive_id,
+            )
+            prior_ids = set(prior.values_list("reported_product_id", flat=True).distinct()[:2])
+            if not prior_ids or prior_ids == {matches[0].pk}:
+                product = matches[0]
+                identity_claim = prior.order_by("pk").first() if prior_ids else add_claim(
+                    linked.pk, claim_kind="release_context",
+                    scope_key="pulse-self-identity-v1:" + finding["finding_key"],
+                    assertion_text="Source names an existing Hugging Face model with this exact name",
+                    source_excerpt=claim.source_excerpt, source_locator=claim.source_locator,
+                    extraction_version="pulse-product-identity-v1",
+                    source_archive_id=claim.source_archive_id,
+                    reported_brand_id=product.brand_id, reported_product_id=product.pk,
+                )
+            else:
+                identity_conflict = True
     trusted_publisher = bool(trusted_finding and (brand_id or attributed_name))
     if trusted_publisher and not brand_id:
         from django.db import connection
