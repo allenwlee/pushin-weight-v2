@@ -325,7 +325,25 @@ body.pw-v20.pw-general[data-pw-page="each"] .each-tab:focus-visible { outline: 2
 body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel { padding: 0; background: transparent; border: 0; border-radius: 0; overflow: visible; }
 body.pw-v20.pw-general[data-pw-page="each"] .each-chart-mode { color: var(--ink); font-size: 12px; }
 body.pw-v20.pw-general[data-pw-page="each"] .each-chart-mode input { accent-color: var(--blue); }
-body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend i { border-color: #0000001a; }
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-face { display: grid; grid-template-columns: 142px minmax(0, 1fr); gap: 14px; align-items: stretch; }
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-face .pw-canvas-box { min-width: 0; height: 420px; }
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel canvas.home-chart { height: 100% !important; }
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend { display: block; position: relative; min-width: 0; height: 100%; margin: 0 !important; padding: 0; overflow: visible; }
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend button { display: flex; position: absolute; left: 0; right: 0; transform: translateY(-50%); align-items: center; gap: 8px; min-height: 26px; padding: 0 4px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--muted); text-align: left; font: inherit; font-size: 11px; line-height: 1.2; cursor: pointer; }
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend button:hover,
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend button[data-emphasized="true"] { background: #f0f4ff; border-color: #dce5fa; color: var(--ink); }
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend button[aria-pressed="true"] { box-shadow: inset 2px 0 0 var(--each-category-color); }
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend i { flex: 0 0 17px; width: 17px; height: 3px; border: 0; border-radius: 1px; background: var(--each-category-color); }
+body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend button span { display: block; flex: 1 1 0; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+body.pw-v20.pw-general[data-pw-page="each"] .each-legend-hint { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+@media (max-width: 600px) {
+  body.pw-v20.pw-general[data-pw-page="each"] .each-chart-face { grid-template-columns: 110px minmax(0, 1fr); gap: 7px; }
+  body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend { font-size: 10px; }
+  body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend button { min-height: 24px; gap: 5px; padding: 0 2px; font-size: 10px; }
+  body.pw-v20.pw-general[data-pw-page="each"] .each-chart-panel .legend i { flex-basis: 12px; width: 12px; }
+  body.pw-v20.pw-general[data-pw-page="each"] .each-legend-hint { font-size: 10px; }
+}
 body.pw-v20.pw-general[data-pw-page="each"] .headline-voices .voice-chip { background: var(--tint); color: #446aca; }
 body.pw-v20.pw-general[data-pw-page="each"] .headline-voices .voice-chip:hover { background: #dfe8ff; color: var(--blue); }
 

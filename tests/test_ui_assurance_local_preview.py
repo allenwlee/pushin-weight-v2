@@ -182,6 +182,17 @@ def test_preview_serves_verified_bytes_and_blocks_redirects(
             assert b"/__bridgewright_assets/htmx.js" in homepage
             assert b"unchanged" in homepage
 
+            for path in ('/dashboard/each?brand=deepseek', '/dashboard/each/?brand=deepseek'):
+                with local_preview._NO_REDIRECT_OPENER.open(
+                    f'{preview.origin}{path}', timeout=5,
+                ) as response:
+                    each = response.read()
+                    assert response.headers['X-Bridgewright-Revision'] == _Upstream.revision
+                assert b'/__bridgewright_assets/htmx.js' in each
+                assert b'/__bridgewright_assets/chart.js' in each
+                assert b'https://unpkg.test/' not in each
+                assert b'unchanged' in each
+
             asset_path, expected = next(iter(assets.items()))
             with local_preview._NO_REDIRECT_OPENER.open(
                 f"{preview.origin}{asset_path}", timeout=5
@@ -240,3 +251,39 @@ def test_preview_rejects_non_loopback_listener(monkeypatch: pytest.MonkeyPatch) 
     assets = _fake_assets(monkeypatch)
     with pytest.raises(ValueError, match="bind 127.0.0.1"):
         local_preview.LocalPreviewServer(assets=assets, host="0.0.0.0", port=0)
+
+
+def test_fixture_bootstrap_injection_is_opt_in_and_precedes_existing_scripts():
+    bootstrap = b"window.declaredFixture = true;"
+    original = _Upstream.home
+    injected = local_preview.inject_fixture_bootstrap(original, bootstrap)
+    marker = b'<script data-pw-performance-fixture-bootstrap>' + bootstrap + b"</script>"
+    assert injected.replace(marker, b"", 1) == original
+    assert injected.index(marker) < injected.index(b" defer")
+    with local_preview.LocalPreviewServer(assets={}, port=0) as preview:
+        assert preview.fixture_bootstrap is None
+
+
+@pytest.mark.parametrize("bootstrap", [b"", b"a" * 16_385, b"</script><script>bad</script>", "not bytes"])
+def test_fixture_bootstrap_rejects_unbounded_or_breakout_bytes(bootstrap):
+    with pytest.raises(ValueError):
+        local_preview.inject_fixture_bootstrap(b"<head></head>", bootstrap)
+
+
+def test_proxy_serves_the_declared_inline_bytes_before_deferred_scripts(monkeypatch):
+    assets = _fake_assets(monkeypatch)
+    monkeypatch.setattr(_Upstream, "home", b"<html><head>" + _Upstream.home + b"</head></html>")
+    bootstrap = b"window.declaredFixture = true;"
+    with (
+        _upstream() as upstream,
+        local_preview.LocalPreviewServer(
+            assets=assets, upstream_origin=f"http://127.0.0.1:{upstream.server_port}",
+            port=0, fixture_bootstrap=bootstrap,
+        ) as preview,
+        local_preview._NO_REDIRECT_OPENER.open(preview.origin + "/", timeout=5) as response,
+    ):
+        body = response.read()
+        assert int(response.headers["Content-Length"]) == len(body)
+        assert body.count(bootstrap) == 1
+        assert body.index(bootstrap) < body.index(b" defer")
+        assert b"unchanged" in body

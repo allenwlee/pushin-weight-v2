@@ -1,0 +1,64 @@
+{
+  "schema_version": "pushinweight.each-seed/v1",
+  "seed": "each-area-seven-day",
+  "saved_commentary": {
+    "en": "Saved synthetic commentary.",
+    "zh-cn": "已保存的测试评论。",
+    "ja": "保存されたテスト解説。"
+  },
+  "brand": "deepseek",
+  "days": 7,
+  "counts": [
+    8,
+    9,
+    10,
+    8,
+    9,
+    10,
+    8
+  ],
+  "sentiments": [
+    "positive",
+    "negative",
+    "mixed",
+    "neutral"
+  ],
+  "post_types": [
+    "releases_updates",
+    "hands_on_usage",
+    "opinions_reactions"
+  ],
+  "products": [
+    "bug",
+    "complaint",
+    "testimonial"
+  ],
+  "geopolitical_modes": [
+    "reporting",
+    "framework",
+    "nationalism"
+  ],
+  "topics": [
+    "local_inference",
+    "cost_performance",
+    "evals_benchmarks"
+  ],
+  "roles": [
+    "official",
+    "staff",
+    "community",
+    "other"
+  ],
+  "languages": [
+    "en",
+    "ja",
+    "zh-Hans"
+  ],
+  "promotions": [
+    "general",
+    "spam",
+    "crypto"
+  ],
+  "base_fixture": "tests/golden/v22_mockup_fixture.json",
+  "base_fixture_sha256": "cade1fcef0b250df73fcd86a8e4364b81c8653ad45862cf88080a2ea9277daab"
+}

@@ -100,9 +100,10 @@
             <label><input type="radio" name="each-chart-mode" value="volume" data-each-mode="volume"> {% if is_zh_chrome %}按帖子数量{% elif is_ja_chrome %}投稿数{% else %}By volume of posts{% endif %}</label>
           </fieldset>
           <div class="each-chart-face">
+            <div class="legend" data-each-legend role="group" aria-label="{% if is_zh_chrome %}分类，从上到下对应堆叠顺序{% elif is_ja_chrome %}積み上げ順に上から表示した分類{% else %}Categories from top to bottom of the stack{% endif %}"></div>
             <div class="pw-canvas-box"><canvas class="home-chart" data-each-canvas aria-label="{% if is_zh_chrome %}按分类堆叠的帖子数{% elif is_ja_chrome %}分類別の積み上げ投稿数{% else %}Stacked posts by classification{% endif %}"></canvas></div>
-            <div class="legend" data-each-legend></div>
           </div>
+          <p class="each-legend-hint"><span data-each-bucket-note hidden>{% if is_zh_chrome %}每小时汇总。{% elif is_ja_chrome %}1時間ごとの集計。{% else %}1-hour totals.{% endif %} </span>{% if is_zh_chrome %}悬停或点击分类可突出显示，再次点击可取消。{% elif is_ja_chrome %}分類にカーソルを合わせるかクリックして強調表示。再度クリックで解除。{% else %}Hover or click a category to emphasize it. Click again to clear.{% endif %}</p>
           <p class="chart-state muted" data-each-status role="status" aria-live="polite" hidden></p>
         </div>
       </section>
