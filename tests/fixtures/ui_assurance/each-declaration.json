@@ -1,0 +1,98 @@
+{
+  "schema_version": "bridgewright.assurance.declaration/v1",
+  "profile": "stateful-ui-assurance/v1",
+  "source_revision": "worktree-sha256:9ac0c76fd0691de5134b43dfb52bb86b82e91e93626200bccdb972cda2b84c6a",
+  "fixture": {
+    "path": "tests/fixtures/ui_assurance/each-fixture.json",
+    "sha256": "698946a4176a66fac8972c2f97c769dc4c88ccd2a240860f8e1d12fcb9a1d4c4"
+  },
+  "generator": {
+    "name": "pushinweight-each-real-browser",
+    "version": "1.0",
+    "seed": 501
+  },
+  "controls": [
+    {
+      "id": "pin",
+      "kind": "single_select",
+      "values": [
+        "none",
+        "first",
+        "other"
+      ],
+      "initial_value": "none",
+      "reversible": true
+    },
+    {
+      "id": "hover",
+      "kind": "single_select",
+      "values": [
+        "none",
+        "first",
+        "other"
+      ],
+      "initial_value": "none",
+      "reversible": true
+    },
+    {
+      "id": "mode",
+      "kind": "single_select",
+      "values": [
+        "percent",
+        "volume"
+      ],
+      "initial_value": "percent",
+      "reversible": true
+    }
+  ],
+  "coverage_groups": [
+    {
+      "id": "each-emphasis-mode",
+      "controls": [
+        "pin",
+        "hover",
+        "mode"
+      ],
+      "strength": 3
+    }
+  ],
+  "ordered_groups": [
+    {
+      "id": "each-pin-hover-restore",
+      "actions": [
+        "pin:first",
+        "hover:other",
+        "hover:none"
+      ],
+      "strength": 3
+    }
+  ],
+  "constraints": [],
+  "invariants": [
+    {
+      "id": "each-stack-legend-tooltip-data-network",
+      "projections": [
+        "chart",
+        "counts",
+        "accessibility",
+        "network"
+      ]
+    }
+  ],
+  "races": [],
+  "seeded_regressions": [],
+  "environments": [
+    {
+      "id": "each-chromium",
+      "browser_runtime": "playwright-chromium",
+      "required": true
+    }
+  ],
+  "gates": [
+    {
+      "id": "each-runtime",
+      "scope": "affected",
+      "required": true
+    }
+  ]
+}

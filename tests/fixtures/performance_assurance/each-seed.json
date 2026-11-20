@@ -1,0 +1,233 @@
+{
+  "schema_version": "pushinweight.performance-seed/v1",
+  "purpose": "Combined deterministic input recipe for homepage, General and rich Each candidate performance workloads.",
+  "time_policy": {
+    "kind": "frozen-preview-test-clock",
+    "anchor": "Capture django.utils.timezone.now() once before preparing the preview fixture.",
+    "general_override": {
+      "symbol": "tests.general_helpers.NOW",
+      "value": "captured preview seed time"
+    },
+    "base_and_each": "The shared combined seeder patches django.utils.timezone.now to the captured anchor during all seed writes; Each uses seven Japan calendar days.",
+    "runtime_clock": "Test-only preview condition: hold django.utils.timezone.now at the returned seed anchor for every served preview request. Production clocks and settings are unchanged."
+  },
+  "inputs": [
+    {
+      "id": "base-oracle",
+      "path": "docs/ideation/mockups/06-tier1-composed.v22-master.html",
+      "sha256": "0cac263541bce45269790ef127907aef177ad26cbee7b363d0d6eef7f834c013"
+    },
+    {
+      "id": "base-fixture",
+      "path": "tests/golden/v22_mockup_fixture.json",
+      "sha256": "cade1fcef0b250df73fcd86a8e4364b81c8653ad45862cf88080a2ea9277daab"
+    },
+    {
+      "id": "base-oracle-reader",
+      "path": "tests/mockup_spec.py",
+      "sha256": "21fd72131516dd8291500a38a6f3174bcb34b46d941276c718e3dcfd9545de7b"
+    },
+    {
+      "id": "base-seeder",
+      "path": "tests/v22_support.py",
+      "sha256": "ea1d298d5b0a8b7c9be5c86a337737706f96ee1c496db90def4b62ddfc5c1037"
+    },
+    {
+      "id": "each-manifest",
+      "path": "tests/fixtures/ui_assurance/each-fixture.json",
+      "sha256": "698946a4176a66fac8972c2f97c769dc4c88ccd2a240860f8e1d12fcb9a1d4c4"
+    },
+    {
+      "id": "each-seeder",
+      "path": "tests/each_area_fixture.py",
+      "sha256": "8d3cce055fe70bf5551c15c0ed024b42fb7fb5a8830309093516d0421b6b8b2d"
+    },
+    {
+      "id": "general-contract",
+      "path": "tests/fixtures/general_feed_contract.json",
+      "sha256": "f6578c8ae5822870bb6e99a368d85be10e5b7d16484e89db22b1fd7134425d88"
+    },
+    {
+      "id": "general-seeder",
+      "path": "tests/general_helpers.py",
+      "sha256": "35d8d8bc0cc01222b48682a9f1e31f568009f0991bf40ec4b8db4401f19de321"
+    },
+    {
+      "id": "combined-seeder",
+      "path": "tests/each_performance_fixture.py",
+      "sha256": "f73708a631fe327d0e1f6007f18af8b2d7285349fa3165ce98cb19e45d7677e5"
+    },
+    {
+      "id": "harvest-coverage-seeder",
+      "path": "tests/test_chart_harvest_coverage.py",
+      "sha256": "fcf4f81a1702d00cc9377d682eadaa0123c9a5acd6d999b5f7d26ba01179b4fb"
+    },
+    {
+      "id": "ping-delay-bootstrap",
+      "path": "tests/fixtures/performance_assurance/ping-delay-bootstrap.js",
+      "sha256": "054b1e2f19d3ab329c90bf05a9224f742d38aa178960512c08006699b5e5fca7"
+    },
+    {
+      "id": "preview-transport",
+      "path": "tests/ui_assurance/local_preview.py",
+      "sha256": "7682162897688c0a8dfd8a82ea6d30045139f8b6c30278c91674122887697a3b"
+    }
+  ],
+  "recipe": [
+    {
+      "id": "general-clock",
+      "assign": "tests.general_helpers.NOW = captured_preview_seed_time",
+      "inputs": [
+        "general-seeder"
+      ]
+    },
+    {
+      "id": "base",
+      "call": "tests.v22_support.seed_real_home_orm(tests.v22_support.fixture_from_oracle())",
+      "inputs": [
+        "base-oracle",
+        "base-fixture",
+        "base-oracle-reader",
+        "base-seeder"
+      ],
+      "purpose": "Populate the real homepage/feed base records from the authored oracle and verified golden fixture."
+    },
+    {
+      "id": "base-synthesis",
+      "for_each": "post in Post.objects.filter(tweet_id__startswith=\"u3-post-\")",
+      "call": "tests.general_helpers.saved_commentary(post, texts={\"en\": post.commentary_en, \"zh-cn\": post.commentary_zh_cn, \"ja\": f\"\u4fdd\u5b58\u3055\u308c\u305f\u30c6\u30b9\u30c8\u7528\u89e3\u8aac {post.pk}\"})",
+      "inputs": [
+        "base-seeder",
+        "general-seeder",
+        "combined-seeder"
+      ],
+      "purpose": "Create complete typed EN/ZH/JA synthesis while preserving the existing base English and Chinese visible commentary verbatim; normal feed observers remain enabled.",
+      "expected_status": "ready"
+    },
+    {
+      "id": "terminal-translation-failure",
+      "writer": "core.models.PostEnrichmentState.objects.create",
+      "record": {
+        "post_id": "u3-post-0",
+        "translation_requested": true,
+        "translation_status": "failed",
+        "translation_attempts": 3,
+        "translation_first_attempt_at": "captured_preview_seed_time",
+        "translation_last_attempt_at": "captured_preview_seed_time",
+        "translation_next_attempt_at": null,
+        "translation_error_code": "fixture_terminal_translation_failure",
+        "classification_status": "succeeded",
+        "classification_attempts": 1,
+        "classification_first_attempt_at": "captured_preview_seed_time",
+        "classification_last_attempt_at": "captured_preview_seed_time",
+        "classification_next_attempt_at": null
+      },
+      "inputs": [
+        "combined-seeder"
+      ],
+      "purpose": "Render the terminal failed-stop glyph for the unchanged declared immutable processing-sprite cache expectation; no polling state is introduced."
+    },
+    {
+      "id": "each",
+      "call": "tests.each_area_fixture.seed_each_area_orm(json.loads(each_manifest))",
+      "inputs": [
+        "each-manifest",
+        "each-seeder"
+      ],
+      "expected_return": 62,
+      "effect": "Replace the base DeepSeek PostBrand associations with the manifest's 62-post, seven-day chart cohort."
+    },
+    {
+      "id": "general",
+      "for_each": "post_id, category in general_contract[\"sections\"].items()",
+      "call": "tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(post_id, category))",
+      "inputs": [
+        "general-contract",
+        "general-seeder"
+      ],
+      "scope": "The four contract section posts; classified_post uses its default qwen brand.",
+      "purpose": "Populate actual General section records and persisted saved commentary in each supported locale."
+    },
+    {
+      "id": "general-closed-job",
+      "call": "tests.general_helpers.saved_commentary(tests.general_helpers.classified_post(general_contract[\"closed_job\"], brand=\"claude\"))",
+      "inputs": [
+        "general-contract",
+        "general-seeder"
+      ],
+      "scope": "The contract closed_job post, using classified_post's default job_listings category and the explicit claude brand.",
+      "purpose": "Preserve GeneralBrowserTests.setUp's closed-brand fixture alongside the four section posts."
+    },
+    {
+      "id": "harvest-coverage",
+      "call": "tests.test_chart_harvest_coverage.record_harvest(captured_preview_seed_time, finished_at=captured_preview_seed_time, staggered=False)",
+      "inputs": [
+        "harvest-coverage-seeder",
+        "combined-seeder"
+      ],
+      "purpose": "Record completed local fixture harvest coverage at the same preview anchor without provider calls."
+    }
+  ],
+  "workloads": {
+    "homepage": [
+      "homepage-desktop",
+      "homepage-mobile"
+    ],
+    "general": [
+      "general-desktop",
+      "general-mobile"
+    ],
+    "each": [
+      "each-desktop",
+      "each-mobile"
+    ]
+  },
+  "entrypoint": {
+    "call": "tests.each_performance_fixture.seed_each_performance_orm(now=captured_preview_seed_time)",
+    "returns": "captured_preview_seed_time",
+    "inputs": [
+      "combined-seeder"
+    ]
+  },
+  "fixture_bootstrap": {
+    "input": "ping-delay-bootstrap",
+    "sha256": "054b1e2f19d3ab329c90bf05a9224f742d38aa178960512c08006699b5e5fca7",
+    "transport_input": "preview-transport",
+    "injection": "Opted-in loopback HTML only: inline script as the first child of head, before deferred application scripts. Its added HTML, DOM node and execution cost remain in the measurement.",
+    "target": "CSSStyleDeclaration.prototype.setProperty(--pw-ping-delay, value, priority)",
+    "numeric_lexeme_width": 40,
+    "raw_max_characters": 42,
+    "maximum_numeric_digits": 40,
+    "phase_ms": [
+      -2250,
+      0
+    ],
+    "transformation": "Insert ASCII zeroes immediately after the original sign until the numeric lexeme has fixed width. Preserve every original mantissa/fraction/exponent character and ms suffix; require Object.is numeric equality, including negative zero.",
+    "other_calls": "Delegate all other property calls with original receiver, arguments, priority and return value.",
+    "invalid_input": "Remove documentElement and throw; declared interaction targets become unavailable.",
+    "unchanged": "No rounding, phase freezing, metric/guard rewriting, performance.now patch, animation disabling, or production asset change."
+  },
+  "fixture_conditions": {
+    "terminal_translation_failure": {
+      "purpose": "Retain the already-declared processing-glyph sprite cache workload on a visible base post without pending work or polling.",
+      "policy": "Synthetic terminal-failure preview/test condition only; no production retry policy or persisted production data is changed.",
+      "record": {
+        "post_id": "u3-post-0",
+        "translation_requested": true,
+        "translation_status": "failed",
+        "translation_attempts": 3,
+        "translation_first_attempt_at": "captured_preview_seed_time",
+        "translation_last_attempt_at": "captured_preview_seed_time",
+        "translation_next_attempt_at": null,
+        "translation_error_code": "fixture_terminal_translation_failure",
+        "classification_status": "succeeded",
+        "classification_attempts": 1,
+        "classification_first_attempt_at": "captured_preview_seed_time",
+        "classification_last_attempt_at": "captured_preview_seed_time",
+        "classification_next_attempt_at": null
+      },
+      "preserved": "All synthesis remains locale-complete and ready; existing successful PostBrandClassificationState records and chart values are untouched.",
+      "work": "No pending enrichment state, active claims, active synthesis demands or provider calls."
+    }
+  }
+}
