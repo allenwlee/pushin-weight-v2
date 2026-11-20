@@ -272,6 +272,7 @@ EACH_CHART_STATE = """() => {
     })),
     labels: chart.data.labels.length,
     lastTick: x.ticks.length ? x.ticks[x.ticks.length - 1].value : null,
+    lastTickText: x.ticks.length ? x.ticks[x.ticks.length - 1].label : null,
     tickCount: x.ticks.length,
     legend: [...document.querySelectorAll('[data-each-legend] > *')].map((node) => node.textContent.trim()),
   };
@@ -317,6 +318,144 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
             arg=tab,
         )
 
+    def test_sparse_one_day_uses_exact_hourly_areas_in_both_modes_and_locales(self):
+        from datetime import datetime, timedelta
+
+        from core.classification_contract import (
+            CONTRACT_VERSION,
+            PROMPT_VERSION,
+            TAXONOMY_VERSION,
+        )
+        from core.models import (
+            Post,
+            PostBrand,
+            PostBrandClassificationState,
+            PostBrandSignal,
+            PostTypeKey,
+        )
+
+        Brand.objects.get_or_create(nickname='llama', defaults={'display_name': 'Meta Llama', 'accent_color': '#0089f4'})
+        # Derive the request's real 24-hour coverage boundary; authored counts
+        # below are the independent oracle, not values read from a live page.
+        raw = self.client.get('/dashboard/each/chart/', {
+            'brand': 'llama', 'tab': 'lang', 'window': 1, 'locale': 'en',
+        }).json()
+        self.assertEqual(len(raw['days']), 288)
+        start = datetime.fromisoformat(raw['days'][0])
+        PostBrand.objects.filter(brand_id='llama').delete()
+        for key in ('releases_updates', 'opinions_reactions'):
+            PostTypeKey.objects.get_or_create(key=key)
+        # At each hour: one English release at minute0, nine Japanese opinions
+        # at minute5. There are no posts in the other ten five-minute buckets.
+        for hour in range(24):
+            for ordinal in range(10):
+                post = Post.objects.create(
+                    tweet_id=f'each-hourly-{hour}-{ordinal}',
+                    created_at=start + timedelta(hours=hour, minutes=0 if ordinal == 0 else 5, seconds=1),
+                    lang_detected='en' if ordinal == 0 else 'ja',
+                    text='Synthetic sparse chart post.',
+                )
+                PostBrand.objects.create(post=post, brand_id='llama')
+                PostBrandClassificationState.objects.create(
+                    post=post, brand_id='llama', contract_version=CONTRACT_VERSION,
+                    taxonomy_version=TAXONOMY_VERSION, prompt_version=PROMPT_VERSION,
+                    model='fixture', input_context_fingerprint=f'{hour * 10 + ordinal + 1:064x}',
+                    outcome='classified', sentiment_id='positive',
+                )
+                PostBrandSignal.objects.create(
+                    post=post, brand_id='llama', sentiment_id='positive',
+                    post_type_id='releases_updates' if ordinal == 0 else 'opinions_reactions',
+                )
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for width, locale, note in (
+                    (1440, 'en', '1-hour totals.'), (390, 'zh_cn', '每小时汇总。'),
+                    (390, 'ja', '1時間ごとの集計。'),
+                ):
+                    context = self._context(browser)
+                    page = context.new_page()
+                    page.set_viewport_size({'width': width, 'height': 1000})
+                    for tab, first, second in (
+                        ('lang', 'en', 'ja'),
+                        ('post_types', 'releases_updates', 'opinions_reactions'),
+                    ):
+                        with self.subTest(width=width, locale=locale, tab=tab):
+                            with page.expect_response(lambda response: '/dashboard/each/chart/' in response.url and response.status == 200) as response:
+                                page.goto(f'{self.live_server_url}/dashboard/each?brand=llama&tab={tab}&window=1&locale={locale}', wait_until='networkidle')
+                            source = response.value.json()
+                            self.assertEqual(len(source['days']), 288, 'The API retains raw five-minute precision')
+                            self.assertEqual(sum(source['totals']), 240)
+                            self.assertEqual(sum(source['series'][first]), 24)
+                            self.assertEqual(sum(source['series'][second]), 216)
+                            self._wait_for_chart(page, tab)
+                            percent = page.evaluate("""() => {
+                              const c=Chart.getChart(document.querySelector('[data-each-canvas]'));
+                              return {length:c.data.labels.length, type:c.config.type,
+                                entries:Object.fromEntries(c.data.datasets.map((d,i)=>[d.categoryKey,
+                                  {values:d.data,segments:c.getDatasetMeta(i).dataset.segments.length,fill:d.fill}])),
+                                lastTick:c.scales.x.ticks.at(-1).value};
+                            }""")
+                            self.assertEqual(percent['length'], 24, 'Sparse five-minute columns must become hourly area points')
+                            self.assertEqual(page.locator('[data-each-bucket-note]').inner_text().strip(), note)
+                            self.assertEqual(percent['type'], 'line')
+                            self.assertTrue(all(item['fill'] == 'stack' for item in percent['entries'].values()))
+                            self.assertEqual(percent['entries'][first]['values'], [10] * 24)
+                            self.assertEqual(percent['entries'][second]['values'], [90] * 24)
+                            self.assertEqual(percent['entries'][first]['segments'], 1)
+                            self.assertEqual(percent['entries'][second]['segments'], 1)
+                            self.assertEqual(percent['lastTick'], 23, 'The latest bucket stays on the time axis')
+                            page.locator('[data-each-mode=volume]').check()
+                            self._wait_for_chart(page, tab)
+                            volume = page.evaluate("""() => Object.fromEntries(Chart.getChart(document.querySelector('[data-each-canvas]')).data.datasets.map(d=>[d.categoryKey,d.data]))""")
+                            self.assertEqual(volume[first], [1] * 24)
+                            self.assertEqual(volume[second], [9] * 24)
+                            page.locator('[data-each-mode=percent]').check()
+                            self._wait_for_chart(page, tab)
+                            self.assertEqual(page.evaluate("Chart.getChart(document.querySelector('[data-each-canvas]')).data.labels.length"), 24)
+                    context.close()
+            finally:
+                browser.close()
+
+    def test_plot_height_and_left_legend_stay_fixed_for_every_tab_size_and_locale(self):
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for width in (1440, 390):
+                    for locale in ('en', 'zh_cn', 'ja'):
+                        context = self._context(browser)
+                        page = context.new_page()
+                        page.set_viewport_size({'width': width, 'height': 1000})
+                        page.goto(f'{self.live_server_url}/dashboard/each?brand=deepseek&window=7&locale={locale}', wait_until='networkidle')
+                        tabs = page.locator('[data-each-tab]')
+                        for index in range(tabs.count()):
+                            tab = tabs.nth(index).get_attribute('data-each-tab')
+                            with self.subTest(width=width, locale=locale, tab=tab):
+                                tabs.nth(index).click()
+                                self._wait_for_chart(page, tab)
+                                geometry = page.evaluate("""() => {
+                                  const c=Chart.getChart(document.querySelector('[data-each-canvas]'));
+                                  const r=c.canvas.getBoundingClientRect();
+                                  return {height:r.height,top:r.top+c.chartArea.top,bottom:r.top+c.chartArea.bottom,
+                                    rows:[...document.querySelectorAll('[data-each-category]')].map(b=>{
+                                      const q=b.getBoundingClientRect(),label=b.querySelector('span');
+                                      return {key:b.dataset.eachCategory,top:q.top,bottom:q.bottom,center:(q.top+q.bottom)/2,
+                                        clipped:label.scrollWidth>label.clientWidth+1};
+                                    }),keys:c.data.datasets.map(d=>d.categoryKey)};
+                                }""")
+                                self.assertAlmostEqual(geometry['height'], 420, delta=1)
+                                self.assertEqual([row['key'] for row in geometry['rows']], geometry['keys'][::-1])
+                                count = len(geometry['rows'])
+                                for i, row in enumerate(geometry['rows']):
+                                    expected = (geometry['top'] + geometry['bottom']) / 2 if count == 1 else geometry['top'] + i * (geometry['bottom'] - geometry['top']) / (count - 1)
+                                    self.assertAlmostEqual(row['center'], expected, delta=1)
+                                    self.assertFalse(row['clipped'])
+                                    if i:
+                                        self.assertLessEqual(geometry['rows'][i - 1]['bottom'], row['top'] + 1, f'Legend overlap: {width}/{locale}/{tab}')
+                        context.close()
+            finally:
+                browser.close()
+
     def test_every_tab_uses_the_shared_axis_and_area_style(self):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
@@ -339,6 +478,8 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
                         tabs.nth(index).click()
                         self._wait_for_chart(page, tab)
                         state = page.evaluate(EACH_CHART_STATE)
+                        self.assertAlmostEqual(page.locator('[data-each-canvas]').bounding_box()['height'], 420, delta=1, msg='The plot height must stay fixed across category counts')
+                        self.assertTrue(page.locator('[data-each-bucket-note]').is_hidden())
                         self.assertEqual(state["yPosition"], "right")
                         self.assertIs(state["yBorder"], False)
                         self.assertEqual(state["gridDash"], [1, 3])
@@ -821,7 +962,58 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_partial_hour_uses_the_actual_harvest_end_on_axis_and_tooltip(self):
+        from datetime import datetime, timedelta
+        from unittest.mock import patch
+        from zoneinfo import ZoneInfo
+
+        from core.models import Post, PostBrand
+
+        baseline = self.client.get('/dashboard/each/chart/', {
+            'brand': 'deepseek', 'tab': 'lang', 'window': 1, 'locale': 'en',
+        }).json()
+        self.assertEqual(len(baseline['days']), 288)
+        end = datetime.fromisoformat(baseline['days'][-1]) + timedelta(minutes=5)
+        post = Post.objects.create(tweet_id='partial-hour-last-post', created_at=end - timedelta(minutes=1), lang_detected='en', text='Synthetic last covered post.')
+        PostBrand.objects.create(post=post, brand_id='deepseek')
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for lag in (5, 10):
+                    with patch('monitor.views._dashboard_now', return_value=end + timedelta(minutes=lag)):
+                        context = self._context(browser)
+                        page = context.new_page()
+                        with page.expect_response(lambda response: '/dashboard/each/chart/' in response.url and response.status == 200) as response:
+                            page.goto(f'{self.live_server_url}/dashboard/each?brand=deepseek&tab=lang&window=1&locale=en', wait_until='networkidle')
+                        source = response.value.json()
+                        self.assertEqual(len(source['days']), 288 - lag // 5)
+                        actual_end = datetime.fromisoformat(source['days'][-1]) + timedelta(minutes=5)
+                        self.assertEqual(actual_end, end)
+                        local_end = end.astimezone(ZoneInfo('Asia/Tokyo'))
+                        expected_clock = f"{local_end.hour % 12 or 12}:{local_end.minute:02d}{'am' if local_end.hour < 12 else 'pm'}"
+                        for mode in ('percent', 'volume', 'percent'):
+                            with self.subTest(lag=lag, mode=mode):
+                                page.locator(f'[data-each-mode={mode}]').check()
+                                self._wait_for_chart(page, 'lang')
+                                state = page.evaluate(EACH_CHART_STATE)
+                                self.assertEqual(state['labels'], 24)
+                                self.assertEqual(state['lastTickText'], expected_clock, 'Axis must not claim unharvested time')
+                                title = page.evaluate("""() => {
+                                  const c=Chart.getChart(document.querySelector('[data-each-canvas]'));
+                                  const datasetIndex=c.data.datasets.findIndex(d=>d.categoryKey==='en');
+                                  const index=c.data.labels.length-1, point=c.getDatasetMeta(datasetIndex).data[index];
+                                  c.tooltip.setActiveElements([{datasetIndex,index}],{x:point.x,y:point.y});
+                                  c.update('none');return c.tooltip.title;
+                                }""")
+                                self.assertTrue(title[0].endswith(' – ' + expected_clock))
+                        context.close()
+            finally:
+                browser.close()
+
     def test_newest_tick_is_kept_in_every_window_and_language(self):
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -851,17 +1043,25 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
                                     "() => JSON.parse(document.getElementById('each-initial-chart').textContent).days"
                                 )
                             )
-                            self.assertEqual(len(days), state["labels"])
+                            display_days = days[::12] if window == 1 else days
+                            self.assertEqual(len(display_days), state["labels"])
                             # Date axes end on the latest day; the 365-day axis labels month
                             # starts, so its newest tick is the latest month start.
                             newest = (
                                 max(index for index, day in enumerate(days) if day.endswith("-01"))
                                 if window == 365
-                                else len(days) - 1
+                                else len(display_days) - 1
                             )
                             self.assertEqual(state["lastTick"], newest)
                             self.assertGreaterEqual(state["tickCount"], 2)
                             if window == 1:
+                                self.assertEqual(len(days), 288, 'Raw API precision is preserved')
+                                end = (datetime.fromisoformat(days[-1]) + timedelta(minutes=5)).astimezone(ZoneInfo('Asia/Tokyo'))
+                                expected_clock = (
+                                    f"{end.hour % 12 or 12}:{end.minute:02d}{'am' if end.hour < 12 else 'pm'}"
+                                    if locale == 'en' else f'{end.hour:02d}:{end.minute:02d}'
+                                )
+                                self.assertEqual(state['lastTickText'], expected_clock, 'Hourly display must retain the exact latest harvest boundary')
                                 self.assertLessEqual(state["tickCount"], 8)
                 context.close()
             finally:

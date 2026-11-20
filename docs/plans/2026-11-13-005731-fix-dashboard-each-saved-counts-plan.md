@@ -1288,3 +1288,106 @@ staging worktree are retained for continuation. No production mutation occurred.
 This close-out is a documentation-only feature-branch commit. Staging stays at
 verified product revision1a842e82; failed acceptance checks do not authorize
 promotion or another deployment.
+
+
+### Owner-reported bar-like rendering investigation — 2026-11-20T09:02:46+09:00
+
+No product change yet. Real staging revision1a842e82 was inspected in Chromium
+through the actual Each URL/template/assets/chart endpoint at1440×1000,en.
+Meta7/30 andKimi30 render continuous filled areas. DeepSeek1has288five-minute
+buckets,34empty percentage buckets and28separate line segments; sparse
+DeepSeek365has251empty days and14segments. Actual chart/dataset types are
+`line`,with`fill:stack`,monotone curves and skipped NULL percentage points;
+they are not configured as bars. Screenshots and runtime metadata are under
+`.local/2026-11-20-each-area/`.
+
+An in-memory browser hypothesis with`spanGaps:true` joined the1-day segments
+without changing data arrays, but also painted through months without
+observations in365days. It is rejected as a product fix; nothing deployed or
+committed. The existing plan explicitly preserves5-minute one-day buckets, so
+changing aggregation also cannot be smuggled in as styling. Await the owner's
+brand/tab/window (and which visual effect matches) to pin the exact reported
+case before choosing a convergent fix. Optional clarification requested in
+chat; previous refresh/latency/parity failures remain unchanged. No DB load
+probes, provider calls, schema/resource/worker changes or production action.
+
+
+### Screenshot-confirmed one-day area correction — November20 JST
+
+The09:06owner screenshots identify staging Meta,1day,percentage mode,Language
+andPostType. The raw288five-minute buckets include169empty buckets for the
+captured day. Thin separated100% samples cause the bar-like appearance.
+A browser-only unlimited gap-joining experiment was rejected because it also
+paints across unobserved months in365days.
+
+For1day only, the renderer now sums twelve raw count buckets into each1-hour
+display point, then computes weighted percentages. The rawAPI retains288
+five-minute rows and the original cached payload is retained for redraws.
+The day totals remain exact. Empty hours stayNULL forpercent/zero forvolume.
+The localized1-hour note and tooltip start/end make this display interval
+explicit. Existing axis logic keeps the exact latest harvest boundary.
+7/30/365points, category ordering, colors, pills, focus/pin and all backend
+contracts remain unchanged. This explicitly adjusts visual aggregation for
+the reported defect while preserving the plan's raw five-minute API contract.
+
+The before/after comparison opened in Chrome on allenwlee at
+`/Users/allenwlee/Downloads/agents/2026-11-20/2026-11-20-091527-each-hourly-comparison.html`;
+it preserves161language posts and190type assignments. Source evidence remains
+on fuchitalee in`.local/2026-11-20-each-area/`. The new real-route sparse240-post
+regression was red in all six locale/tab cases (288points versus24). The repaired
+run and shared-style/latest-boundary checks pass3requiredPGtests+22subtests,
+0skips/errors. Node22passes pin weighted percentages, exactcounts, emptyhours,
+rawcache, redraws, no addedrequests, and tooltipranges. Simplification preserves
+Chart.js's native daily tooltip title and improves the test payload-identity pin.
+
+Each's source identity is refreshed; its controls/38obligations and all fixture
+inputs remain unchanged. The additional hourly regression is mandatory in the
+candidate suite; it does not replace the original96-case seven-day normalized
+matrix. Full candidate verification/review and staging rollout remain pending.
+This independently requested visual correction retains the staging endpoint.
+Earlier backend refresh, latency and full-parity failures remain failed and
+are not rerun or relabeled. No model/schema/backend/query/provider/resource or
+schedule change is included; no production action is authorized.
+
+
+### Fixed chart height and coverage boundary — November20 09:57 JST
+
+Owner adds a fixed plot height and a left legend justified to that height.
+Each canvas is now420px at desktop/mobile widths; category count no longer
+changes it. Legend centers remain evenly distributed from the plot top to
+bottom; compact11pxdesktop/10pxmobile labels and a110pxmobile column retain
+wrapping without overlap. OnlyEach-scoped pro-general.css selectors change.
+The old dynamic fitLegendHeight routine and resize hook are removed.
+
+Adversarial review also found that286/287raw five-minute buckets produce a
+partial last display hour. The axis now uses each aggregate actual bucket_end,
+matching its tooltip instead of implying another5/10minutes of coverage.
+The new real-route lag5/10 regression was red for all6mode/lag cases; it now
+passes. Node23checks pass. Five selected browser tests pass, including all
+48tab/width/locale fixed-height/legend-geometry cases;0required skips/errors.
+Evidence: .local/2026-11-20-each-area/height-browser.log and Node output.
+
+G2 Chatter candidate f898b119acb99f93d24eb91ac20f281702d64417 is coordinated
+for integration before the final combined gate. Hold the staging push until
+G2 observes its candidate and releases the lane; preserve its new archive and
+shared declaration identities. Earlier backend staging failures stay failed.
+
+
+### Final corrective review and metadata repair — November20 10:09 JST
+
+The broad affected run completed560tests+305subtests with0required skips/errors
+(268requiredPG); its sole failure was the expected immutable JavaScript asset
+fingerprint in the performance declaration after changing that asset. This run
+is failed, not passed. Update only the two Each cache_expectations JS paths to
+the new ManifestStaticFilesStorage fingerprint; preserve cache requirements, all
+workloads, budgets, profiles, run counts, metric engines and12fixture inputs.
+The focused rerun passes4tests, including that exact declaration check and the
+real-route hourly/partial-end/fixed-height tests; no required skips/errors.
+
+The second adversarial finding is also repaired: exactly12raw covered buckets
+now retain raw display points instead of collapsing to an invisible one-point
+area. The boundary guard is<=12. New1/11/12/13bucket regression was red at12
+(expected12, actual1), then all24Node tests passed in both modes and redraws.
+No server coverage policy or data is changed. The final combined candidate
+will replay the complete affected suite plus broader controls and fresh sealed
+performance measurements; do not reuse the failed affected run as a pass.

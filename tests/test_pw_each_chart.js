@@ -43,7 +43,7 @@ function fixture({ brand = 'llama', tab = 'product_labels', translated = false, 
 }
 
 function harness(data = fixture(), options = {}) {
-  const nodes = Object.fromEntries(['root', 'canvas', 'panel', 'face', 'legend', 'status', 'box', 'headline', 'headlineStatus'].map(key => [key, new Element()]));
+  const nodes = Object.fromEntries(['root', 'canvas', 'panel', 'face', 'legend', 'status', 'box', 'headline', 'headlineStatus', 'bucketNote'].map(key => [key, new Element()]));
   nodes.root.dataset = { selectedBrand: data.brand, selectedTab: data.tab, chartUrl: '/chart/', chartError: 'Refresh failed', chartEmpty: 'Empty', chartLoading: 'Loading' };
   const modes = ['percent', 'volume'].map(value => Object.assign(new Element('input'), { value, checked: value === 'percent' }));
   const locale = options.locale || 'en';
@@ -58,7 +58,7 @@ function harness(data = fixture(), options = {}) {
   });
   const pulses = ['llama', 'deepseek'].map(brand => { const node = new Element('button'); node.dataset.pwPulseEntry = brand; return node; });
   const selectors = { '[data-each-canvas]': nodes.canvas, '.each-chart-panel': nodes.panel, '.each-chart-face': nodes.face,
-    '[data-each-legend]': nodes.legend, '[data-each-status]': nodes.status, '.pw-canvas-box': nodes.box };
+    '[data-each-legend]': nodes.legend, '[data-each-status]': nodes.status, '.pw-canvas-box': nodes.box, '[data-each-bucket-note]': nodes.bucketNote };
   nodes.root.querySelector = selector => selectors[selector] || null;
   nodes.root.querySelectorAll = selector => selector === '[data-each-tab]' ? tabs : selector === '[data-each-mode]' ? modes : [];
   nodes.face.querySelector = selector => selectors[selector] || null;
@@ -72,7 +72,7 @@ function harness(data = fixture(), options = {}) {
     charts.push(this); this.update();
   }
   const document = {
-    body: { dataset: { pwWindow: '7', pwLocale: locale } },
+    body: { dataset: { pwWindow: String(data.window_days), pwLocale: locale } },
     querySelector: selector => selector === '[data-pw-each-chart]' ? nodes.root : selector === '[data-pw-headline]' ? nodes.headline : null,
     querySelectorAll: selector => selector === '[data-pw-pulse-entry]' ? pulses : [],
     getElementById: id => id === 'each-initial-chart' ? { textContent: JSON.stringify(data) } : null,
@@ -86,12 +86,15 @@ function harness(data = fixture(), options = {}) {
     clearTimeout: id => { if (timers[id - 1]) timers[id - 1].cancelled = true; }, requestAnimationFrame: callback => callback(),
   };
   if (options.time) window.pwTime = options.time;
-  vm.runInNewContext(source, { document, window, Intl, URL, URLSearchParams, AbortController, console,
+  let receivedPayload;
+  const json = Object.create(JSON);
+  json.parse = text => { receivedPayload = JSON.parse(text); return receivedPayload; };
+  vm.runInNewContext(source, { document, window, JSON: json, Intl, URL, URLSearchParams, AbortController, console,
     CustomEvent: function () {}, fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })) });
   const getChart = () => charts.at(-1);
   const button = key => nodes.legend.children.find(child => child.dataset.eachCategory === key);
   const switchMode = value => { modes.forEach(node => { node.checked = node.value === value; }); modes.find(node => node.value === value).fire('change'); };
-  return { nodes, requests, charts, getChart, button, switchMode, tabs, pulses, timers };
+  return { nodes, requests, charts, getChart, button, switchMode, tabs, pulses, timers, getPayload: () => receivedPayload };
 }
 
 function plain(value) { return JSON.parse(JSON.stringify(value)); }
@@ -113,9 +116,10 @@ test('B treatment preserves bottom-to-top datasets while reversing legend and to
 });
 
 test('legend centers span exact plot bounds for changing classifier category counts', () => {
-  for (const count of [1, 4, 7, 10]) {
+  for (const count of [1, 4, 7, 10, 14, 18]) {
     const h = harness(fixture({ keys: Array.from({ length: count }, (_, index) => 'category_' + index) }));
     const chart = h.getChart();
+    assert.equal(h.nodes.face.style['--each-plot-height'], undefined, 'legend count must not resize the plot');
     chart.chartArea = { top: 21, bottom: 421 }; chart.update();
     assert.deepEqual(h.nodes.legend.children.map(button => parseFloat(button.style.top)),
       Array.from({ length: count }, (_, index) => count === 1 ? 221 : 21 + index * 400 / (count - 1)));
@@ -267,4 +271,105 @@ test('headline previous-result notice omits chart category when no tab belongs t
   h.pulses[1].click();
   assert.equal(h.nodes.headlineStatus.textContent, 'Loading Showing previous result (llama, 7d)');
   assert.ok(!h.nodes.headlineStatus.textContent.includes('Product'));
+});
+
+
+function sparseOneDayFixture() {
+  const data = fixture({ keys: ['bug', 'complaint'] });
+  data.window_days = 1;
+  data.granularity = 'minute';
+  data.days = Array.from({ length: 288 }, (_, i) => new Date(Date.UTC(2026, 10, 18, 9, 40) + i * 300000).toISOString());
+  data.series = { bug: Array(288).fill(0), complaint: Array(288).fill(0) };
+  data.series.bug[0] = 1;
+  data.series.complaint[1] = 9;
+  data.series.bug[12] = 3;
+  data.series.complaint[23] = 1;
+  data.series.complaint[287] = 2;
+  data.totals = data.days.map((_, i) => data.series.bug[i] + data.series.complaint[i]);
+  return data;
+}
+
+test('one-day area uses hourly sums and weighted percentages without changing raw payload or fetching again', () => {
+  const data = sparseOneDayFixture(), raw = JSON.stringify(data), h = harness(data);
+  let chart = h.getChart();
+  assert.equal(chart.config.type, 'line');
+  assert.equal(chart.data.labels.length, 24, 'sparse five-minute buckets must not draw 288 narrow columns');
+  assert.deepEqual(plain(chart.data.datasets.map(d => d.data.slice(0, 3))), [[10, 75, null], [90, 25, null]]);
+  assert.deepEqual(plain(chart.data.datasets.map(d => d.data.at(-1))), [0, 100]);
+  assert.equal(h.nodes.bucketNote.hidden, false);
+  h.switchMode('volume');
+  chart = h.getChart();
+  assert.deepEqual(plain(chart.data.datasets.map(d => d.data.slice(0, 3))), [[1, 3, 0], [9, 1, 0]]);
+  assert.deepEqual(plain(chart.data.datasets.map(d => d.data.reduce((a, b) => a + b, 0))), [4, 12]);
+  assert.deepEqual(plain(chart.data.datasets.map(d => d.data.at(-1))), [0, 2], 'the last harvested five-minute sample stays included');
+  h.switchMode('percent');
+  assert.equal(h.getChart().data.labels.length, 24, 'mode redraw must aggregate the original payload only once');
+  assert.deepEqual(plain(h.getChart().data.datasets.map(d => d.data.slice(0, 3))), [[10, 75, null], [90, 25, null]]);
+  assert.equal(JSON.stringify(h.getPayload()), raw, 'the actual parsed payload cached by the renderer stays at five-minute precision');
+  assert.equal(h.requests.length, 0);
+});
+
+test('hourly tooltip identifies the full interval and exact label-assignment counts', () => {
+  const data = sparseOneDayFixture(), h = harness(data), chart = h.getChart();
+  const callbacks = chart.options.plugins.tooltip.callbacks;
+  const item = { datasetIndex: 0, dataIndex: 0, parsed: { y: 10 } };
+  const start = new Date(data.days[0]).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+  const end = new Date(Date.parse(data.days[0]) + 3600000).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+  assert.equal(callbacks.title([item]), start + ' – ' + end);
+  assert.equal(callbacks.label(item), 'bug: 1 (10.0%)');
+  assert.equal(callbacks.footer([item]), '10 label assignments');
+});
+
+test('daily charts preserve original points and values and keep the standard tooltip title', () => {
+  for (const window of [7, 30, 365]) {
+    const data = fixture(); data.window_days = window;
+    const h = harness(data), chart = h.getChart();
+    assert.equal(chart.data.labels.length, data.days.length);
+    assert.equal(h.nodes.bucketNote.hidden, true);
+    assert.equal(chart.options.plugins.tooltip.callbacks.title, undefined);
+    h.switchMode('volume');
+    assert.deepEqual(plain(h.getChart().data.datasets.map(d => d.data)), Object.values(data.series));
+  }
+});
+
+
+test('partial hourly coverage keeps the real harvest end on the axis and tooltip after mode redraws', () => {
+  const timeContext = { module: { exports: {} }, document: { querySelector: () => null }, window: { Intl }, Intl };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../monitor/static/pw-tz.js'), 'utf8'), timeContext);
+  const time = timeContext.module.exports;
+  for (const size of [286, 287]) {
+    const data = sparseOneDayFixture();
+    data.days = data.days.slice(0, size); data.totals = data.totals.slice(0, size);
+    for (const key of Object.keys(data.series)) data.series[key] = data.series[key].slice(0, size);
+    const h = harness(data, { time });
+    const expectedEnd = time.clockText(new Date(Date.parse(data.days.at(-1)) + 300000), 'en');
+    for (const mode of ['percent', 'volume', 'percent']) {
+      h.switchMode(mode);
+      const chart = h.getChart(), axis = { width: 600, ticks: [] };
+      chart.options.scales.x.afterBuildTicks(axis);
+      assert.equal(axis.ticks.at(-1).value, 23);
+      const text = chart.options.scales.x.ticks.callback.call({}, 23, axis.ticks.length - 1);
+      assert.equal(text, expectedEnd, 'a partial hour must not label unharvested time as covered');
+      assert.ok(chart.options.plugins.tooltip.callbacks.title([{ dataIndex: 23 }]).endsWith(' – ' + expectedEnd));
+    }
+  }
+});
+
+
+test('short harvest coverage keeps raw points until hourly aggregation can draw at least two points', () => {
+  for (const size of [1, 11, 12, 13]) {
+    const data = sparseOneDayFixture();
+    data.days = data.days.slice(0, size); data.totals = data.totals.slice(0, size);
+    for (const key of Object.keys(data.series)) data.series[key] = data.series[key].slice(0, size);
+    const h = harness(data);
+    for (const mode of ['percent', 'volume', 'percent']) {
+      h.switchMode(mode);
+      const chart = h.getChart();
+      assert.equal(chart.data.labels.length, size <= 12 ? size : 2, `covered buckets: ${size}`);
+      assert.equal(h.nodes.bucketNote.hidden, size <= 12);
+      if (mode === 'volume') {
+        assert.deepEqual(plain(chart.data.datasets.map(d => d.data.reduce((a,b) => a+b, 0))), Object.values(data.series).map(values => values.reduce((a,b) => a+b, 0)));
+      }
+    }
+  }
 });
