@@ -834,3 +834,100 @@ def test_worker_dispatches_newest_and_oldest_fresh_posts_in_priority_order(monke
     runner = CycleRunner(cfg=cfg, _post_fetch_clients={'translation': None, 'classification': object()})
     runner._run_post_fetch([], run_id='worker-priority', fair_queue=True)
     assert captured == [states[index].pk for index in (5, 4, 0, 1)]
+
+
+def test_worker_prioritizes_first_classification_in_recent_and_older_lanes():
+    from core.models import Post
+
+    now = timezone.now()
+    cfg = _cfg().harvest.enrichment.model_copy(update={"batch_size": 10, "fresh_batch_size": 8})
+    first = [_state(f"first-{i}") for i in range(10)]
+    retry = [_state(f"retry-{i}") for i in range(10)]
+    for states, attempts in ((first, 0), (retry, 1)):
+        for i, state in enumerate(states):
+            old = i >= 8
+            # Retries are both older queued and newer published: neither
+            # ordering should put them ahead of a missing first attempt.
+            queued = now - timedelta(minutes=(60 if old else 10) + attempts)
+            PostEnrichmentState.objects.filter(pk=state.pk).update(
+                created_at=queued, classification_attempts=attempts,
+                translation_requested=False,
+            )
+            Post.objects.filter(pk=state.pk).update(created_at=now-timedelta(seconds=100-i-50*attempts))
+    batch = claim_enrichment_states(cfg=cfg, run_id="first-attempt", now=now, fair_queue=True)
+    assert len(set(batch.current_cycle_post_ids) & {s.pk for s in first[:8]}) == 6
+    assert len(set(batch.current_cycle_post_ids) & {s.pk for s in retry[:8]}) == 2
+    assert len(set(batch.carryover_post_ids) & {s.pk for s in first[8:]}) == 1
+    assert len(set(batch.carryover_post_ids) & {s.pk for s in retry[8:]}) == 1
+    # Once first attempts have been claimed, retry work still uses the queue.
+    following = claim_enrichment_states(cfg=cfg, run_id="retry-work", now=now, fair_queue=True)
+    assert {s.pk for s in batch.states + following.states} == {s.pk for s in first + retry}
+
+
+def test_worker_dispatches_first_attempts_before_retries(monkeypatch):
+    from core.models import Post
+    from monitor.cycle import CycleRunner
+    from x_monitor import attribution
+
+    now = timezone.now()
+    cfg = _cfg()
+    cfg.harvest.enrichment.batch_size = cfg.harvest.enrichment.fresh_batch_size = 4
+    first = [_state(f"first-dispatch-{i}") for i in range(4)]
+    retry = [_state(f"retry-dispatch-{i}") for i in range(4)]
+    for states, attempts in ((first, 0), (retry, 1)):
+        for i, state in enumerate(states):
+            PostEnrichmentState.objects.filter(pk=state.pk).update(
+                created_at=now-timedelta(minutes=2+attempts),
+                translation_status="succeeded", classification_attempts=attempts,
+            )
+            Post.objects.filter(pk=state.pk).update(created_at=now-timedelta(seconds=100-i-50*attempts))
+    captured = []
+    def classify(tweets, *args, **kwargs):
+        captured.extend(tweet["tweet_id"] for tweet in tweets)
+        return [{"valid": False} for _ in tweets]
+    monkeypatch.setattr(attribution, "classify_batch_pragmatics_full", classify)
+    runner = CycleRunner(cfg=cfg, _post_fetch_clients={"translation": None, "classification": object()})
+    runner._run_post_fetch([], run_id="first-dispatch", fair_queue=True)
+    assert len(set(captured) & {state.pk for state in first}) == 2
+    assert len(set(captured) & {state.pk for state in retry}) == 2
+
+
+@pytest.mark.parametrize("blocked_reason", ["future_due", "no_brand", "historical_owner"])
+def test_first_classification_priority_requires_runnable_classification(blocked_reason):
+    from core.models import Post, PostBrand
+    from tests.test_backfill_collection import ready_job
+
+    now = timezone.now()
+    cfg = _cfg().harvest.enrichment.model_copy(update={"batch_size": 4, "fresh_batch_size": 4})
+    ready = [_state(f"ready-first-{i}") for i in range(4)]
+    translation_only = [_state(f"translation-only-{i}") for i in range(4)]
+    for states, offset in ((ready, 0), (translation_only, 1)):
+        PostEnrichmentState.objects.filter(pk__in=[s.pk for s in states]).update(created_at=now-timedelta(minutes=2+offset))
+        Post.objects.filter(pk__in=[s.pk for s in states]).update(created_at=now-timedelta(seconds=100-50*offset))
+    ids = [s.pk for s in translation_only]
+    if blocked_reason == "future_due":
+        PostEnrichmentState.objects.filter(pk__in=ids).update(classification_next_attempt_at=now+timedelta(hours=1))
+    elif blocked_reason == "no_brand":
+        PostBrand.objects.filter(post_id__in=ids).delete()
+    else:
+        PostEnrichmentState.objects.filter(pk__in=ids).update(source_collection_job=ready_job())
+    batch = claim_enrichment_states(cfg=cfg, run_id="runnable-first", now=now, fair_queue=True)
+    assert len(set(batch.current_cycle_post_ids) & {s.pk for s in ready}) == 2
+    assert len(set(batch.current_cycle_post_ids) & set(ids)) == 2
+
+
+def test_retries_keep_a_share_while_first_attempts_continue_arriving():
+    cfg = _cfg().harvest.enrichment.model_copy(update={"batch_size": 10, "fresh_batch_size": 8})
+    now = timezone.now()
+    for turn in range(3):
+        for kind, attempts in (("first", 0), ("retry", 1)):
+            for i in range(10):
+                state = _state(f"steady-{turn}-{kind}-{i}")
+                PostEnrichmentState.objects.filter(pk=state.pk).update(
+                    classification_attempts=attempts, translation_requested=False,
+                    created_at=now-timedelta(minutes=60 if i>=8 else 2),
+                )
+        batch = claim_enrichment_states(cfg=cfg, run_id=f"steady-{turn}", now=now, fair_queue=True)
+        assert len(batch.states) == 10
+        assert sum(s.classification_attempts == 0 for s in batch.states) == 7
+        assert sum(s.classification_attempts > 0 for s in batch.states) == 3

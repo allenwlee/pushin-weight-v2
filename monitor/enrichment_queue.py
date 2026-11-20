@@ -109,6 +109,27 @@ class EnrichmentClaimBatch:
         return tuple(str(state.pk) for state in self.carryover_states)
 
 
+def _first_attempt_share(ordered, limit: int, now: datetime) -> list[PostEnrichmentState]:
+    """Reserve most slots for first classifications, keeping other due work moving."""
+    if limit <= 0:
+        return []
+    first_due = (
+        Q(classification_attempts=0, source_collection_job_id__isnull=True)
+        & stage_due_q("classification", now)
+        & Q(Exists(PostBrand.objects.filter(post_id=OuterRef("post_id"))))
+    )
+    # Production allocations reserve 80% for first attempts and 20% for
+    # retries/translation. Small allocations retain at least one other slot.
+    other_limit = max(1, limit // 5) if limit > 1 else 0
+    first = list(ordered.filter(first_due)[: limit - other_limit])
+    other = list(ordered.exclude(first_due)[:other_limit])
+    selected = first + other
+    remaining = limit - len(selected)
+    if remaining:
+        selected += list(ordered.exclude(pk__in=[s.pk for s in selected])[:remaining])
+    return selected
+
+
 def claim_enrichment_states(
     *,
     cfg: Any,
@@ -214,22 +235,23 @@ def claim_enrichment_states(
             cutoff = now - timedelta(minutes=cfg.fresh_minutes)
             fresh = eligible.filter(created_at__gte=cutoff)
             newest_count = (cfg.fresh_batch_size + 1) // 2
-            newest = list(fresh.order_by(F("post__created_at").desc(nulls_last=True), "-post_id")[:newest_count])
-            oldest = list(
-                fresh.exclude(pk__in=[state.pk for state in newest])[
-                    : cfg.fresh_batch_size - len(newest)
-                ]
+            newest = _first_attempt_share(
+                fresh.order_by(F("post__created_at").desc(nulls_last=True), "-post_id"),
+                newest_count, now,
+            )
+            oldest = _first_attempt_share(
+                fresh.exclude(pk__in=[state.pk for state in newest]),
+                cfg.fresh_batch_size - len(newest), now,
             )
             current = newest + oldest
-            carryover = list(
-                eligible.filter(created_at__lt=cutoff)[
-                    : cfg.batch_size - cfg.fresh_batch_size
-                ]
+            carryover = _first_attempt_share(
+                eligible.filter(created_at__lt=cutoff),
+                cfg.batch_size - cfg.fresh_batch_size, now,
             )
             remainder = cfg.batch_size - len(current) - len(carryover)
             if remainder:
                 selected = [s.pk for s in current + carryover]
-                for state in eligible.exclude(pk__in=selected)[:remainder]:
+                for state in _first_attempt_share(eligible.exclude(pk__in=selected), remainder, now):
                     (current if state.created_at >= cutoff else carryover).append(state)
         elif prefer_created_before is None:
             carryover = list(
