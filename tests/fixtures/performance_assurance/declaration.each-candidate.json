@@ -428,7 +428,7 @@
       ],
       "cache_expectations": [
         {
-          "path": "/static/pw-each-chart.c261f90fd821.js",
+          "path": "/static/pw-each-chart.ec2eec8e2bbe.js",
           "policy": "immutable",
           "min_max_age_seconds": 31536000,
           "must_reuse": true
@@ -526,7 +526,7 @@
       ],
       "cache_expectations": [
         {
-          "path": "/static/pw-each-chart.c261f90fd821.js",
+          "path": "/static/pw-each-chart.ec2eec8e2bbe.js",
           "policy": "immutable",
           "min_max_age_seconds": 31536000,
           "must_reuse": true

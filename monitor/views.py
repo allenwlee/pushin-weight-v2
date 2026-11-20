@@ -4158,17 +4158,13 @@ def _each_tab_entries(locale: str) -> dict[str, list[dict[str, Any]]]:
 
 def _each_assign_keys(tab, fact, keys, brand):
     """Apply existing category semantics once per distinct raw-fact signature."""
-    classified = (
+    recognized = (
         fact.get("state_contract_version") == CONTRACT_VERSION
         and fact.get("state_taxonomy_version") in COMPATIBLE_TAXONOMY_VERSIONS
-        and fact.get("state_outcome") == "classified"
     )
+    classified = recognized and fact.get("state_outcome") == "classified"
     if tab == "sentiment":
         if fact.get("state_present") and fact.get("state_brand_id") == brand:
-            recognized = (
-                fact.get("state_contract_version") == CONTRACT_VERSION
-                and fact.get("state_taxonomy_version") in COMPATIBLE_TAXONOMY_VERSIONS
-            )
             value = fact.get("state_sentiment") if recognized else None
         else:
             legacy = dict(zip(fact["legacy_sentiment_brand_ids"], fact["legacy_sentiment_values"], strict=True))

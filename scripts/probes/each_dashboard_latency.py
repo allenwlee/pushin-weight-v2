@@ -27,7 +27,9 @@ TABS = ("sentiment", "post_types", "lang", "role", "audience_topics",
 def prepare_materialization():
     """Use the normal publication path, then compare bounded raw-fact pages."""
     from importlib import import_module
+
     from django.db import connection, transaction
+
     from core.materializations import refresh_materialization
     from monitor.each_chart_facts import EACH_FACTS
 
@@ -42,7 +44,8 @@ def prepare_materialization():
             raise RuntimeError("Materialization publication/refresh gate failed")
     module = import_module("core.migrations.0235_each_chart_facts")
     columns = [name.strip() for name in module.COLUMNS.split(",")]
-    assert len(columns) == 20
+    if len(columns) != 20:
+        raise RuntimeError("Unexpected raw-fact schema")
     collated = set(columns)-{"created_at", "author_account_key", "state_present"}
     # Identifiers come only from the frozen migration, never arguments or data.
     mismatch = " OR ".join(
@@ -65,7 +68,8 @@ def prepare_materialization():
         saved_count, outside = cursor.fetchone()
         cursor.execute("SELECT count(*) FROM each_brand_post_facts_source WHERE created_at < %s", [cutoff])
         source_count = cursor.fetchone()[0]
-        assert saved_count == source_count and not outside
+        if saved_count != source_count or outside:
+            raise RuntimeError("Raw-fact count or cutoff parity mismatch")
         while True:
             if monotonic()-started > 300:
                 raise RuntimeError("Bounded parity observation expired")
@@ -87,7 +91,8 @@ def prepare_materialization():
                 raise RuntimeError("Typed raw-fact parity mismatch")
             checked += count
             last = (brand, post)
-        assert checked == saved_count
+        if checked != saved_count:
+            raise RuntimeError("Raw-fact parity coverage mismatch")
     print(json.dumps({"event": "parity", "rows_checked": checked, "seconds": monotonic()-started,
         "generation": generation, "passed": True}), flush=True)
 
@@ -116,7 +121,7 @@ def main():
     if args.prepare:
         try:
             prepare_materialization()
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 -- operator boundary reports failure and exits.
             print(json.dumps({"event": "preparation_failed", "error": type(error).__name__}), flush=True)
             return 1
 
@@ -132,7 +137,8 @@ def main():
     connections.close_all()
     with connection.cursor() as cursor:
         cursor.execute("SHOW default_transaction_read_only")
-        assert cursor.fetchone()[0] == "on"
+        if cursor.fetchone()[0] != "on":
+            raise RuntimeError("Operator route requires database-enforced read-only access")
         cursor.execute("SELECT current_user, current_database()")
         role, database = cursor.fetchone()
     connections.close_all()
@@ -163,7 +169,6 @@ def main():
                 yield from response
             finally:
                 response.close()
-                connections.close_all()
 
     class Quiet(WSGIRequestHandler):
         def log_message(self, *_args):
@@ -187,7 +192,7 @@ def main():
                                 status, payload = response.status, json.load(response)
                         except HTTPError as error:
                             status, payload = error.code, {}
-                        except Exception as error:
+                        except Exception as error:  # noqa: BLE001 -- operator boundary reports failure and exits.
                             status, payload = 0, {"error": type(error).__name__}
                         seconds = monotonic()-start
                         row = {"round": round_number+1, "brand": brand, "window": window, "tab": tab,
@@ -198,7 +203,7 @@ def main():
                         if status != 200 or seconds >= 5 or payload.get("brand") != brand or payload.get("tab") != tab:
                             print(json.dumps({"event": "failed", "reason": "chart_latency_or_response", "completed": len(rows)}), flush=True)
                             return 1
-        values = sorted(row["seconds"] for row in rows)
+        values = [row["seconds"] for row in rows]
         p95 = statistics.quantiles(values, n=100, method="inclusive")[94]
         passed = p95 <= 1.5 and max(values) < 5
         print(json.dumps({"event": "summary", "count": len(rows), "p95_seconds": p95,
