@@ -138,7 +138,9 @@ def test_pulse_real_route_includes_dossier_with_no_review_or_identity(client):
     assert response.status_code == 200
     html = response.content.decode()
     assert str(event.pk) in html
-    assert "Name pending" in html and "Category pending" in html
+    assert "Release candidate with no linked product name" in html and "Category pending" in html
+    assert "No saved P1 decision for this post" in html
+    assert "A source discussing a release" in html
     assert f"/pulse/{event.pk}/sources" in html
     unexpected = [query["sql"] for query in queries if not query["sql"].lstrip().upper().startswith("SELECT")]
     assert unexpected == []
@@ -184,7 +186,7 @@ def test_real_route_separates_reviewed_identity_from_source_claims(client, kind)
         assert "Product identity pending" not in html
     else:
         assert "Product identity pending" in html and "Category pending" in html
-        assert "Reported product" not in html and "Reported publisher" not in html
+        assert "<h2>Reported product</h2>" not in html and "Reported publisher" not in html
         assert "Reported owner" not in html
         if kind == "rejected":
             assert "Reviewed release" in html and "Reviewed issuer" in html

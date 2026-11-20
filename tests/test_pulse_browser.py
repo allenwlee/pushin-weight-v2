@@ -163,7 +163,7 @@ class PulseBrowserTests(StaticLiveServerTestCase):
                             if kind == "reported":
                                 self.assertTrue(card.get_by_role("heading", name="Reported product", exact=True).is_visible())
                             else:
-                                self.assertNotIn("Reported product", card.inner_text())
+                                self.assertEqual(card.get_by_role("heading", name="Reported product", exact=True).count(), 0)
                                 self.assertNotIn("Reported publisher", card.inner_text())
                                 self.assertNotIn("Reported owner", card.inner_text())
                         self.assertTrue(page.locator(f'[data-pulse-event="{legacy.pk}"]').get_by_text(legacy_label, exact=True).is_visible())

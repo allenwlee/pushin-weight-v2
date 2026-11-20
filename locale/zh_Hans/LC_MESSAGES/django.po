@@ -1531,3 +1531,21 @@ msgstr "显示"
 
 msgid "Chatter updates are delayed. The latest available story is shown."
 msgstr "Chatter 更新延迟，当前显示最近发布的报道。"
+
+msgid "Classifier finding with no product name"
+msgstr "分类结果未提供产品名称"
+
+msgid "Reviewed release with no product name"
+msgstr "已审核的发布记录缺少产品名称"
+
+msgid "Release candidate with no linked product name"
+msgstr "尚未关联产品名称的发布候选"
+
+msgid "Latest saved P1 release count for this post"
+msgstr "此帖最近一次 P1 判定的发布数量"
+
+msgid "Saved release finding attached to this candidate"
+msgstr "此候选已关联发布判定"
+
+msgid "No saved P1 decision for this post"
+msgstr "此帖尚无已保存的 P1 判定"

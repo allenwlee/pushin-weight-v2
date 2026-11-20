@@ -796,6 +796,8 @@ def test_cycle_supplies_saved_profile_to_jev_without_an_extra_call(monkeypatch):
 
     state, runner, transport = setup_cycle(monkeypatch, official=True)
     account = state.post.author
+    other = models.Brand.objects.create(nickname="otherpublisher")
+    models.BrandAccount.objects.create(brand=other, account=account, role_id="official")
     account.bio = "We build Qwen models."
     account.save(update_fields=["bio"])
     state.post.author_profile_bio = {
@@ -806,6 +808,7 @@ def test_cycle_supplies_saved_profile_to_jev_without_an_extra_call(monkeypatch):
     runner._run_post_fetch([], run_id="pulse-profile-fallback")
     assert len(transport.calls) == 2
     request = json.loads(transport.calls[1]["messages"][0]["content"])
+    assert "otherpublisher" in [a["brand_id"] for a in request["state"]["author_affiliations"]]
     profile = request["state"]["author_profile_evidence"]
     assert "qwen.example" in profile["domains"]
     assert any(source["text"] == "We build Qwen models." for source in profile["sources"])
@@ -1139,3 +1142,14 @@ def test_classifier_publication_queues_single_exact_hf_link_without_provider_cal
     assert 'https://huggingface.co/Qwen/Qwen4' in read_document(lead.source_archive)['matched_urls']
     assert not models.CollectionRequest.objects.exists()
     assert len(transport.calls) == 2  # Both responses are local fixtures.
+
+
+def test_pulse_backfill_reuses_a_saved_empty_decision(monkeypatch):
+    from monitor.management.commands.backfill_pulse_candidates import saved_result
+
+    state, runner, transport = setup_cycle(monkeypatch, empty=True)
+    assert saved_result(state.post_id) == ("missing", ())
+    runner._process_enrichment_claim_batch([], run_id="pulse-history-test",
+        post_ids={state.post_id}, pulse_backfill=True)
+    assert saved_result(state.post_id) == ("selected", ())
+    assert len(transport.calls) == 2

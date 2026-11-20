@@ -31,3 +31,6 @@
   .pulse-main .release-dates > div { grid-template-columns: 1fr; gap: 3px; }
   .pulse-main h2 { font-size: 21px; }
 }
+.pulse-main blockquote { margin: 16px 0; padding: 0 14px; border-inline-start: 2px solid var(--panel-border); }
+.pulse-main blockquote p { margin: 6px 0; white-space: pre-line; }
+.pulse-main blockquote small { color: var(--muted); }

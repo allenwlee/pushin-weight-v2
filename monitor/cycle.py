@@ -3858,6 +3858,7 @@ class CycleRunner:
         source_collection_job_id: Any | None = None,
         classification_input_snapshot: dict[str, Any] | None = None,
         translation_only: bool = False,
+        pulse_backfill: bool = False,
         fair_queue: bool = False,
         dispatch_guard: Any | None = None,
     ) -> dict[str, Any]:
@@ -3919,7 +3920,7 @@ class CycleRunner:
                 cfg=enrichment_cfg,
                 literal_v2_enabled=self.cfg.llm.literal_translation_v2_enabled,
                 post_ids=selected_post_ids,
-            ) if source_collection_job_id is None else 0
+            ) if source_collection_job_id is None and not pulse_backfill else 0
         )
 
         claim_batch = _claim_enrichment_states(
@@ -4033,7 +4034,7 @@ class CycleRunner:
                     "affiliations": [
                         affiliation
                         for affiliation in affiliations_by_author.get(str(post.author_id), [])
-                        if affiliation["brand_id"] in brand_ids
+                        if self.cfg.llm.classifier_pipeline == "compressed8_pulse_v1" or affiliation["brand_id"] in brand_ids
                     ],
                 }
                 classification_due = (
@@ -4065,7 +4066,7 @@ class CycleRunner:
                         "sources": sources,
                         "domains": evidence["domains"][:16],
                     }
-                if stage_is_due(state, "translation", state.claimed_at):
+                if not pulse_backfill and stage_is_due(state, "translation", state.claimed_at):
                     translation_tweets.append(tweet)
                 if classification_due:
                     classification_tweets.append(tweet)
@@ -4370,7 +4371,7 @@ class CycleRunner:
                     if flag_result.outcome == "persisted"
                     else "n_unsanctioned_cleared"
                 ] += 1
-                if repair_manifest is not None:
+                if repair_manifest is not None or pulse_backfill:
                     # Exact Stage 1 repair is not a targeted-extraction run.
                     counters["n_classifications_published"] = (
                         counters.get("n_classifications_published", 0) + 1

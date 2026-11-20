@@ -43,6 +43,7 @@ from core.models import (
     EventDossierSource,
     Product,
     ProductGroupMembership,
+    PostBrandClassificationJudgment,
     SourceSubjectMapping,
 )
 
@@ -213,6 +214,8 @@ def _events():
     return EventDossier.objects.filter(
         event_kind_reference__code="product_release", merged_into__isnull=True
     ).annotate(
+        has_pulse_finding=Exists(claims.filter(scope_key__startswith="pulse-finding-v1:",
+            extraction_version__startswith="pulse-classified-findings-v1:")),
         report_names=_count(
             reports,
             "event_dossier_source__event_dossier_id",
@@ -270,6 +273,16 @@ def _source_query(event_ids):
             1,
             256,
         ),
+        has_attached_finding=Exists(EventDossierClaim.objects.filter(
+            event_dossier_source_id=OuterRef("pk"), scope_key__startswith="pulse-finding-v1:",
+            extraction_version__startswith="pulse-classified-findings-v1:",
+        )),
+        excerpt=Substr("post__text", 1, 320),
+        last_release_keys=Subquery(PostBrandClassificationJudgment.objects.filter(
+            post_id=OuterRef("post_id"),
+            changes_json__release_output__schema="pulse-classified-release-output-v1",
+            validation_state__in=("validated", "release_only"),
+        ).order_by("-created_at", "-pk").values("changes_json__release_output__finding_keys")[:1]),
         post_url=Substr("post__tweet_url", 1, 2049),
         observation_url=Substr("collection_observation__run__source_url", 1, 2049),
         observation_label=Substr("collection_observation__source_identifier", 1, 256),
@@ -284,6 +297,9 @@ _SOURCE_FIELDS = (
     "linked_at",
     "post_url",
     "post_label",
+    "excerpt",
+    "last_release_keys",
+    "has_attached_finding",
     "observation_label",
     "observation_url",
     "supports_current_review",
@@ -298,6 +314,9 @@ def _source(row):
     return {
         "id": row["id"],
         "post_id": post_id,
+        "excerpt": row["excerpt"],
+        "has_attached_finding": row["has_attached_finding"],
+        "last_finding_count": len(row["last_release_keys"]) if isinstance(row["last_release_keys"], list) else None,
         "observation_id": row["collection_observation_id"],
         "label": row["post_label"]
         or row["observation_label"]
@@ -717,6 +736,7 @@ def release_page(*, cursor=None, limit=PAGE_SIZE):
             "observed_name",
             "current_review__product_release__product__id",
             "issuer_company_id",
+            "has_pulse_finding",
             "report_names",
             "report_name",
             "claimed_products",
@@ -761,6 +781,7 @@ def release_page(*, cursor=None, limit=PAGE_SIZE):
             {
                 "id": str(row["id"]),
                 "name": name or (product["name"] if product else None),
+                "has_pulse_finding": row["has_pulse_finding"],
                 "review_state": row["current_review__review_state"] or "pending",
                 "review_id": str(row["current_review_id"])
                 if row["current_review_id"]

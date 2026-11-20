@@ -7,7 +7,7 @@
 {% for entry in entries %}
 <article class="release-card" data-pulse-event="{{ entry.id }}">
   <div class="release-top"><span class="category">{{ entry.category_label }}</span><span class="state">{{ entry.state_label }}</span></div>
-  <h2>{% if entry.name %}{{ entry.name }}{% else %}{% trans 'Name pending' %}{% endif %}</h2>
+  <h2>{% if entry.name %}{{ entry.name }}{% else %}{% if entry.has_pulse_finding %}{% trans 'Classifier finding with no product name' %}{% elif entry.review_id %}{% trans 'Reviewed release with no product name' %}{% else %}{% trans 'Release candidate with no linked product name' %}{% endif %}{% endif %}</h2>
   <p class="ownership">{% if entry.brand %}{{ entry.brand.name }}{% else %}{% trans 'Brand pending' %}{% endif %}{% if entry.family %}<span aria-hidden="true"> · </span>{{ entry.family.name }}{% endif %}<span aria-hidden="true"> · </span>{% for company in entry.companies %}{{ company.name }}{% if not forloop.last %} / {% endif %}{% empty %}{% trans 'Company pending' %}{% endfor %}{% if entry.companies_more %} · {% trans 'Additional ownership records' %}{% endif %}</p>
   {% if entry.product_identity_state == 'reported' %}<p class="muted">{% trans 'Reported product identity — awaiting review' %}</p>{% elif entry.product_identity_state == 'pending' %}<p class="muted">{% trans 'Product identity pending' %}</p>{% endif %}
   {% if not entry.provider_mapping_present %}<p class="muted">{% trans 'Provider identity pending' %}</p>{% endif %}
@@ -18,6 +18,11 @@
   {% for claim in entry.release_dates %}<div><dt>{{ claim.kind_label }}</dt><dd>{{ claim.display_value }} <span class="muted">· {{ claim.disposition_label }}</span>{% if claim.url %} <a href="{{ claim.url }}" rel="noopener noreferrer" target="_blank">{% trans 'Source' %} ↗</a>{% endif %}</dd></div>{% empty %}<div><dt>{% trans 'Release date' %}</dt><dd class="muted">{% trans 'Date pending' %}</dd></div>{% endfor %}
   </dl>
   {% if entry.dates_more %}<p class="muted">{% trans 'More dated evidence is saved with this discovery.' %}</p>{% endif %}
+  {% for source in entry.sources %}{% if source.post_id %}
+  <blockquote><a href="{% url 'post_detail' source.post_id %}?locale={{ active_locale }}">{{ source.label }}</a>
+    {% if source.excerpt %}<p>{{ source.excerpt }}</p>{% endif %}
+    <small>{% if source.last_finding_count != None %}{% trans 'Latest saved P1 release count for this post' %} · {{ source.last_finding_count }}{% elif source.has_attached_finding %}{% trans 'Saved release finding attached to this candidate' %}{% else %}{% trans 'No saved P1 decision for this post' %}{% endif %}</small>
+  </blockquote>{% endif %}{% endfor %}
   <div class="release-sources"><a href="{% url 'pulse_sources' entry.id %}?locale={{ active_locale }}">{% trans 'Related sources' %} <span class="count">{{ entry.sources_count }}</span> →</a></div>
 </article>
 {% empty %}<section class="empty"><h2>{% trans 'No release discoveries yet' %}</h2><p class="muted">{% trans 'Saved release discoveries will appear here.' %}</p></section>{% endfor %}

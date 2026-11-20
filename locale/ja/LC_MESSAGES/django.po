@@ -1612,3 +1612,21 @@ msgstr "表示"
 
 msgid "Chatter updates are delayed. The latest available story is shown."
 msgstr "Chatterの更新が遅れています。現在は最新の公開記事を表示しています。"
+
+msgid "Classifier finding with no product name"
+msgstr "製品名のない分類結果"
+
+msgid "Reviewed release with no product name"
+msgstr "製品名のないレビュー済みリリース"
+
+msgid "Release candidate with no linked product name"
+msgstr "製品名が紐付いていないリリース候補"
+
+msgid "Latest saved P1 release count for this post"
+msgstr "この投稿の最新のP1リリース判定件数"
+
+msgid "Saved release finding attached to this candidate"
+msgstr "この候補にリリース判定が紐付いています"
+
+msgid "No saved P1 decision for this post"
+msgstr "この投稿のP1判定は未保存です"
