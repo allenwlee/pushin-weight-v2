@@ -52,16 +52,21 @@ None.
 
 # Each dashboard saved counts, request isolation and chart presentation
 
-## Current execution status — 2026-11-20 03:20 JST
+## Current execution status — 2026-11-20 10:36 JST
 
-Staging revision `1a842e821f0a0693f60a1f583faabdc9acdf9453` is deployed on all
-seven active services and its388,692-row saved view is published. **U8 staging
-validation has failed:** the actual concurrent refresh hit its90sstatement
-limit, and144successful chart responses measured p95=4.214s/max=8.909s versus
-required≤1.5s/<5s. Do not describe this as complete or promote it. The accepted
-visuals passed all six live width/locale cases. Full staging row-parity failed during a database recovery event; the bounded
-all-live matrix was left unperformed after that incident. Neither is passed.
-Production remains outside this task's authorization.
+Staging revision `d98472b66394c0b9578cb4bd25a468719ab62350` is deployed on all
+seven active services, preserving G2 Chatter `f898b119`. The independently
+requested chart correction is complete:420px fixed plots, justified left
+legends, hourly1-day areas, exact counts and six live locale/width/tab cases.
+Full676tests+371subtests and exact-candidate fixture performance pass.
+
+**Original U8 backend validation remains failed.** The published388,692-row
+saved view remains in use. Prior actual concurrent refresh hit its90sstatement
+limit, and144chart responses measuredp95=4.214s/max=8.909s versus≤1.5s/<5s.
+Full source parity was incomplete after the prior database recovery event;
+the bounded all-live matrix was unperformed. These were not rerun, waived or
+passed by the new visual correction. Do not promote this plan as complete or
+production-ready. Production remains outside this task's authorization.
 
 ## Plain-English Summary
 
@@ -1415,3 +1420,49 @@ zero outstanding findings. Both partial-hour endpoint and12bucket guard P2s
 are resolved. Receipt: /tmp/compound-engineering-501/ce-code-review/
 20261120-093500-fa94f6cd/review.json. External cross-model review was not run
 per owner direction; this is native-context corroboration, not cross-model.
+
+
+### Corrective UI staging closeout — November20 10:36 JST
+
+The product candidate d98472b66394c0b9578cb4bd25a468719ab62350 is observed live
+on all7active Render targets after a non-forced fast-forward of G2 f898b119.
+Both remote refs were verified at the candidate before the docs-only closeout.
+G2 Chatter's24imported files and6Each source/test/performance files retain the
+reviewed bytes; only the derived combined Each identity was regenerated.
+
+Final gate:676tests+371subtests,375requiredPG,0skips/errors; Each Node24 and
+Ollija40 pass. Normalized homepage5191/Each38 obligations are clean with
+0failed/skipped/errored/missing/unknown. The declaration retains its38obligations
+and unchanged control model/fixture. Final performance attempt
+2f4719d4ac69a4e20d4ceda0 is sealed clean at the candidate SHA,6scenarios×2
+runs using the original1bbef5ee...fixture and12unchanged inputs/budgets.
+All8Each chart requests in measurement returned200. The unchanged fixture
+lacks General's default DeepSeek-V4-Pro-0813 product, so10Generalchart404s
+are explicitly retained as a fixture limitation, also observed in the prior
+November19 preview. This does not establish populated General chart
+performance; no fixture, source, criterion or budget was changed to hide it.
+Optional Lighthouse robots/source-map404s are separately listed in the audit.
+
+Actual staging proof:Meta1day Language/PostType at1440/390English plus390
+Chinese Language/Japanese PostType; all6cases pass percent→volume→percent.
+Plots are420px, legends match reversed dataset order and exact plot bounds
+without overlap/clipping,24hourly points preserve161posts and190PostType
+label assignments, localized interval notes render, served JS/CSS hashes
+match the candidate, and no page JavaScript errors occur. RawAPI288rows
+remain unchanged. The first probe incorrectly used unique posts as the
+PostType percentage denominator; corrected the probe to sum label assignments
+according to the existing chart contract, then all6cases passed without
+changing product code. Both initial and corrected logs are retained.
+The staging probe is limited to chart/headline/assets; unrelated feed/provider
+traffic is blocked. Broad native tests cover the preserved surrounding flows.
+
+The existing staging owner was reused;0users were created. Its temporary
+session and private policy were deleted. The task-owned sync local preview
+was stopped; task fixture databases and canonical worktree are retained.
+No production, provider/model, schema, resource, schedule or live-worker
+operation was changed. The original U8 backend failures remain open.
+Source/receipts: `.local/2026-11-20-each-area/completion.json`,
+`candidate-full.log`, `performance-result.json`, `performance-http-audit.json`,
+`integration-proof.json`, `staging-ui-verification.json` and6live screenshots.
+These source-scoped results remain valid through this docs-only closeout;
+staging intentionally remains at the verified product SHA.
