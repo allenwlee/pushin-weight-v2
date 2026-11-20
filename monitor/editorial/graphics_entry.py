@@ -219,6 +219,9 @@ def prepare_selected_story(*, content_id, run_id, locale, per_story_usd=None, da
         'daily_usd': _limit(daily_usd, '40'),
     }
     if chatter is not None:
+        if run.config_snapshot['editorial'].get('chatter', {}).get('discovery_lane') == 'personalized-trends-v2':
+            from .graphics_contracts import WRITER_LED
+            request['handoff']['copy_contract'] = WRITER_LED
         request['chatter'] = chatter
         request['writer_route'] = route.model_dump(mode='json')
         request['handoff'].update(voice=voice.model_dump(mode='json'), voice_hash=voice.digest)

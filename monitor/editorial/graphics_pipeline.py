@@ -33,6 +33,7 @@ from monitor.trend_narrative_lifecycle import (
 )
 
 from .config import load_editorial_config
+from .graphics_cast import cast_manifest, load_cast, recipe_refs
 from .graphics_chatter import (
     accounting_config,
     published_text,
@@ -46,6 +47,7 @@ from .graphics_contracts import (
     normalize_treatments,
     validate_copy_fact_ids,
     validate_stage_output,
+    writer_led,
 )
 from .graphics_generation import (
     MAX_INPUT_BYTES,
@@ -97,7 +99,8 @@ def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport
     }[route['endpoint']]
     ceiling = '0.15' if is_image else '0.25'
     if route:
-        ceiling = text_reservation(copy_writer_route(route), encoded)
+        text_bytes = packet["request_template"].encode() if references else encoded
+        ceiling = text_reservation(copy_writer_route(route), text_bytes, image_count=len(references))
 
     def reserve(saved_packet, saved_hash):
         return reserve_graphics_call(
@@ -166,10 +169,10 @@ def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport
     return submit_once(stage, request, packet, request_hash, key, pack, **kwargs)
 
 
-def _asset_inputs(saved, source_record):
-    assets = []
-    seen = set()
-    for person_id in saved.get('person_ids', []):
+def _asset_inputs(saved, source_record, *, cast=None):
+    assets = load_cast(cast) if cast is not None else []
+    seen = {asset['sha256'] for asset in assets}
+    for person_id in ([] if cast is not None else saved.get('person_ids', [])):
         pack = read_graphics_references(person_id, permitted_reuse={'unknown', 'permitted', 'restricted'})
         for ref in pack.references:
             if ref.sha256 in seen or ref.media_type not in {'image/jpeg', 'image/png', 'image/webp'}:
@@ -292,10 +295,16 @@ def _save_sources(run, content, claim, discovery, search, credentials, configure
     return record
 
 
-def _image_request(pack, saved, source_record, g1, stage):
+def _image_request(pack, saved, source_record, g1, stage, *, cast=None):
     treatments, _ = normalize_treatments(pack, g1.response_payload)
     treatment = next(item for item in treatments['treatments'] if item['candidate_id'] == stage[-1])
-    assets = _asset_inputs(saved, source_record)
+    assets = _asset_inputs(saved, source_record, cast=cast)
+    if cast is not None:
+        # A verified cast portrait accompanies the still even when the treatment
+        # mentions the subject but omits its transport reference.
+        identities = [{'asset_ref': asset['asset_ref'], 'role': asset['role']} for asset in cast['assets']]
+        remaining = [ref for ref in treatment['input_asset_refs'] if ref not in identities]
+        treatment['input_asset_refs'] = (identities + remaining)[:pack['media_capabilities']['max_image_inputs']]
     by_ref = {asset['asset_ref']: asset for asset in assets}
     selected = []
     for ref in treatment['input_asset_refs']:
@@ -342,6 +351,8 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
         content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
         saved = run.snapshot['request']
         early_copy = accounting_config(run) is not None
+        single = writer_led(saved['handoff'])
+        cast = run.decisions.get('writer_cast') if single else None
         pack = load_pack(Path(settings.BASE_DIR) / 'config/editorial_prompts/editorial-creative-roles-v1.json')
         pack = bind_copy_contract(pack, saved['handoff'])
         credentials = os.environ if keys is None else keys
@@ -357,10 +368,29 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             if not key:
                 _skip_stage(run, claim, 'C1', 'credential_unavailable')
                 return {'state': 'credential_unavailable', 'stage': 'C1', 'next_action': None}
-            request = build_text_request(pack, 'C1', saved['handoff'], writer_route=route)
+            handoff = saved['handoff']
+            assets = []
+            if single:
+                if cast is None:
+                    selection = OriginalContent.objects.get(pk=saved['content_id']).selection
+                    cast = cast_manifest(saved, selection)
+                    with transaction.atomic():
+                        current = OriginalContentRun.objects.select_for_update().get(pk=run_id)
+                        if not _owned(current, owner, claim.fence):
+                            return {'state': 'claim_lost', 'stage': 'C1', 'next_action': None}
+                        current.decisions = {**current.decisions, 'writer_cast': cast}
+                        current.save(update_fields=['decisions'])
+                try:
+                    assets = load_cast(cast)
+                except (ValueError, OSError):
+                    _skip_stage(run, claim, 'C1', 'cast_input_unavailable')
+                    return {'state': 'unavailable', 'stage': 'C1', 'next_action': None}
+                handoff = {**handoff, 'cast_gaps': cast['gaps'], 'cast_manifest': [
+                    {k: v for k, v in ref.items() if k not in {'storage_alias', 'storage_name'}} for ref in cast['assets']]}
+            request = build_text_request(pack, 'C1', handoff, writer_route=route, attachments=assets)
             try:
                 outcome = _run_text_stage(run, content, claim, 'C1', request, key, pack,
-                                          transport=transport, configured_daily_limit=configured_daily_limit)
+                                          transport=transport, configured_daily_limit=configured_daily_limit, references=recipe_refs(assets))
             except CapacityHeld:
                 return {'state': 'capacity_unavailable', 'stage': 'C1', 'next_action': None}
             except BudgetHeld:
@@ -388,6 +418,8 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             else:
                 record_ready(content.localized_texts.get(locale=saved['locale']))
         g0 = _stage_call(run_id, 'G0')
+        if g0 is None and single:
+            g0 = SimpleNamespace(state='skipped', response_payload={})
         if g0 is None and 'G0' in run.decisions.get('graphics_skipped_stages', {}):
             g0 = SimpleNamespace(state='skipped', response_payload={})
         if g0 is None:
@@ -429,6 +461,10 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
         source_record = run.decisions.get('graphics_source_search')
         if source_record is None:
             discovery = g0.response_payload if g0.state == 'completed' else {'queries': []}
+            if single:
+                reference = c1.response_payload['candidates'][0]['cultural_reference']
+                if reference:
+                    discovery = {'queries': [reference['name'] + ' original artwork']}
             source_record = _save_sources(run, content, claim, discovery, search, credentials, configured_daily_limit)
             return {'state': 'completed' if source_record else 'claim_lost',
                     'stage': 'source_lookup', 'next_action': 'advance' if source_record else None}
@@ -445,7 +481,11 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             if not key:
                 ok = _skip_stage(run, claim, 'G1', 'credential_unavailable')
                 return {'state': 'skipped' if ok else 'claim_lost', 'stage': 'G1', 'next_action': 'advance' if ok else None}
-            assets = _asset_inputs(saved, source_record)
+            try:
+                assets = _asset_inputs(saved, source_record, cast=cast)
+            except (ValueError, OSError):
+                _skip_stage(run, claim, 'G1', 'input_unavailable')
+                return {'state': 'skipped', 'stage': 'G1', 'next_action': 'advance'}
             manifest = [{k: v for k, v in a.items() if k not in {'data', 'storage_alias', 'storage_name'}} for a in assets]
             request = build_text_request(pack, 'G1', {
                 'candidates': c1.response_payload['candidates'],
@@ -482,7 +522,7 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             key = credentials.get('XAI_API_KEY_PW', '')
             if key:
                 try:
-                    request, refs = _image_request(pack, saved, source_record, g1, 'I-A')
+                    request, refs = _image_request(pack, saved, source_record, g1, 'I-A', cast=cast)
                 except (ValueError, OSError, StopIteration, KeyError):
                     _skip_stage(run, claim, 'I-A', 'input_unavailable')
                     return {'state': 'skipped', 'stage': 'I-A', 'next_action': 'advance'}
@@ -528,7 +568,7 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             provenance__candidate_id='A', state='failed').first()
         video_call = _stage_call(run_id, 'V1')
         failure_call = image_call if image_call and image_call.state == 'failed' else (video_call if video_call and (video_call.state == 'failed' or failed_job) else None)
-        if failure_call and g1.state == 'completed':
+        if failure_call and not single and g1.state == 'completed':
             reserve = _stage_call(run_id, 'I-B')
             skipped = run.decisions.get('graphics_skipped_stages', {})
             if reserve is None and 'I-B' not in skipped:
@@ -671,7 +711,7 @@ def pending_action(run_id):
         return {'action': 'advance'}
     skipped = run.decisions.get('graphics_skipped_stages', {})
     if accounting_config(run) is not None:
-        for stage in ('G0', 'G1', 'I-A'):
+        for stage in (('G1', 'I-A') if writer_led(run.snapshot['request']['handoff']) else ('G0', 'G1', 'I-A')):
             call = _stage_call(run_id, stage)
             if call is None and stage not in skipped:
                 return {'action': 'advance'}
@@ -688,7 +728,7 @@ def pending_action(run_id):
     video_a = _stage_call(run_id, 'V1')
     video_failure = (video_a and video_a.state == 'failed') or ContentPicture.objects.filter(run=run, provenance__schema_version='graphics-video-job/v1', provenance__candidate_id='A', state='failed').exists()
     failed_a = (a_call and a_call.state == 'failed') or video_failure
-    if failed_a and 'I-B' not in skipped and (not b_call or b_call.state == 'completed' and text.provenance.get('candidate_id') == 'A'):
+    if failed_a and not writer_led(run.snapshot.get('request', {}).get('handoff', {})) and 'I-B' not in skipped and (not b_call or b_call.state == 'completed' and text.provenance.get('candidate_id') == 'A'):
         return {'action': 'advance'}
     review_due = _stage_call(run_id, 'E1') is None and 'E1' not in skipped
     still = ContentPicture.objects.filter(run=run, text=text, provenance__role='still', state='complete').first()

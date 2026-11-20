@@ -46,6 +46,13 @@ def copy_writer_route(value):
     return route
 
 
+WRITER_LED = 'chatter-writer-led/v1'
+
+
+def writer_led(handoff):
+    return handoff.get('copy_contract') == WRITER_LED
+
+
 def bind_copy_contract(pack, handoff):
     """Bind the one C1/publication contract to this saved edition, without edits
     to the literal shared pack or another Copy Editor request.
@@ -63,6 +70,26 @@ def bind_copy_contract(pack, handoff):
                 or not voice.instructions.strip() or voice.digest != handoff.get('voice_hash')):
             raise ValueError('invalid saved Copy Editor voice')
     result = copy.deepcopy(pack)
+    if writer_led(handoff):
+        path = Path(__file__).resolve().parents[2] / 'config/editorial_prompts/chatter-writer-led-v1.json'
+        overrides = json.loads(path.read_text())
+        for item in result['model_call_plan']['calls']:
+            stage = item['id']
+            if stage not in overrides:
+                continue
+            item.update(overrides[stage])
+            props = item['response_schema']['properties']
+            entries = props['candidates' if stage == 'C1' else 'treatments']
+            entries.update(minItems=1, maxItems=1)
+            schema = entries['items']
+            schema['properties']['id' if stage == 'C1' else 'candidate_id'] = {'const': 'A'}
+            if stage == 'C1':
+                props['schema_version'] = {'const': WRITER_LED}
+                for field in ('still_pitch', 'motion_prompt'):
+                    schema['properties'][field] = {'type': 'string', 'minLength': 1}
+                    if field not in schema['required']:
+                        schema['required'].append(field)
+        result['copy_contract'] = WRITER_LED
     call = next(item for item in result['model_call_plan']['calls'] if item['id'] == 'C1')
     call['response_schema']['properties']['locale'] = {'const': locale}
     result['publication_schema']['properties']['locale']['const'] = locale
@@ -99,12 +126,13 @@ def validate_stage_output(pack, stage, response):
     if call is None or 'response_schema' not in call:
         raise ValueError('Unknown Graphics language-model stage')
     validate(response, call['response_schema'])
-    if stage == 'C1' and [item['id'] for item in response['candidates']] != ['A', 'B']:
-        raise ValueError('Expected one candidate A and one B')
+    expected = ['A'] if pack.get('copy_contract') == WRITER_LED else ['A', 'B']
+    if stage == 'C1' and [item['id'] for item in response['candidates']] != expected:
+        raise ValueError('Expected one candidate ' + ' and one '.join(expected))
     if stage == 'G0' and sorted(item['candidate_id'] for item in response['approaches']) != ['A', 'B']:
         raise ValueError('Expected one Graphics approach for A and one for B')
-    if stage == 'G1' and sorted(item['candidate_id'] for item in response['treatments']) != ['A', 'B']:
-        raise ValueError('Expected one Graphics treatment for A and one for B')
+    if stage == 'G1' and sorted(item['candidate_id'] for item in response['treatments']) != expected:
+        raise ValueError('Expected one Graphics treatment for ' + ' and one for '.join(expected))
     return response
 
 

@@ -340,6 +340,8 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None, reserva
         }
         if request.get("packet_version") == "chatter-trends-ranking-v1":
             reply["schema_version"] = 1
+        elif request.get("packet_version") == "chatter-trends-ranking-v2":
+            reply["schema_version"] = 2
         if route.endpoint == "https://api.x.ai/v1/responses":
             reply["search_activity"] = activity
         if request.get("allow_partial_events") and stage.startswith("editor"):

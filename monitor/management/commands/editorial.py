@@ -106,7 +106,7 @@ class Command(BaseCommand):
                         cfg = EditorialConfig.model_validate(data)
                     if cfg.chatter.trial is None:
                         raise CommandError("The private Chatter tester requires a finite trial profile")
-                    if cfg.chatter.discovery_lane == "personalized-trends-v1" and not options["chatter_run"]:
+                    if cfg.chatter.discovery_lane in {"personalized-trends-v1", "personalized-trends-v2"} and not options["chatter_run"]:
                         from monitor.editorial.dispatch import dispatch_chatter_due_slot
 
                         result = dispatch_chatter_due_slot("operator-chatter:" + cutoff.isoformat(), cutoff, cfg=cfg, purpose="on-demand")

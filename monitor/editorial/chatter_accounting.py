@@ -120,7 +120,7 @@ def _model_category(call, source_run_id):
         return "selector"
     if re.fullmatch(r"writer:[1-9][0-9]*:[a-zA-Z-]+", call.stage):
         return "writer"
-    return {"trends-ranking-v1": "ranker", "discovery": "discovery",
+    return {"trends-ranking-v1": "ranker", "trends-ranking-v2": "ranker", "discovery": "discovery",
             "advisory": "review", "review": "review"}.get(call.stage, "other_model")
 
 
@@ -204,7 +204,7 @@ def chatter_call_report(run_id):
             request.started_at is not None, request.transport_outcome, request.reserved_usd,
             estimate=None if official else request.estimated_usd, endpoint=request.endpoint_url)
 
-    if run.scope_key == "chatter:personalized-trends:v1":
+    if run.scope_key in {"chatter:personalized-trends:v1","chatter:personalized-trends:capture:v2"}:
         state = checkpoint(run)
         if state.observation:
             request, _ = _saved_observation(run, state)
@@ -246,12 +246,12 @@ def call_once(run, stage, kind, ceiling, cfg, send, *, request_metadata=None):
             if prior.request_hash != metadata["request_hash"]:
                 raise BudgetHeld("Chatter request identity changed")
             if prior.state == "completed":
-                if stage == "trends-ranking-v1":
+                if stage in {"trends-ranking-v1","trends-ranking-v2"}:
                     from .chatter_trends import validate_rank_reply
 
                     if prior.response_hash != digest(prior.response_payload):
                         raise BudgetHeld("saved ranking response identity changed")
-                    return validate_rank_reply(prior.response_payload)
+                    return validate_rank_reply(prior.response_payload, stage)
                 return prior.response_payload
             raise BudgetHeld("Chatter stage already sent; reconciliation required")
         amount = admit(cfg, ceiling)
@@ -313,10 +313,10 @@ def call_once(run, stage, kind, ceiling, cfg, send, *, request_metadata=None):
             raise BudgetHeld("Chatter claim conflict")
     try:
         reply = send()
-        if stage == "trends-ranking-v1":
+        if stage in {"trends-ranking-v1","trends-ranking-v2"}:
             from .chatter_trends import validate_rank_reply
 
-            reply = validate_rank_reply(reply)
+            reply = validate_rank_reply(reply, stage)
     except Exception as exc:
         code = exc.code if isinstance(exc, ProviderReplyError) else type(exc).__name__
         if not re.fullmatch(r"[a-zA-Z0-9_:-]{1,64}", code):

@@ -45,7 +45,7 @@ from .chatter_history import (
     validated_packet,
 )
 from .chatter_sources import SourceSession
-from .chatter_trends import TRENDS_SCOPE, checkpoint, read_ranked_batch
+from .chatter_trends import DECISION_SCOPE, RANKED_SCOPES, checkpoint, read_ranked_batch
 
 RECIPE = "chatter-original-headline-terms-v1"
 # Generic headline framing supplies no names or story facts.
@@ -673,15 +673,23 @@ def _finish_gathering(run, *, enqueue=None, empty=False, **changes):
         transaction.on_commit(lambda: enqueue("select", run.pk), robust=True)
 
 
+def _validate_empty(run, state):
+    from .chatter_trends import _headlines, _saved_observation
+
+    if run.scope_key == DECISION_SCOPE:
+        if read_ranked_batch(run.pk)["leads"]:
+            raise ValueError("invalid_empty_decision")
+    else:
+        _, observation = _saved_observation(run, state)
+        if _headlines(observation) or state.observation.http_status != 200 or state.observation.headline_count != 0:
+            raise ValueError("invalid_empty_observation")
+
+
 def _repair_completion(run, *, enqueue=None):
     """Repair the former split commit using only validated saved evidence, under its row lock."""
     state = checkpoint(run)
     if run.outcome.get("phase") == "complete" and state.phase == "empty":
-        from .chatter_trends import _headlines, _saved_observation
-
-        _, observation = _saved_observation(run, state)
-        if _headlines(observation) or state.observation.http_status != 200 or state.observation.headline_count != 0:
-            raise ValueError("invalid_empty_observation")
+        _validate_empty(run, state)
         run.discovery_state, run.execution_state = "complete", "completed"
     elif run.outcome.get("phase") == "discovered":
         batch = read_ranked_batch(run.pk)
@@ -710,7 +718,7 @@ def gather_trends(run_id, resume=False, *, cfg=None, x_client=None, enqueue=None
         raise ValueError("Chatter gathering resume must be boolean")
     from .chatter_chain import _consider, _history, _saved_config
 
-    run = OriginalContentRun.objects.get(pk=run_id, scope_key=TRENDS_SCOPE)
+    run = OriginalContentRun.objects.get(pk=run_id, scope_key__in=RANKED_SCOPES)
     cfg = _saved_config(run, cfg)
     if cfg is None:
         return {"status": "disabled"}
@@ -732,13 +740,9 @@ def gather_trends(run_id, resume=False, *, cfg=None, x_client=None, enqueue=None
     try:
         state = checkpoint(run)
         if state.phase == "empty":
-            from .chatter_trends import _headlines, _saved_observation
-
-            _, observation = _saved_observation(run, state)
-            if (_headlines(observation) or state.observation.http_status != 200
-                    or state.observation.headline_count != 0):
-                raise ValueError("invalid_empty_observation")
-            _finish_gathering(run, empty=True, healthy_at=timezone.now().isoformat(), selected=0)
+            _validate_empty(run, state)
+            observed = run.scope_key != DECISION_SCOPE or bool(state.manifest)
+            _finish_gathering(run, empty=True, healthy_at=timezone.now().isoformat() if observed else None, selected=0)
             return {"status": "empty", "run_id": run.pk}
         batch = read_ranked_batch(run.pk)
         gathering = run.outcome.get("gathering")
@@ -760,8 +764,8 @@ def gather_trends(run_id, resume=False, *, cfg=None, x_client=None, enqueue=None
         if (gathering["batch_sha256"] != batch["batch_sha256"] or datetime.fromisoformat(gathering["cutoff"])
                 != datetime.fromisoformat(batch["cutoff"])):
             raise ValueError("gathering_batch_changed")
-        previous, incumbents, history = _history(run.facts_as_of, lane="personalized-trends-v1")
-        producing = OriginalContentCall.objects.get(pk=batch["rank_call_id"], run=run)
+        previous, incumbents, history = _history(run.facts_as_of, lane=state.lane)
+        producing = OriginalContentCall.objects.get(pk=batch["rank_call_id"])
         available = resolved_sources(run.snapshot) if run.snapshot else {}
         candidates = {}
         for lead, entry in zip(batch["leads"], gathering["leads"], strict=True):
@@ -795,7 +799,7 @@ def gather_trends(run_id, resume=False, *, cfg=None, x_client=None, enqueue=None
                                                     client=x_client, resume=prior_collection)
                         try:
                             entry["coverage"], entry["query_state"] = "query_drained", "drained"
-                            for page in session.search_pages(recipe["query"]):
+                            for page in session.search_pages(recipe["query"], **({"rank_call_id":lead["rank_call_id"]} if "rank_call_id" in lead else {})):
                                 request_id = str(session.last_request.pk) if session.last_request else None
                                 items = session.source_items(page.items)
                                 if request_id is None or request_id not in entry["captured_request_ids"]:
@@ -894,7 +898,10 @@ def gather_trends(run_id, resume=False, *, cfg=None, x_client=None, enqueue=None
                 "original_headlines": entry["recipe"]["original_headlines"], "headline_ids": lead["headline_ids"],
                 "gathered_identity": identity, "query_sha256": entry["recipe"]["query_sha256"],
                 "source_identities": [_source_identity(post) for post in posts]}
-            row = _consider(run, story, pitch, source_ids, "personalized_trend", producing, lead["rank"])
+            if "episode_id" in lead:
+                pitch["episode_id"] = lead["episode_id"]
+            origin = OriginalContentCall.objects.get(pk=lead["rank_call_id"]) if "rank_call_id" in lead else producing
+            row = _consider(run, story, pitch, source_ids, "personalized_trend", origin, lead["rank"])
             if entry["background_ids"]:
                 attach_sources(row, entry["background_ids"], fence=run.fence, usage="background")
             _save(run, gathering)

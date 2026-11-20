@@ -58,6 +58,8 @@ def _expanded_history(identities, run):
 
 
 def _selection_packet(run, cfg):
+    from .chatter_trends import DECISION_SCOPE, RANKED_SCOPES
+
     rows = list(
         OriginalContent.objects.filter(run=run)
         .select_related("development")
@@ -87,7 +89,7 @@ def _selection_packet(run, cfg):
         ]
         evidence = [sources[identity] for identity in identities]
         roles = {s.post_id or f"dossier-source:{s.dossier_source_id}": s.usage for s in row.consideration_sources.all()}
-        current_evidence = [source for source in evidence if roles[source["id"]] == "consideration"] if run.scope_key == "chatter:personalized-trends:v1" else evidence
+        current_evidence = [source for source in evidence if roles[source["id"]] == "consideration"] if run.scope_key in RANKED_SCOPES else evidence
         ref = str(row.development_id)
         candidates.append(
             {
@@ -104,10 +106,10 @@ def _selection_packet(run, cfg):
                     "source_identities": row.selection.get("source_identities", []),
                     "source_usages": roles,
                     "gathering": "ranking is a gathering lead; only supplied source passages are evidence"}
-                   if run.scope_key == "chatter:personalized-trends:v1" else {}),
+                   if run.scope_key in RANKED_SCOPES else {}),
                 "persistence": appearance_history(
                     row.development, run.facts_as_of, observed_at=observed_at,
-                    lane="personalized-trends-v1" if run.scope_key == "chatter:personalized-trends:v1" else "semantic-v1"
+                    lane="personalized-trends-v2" if run.scope_key == DECISION_SCOPE else "personalized-trends-v1" if run.scope_key in RANKED_SCOPES else "semantic-v1"
                 ),
             }
         )
@@ -161,7 +163,7 @@ def _selection_packet(run, cfg):
             ),
             "lookup_omitted": run.outcome.get("lookup_omitted", 0),
             "all_x_totals": "unknown",
-            **({"gathering": run.outcome.get("gathering")} if run.scope_key == "chatter:personalized-trends:v1" else {}),
+            **({"gathering": run.outcome.get("gathering")} if run.scope_key in RANKED_SCOPES else {}),
         },
     }
     requested = run.outcome.get("history_coverage", {}).get("history_requests", [])

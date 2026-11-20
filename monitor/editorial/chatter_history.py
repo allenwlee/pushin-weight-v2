@@ -1,7 +1,7 @@
 """Frozen evidence, query versions and queryable Chatter consideration history."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from django.db import transaction
@@ -20,7 +20,6 @@ from core.models import (
 )
 from monitor.original_content import WORKFLOWS, citation_values, digest, safe_source_url
 
-from .contracts import interval_start
 from .evidence import post_evidence, safe_source_image
 
 WORKFLOW = "chatter-discovery"
@@ -317,6 +316,23 @@ def save_query(text, *, development=None):
     return query
 
 
+def history_lane(lane):
+    from .chatter_trends import (
+        DECISION_SCOPE,
+        RANK_STAGE,
+        TRENDS_SCOPE,
+        WINDOW_RANK_STAGE,
+    )
+
+    if lane == "semantic-v1":
+        return SCOPE, "discovery", "semantic_shortlist", 15
+    if lane == "personalized-trends-v1":
+        return TRENDS_SCOPE, RANK_STAGE, "personalized_trend", 60
+    if lane == "personalized-trends-v2":
+        return DECISION_SCOPE, WINDOW_RANK_STAGE, "personalized_trend", 30
+    raise ValueError("unknown Chatter history lane")
+
+
 def appearance_history(development, cutoff, *, periods=8, observed_at=None, lane="semantic-v1"):
     if type(periods) is not int or not 1 <= periods <= 96:
         raise ValueError("history period limit exceeded")
@@ -325,12 +341,11 @@ def appearance_history(development, cutoff, *, periods=8, observed_at=None, lane
     observed_at = observed_at or cutoff
     if observed_at < cutoff:
         raise ValueError("history observation precedes its cycle")
-    if lane not in {"semantic-v1", "personalized-trends-v1"}:
-        raise ValueError("unknown Chatter history lane")
-    hourly = lane == "personalized-trends-v1"
-    scope, stage, kind = ("chatter:personalized-trends:v1", "trends-ranking-v1", "personalized_trend") if hourly else (SCOPE, "discovery", "semantic_shortlist")
-    anchor = cutoff.replace(minute=0, second=0, microsecond=0) if hourly else interval_start(cutoff)
-    slots = [anchor - timedelta(minutes=(60 if hourly else 15) * index) for index in range(periods)]
+    scope, stage, kind, minutes = history_lane(lane)
+    rolling = lane == "personalized-trends-v2"
+    clock = cutoff.astimezone(UTC)
+    anchor = clock.replace(minute=clock.minute // minutes * minutes, second=0, microsecond=0)
+    slots = [anchor - timedelta(minutes=minutes * index) for index in range(periods)]
     runs = {run.interval: run for run in OriginalContentRun.objects.filter(
         workflow_key=WORKFLOW, scope_key=scope, interval__in=slots, facts_as_of__lte=cutoff,
     ).annotate(discovery_observed=Exists(OriginalContentCall.objects.filter(
@@ -341,12 +356,13 @@ def appearance_history(development, cutoff, *, periods=8, observed_at=None, lane
         development=development, run_id__in=[run.pk for run in runs.values()],
         attempted_at__lte=observed_at, discovery_call__completed_at__lte=observed_at,
         appearance_kind=kind, discovery_call__state="completed", discovery_call__stage=stage,
-        discovery_call__run_id=F("run_id"), discovery_call__workflow_key=WORKFLOW,
+        discovery_call__workflow_key=WORKFLOW,
+        **({"discovery_call__run__scope_key":scope, "discovery_call__run__interval__lte":F("run__interval")} if rolling else {"discovery_call__run_id":F("run_id")}),
     )}
     evidence, lower_bound, consecutive, known = [], 0, True, True
     for slot in slots:
         run = runs.get(slot)
-        if hourly and run and run.discovery_state == "complete":
+        if kind == "personalized_trend" and run and run.discovery_state == "complete":
             from .chatter_trends import (
                 _headlines,
                 _saved_observation,
@@ -356,13 +372,14 @@ def appearance_history(development, cutoff, *, periods=8, observed_at=None, lane
 
             try:
                 state = checkpoint(run)
-                if state.phase == "empty":
+                if state.phase == "empty" and not rolling:
                     _, saved = _saved_observation(run, state)
                     run.discovery_observed = (not _headlines(saved) and state.observation.http_status == 200
                                               and state.observation.headline_count == 0 and state.observation.observed_at <= observed_at)
                 else:
                     batch = read_ranked_batch(run.pk)
-                    run.discovery_observed = datetime.fromisoformat(batch["observed_at"]) <= observed_at
+                    run.discovery_observed = (datetime.fromisoformat(batch["observed_at"]) <= observed_at
+                                              and (not rolling or bool(state.manifest)))
             except (ValueError, KeyError, OriginalContentCall.DoesNotExist):
                 run.discovery_observed = False
         state = "unknown"
@@ -387,10 +404,8 @@ def appearance_history(development, cutoff, *, periods=8, observed_at=None, lane
 def competition_board(cutoff, *, limit=200, lane="semantic-v1"):
     if type(limit) is not int or not 1 <= limit <= 200:
         raise ValueError("board limit exceeded")
-    if lane not in {"semantic-v1", "personalized-trends-v1"}:
-        raise ValueError("unknown Chatter history lane")
-    scope = "chatter:personalized-trends:v1" if lane == "personalized-trends-v1" else SCOPE
-    kinds = ["personalized_trend", "release"] if lane == "personalized-trends-v1" else ["semantic_shortlist", "keyword_only", "release"]
+    scope, _, _, _ = history_lane(lane)
+    kinds = ["personalized_trend", "release"] if lane != "semantic-v1" else ["semantic_shortlist", "keyword_only", "release"]
     return list(history_query().filter(
         run__workflow_key=WORKFLOW, run__scope_key=scope, run__discovery_state="complete",
         run__facts_as_of__lte=cutoff, run__facts_as_of__gt=cutoff - timedelta(hours=2),

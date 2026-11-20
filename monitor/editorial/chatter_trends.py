@@ -40,11 +40,18 @@ from monitor.original_content import advisory_lock, digest, shared_storage
 
 from .chatter_accounting import admit, call_once
 from .chatter_history import WORKFLOW, locked_run, validated_packet
+from .chatter_windows import WindowRanking
 from .config import EditorialConfig, load_editorial_config
 from .providers import json_call, request_fingerprint, request_payload
 from .voices import load_bound_voices
 
 TRENDS_SCOPE = "chatter:personalized-trends:v1"
+ROLLING_LANE = "personalized-trends-v2"
+CAPTURE_SCOPE = "chatter:personalized-trends:capture:v2"
+DECISION_SCOPE = "chatter:personalized-trends:decision:v2"
+RANKED_SCOPES = (TRENDS_SCOPE, DECISION_SCOPE)
+ROLLING_SCOPES = (CAPTURE_SCOPE, DECISION_SCOPE)
+WINDOW_RANK_STAGE = "trends-ranking-v2"
 RANK_STAGE = "trends-ranking-v1"
 OFFICIAL_ENDPOINT = "https://api.x.com/2/users/personalized_trends"
 OFFICIAL_PARAMS = {"personalized_trend.fields": "category,post_count,trend_name,trending_since"}
@@ -119,8 +126,14 @@ class RankingReply(ClosedDocument):
     diagnostics: RankingDiagnostics
 
 
-def validate_rank_reply(value):
-    reply = RankingReply.model_validate(value)
+class WindowReply(RankingReply):
+    schema_version: Literal[2]
+    data: WindowRanking
+
+
+def validate_rank_reply(value, stage=RANK_STAGE):
+    contract = WindowReply if stage == WINDOW_RANK_STAGE else RankingReply
+    reply = contract.model_validate(value)
     if reply.usage != reply.diagnostics.usage:
         raise ValueError("ranking usage differs from receipt")
     # Do not add absent optional keys to the provider's compact saved reply.
@@ -157,6 +170,34 @@ class Checkpoint(ClosedDocument):
     last_enqueue_at: AwareDatetime | None = None
 
 
+class WindowPointer(ClosedDocument):
+    run_id: int = Field(ge=1)
+    request_id: UUID
+    archive_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class SelectedDevelopment(ClosedDocument):
+    consideration_id: int = Field(ge=1)
+    development_id: UUID
+    episode_id: str
+    title: str
+    selected_at: AwareDatetime
+    wordings: list[str]
+
+
+class WindowCheckpoint(Checkpoint):
+    schema_version: Literal[2] = 2
+    lane: Literal["personalized-trends-v2"] = ROLLING_LANE
+    terminal_at: AwareDatetime | None = None
+    selected_developments: list[SelectedDevelopment] = Field(default_factory=list, max_length=200)
+    freeze_at: AwareDatetime | None = None
+    manifest: list[WindowPointer] = Field(default_factory=list, max_length=4)
+    missing_slots: list[AwareDatetime] = Field(default_factory=list, max_length=4)
+    previous_id: int | None = Field(default=None, ge=1)
+    previous_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    committed_at: AwareDatetime | None = None
+
+
 def _document(model, value):
     # JSON mode accepts ISO clocks while strict mode rejects coercions and extra keys.
     if "schema_version" in model.model_fields and (not isinstance(value, dict) or "schema_version" not in value):
@@ -165,12 +206,23 @@ def _document(model, value):
 
 
 def checkpoint(run):
-    state = _document(Checkpoint, run.outcome["trends"])
-    if (run.scope_key != TRENDS_SCOPE or run.workflow_key != WORKFLOW
+    state = _document(WindowCheckpoint if run.scope_key in ROLLING_SCOPES else Checkpoint, run.outcome["trends"])
+    if (run.scope_key not in (*RANKED_SCOPES, CAPTURE_SCOPE) or run.workflow_key != WORKFLOW
             or state.slot != run.interval or state.cutoff != run.facts_as_of
             or state.cycle_started_at != run.cycle_started_at
             or state.source_cycle_id != run.source_cycle_id):
         raise ValueError("trends checkpoint ownership changed")
+    if run.scope_key in ROLLING_SCOPES:
+        if run.interval.second or run.interval.microsecond or run.interval.minute % (30 if run.scope_key == DECISION_SCOPE else 15):
+            raise ValueError("unaligned_rolling_slot")
+        if run.scope_key == DECISION_SCOPE and (
+            state.cutoff != state.slot or state.observation is not None
+            or state.freeze_at and not state.slot <= state.freeze_at <= state.slot + timedelta(minutes=5)
+            or state.committed_at and (not state.freeze_at or not state.ranking_sha256)
+        ):
+            raise ValueError("invalid_decision_checkpoint")
+        if run.scope_key == CAPTURE_SCOPE and (state.freeze_at or state.rank_call_id or state.manifest):
+            raise ValueError("invalid_capture_checkpoint")
     validated_packet(run.snapshot)
     return state
 
@@ -179,33 +231,42 @@ def ranking_prefix():
     return (Path(settings.BASE_DIR) / "config/editorial_chatter_chain/trends-ranking.txt").read_text()
 
 
-def workflow_version():
+def workflow_version(lane="personalized-trends-v1"):
     from .chatter_discovery import prompts
 
+    if lane == ROLLING_LANE:
+        from .chatter_windows import PROMPT
+
+        return digest([lane, OFFICIAL_ENDPOINT, OFFICIAL_PARAMS, PROMPT.read_text(), prompts()])
     return digest(["personalized-trends-v1", OFFICIAL_ENDPOINT, OFFICIAL_PARAMS, ranking_prefix(), prompts()])
 
 
-def reserve_due_slot(source_cycle_id, started, *, cfg, purpose):
+def reserve_due_slot(source_cycle_id, started, *, cfg, purpose, scope=TRENDS_SCOPE):
     """Commit the interval owner before a broker notification can be attempted."""
-    if not cfg.chatter.enabled or cfg.chatter.discovery_lane != "personalized-trends-v1":
+    rolling = scope in ROLLING_SCOPES
+    lane = ROLLING_LANE if rolling else "personalized-trends-v1"
+    if scope not in (*RANKED_SCOPES, CAPTURE_SCOPE) or not cfg.chatter.enabled or cfg.chatter.discovery_lane != lane:
         raise ValueError("personalized trends lane is not enabled")
     now = timezone.now()
     if started.tzinfo is None or started > now + timedelta(minutes=1) or started < now - timedelta(days=8):
         raise ValueError("invalid Chatter cutoff")
-    if cfg.chatter.trial and purpose != "on-demand":
+    if not rolling and cfg.chatter.trial and purpose != "on-demand":
         raise ValueError("explicit validation requires the on-demand purpose")
-    slot = started.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
-    state = Checkpoint(slot=slot, source_cycle_id=str(source_cycle_id), cycle_started_at=started,
-                       cutoff=started, credential_purpose=purpose)
+    step = 15 if scope == CAPTURE_SCOPE else 30 if scope == DECISION_SCOPE else 60
+    tick = started.astimezone(UTC)
+    slot = tick.replace(minute=tick.minute // step * step, second=0, microsecond=0)
+    cutoff = slot if scope == DECISION_SCOPE else started
+    state = (WindowCheckpoint if rolling else Checkpoint)(slot=slot, source_cycle_id=str(source_cycle_id), cycle_started_at=started,
+                       cutoff=cutoff, credential_purpose=purpose)
     voices = load_bound_voices(cfg)
     with transaction.atomic():
-        advisory_lock(TRENDS_SCOPE)
-        existing = OriginalContentRun.objects.filter(scope_key=TRENDS_SCOPE, interval=slot).first()
+        advisory_lock(scope)
+        existing = OriginalContentRun.objects.filter(scope_key=scope, interval=slot).first()
         if existing:
             validate_slot_authority(existing, cfg=cfg, purpose=purpose)
             return existing, False
-        latest = OriginalContentRun.objects.filter(scope_key=TRENDS_SCOPE).order_by("-interval").first()
-        if latest:
+        latest = OriginalContentRun.objects.filter(scope_key=scope).order_by("-interval").first()
+        if latest and scope != DECISION_SCOPE:
             previous = checkpoint(latest)
             if previous.deferred_until and previous.deferred_until > now:
                 return latest, False
@@ -215,8 +276,8 @@ def reserve_due_slot(source_cycle_id, started, *, cfg, purpose):
                         or credential["credential_revision"] == previous.observation.credential_revision):
                     return latest, False
         run = OriginalContentRun.objects.create(
-            scope_key=TRENDS_SCOPE, interval=slot, source_cycle_id=str(source_cycle_id),
-            workflow_key=WORKFLOW, workflow_version=workflow_version(), facts_as_of=started,
+            scope_key=scope, interval=slot, source_cycle_id=str(source_cycle_id),
+            workflow_key=WORKFLOW, workflow_version=workflow_version(lane), facts_as_of=cutoff,
             cycle_started_at=started, packet_schema_version=1,
             snapshot={"schema_version": 1, "sources": {}},
             config_snapshot={"schema_version": 1, "editorial": cfg.model_dump(mode="json"),
@@ -244,7 +305,7 @@ def envelope_for(run):
 
 
 def _save(run, state, **changes):
-    updated = _document(Checkpoint, {**state.model_dump(mode="json"), **changes})
+    updated = _document(type(state), {**state.model_dump(mode="json"), **changes})
     with transaction.atomic():
         current = locked_run(run.pk, run.fence)
         current.outcome = {**current.outcome, "phase": updated.phase, "trends": updated.model_dump(mode="json")}
@@ -289,7 +350,7 @@ def _saved_observation(run, state):
     request = CollectionRequest.objects.select_related("archive", "attempt__run").get(pk=receipt.request_id)
     body = bytes(request.archive.body) if request.archive is not None else None
     if (request.attempt.run.content_run_id != run.pk or request.endpoint_url != OFFICIAL_ENDPOINT
-            or request.http_method != "GET" or request.request_config != "personalized-trends-v1"
+            or request.http_method != "GET" or request.request_config != state.lane
             or request.transport_outcome != "received" or request.http_status != receipt.http_status
             or request.received_at != receipt.observed_at or request.archive is None
             or request.archive.content_sha256 != receipt.archive_sha256
@@ -301,17 +362,17 @@ def _saved_observation(run, state):
 def _official_job(run, state):
     source, _ = DataSource.objects.get_or_create(pk="x", defaults={"name": "X", "source_type": "social"})
     recurring = state.credential_purpose == "scheduled"
-    identity = ["personalized-trends-v1", CREDENTIAL_KEY, state.credential_purpose,
+    identity = [state.lane, CREDENTIAL_KEY, state.credential_purpose,
                 run.config_snapshot["editorial"]["chatter"], OFFICIAL_ENDPOINT, OFFICIAL_PARAMS,
                 None if recurring else run.pk]
     return register_job(
         job_key="chatter-personalized-trends:" + digest(identity)[:40], source=source, purpose="content",
         operation="chatter_search", mode="recurring" if recurring else "manual", definition={"version": 2, "options": {
-            "credential_purpose": state.credential_purpose, "workflow_version": "personalized-trends-v1",
+            "credential_purpose": state.credential_purpose, "workflow_version": state.lane,
             "pricing_sha256": digest(["official-x", "unpriced"]),
         }}, settings={"owner_kind": "source", "schedule_kind": "interval" if recurring else "manual",
                       "schedule_driver": "external_render_cron" if recurring else "manual",
-                      "interval_seconds": 3600 if recurring else None,
+                      "interval_seconds": (900 if state.lane == ROLLING_LANE else 3600) if recurring else None,
                       "max_requests": 1, "max_bytes": MAX_RESPONSE_BYTES, "max_seconds": 120, "max_items": 10000},
     )
 
@@ -352,10 +413,10 @@ def _observe(run, state, *, token_store, official_get):
         attempt = CollectionAttempt.objects.get(pk=claim.attempt_id)
         attempt.credential_purpose = state.credential_purpose
         attempt.save(update_fields=["credential_purpose"])
-        scope = checkpoint_scope(claim, scope_key="personalized-trends-v1", scope_kind="chatter_trends",
+        scope = checkpoint_scope(claim, scope_key=state.lane, scope_kind="chatter_trends",
                                  ownership={"content_run_id": run.pk}, typed=True, requested_end_at=run.facts_as_of)
         request = begin_request(attempt, scope, endpoint_url=OFFICIAL_ENDPOINT, method="GET",
-                                request_config="personalized-trends-v1")
+                                request_config=state.lane)
         # Hold a conservative source-call reservation; official-X has no
         # TwitterAPI price estimate or reported charge in this receipt.
         run_config = EditorialConfig.model_validate(run.config_snapshot["editorial"])
@@ -414,6 +475,10 @@ def read_ranked_batch(run_id):
     """Hash-checked U47 input: all groups plus ten leads with original members."""
     run = OriginalContentRun.objects.get(pk=run_id)
     state = checkpoint(run)
+    if run.scope_key == DECISION_SCOPE:
+        from .chatter_window_runs import read_window_batch
+
+        return read_window_batch(run, state)
     _, document = _saved_observation(run, state)
     headlines = _headlines(document)
     if state.observation.http_status != 200 or state.observation.headline_count != len(headlines):
@@ -454,8 +519,10 @@ def discover_trends(run_id, *, cfg=None, transport=None, official_get=None, toke
             cfg = EditorialConfig.model_validate(run.config_snapshot["editorial"])
         except (ValueError, KeyError):
             return {"status": "held", "run_id": run.pk, "error_code": "invalid_trends_checkpoint"}
-        if run.workflow_version != workflow_version():
+        if run.workflow_version != workflow_version(state.lane):
             return {"status": "held", "run_id": run.pk, "error_code": "trends_prompt_changed"}
+        if run.scope_key == CAPTURE_SCOPE and run.execution_state == "completed":
+            return {"status": "captured", "run_id":run.pk}
         if state.phase == "ranked":
             try:
                 read_ranked_batch(run.pk)
@@ -479,7 +546,7 @@ def discover_trends(run_id, *, cfg=None, transport=None, official_get=None, toke
         if state.observation is None:
             if state.phase == "held":
                 return {"status": "held", "run_id": run.pk, "error_code": state.error_code}
-            if timezone.now() >= state.slot + timedelta(hours=1):
+            if timezone.now() >= state.slot + timedelta(minutes=15 if state.lane == ROLLING_LANE else 60):
                 raise ValueError("official_observation_window_elapsed")
             state = _observe(run, state, token_store=token_store, official_get=official_get)
         _, document = _saved_observation(run, state)
@@ -489,6 +556,9 @@ def discover_trends(run_id, *, cfg=None, transport=None, official_get=None, toke
                              "official_rate_limited" if status == 429 else "official_http_failure")
         headlines = _headlines(document)
         state = _save(run, state, observation={**state.observation.model_dump(mode="json"), "headline_count": len(headlines)})
+        if run.scope_key == CAPTURE_SCOPE:
+            OriginalContentRun.objects.filter(pk=run.pk, fence=run.fence).update(execution_state="completed", discovery_state="complete")
+            return {"status":"captured", "run_id":run.pk}
         if not headlines:
             _save(run, state, phase="empty", error_code="")
             return {"status": "empty", "run_id": run.pk}
@@ -515,7 +585,7 @@ def discover_trends(run_id, *, cfg=None, transport=None, official_get=None, toke
         if not isinstance(code, str) or not re.fullmatch(r"[a-zA-Z0-9_:-]{1,64}", code):
             code = "trends_stage_failure"
         state = checkpoint(OriginalContentRun.objects.get(pk=run.pk))
-        _save(run, state, phase="held", error_code=code)
+        _save(run, state, phase="held", error_code=code, **({"terminal_at":timezone.now().isoformat()} if run.scope_key == CAPTURE_SCOPE else {}))
         OriginalContentRun.objects.filter(pk=run.pk, fence=run.fence).update(discovery_state="failed")
         return {"status": "held", "run_id": run.pk, "error_code": code}
     finally:

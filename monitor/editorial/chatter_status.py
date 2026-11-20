@@ -11,10 +11,10 @@ from .chatter_history import SCOPE, WORKFLOW
 
 def delay_status(now=None, *, activated_at=None):
     now = now or timezone.now()
-    from .chatter_trends import TRENDS_SCOPE
+    from .chatter_trends import DECISION_SCOPE, TRENDS_SCOPE
 
     rows = list(
-        OriginalContentRun.objects.filter(workflow_key=WORKFLOW, scope_key__in=[SCOPE, TRENDS_SCOPE])
+        OriginalContentRun.objects.filter(workflow_key=WORKFLOW, scope_key__in=[SCOPE, TRENDS_SCOPE, DECISION_SCOPE])
         .order_by("-interval")
         .values("outcome__healthy_at", "created_at", "scope_key")[:192]
     )
@@ -32,7 +32,7 @@ def delay_status(now=None, *, activated_at=None):
         starts.append(activated_at)
     activated = min(starts, default=now)
     latest_scope = rows[0]["scope_key"] if rows else SCOPE
-    notice = timedelta(hours=3) if latest_scope == TRENDS_SCOPE else timedelta(minutes=45)
+    notice = timedelta(hours=3) if latest_scope == TRENDS_SCOPE else timedelta(minutes=90 if latest_scope == DECISION_SCOPE else 45)
     return {
         "delayed": now - (last or activated) >= notice,
         "last_success_at": last.isoformat() if last else None,
