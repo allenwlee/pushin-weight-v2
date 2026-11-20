@@ -1961,8 +1961,10 @@ def queue_saved_release_claims(*, limit=100, after=None, persist=False):
                 (TextEvidence(f"event_dossier_claims:{claim.pk}", "release_extraction", claim.assertion_text),),
             ))
             leads = search_leads(candidate) if candidate else ()
-            exact_repo = (_source_bound_hf_repo(claim) if claim.scope_key.startswith("pulse-finding-v1:") else None)
-            eligible = bool(exact_repo or (leads and leads[0]["eligible"]))
+            if claim.scope_key.startswith("pulse-finding-v1:"):
+                eligible = bool(_source_bound_hf_repo(claim))
+            else:
+                eligible = bool(leads and leads[0]["eligible"])
         if latest and latest.outcome in {"non_release", "scam"}:
             outcome = "excluded"
         elif not eligible:
@@ -1970,6 +1972,7 @@ def queue_saved_release_claims(*, limit=100, after=None, persist=False):
         elif persist:
             try:
                 job = (queue_github_repository(claim.pk) if claim.scope_key.startswith("github_repo_lead:")
+                       else queue_hf_name_search(claim.pk, exact_only=True) if claim.scope_key.startswith("pulse-finding-v1:")
                        else queue_hf_name_search(claim.pk))
                 outcome = "queued"
             except Exception:

@@ -482,3 +482,20 @@ def test_hf_registration_and_dossier_merge_do_not_deadlock(monkeypatch, settings
         job = models.CollectionJob.objects.get(pk=future.result(timeout=10))
     lead = job.dossier_claim_links.get(claim__scope_key__startswith='pulse-hf-source-link-v1:').claim
     assert lead.event_dossier_source.event_dossier_id == target.pk
+
+
+def test_saved_pulse_sweep_does_not_expand_unverified_hf_name(settings):
+    from core.product_release_acquisition import queue_saved_release_claims
+    from core.product_release_dossiers import persist_classified_release_findings
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    models.DataSource.objects.get_or_create(pk='hf', defaults={'name':'Hugging Face', 'source_type':'model_adoption'})
+    post = models.Post.objects.create(tweet_id='pulse-sweep-no-hf', text='Released Qwen3.5')
+    item = finding(name='Qwen3.5')
+    item['assertions'][0]['source_excerpt'] = 'Released Qwen3.5'
+    item['assertions'][0]['assertion_text'] = 'Released Qwen3.5'
+    persist_classified_release_findings(source={'kind':'post', 'id':post.pk}, revision_id='b' * 64,
+        content_fingerprint='c' * 64, extraction_version='test', findings=[item])
+    outcome = queue_saved_release_claims(limit=100, persist=True)
+    assert outcome['queued'] == 0
+    assert not models.CollectionJob.objects.filter(operation='release_acquisition').exists()
