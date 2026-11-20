@@ -47,6 +47,12 @@ services:
           property: connectionString
       - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
         value: staging
+      - key: PULSE_CONTROL_R2_BUCKET
+        value: pushinweight-media-staging
+      - key: X_MONITOR_CLASSIFIER_PIPELINE
+        value: compressed8_pulse_v1
+      - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
+        value: "True"
       - key: OLLIJA_STAGING_MODE
         value: "True"
       - key: OLLIJA_STAGING_ALLOWED_EMAILS
@@ -126,6 +132,27 @@ services:
           property: connectionString
       - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
         value: staging
+      - key: PULSE_CONTROL_R2_BUCKET
+        value: pushinweight-media-staging
+      - key: X_MONITOR_CLASSIFIER_PIPELINE
+        value: compressed8_pulse_v1
+      - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
+        value: "True"
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_SECRET_ACCESS_KEY
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: DEEPINFRA_API_KEY
@@ -191,6 +218,11 @@ services:
           type: worker
           name: pushinweight-staging-headlines
           envVarKey: OPENROUTER_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: OPENAI_API_KEY
       - key: XAI_API_KEY_PW
         fromService:
           type: worker
@@ -284,6 +316,11 @@ services:
           type: worker
           name: pushinweight-staging-headlines
           envVarKey: OPENROUTER_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          type: worker
+          name: pushinweight-staging-headlines
+          envVarKey: OPENAI_API_KEY
       - key: XAI_API_KEY_PW
         fromService:
           type: worker
@@ -469,12 +506,38 @@ services:
         generateValue: true
       - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
         value: staging
+      - key: PULSE_CONTROL_R2_BUCKET
+        value: pushinweight-media-staging
+      - key: X_MONITOR_CLASSIFIER_PIPELINE
+        value: compressed8_pulse_v1
+      - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
+        value: "True"
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_SECRET_ACCESS_KEY
       - key: DATABASE_URL
         fromDatabase:
           name: pushinweight-staging-db
           property: connectionString
       - key: PW_SERVING_DATABASE_ROLE
         value: pushinweight_web_serving
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-staging-headlines-broker
+          property: connectionString
       - key: DEEPINFRA_ON_DEMAND
         sync: false
       - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
@@ -539,6 +602,27 @@ services:
           property: connectionString
       - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
         value: staging
+      - key: PULSE_CONTROL_R2_BUCKET
+        value: pushinweight-media-staging
+      - key: X_MONITOR_CLASSIFIER_PIPELINE
+        value: compressed8_pulse_v1
+      - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
+        value: "True"
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: pushinweight-staging-web
+          envVarKey: R2_SECRET_ACCESS_KEY
       - key: X_MONITOR_STAGING_ACCEPTANCE_SERVICE
         value: pushinweight-staging-harvest
       - key: X_MONITOR_STAGING_ACCEPTANCE_ENABLED

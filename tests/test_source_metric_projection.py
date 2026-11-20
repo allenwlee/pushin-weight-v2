@@ -214,7 +214,7 @@ def test_exact_release_capture_projects_into_reviewed_product_statistics():
         replay_saved_evidence,
     )
 
-    contract, _, product, spec = configured("hf", product_type="llm-model", mapped=True)
+    contract, _, product, spec = configured("hf", product_type="model-llm", mapped=True)
     url = "https://huggingface.co/lab/Model"
     post = Post.objects.create(tweet_id="metric-release", text=f"Announcing Model {url}")
     dossier, _, _ = record_release_report(
@@ -292,7 +292,7 @@ def test_exact_release_capture_queues_active_reviewed_publisher_for_projection(
     )
     from core.product_release_dossiers import record_release_report
 
-    contract, _, product, spec = configured("hf", product_type="llm-model", mapped=mapped)
+    contract, _, product, spec = configured("hf", product_type="model-llm", mapped=mapped)
     if not native_allowed:
         spec["source_configuration"]["hf"]["native_resources"] = False
         contract = source_metric_projection.configure_source_statistics(spec)
@@ -375,7 +375,7 @@ def test_saved_release_capture_waits_for_later_reviewed_authority_without_refetc
     from core.product_release_dossiers import record_release_report
     from core.source_metric_projection import recover_release_projection_followups
 
-    contract, _, product, _ = configured("hf", product_type="llm-model", mapped=True)
+    contract, _, product, _ = configured("hf", product_type="model-llm", mapped=True)
     url = "https://huggingface.co/lab/Model"
     post = Post.objects.create(tweet_id="release-later-contract", text=f"Announcing Model {url}")
     dossier, _, _ = record_release_report(
@@ -444,7 +444,7 @@ def test_waiting_release_followup_respects_exclusion_and_later_correction():
         retain_release_projection_followup,
     )
 
-    _, _, product, _ = configured("hf", product_type="llm-model", mapped=True)
+    _, _, product, _ = configured("hf", product_type="model-llm", mapped=True)
     url = "https://huggingface.co/lab/Model"
     post = Post.objects.create(tweet_id="release-reconsider", text=f"Announcing Model {url}")
     dossier, _, _ = record_release_report(
@@ -499,7 +499,7 @@ def test_native_release_measurement_waits_for_later_dedicated_product_mapping():
         recover_release_projection_followups,
     )
 
-    dedicated, _, product, spec = configured("hf", product_type="llm-model", mapped=True)
+    dedicated, _, product, spec = configured("hf", product_type="model-llm", mapped=True)
     native_spec = copy.deepcopy(spec)
     native_spec["mappings"] = [m for m in native_spec["mappings"] if m["source_subject_kind"] == "account"]
     native = configure_source_statistics(native_spec)
@@ -555,7 +555,7 @@ def test_native_release_measurement_waits_for_later_dedicated_product_mapping():
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("owner_matches", [True, False])
 @pytest.mark.parametrize("role,product_type", [
-    ("dedicated_model", "llm-model"), ("dedicated_product", "agent-harness"),
+    ("dedicated_model", "model-llm"), ("dedicated_product", "agent"),
 ])
 def test_github_release_capture_projects_reviewed_product_metrics_without_refetch(owner_matches, role, product_type):
     import httpx
@@ -645,7 +645,7 @@ def test_github_release_measurement_waits_for_later_reviewed_authority():
     from core.product_release_sources import stored_posts
     from core.source_metric_projection import recover_release_projection_followups
 
-    contract, raw, product, _ = configured("github", product_type="llm-model", mapped=True)
+    contract, raw, product, _ = configured("github", product_type="model-llm", mapped=True)
     post = Post.objects.create(tweet_id="github-release-late-authority", text=(
         "We release our model at https://github.com/publisher/family"
     ))
@@ -704,7 +704,7 @@ def test_github_native_release_metrics_wait_for_later_product_mapping():
         recover_release_projection_followups,
     )
 
-    dedicated, raw, product, spec = configured("github", product_type="llm-model", mapped=True)
+    dedicated, raw, product, spec = configured("github", product_type="model-llm", mapped=True)
     native_spec = copy.deepcopy(spec)
     native_spec["mappings"] = [m for m in native_spec["mappings"] if m["source_subject_kind"] == "account"]
     native = configure_source_statistics(native_spec)
@@ -918,7 +918,7 @@ def test_other_model_admission_is_separate_from_text_benchmark_policy():
     from core.benchmark_metric_identity import configure_collection
 
     contract, raw, product, spec = configured(
-        product_type="other-ai-model", mapped=True
+        product_type="model-other", mapped=True
     )
     run = project(contract, "hf", [evidence("hf", raw)])
     numeric = run.observations.get()
@@ -932,7 +932,7 @@ def test_other_model_admission_is_separate_from_text_benchmark_policy():
 def test_family_repo_stays_native_only_instead_of_copying_models():
     from core.source_metric_projection import configure_source_statistics
 
-    contract, raw, _, spec = configured("github", product_type="llm-model", mapped=True)
+    contract, raw, _, spec = configured("github", product_type="model-llm", mapped=True)
     spec["mappings"][1]["identifier_metadata"]["role"] = "family_repository"
     contract = configure_source_statistics(spec)
     run = project(contract, "github", [evidence("github", raw)])
@@ -944,7 +944,7 @@ def test_family_repo_stays_native_only_instead_of_copying_models():
 def test_dedicated_agent_repository_projects_to_reviewed_product():
     from core.source_metric_projection import configure_source_statistics
 
-    _, raw, product, spec = configured("github", product_type="agent-harness", mapped=True)
+    _, raw, product, spec = configured("github", product_type="agent", mapped=True)
     spec["mappings"][1]["identifier_metadata"]["role"] = "dedicated_product"
     contract = configure_source_statistics(spec)
     run = project(contract, "github", [evidence("github", raw)])
@@ -1428,14 +1428,14 @@ def test_campaign_over_1000_models_partitions_and_routes_each_native_grain_once(
     from core.models import Product
     from core.source_metric_projection import configure_statistics_partitions
 
-    _contract, _, product, spec = configured(product_type="llm-model", mapped=True)
+    _contract, _, product, spec = configured(product_type="model-llm", mapped=True)
     products = Product.objects.bulk_create(
         [
             Product(
                 repo_id=f"lab/Model-{n}",
                 publisher_account=product.publisher_account,
                 brand=product.brand,
-                **product_type_fields(Product, "llm-model"),
+                **product_type_fields(Product, "model-llm"),
             )
             for n in range(2100)
         ]

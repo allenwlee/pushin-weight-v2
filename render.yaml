@@ -23,6 +23,12 @@ services:
     startCommand: gunicorn project.wsgi:application --log-file -
     healthCheckPath: /accounts/login/
     envVars:
+      - key: PULSE_CONTROL_R2_BUCKET
+        value: pushinweight-media-production
+      - key: X_MONITOR_CLASSIFIER_PIPELINE
+        value: compressed8_pulse_v1
+      - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
+        value: "True"
       - key: PYTHON_VERSION
         value: 3.12.0
       - key: DEBUG
@@ -106,6 +112,12 @@ services:
       celery -A project worker -l INFO -Q trend-narratives --concurrency=1
       --prefetch-multiplier=1 --without-gossip --without-mingle
     envVars:
+      - key: PULSE_CONTROL_R2_BUCKET
+        value: pushinweight-media-production
+      - key: X_MONITOR_CLASSIFIER_PIPELINE
+        value: compressed8_pulse_v1
+      - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
+        value: "True"
       - key: PYTHON_VERSION
         value: 3.12.0
       - key: DEBUG
@@ -446,6 +458,34 @@ services:
     buildCommand: ./build.sh
     startCommand: python manage.py run_enrichment_worker --json
     envVars:
+      - key: PULSE_CONTROL_R2_BUCKET
+        value: pushinweight-media-production
+      - key: X_MONITOR_CLASSIFIER_PIPELINE
+        value: compressed8_pulse_v1
+      - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
+        value: "True"
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: web
+          name: pushinweight-web
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: pushinweight-web
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: pushinweight-web
+          envVarKey: R2_SECRET_ACCESS_KEY
+      - key: TYPESAFE_API_KEY
+        sync: false
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
       - key: PYTHON_VERSION
         value: 3.12.0
       - key: DEBUG
@@ -496,6 +536,27 @@ services:
     buildCommand: ./build.sh
     startCommand: python manage.py run_cycle --scheduled
     envVars:
+      - key: PULSE_CONTROL_R2_BUCKET
+        value: pushinweight-media-production
+      - key: X_MONITOR_CLASSIFIER_PIPELINE
+        value: compressed8_pulse_v1
+      - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
+        value: "True"
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: web
+          name: pushinweight-web
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: pushinweight-web
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: pushinweight-web
+          envVarKey: R2_SECRET_ACCESS_KEY
       - key: PYTHON_VERSION
         value: 3.12.0
       - key: DEBUG

@@ -26,12 +26,17 @@ def config_fingerprint(cfg) -> str:
     enrichment = cfg.harvest.enrichment.model_dump(
         exclude={"mode", "provider_calls_active", "budget_window_id"}
     )
+    llm = cfg.llm.model_dump()
+    pricing = PRICING_REVISION
+    if llm.pop("classifier_pipeline", "two_role") == "compressed8_pulse_v1":
+        llm["classifier_pipeline"] = "compressed8_pulse_v1"
+        pricing += "+typesafe-2026-11-17-bound-v1"
     payload = {
         "enrichment": enrichment,
-        "llm": cfg.llm.model_dump(),
+        "llm": llm,
         "synthesis_concurrency": cfg.synthesis.concurrency,
         "targeted_extraction": cfg.targeted_extraction.model_dump(),
-        "pricing": PRICING_REVISION,
+        "pricing": pricing,
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
@@ -40,6 +45,23 @@ def config_fingerprint(cfg) -> str:
 
 def request_cost_bound(request: dict) -> Decimal:
     model = request.get("model")
+    if model == "jev-1.14.0":
+        from x_monitor.jev_classifier import (
+            INPUT_PRICE_PER_MILLION,
+            MAX_INPUT_TOKENS,
+            request_document,
+        )
+
+        try:
+            request_document(request.get("messages"), model=model)
+        except (ValueError, TypeError) as exc:
+            raise LLMCallBudgetExhausted("enrichment_token_bound_unknown") from exc
+        # Reserve the documented non-long-context maximum before extraction,
+        # since the second request depends on the first response. No refund or
+        # optimistic tokenizer estimate can renew this budget after a lost reply.
+        return (MAX_INPUT_TOKENS * INPUT_PRICE_PER_MILLION / 1_000_000).quantize(
+            Decimal("0.000001"), rounding=ROUND_CEILING,
+        )
     if model not in PRICES:
         raise LLMCallBudgetExhausted("enrichment_price_unknown")
     messages = request.get("messages")

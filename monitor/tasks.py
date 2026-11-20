@@ -78,7 +78,12 @@ def recover_due_product_releases() -> dict[str, object]:
     from core.source_metric_projection import recover_release_projection_followups
 
     try:
-        detection = drain_posts(limit=50, max_seconds=20)
+        if load_config(Path("config.yaml")).llm.classifier_pipeline == "compressed8_pulse_v1":
+            from monitor.pulse_processing import process_saved_findings
+
+            detection = process_saved_findings()
+        else:
+            detection = drain_posts(limit=50, max_seconds=20)
     except Exception:
         logger.exception("Release detection recovery failed; later wake-up can retry")
         detection = {"status": "error"}

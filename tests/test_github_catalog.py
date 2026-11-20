@@ -897,3 +897,32 @@ def test_authenticated_draft_releases_never_enter_saved_public_evidence():
         b"UNPUBLISHED_SENTINEL" not in bytes(archive.body)
         for archive in CollectionEvidenceArchive.objects.all()
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_saved_github_release_detection_waits_for_pulse_identity_resume(settings, monkeypatch, tmp_path):
+    from core import models
+    from core.product_release_source_queue import drain_observations, enqueue_saved_observations
+    from monitor import pulse_control
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    job, repo = configured()
+    original = responses(repo, [])
+    def respond(request):
+        if request.url.path.endswith('/releases'):
+            return httpx.Response(200, json=[{'id': 1, 'tag_name': 'v1', 'name': 'Agent 1.0',
+                'body': 'Release of Agent 1.0', 'draft': False, 'published_at': '2026-09-01T00:00:00Z',
+                'html_url': 'https://github.com/publisher/family/releases/tag/v1'}])
+        return original(request)
+    run = execute_github_catalog(job.pk, client=reader(respond, 30))
+    release = run.observations.get(observation_kind='releases')
+    enqueue_saved_observations([release.pk])
+    monkeypatch.setenv('X_MONITOR_CLASSIFIER_PIPELINE', 'compressed8_pulse_v1')
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PULSE_CONTROL_R2_BUCKET = ''
+    pulse_control.initialize(directory=tmp_path, state='stopped', actor='fixture', reason='test')
+    assert drain_observations(observation_ids=[release.pk])['processed'] == 0
+    assert models.CollectionScopeRun.objects.get(scope_kind='release_detection', resource_observation=release).outcome == 'pending'
+    row = pulse_control.read_status()
+    pulse_control.request_state('running', expected_revision=row['desired_revision'], actor='fixture', reason='test')
+    assert drain_observations(observation_ids=[release.pk])['processed'] == 1

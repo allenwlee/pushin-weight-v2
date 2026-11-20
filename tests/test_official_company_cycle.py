@@ -44,7 +44,7 @@ def accept(system, user, model, max_tokens):
 
 
 
-def test_model_positive_is_reviewed_without_registration_or_list_add():
+def test_model_positive_registers_without_list_add():
     from core.models import BrandAccount, CompanyAccount, OfficialCompanyListIntent
 
     account = Account.objects.create(
@@ -61,14 +61,14 @@ def test_model_positive_is_reviewed_without_registration_or_list_add():
     result = runner._run_official_company_discovery(
         run_id="cycle", deadline=runner.cfg.harvest.start_deadline()
     )
-    assert result["attempted"] == 1 and result["registered"] == 0
+    assert result["attempted"] == 1 and result["registered"] == 1
     state.refresh_from_db()
-    assert state.status == "review_needed"
-    assert state.last_error == "human_review_required"
+    assert state.status == "registered"
+    assert state.last_error == ""
     assert state.decision["outcome"] == "accepted"
     assert state.attempt_records.get().decision["outcome"] == "accepted"
-    assert not BrandAccount.objects.filter(account=account).exists()
-    assert not CompanyAccount.objects.filter(account=account).exists()
+    assert BrandAccount.objects.filter(account=account).exists()
+    assert CompanyAccount.objects.filter(account=account).exists()
     assert not OfficialCompanyListIntent.objects.exists()
     assert not client.add.called
 
@@ -107,7 +107,7 @@ def test_owner_settlement_to_list_observation_and_call_a_attribution():
         handle="reflection_ai",
         bio="We are Voice Lab. We release our own speech models.",
     )
-    enqueue_account(account)
+    state = enqueue_account(account)
     client = Mock()
     client.members.return_value = (set(), True)
     runner = CycleRunner(
@@ -120,6 +120,13 @@ def test_owner_settlement_to_list_observation_and_call_a_attribution():
         run_id="cycle", deadline=runner.cfg.harvest.start_deadline()
     )
     assert result["attempted"] == 0 and result["registered"] == 1
+    assert result["list_sync"]["confirmed"] == 0
+    from core.official_company_accounts import register_account
+
+    register_account(state.pk, cfg=runner.cfg.official_company, select_for_list=True)
+    result = runner._run_official_company_discovery(
+        run_id="list-selection", deadline=runner.cfg.harvest.start_deadline()
+    )
     assert result["list_sync"]["confirmed"] == 1
     item = {
         "id": "new-post",
@@ -298,7 +305,7 @@ def test_real_scheduled_cycle_reaches_discovery_once_without_changing_queries(
             assert result["official_company_discovery"]["attempted"] == 1
 
 
-def test_scheduled_dispatch_persists_multiple_offering_categories_without_auto_induction():
+def test_scheduled_dispatch_persists_offerings_and_registers_without_list_selection():
     from core.models import OfficialCompanyListIntent
 
     account = Account.objects.create(author_id="981099", bio="We are Control Lab. We develop our own permissions runtime and operate our AI cloud platform.")
@@ -323,7 +330,7 @@ def test_scheduled_dispatch_persists_multiple_offering_categories_without_auto_i
     assert result["attempted"] == 1 and len(seen) == 1
     assert state.policy_version == "official-ai-offerings-v4"
     assert state.decision["offering_categories"] == ["harness", "other"]
-    assert state.status == "review_needed" and state.last_error == "human_review_required"
+    assert state.status == "registered" and state.last_error == ""
     assert not OfficialCompanyListIntent.objects.exists()
 
 
@@ -354,7 +361,7 @@ def test_scheduled_extractor_resumes_legacy_native_account_cursor():
     attempt = OfficialCompanyAttempt.objects.get()
     assert attempt.status == "completed" and attempt.policy_version == POLICY_VERSION
     assert attempt.decision["offering_categories"] == ["model-other"]
-    assert OfficialCompanyAccountState.objects.get(account=account).status == "review_needed"
+    assert OfficialCompanyAccountState.objects.get(account=account).status == "registered"
 
 
 def test_scheduled_evaluation_does_not_repeat_unresolved_expired_call():

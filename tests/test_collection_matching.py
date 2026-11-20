@@ -38,7 +38,7 @@ def catalog_fixture(name="Model-7B-Instruct", source="arena", native=None):
         brand=brand,
         publisher_account=publisher.account,
         created_at=timezone.now(),
-        **product_type_fields(Product, "llm-model"),
+        **product_type_fields(Product, "model-llm"),
         private=False,
     )
     provider, _ = DataSource.objects.get_or_create(
@@ -137,6 +137,182 @@ def test_null_brand_and_type_catalog_is_visible_through_confirmed_publisher():
     report = preview(brand)
     assert report["products"][0]["product_key"] == str(product.product_key)
     assert len(report["products"][0]["candidates"]) == 1
+
+
+def test_product_without_provider_repository_can_be_previewed():
+    brand, product, _ = catalog_fixture()
+    product.display_name = "Model-7B-Instruct"
+    product.repo_id = None
+    product.save(update_fields=["display_name", "repo_id"])
+    report = preview(brand)
+    row = next(row for row in report["products"] if row["product_key"] == str(product.product_key))
+    candidate = row["candidates"][0]
+    assert row["hf_product"] is None
+    assert candidate["decision"] == "needs_review"
+    assert candidate["ownership"]["display_name"] == "Model-7B-Instruct"
+    assert SourceSubjectMapping.objects.count() == 0
+    assert apply_reviewed(report)["status"] == "success"
+    assert SourceSubjectMapping.objects.get().subject.product_id == product.product_key
+
+
+def test_named_product_without_publisher_evidence_stays_unmatched():
+    brand, product, _ = catalog_fixture()
+    product.display_name = "Model-7B-Instruct"
+    product.repo_id = None
+    product.publisher_account = None
+    product.save(update_fields=["display_name", "repo_id", "publisher_account"])
+    candidate = preview(brand)["products"][0]["candidates"][0]
+    assert candidate["decision"] == "unmatched"
+    assert candidate["reasons"] == ["publisher_ownership_unqualified"]
+    assert not SourceSubjectMapping.objects.exists()
+
+
+@pytest.mark.parametrize("source,scope,row_key", [
+    ("arena", "arena_model_name", "model_name"),
+    ("openrouter", "rankings_permaslug", "model_permaslug"),
+])
+def test_pending_target_preview_pins_one_saved_publication_row(source, scope, row_key, monkeypatch):
+    from django.db import connection, transaction
+
+    import core.collection_matching as matching
+    from core.collection_matching import (
+        execute_matches,
+        pending_target_pin,
+        preview_pending_target,
+        register_pending_publication_targets,
+    )
+    from core.collection_reports import job_status
+
+    _, product, old = catalog_fixture(source=source)
+    observation = CollectionObservation.objects.create(
+        run=old.run, source_identifier="aggregate", source_subject_kind="aggregate",
+        observation_key=digest([source, "rows"]), observation_kind="publication_window",
+        legacy_archive=archive_legacy({
+            "dimensions": {}, "listing": {"rows": [{row_key: "another-model"}, {row_key: "model-7b-instruct"}]},
+            "source_metadata": {},
+        }),
+    )
+    pin = pending_target_pin(observation, scope, 1)
+    budgets = {"requests": 1, "bytes": 10000, "seconds": 30, "items": 1}
+    with pytest.raises(ValueError, match="byte or time budget"):
+        register_pending_publication_targets(
+            observation_id=observation.pk, row_indices=[1], budgets={**budgets, "bytes": 1},
+        )
+    with monkeypatch.context() as patcher:
+        ticks = iter([0, 2])
+        patcher.setattr(matching, "monotonic", lambda: next(ticks))
+        with pytest.raises(ValueError, match="byte or time budget"):
+            register_pending_publication_targets(
+                observation_id=observation.pk, row_indices=[1], budgets={**budgets, "seconds": 1},
+            )
+    job = register_pending_publication_targets(observation_id=observation.pk, row_indices=[1], budgets=budgets)
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("SET LOCAL lock_timeout = '200ms'")
+        assert register_pending_publication_targets(observation_id=observation.pk, row_indices=[1], budgets=budgets).pk == job.pk
+        cursor.execute("SHOW lock_timeout")
+        assert cursor.fetchone()[0] == "200ms"
+    with pytest.raises(ValueError, match="distinct"):
+        register_pending_publication_targets(observation_id=observation.pk, row_indices=[1, 1], budgets=budgets)
+    with pytest.raises(ValueError, match="budget"):
+        register_pending_publication_targets(observation_id=observation.pk, row_indices=[0, 1], budgets=budgets)
+    with pytest.raises(ValueError, match="publication row"):
+        register_pending_publication_targets(observation_id=observation.pk, row_indices=[99], budgets=budgets)
+    with pytest.raises(ValueError, match="reviewed resolution"):
+        execute_matches(job.pk)
+    target = job.targets.get()
+    assert target.selection_sha256 == pin
+    assert job_status(job.pk)["matching"]["remaining"] == 1
+    before = (target.subject_id, target.selection_sha256, target.source_row_index)
+    report = preview_pending_target(target_id=target.pk, product_key=product.product_key)
+    candidate = report["products"][0]["candidates"][0]
+    assert candidate["identifier"] == "model-7b-instruct"
+    assert candidate["publication_row_index"] == 1
+    target.refresh_from_db()
+    assert (target.subject_id, target.selection_sha256, target.source_row_index) == before
+    assert not SourceSubjectMapping.objects.exists()
+    assert pending_target_pin(observation, scope, 0) != pin
+    unrelated = Product.objects.create(display_name="Unrelated model", brand=product.brand)
+    with pytest.raises(ValueError, match="does not match Product name"):
+        preview_pending_target(target_id=target.pk, product_key=unrelated.product_key)
+    observation.observation_kind = "model_catalog"
+    with pytest.raises(ValueError, match="publication row"):
+        pending_target_pin(observation, scope, 1)
+    observation.observation_kind = "publication_window"
+    observation.source_subject_kind = "model"
+    with pytest.raises(ValueError, match="publication row"):
+        pending_target_pin(observation, scope, 1)
+    observation.source_subject_kind = "aggregate"
+    original_archive = observation.legacy_archive
+    observation.legacy_archive = archive_legacy({
+        "dimensions": {}, "listing": {"rows": [{row_key: "model-7b-instruct"}, {row_key: "another-model"}]},
+        "source_metadata": {},
+    })
+    observation.save(update_fields=["legacy_archive"])
+    with pytest.raises(ValueError, match="evidence changed"):
+        preview_pending_target(target_id=target.pk, product_key=product.product_key)
+    observation.legacy_archive = original_archive
+    observation.save(update_fields=["legacy_archive"])
+    assert apply_reviewed(report)["status"] == "success"
+    mapping = SourceSubjectMapping.objects.get()
+    assert mapping.subject.product_id == product.product_key
+    decision = CollectionObservation.objects.get(observation_kind="product_match_decision")
+    lineage = decision.inputs.get(input_role="match_candidate")
+    assert lineage.input_observation_id == observation.pk
+    assert lineage.row_locator == f"target:{target.pk};row:1"
+    target.refresh_from_db()
+    assert (target.subject_id, target.selection_sha256, target.source_row_index) == before
+    assert apply_reviewed(report)["status"] == "success"
+    assert SourceSubjectMapping.objects.count() == 1
+    assert job_status(job.pk)["matching"]["remaining"] == 0
+    both = register_pending_publication_targets(
+        observation_id=observation.pk, row_indices=[0, 1], budgets={**budgets, "items": 2},
+    )
+    assert both.targets.count() == 2
+    assert job_status(both.pk)["matching"]["remaining"] == 2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_pending_registration_respects_lock_timeout():
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from time import monotonic
+
+    from django.db import OperationalError, close_old_connections, transaction
+
+    from core.collection_matching import register_pending_publication_targets
+
+    _, _, old = catalog_fixture(source="arena")
+    observation = CollectionObservation.objects.create(
+        run=old.run, source_identifier="aggregate", source_subject_kind="aggregate",
+        observation_key=digest(["arena", "locked-rows"]), observation_kind="publication_window",
+        legacy_archive=archive_legacy({"dimensions": {}, "listing": {"rows": [{"model_name": "model-7b-instruct"}]}, "source_metadata": {}}),
+    )
+    locked, release = Event(), Event()
+
+    def hold_lock():
+        close_old_connections()
+        try:
+            with transaction.atomic():
+                CollectionObservation.objects.select_for_update().get(pk=observation.pk)
+                locked.set()
+                release.wait(5)
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(hold_lock)
+        try:
+            assert locked.wait(3)
+            start = monotonic()
+            with pytest.raises(OperationalError):
+                register_pending_publication_targets(
+                    observation_id=observation.pk, row_indices=[0],
+                    budgets={"requests": 1, "bytes": 10000, "seconds": 1, "items": 1},
+                )
+            assert monotonic() - start < 4
+        finally:
+            release.set()
+            future.result(timeout=5)
 
 
 def test_openrouter_catalog_does_not_prove_usage_scope():

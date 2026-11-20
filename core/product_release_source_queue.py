@@ -166,6 +166,20 @@ def enqueue_saved_observations(observation_ids, *, reconcile=False):
 
 
 def drain_observations(*, limit=25, max_seconds=15, observation_ids=None):
+    """Apply saved sources under the same stop boundary as other identity work."""
+    from monitor.pulse_processing import identity_application, identity_application_active, identity_control_selected
+
+    if identity_control_selected() and not identity_application_active():
+        with identity_application() as boundary:
+            if boundary.status != "running":
+                return {"status": boundary.status, "selected": 0, "processed": 0, "candidates": 0,
+                        "failed": 0, "busy": 0, "due_remaining": True}
+            return _drain_observations(limit=limit, max_seconds=max_seconds, observation_ids=observation_ids,
+                                       before_observation=boundary.allowed)
+    return _drain_observations(limit=limit, max_seconds=max_seconds, observation_ids=observation_ids)
+
+
+def _drain_observations(*, limit, max_seconds, observation_ids, before_observation=None):
     """Process saved sources without provider calls; failures stay retryable."""
     if type(limit) is not int or not 1 <= limit <= 100 or not 0 < max_seconds <= 120:
         raise ValueError("invalid source detection budget")
@@ -188,7 +202,7 @@ def drain_observations(*, limit=25, max_seconds=15, observation_ids=None):
     result = {"selected": len(marker_ids), "processed": 0, "candidates": 0, "failed": 0, "busy": 0}
     deadline = monotonic() + max_seconds
     for marker_id in marker_ids:
-        if monotonic() >= deadline:
+        if monotonic() >= deadline or (before_observation is not None and not before_observation()):
             break
         try:
             with transaction.atomic():

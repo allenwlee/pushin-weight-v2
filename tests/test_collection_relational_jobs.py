@@ -159,7 +159,7 @@ def test_recurring_resume_keeps_current_slot_but_new_day_starts_new_collection(
         job_key="typed-slots",
         source=source,
         purpose="catalog",
-        operation="model_inventory",
+        operation="model_history",
         mode="recurring",
         definition={"version": 2, "options": {}},
         settings={
@@ -178,10 +178,10 @@ def test_recurring_resume_keeps_current_slot_but_new_day_starts_new_collection(
     set_job_state(job.pk, "ready", now=now)
     take_collection_authority(job.pk)
     first = claim_job(job.pk, now=now)
-    finish_run(first, status="partial", now=now)
+    finish_run(first, status="partial", now=now, typed=True, request_count=0, physical_accounting_complete=True)
     resumed = claim_job(job.pk, now=now + timedelta(minutes=15))
     assert resumed.run_id == first.run_id
-    finish_run(resumed, status="partial", now=now + timedelta(minutes=15))
+    finish_run(resumed, status="partial", now=now + timedelta(minutes=15), typed=True, request_count=0, physical_accounting_complete=True)
     tomorrow = now + timedelta(days=1)
     job.refresh_from_db()
     assert due_job(job, now=tomorrow)["slot"] == tomorrow.replace(hour=10).isoformat()

@@ -349,7 +349,7 @@ def validate_statistics_mapping(subject, row, source, taxonomy):
             "statistics product identity changed",
         )
         require(
-            frozen["type"] in {"llm-model", "other-ai-model", "agent-harness"}
+            frozen["type"] in {"llm-model", "other-ai-model", "agent-harness", "model-llm", "model-other", "agent", "harness"}
             or frozen.get("model_kind_qualification"),
             "unreviewed statistics product type",
         )

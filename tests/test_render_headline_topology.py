@@ -15,6 +15,9 @@ def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
         "pushinweight-headlines-broker",
         "pushinweight-web",
         "pushinweight-headlines",
+        "pushinweight-graphics-a",
+        "pushinweight-graphics-b",
+        "pushinweight-graphics-review",
         "pushinweight-synthesis",
         "pushinweight-enrichment",
         "pushinweight-harvest",
@@ -138,7 +141,11 @@ def test_enrichment_worker_has_one_process_and_no_collection_credentials():
             "key": "X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE", "sync": False,
         }
         assert "schedule" not in worker
-        assert not {"TWITTERAPI_IO_SCHEDULED_API_KEY", "TWITTERAPI_IO_ON_DEMAND_API_KEY", "CELERY_BROKER_URL"} & set(environment)
+        assert not {"TWITTERAPI_IO_SCHEDULED_API_KEY", "TWITTERAPI_IO_ON_DEMAND_API_KEY"} & set(environment)
+        if filename == "render.yaml":
+            assert environment["CELERY_BROKER_URL"]["fromService"]["name"] == "pushinweight-headlines-broker"
+        else:
+            assert environment["CELERY_BROKER_URL"]["fromService"]["name"] == "pushinweight-staging-headlines-broker"
 
 
 def test_about_backfill_hosts_have_explicit_production_identity():

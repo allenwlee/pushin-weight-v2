@@ -168,7 +168,7 @@ def present_feed(feed):
     return feed
 
 
-def _settings_links(state, request):
+def _settings_links(state, request, *, path="/general/"):
     options = {
         "weights": [("open", _("Open")), ("closed", _("Closed"))],
         "audience": [("human", _("Human")), ("agent", _("Agent"))],
@@ -197,7 +197,7 @@ def _settings_links(state, request):
                     "value": value,
                     "label": label,
                     "active": state["locale" if key == "lang" else key] == value,
-                    "url": "/general/?" + params.urlencode(),
+                    "url": path + "?" + params.urlencode(),
                 }
             )
         links[key] = rows

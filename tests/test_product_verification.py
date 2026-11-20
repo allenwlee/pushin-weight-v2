@@ -80,7 +80,7 @@ def test_confirmed_known_publisher_attaches_exact_repo_idempotently():
         account=account,
         metadata=metadata,
         evidence={"source": "x_post"},
-        product_type="llm-model",
+        product_type="model-llm",
     )
     second = attach_verified_product(
         post=post,
@@ -90,7 +90,7 @@ def test_confirmed_known_publisher_attaches_exact_repo_idempotently():
         account=account,
         metadata={**metadata, "sha": "def"},
         evidence={"source": "x_post"},
-        product_type="llm-model",
+        product_type="model-llm",
     )
     assert first.pk == second.pk
     assert Product.objects.get(pk=first.pk).sha == "def"
@@ -127,7 +127,7 @@ def test_no_link_official_release_uses_verified_search_and_exact_capture(mode, e
         event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_report"
     )
     RareTypeCategoryAssignment.objects.create(
-        post=post, brand=brand, category="llm-model", source_evidence={}, classification_version="test"
+        post=post, brand=brand, category="model-llm", source_evidence={}, classification_version="test"
     )
     proposal = ProductVerificationProposal.objects.create(
         proposal_key="f" * 64, source_post=post, source_dossier=dossier, proposed_brand=brand,
@@ -202,7 +202,7 @@ def test_exact_capture_does_not_duplicate_approved_x_only_product(matches, merge
     )
     decide_product_proposal(proposal_id=first.pk, action="approve", reviewer="owner@example.com",
                             reason="Approved X-only identity", brand_id=brand.pk,
-                            product_type="llm-model", catalog_mode="x_only")
+                            product_type="model-llm", catalog_mode="x_only")
     original = Product.objects.get()
     if merged:
         from core.event_dossiers import create_dossier, identity_key
@@ -212,7 +212,7 @@ def test_exact_capture_does_not_duplicate_approved_x_only_product(matches, merge
                                 identity_key=identity_key("test-merged", "same-release"))
         merge_dossiers(dossier.pk, target.pk, actor="test", reason="same release")
     RareTypeCategoryAssignment.objects.create(
-        post=post, brand=brand, category="llm-model", source_evidence={}, classification_version="test"
+        post=post, brand=brand, category="model-llm", source_evidence={}, classification_version="test"
     )
     ProductVerificationProposal.objects.create(
         proposal_key="a" * 64, source_post=post, source_dossier=dossier, proposed_brand=brand,
@@ -274,7 +274,7 @@ def test_captured_exact_release_metadata_reuses_known_publisher_verifier(
         event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_report"
     )
     RareTypeCategoryAssignment.objects.create(
-        post=post, brand=brand, category="llm-model", source_evidence={}, classification_version="test"
+        post=post, brand=brand, category="model-llm", source_evidence={}, classification_version="test"
     )
     proposal = ProductVerificationProposal.objects.create(
         proposal_key="e" * 64, source_post=post, source_dossier=dossier,
@@ -347,7 +347,7 @@ def test_known_publisher_hf_match_attaches_to_owner_approved_x_only_product():
         reviewer="owner@example.com",
         reason="Official closed model",
         brand_id=brand.pk,
-        product_type="llm-model",
+        product_type="model-llm",
         catalog_mode="x_only",
     )
     x_only_product = Product.objects.get()
@@ -356,7 +356,7 @@ def test_known_publisher_hf_match_attaches_to_owner_approved_x_only_product():
     RareTypeCategoryAssignment.objects.create(
         post=post,
         brand=brand,
-        category="llm-model",
+        category="model-llm",
         source_evidence={},
         classification_version="test",
     )
@@ -500,7 +500,7 @@ def test_existing_product_owner_conflict_fails_without_reassignment():
             account=account,
             metadata={"id": "MiniMaxAI/M2"},
             evidence={},
-            product_type="llm-model",
+            product_type="model-llm",
         )
     product.refresh_from_db()
     assert product.brand_id == "other"
@@ -536,7 +536,7 @@ def _new_publisher_proposal(*, verified_type: str = "Business"):
     RareTypeCategoryAssignment.objects.create(
         post=post,
         brand_discovery_candidate=candidate,
-        category="llm-model",
+        category="model-llm",
         source_evidence={},
         classification_version="test",
     )
@@ -814,7 +814,7 @@ def test_pending_drainer_runs_after_deadline_gate_and_resolves_known_publisher()
     RareTypeCategoryAssignment.objects.create(
         post=post,
         brand=brand,
-        category="llm-model",
+        category="model-llm",
         source_evidence={},
         classification_version="test",
     )
@@ -888,7 +888,7 @@ def test_resolution_conflict_is_retained_and_does_not_abort_next_proposal():
     RareTypeCategoryAssignment.objects.create(
         post=post,
         brand=brand,
-        category="llm-model",
+        category="model-llm",
         source_evidence={},
         classification_version="test",
     )

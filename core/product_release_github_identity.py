@@ -60,7 +60,8 @@ def retain_named_repository_product(owner_observation, dossier_id):
     from core.event_dossiers import add_claim, attach_source
     from core.measurement_taxonomy import digest, resolve_subject_id
     from core.product_release_acquisition import (
-        _source_bound_github_repo, github_exact_observation_documents,
+        _source_bound_github_repo,
+        github_exact_observation_documents,
         link_reviewed_github_product,
     )
     from core.product_release_github_owner import owner_documents
@@ -115,7 +116,9 @@ def retain_named_repository_product(owner_observation, dossier_id):
                 identity_name=normalized,
             ).exclude(product_key=product_key).exists():
                 return None
-            product, created = models.Product.objects.get_or_create(
+            from core.product_identity import find_or_create_product
+
+            product, created = find_or_create_product(
                 product_key=product_key, defaults={"display_name": name, "hf_type": ""},
             )
             models.MeasurementSubject.objects.get_or_create(

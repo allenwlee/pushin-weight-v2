@@ -30,25 +30,23 @@ def accepted(identifier="880", name="New Speech Lab"):
 
 
 @pytest.mark.parametrize("policy", [POLICY_VERSION, "legacy-evaluator"])
-def test_model_acceptance_requires_human_review_even_with_registration_enabled(policy):
+def test_model_acceptance_registers_without_selecting_a_list(policy):
     state = accepted()
     state.model = MODEL
     state.policy_version = policy
     state.attempts = 3
     state.save()
     old_hash, old_decision = state.evidence_hash, state.decision
-    counts = (Brand.objects.count(), Company.objects.count())
     assert register_account(
         state.pk, cfg=OfficialCompanyConfig(enabled=True, registration_enabled=True)
-    ) is None
+    ) == state.pk
     state.refresh_from_db()
-    assert state.status == "review_needed"
-    assert state.last_error == "human_review_required"
+    assert state.status == "registered"
     assert state.attempts == 3
     assert (state.evidence_hash, state.decision) == (old_hash, old_decision)
-    assert (Brand.objects.count(), Company.objects.count()) == counts
-    assert not BrandAccount.objects.filter(account=state.account).exists()
-    assert not CompanyAccount.objects.filter(account=state.account).exists()
+    assert BrandAccount.objects.filter(account=state.account, role_id="official").exists()
+    assert CompanyAccount.objects.filter(account=state.account, role_id="official").exists()
+    assert BrandCompany.objects.filter(brand=state.registered_brand, company=state.registered_company).exists()
     assert not OfficialCompanyListIntent.objects.exists()
 
 
@@ -65,7 +63,7 @@ def test_owner_settlement_survives_evaluator_policy_change():
     assert state.model == "owner-attestation"
 
 
-def test_registration_is_idempotent_and_creates_no_ownership_or_product_claim():
+def test_registration_is_idempotent_and_does_not_select_a_list():
     state = accepted()
     cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True)
     first = register_account(state.pk, cfg=cfg)
@@ -73,8 +71,8 @@ def test_registration_is_idempotent_and_creates_no_ownership_or_product_claim():
     assert first == second
     assert Brand.objects.count() == Company.objects.count() == 1
     assert BrandAccount.objects.count() == CompanyAccount.objects.count() == 1
-    assert BrandCompany.objects.count() == 0
-    assert OfficialCompanyListIntent.objects.count() == 1
+    assert BrandCompany.objects.count() == 1
+    assert OfficialCompanyListIntent.objects.count() == 0
     state.refresh_from_db()
     assert state.status == "registered"
 
@@ -127,6 +125,7 @@ def test_existing_stable_official_edges_are_reused_after_handle_change():
         company.pk,
     )
     assert Brand.objects.count() == Company.objects.count() == 1
+    assert not BrandCompany.objects.filter(brand=brand, company=company).exists()
 
 
 def test_intent_failure_rolls_back_all_new_organization_records(monkeypatch):
@@ -137,10 +136,10 @@ def test_intent_failure_rolls_back_all_new_organization_records(monkeypatch):
     def fail(**kwargs):
         raise IntegrityError("simulated race")
 
-    monkeypatch.setattr(OfficialCompanyListIntent.objects, "get_or_create", fail)
+    monkeypatch.setattr(OfficialCompanyListIntent.objects, "create", fail)
     assert (
         register_account(
-            state.pk, cfg=OfficialCompanyConfig(enabled=True, registration_enabled=True)
+            state.pk, cfg=OfficialCompanyConfig(enabled=True, registration_enabled=True), select_for_list=True
         )
         is None
     )
@@ -180,7 +179,7 @@ def test_confirmed_candidate_with_stable_evidence_reuses_brand():
 def test_new_accepted_evidence_resumes_unresolved_intent(status):
     state = accepted()
     cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True)
-    register_account(state.pk, cfg=cfg)
+    register_account(state.pk, cfg=cfg, select_for_list=True)
     intent = OfficialCompanyListIntent.objects.get(state=state)
     intent.status = status
     intent.claim_token = "obsolete-claim"
@@ -201,7 +200,7 @@ def test_new_accepted_evidence_resumes_unresolved_intent(status):
 def test_new_evidence_preserves_settled_or_manually_stopped_intent(status):
     state = accepted()
     cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True)
-    register_account(state.pk, cfg=cfg)
+    register_account(state.pk, cfg=cfg, select_for_list=True)
     intent = OfficialCompanyListIntent.objects.get(state=state)
     intent.status = status
     intent.save()
@@ -211,3 +210,25 @@ def test_new_evidence_preserves_settled_or_manually_stopped_intent(status):
     register_account(state.pk, cfg=cfg)
     intent.refresh_from_db()
     assert intent.status == status
+
+
+def test_register_ready_recovers_only_valid_previously_held_acceptances():
+    from core.official_company_discovery import register_ready_accounts
+
+    held = accepted(identifier="881", name="Held Lab")
+    held.model = MODEL
+    held.status = "review_needed"
+    held.last_error = "human_review_required"
+    held.save()
+    failed = accepted(identifier="882", name="Failed Lab")
+    failed.model = MODEL
+    failed.status = "review_needed"
+    failed.last_error = "provider_failure"
+    failed.save()
+    cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True)
+    assert register_ready_accounts(cfg=cfg, limit=10) == 1
+    held.refresh_from_db()
+    failed.refresh_from_db()
+    assert held.status == "registered"
+    assert failed.status == "review_needed" and failed.last_error == "provider_failure"
+    assert not OfficialCompanyListIntent.objects.exists()

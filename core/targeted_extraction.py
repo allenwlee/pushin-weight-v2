@@ -166,13 +166,16 @@ end_date_precision, and confidence. Keep an unstated effective date null with
 unknown precision.
 """,
     "model_release_extraction": """
-Return one record per source-supported AI model or agent-harness release.
+Return one record per source-supported AI product release.
 Recaps, reseller availability, price comparisons, and vague roadmap claims do
 not qualify without an identifiable underlying release. Fields: brand_id,
 organization_name, organization_handle, model_name, candidate_repo_id, version,
 release_channel (stable, preview, beta, or other), release_value,
 release_precision (day, month, year, or unknown), source_url, categories (one
-or more of llm-model, other-ai-model, agent-harness), and confidence. Preserve
+or more of model-llm, model-other, agent, harness, other), and confidence. Use
+model-llm for language models and derivatives, model-other for other AI models,
+agent for goal-directed tool-using systems, harness for execution-control
+software, and other for other identifiable products including hardware. Preserve
 an unstated date as null with unknown precision.
 """,
     "profile_affiliation_extraction": """
@@ -2189,6 +2192,13 @@ def run_targeted_extractions(
         for key in TYPE_TO_ROLE
         if key in post_types
     ]
+    if "model_release_extraction" in roles:
+        from core.classified_product_releases import selected_release_revision
+
+        if selected_release_revision(post.pk) is not None:
+            # Its required release answer, including a valid empty answer,
+            # already committed with classification. Identity retry is DB-only.
+            roles.remove("model_release_extraction")
     has_ambiguous_profile = AffiliationClaimEvidence.objects.filter(
         pk__in=PersonBrandAffiliationEvidence.objects.filter(
             source_profile_snapshot__first_source_post=post,

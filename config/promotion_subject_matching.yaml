@@ -1,0 +1,18 @@
+version: 1
+global_excluded_terms: []
+brands:
+  llama:
+    excluded_terms: [Meta]
+    extra_terms: []
+  minimax:
+    excluded_terms: [智能]
+    extra_terms: []
+  doubao:
+    excluded_terms: []
+    extra_terms: [Dreamina, CapCut]
+  nemo_megatron:
+    excluded_terms: [ace]
+    extra_terms: []
+  factory:
+    excluded_terms: [Factory]
+    extra_terms: [Factory AI, Factory Droid, Droid Factory]

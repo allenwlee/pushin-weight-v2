@@ -126,7 +126,7 @@ def test_csrf_and_forged_brand_fail_closed():
         "action": "approve",
         "reason": "Reviewed",
         "brand_id": "forged",
-        "product_type": "llm-model",
+        "product_type": "model-llm",
         "catalog_mode": "x_only",
     }
     assert client.post(url, payload).status_code == 403
@@ -150,7 +150,7 @@ def test_x_only_approval_is_idempotent_links_source_and_makes_no_network(monkeyp
         "action": "approve",
         "reason": "Official closed model",
         "brand_id": brand.pk,
-        "product_type": "llm-model",
+        "product_type": "model-llm",
         "catalog_mode": "x_only",
     }
     assert client.post(url, payload).status_code == 302
@@ -173,7 +173,7 @@ def test_two_posts_for_same_release_reuse_x_only_product_then_attach_hf_repo():
         reviewer="owner@example.com",
         reason="Reviewed X announcement",
         brand_id=brand.pk,
-        product_type="llm-model",
+        product_type="model-llm",
         catalog_mode="x_only",
     )
     second = _proposal(
@@ -189,7 +189,7 @@ def test_two_posts_for_same_release_reuse_x_only_product_then_attach_hf_repo():
         reviewer="owner@example.com",
         reason="Exact repository reviewed",
         brand_id=brand.pk,
-        product_type="llm-model",
+        product_type="model-llm",
         catalog_mode="hf",
     )
     assert Product.objects.count() == 1
@@ -216,7 +216,7 @@ def test_candidate_can_create_untracked_brand_and_company_without_harvest_member
         reason="Canonical publisher reviewed",
         new_brand_id="new_publisher",
         company_id=company.pk,
-        product_type="other-ai-model",
+        product_type="model-other",
         catalog_mode="x_only",
     )
     assert decided.proposed_brand_id == "new_publisher"
@@ -245,7 +245,7 @@ def test_candidate_new_brand_path_rejects_existing_nickname_collision():
             reviewer="owner@example.com",
             reason="Typo should fail",
             new_brand_id="existing",
-            product_type="llm-model",
+            product_type="model-llm",
             catalog_mode="x_only",
         )
     candidate.refresh_from_db()
@@ -283,7 +283,7 @@ def test_distinct_proposals_for_same_hf_repo_converge_without_duplicate():
                 reviewer="owner@example.com",
                 reason="Exact repo reviewed",
                 brand_id=brand.pk,
-                product_type="llm-model",
+                product_type="model-llm",
                 catalog_mode="hf",
             ).resolved_product_id
         finally:
@@ -293,3 +293,33 @@ def test_distinct_proposals_for_same_hf_repo_converge_without_duplicate():
         product_ids = list(pool.map(approve, [proposal.pk for proposal in proposals]))
     assert product_ids[0] == product_ids[1]
     assert Product.objects.count() == 1
+
+
+def test_same_dossier_different_offering_cannot_reuse_first_product():
+    brand = Brand.objects.create(nickname="separate")
+    release = _release(brand)
+    first = _proposal("f", brand=brand, release=release)
+    decide_product_proposal(
+        proposal_id=first.pk,
+        action="approve",
+        reviewer="owner",
+        reason="Reviewed",
+        brand_id=brand.pk,
+        product_type="model-llm",
+    )
+    second = _proposal("g", brand=brand, release=release)
+    second.observed_name = "Different Model"
+    second.save(update_fields=["observed_name"])
+    decide_product_proposal(
+        proposal_id=second.pk,
+        action="approve",
+        reviewer="owner",
+        reason="Reviewed",
+        brand_id=brand.pk,
+        product_type="model-llm",
+    )
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert second.review_status == "approved"
+    assert second.resolved_product_id != first.resolved_product_id
+    assert Product.objects.count() == 2

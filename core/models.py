@@ -37,7 +37,7 @@ from urllib.parse import urlparse
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.indexes import GinIndex, GistIndex, OpClass
 from django.db import IntegrityError, models, router, transaction
-from django.db.models.functions import Upper
+from django.db.models.functions import MD5, Upper
 from django.db.models.lookups import Exact, IsNull
 from django.utils import timezone
 
@@ -3491,6 +3491,17 @@ class Product(models.Model):
     collected_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        from core.official_company_offerings import TYPES
+
+        super().clean()
+        if self.product_type_id and not ProductType.objects.filter(
+            pk=self.product_type_id, code__in=TYPES
+        ).exists():
+            raise ValidationError({"product_type": "Invalid current product category"})
+
     @property
     def product_type_code(self):
         return self.product_type.code if self.product_type_id else None
@@ -3698,6 +3709,10 @@ class CollectionScopeRun(models.Model):
     class Meta:
         db_table = "collection_scope_runs"
         indexes = [
+            models.Index(
+                fields=["retry_at", "id"], name="idx_pending_pub_admission",
+                condition=models.Q(scope_kind="pending_publication_admission", outcome="pending"),
+            ),
             models.Index(
                 fields=["retry_at", "id"], name="idx_rel_metric_followup_due",
                 condition=models.Q(scope_kind="release_metric_followup", outcome="pending"),
@@ -7703,9 +7718,11 @@ class Opportunity(models.Model):
 
 class RareTypeCategoryAssignment(models.Model):
     CATEGORIES = (
-        ("llm-model", "LLM model"),
-        ("other-ai-model", "Other AI model"),
-        ("agent-harness", "Agent harness"),
+        ("model-llm", "LLM model"),
+        ("model-other", "Other AI model"),
+        ("agent", "Agent"),
+        ("harness", "Harness"),
+        ("other", "Other"),
     )
     id = models.BigAutoField(primary_key=True)
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="rare_type_categories")
@@ -8957,7 +8974,11 @@ class CollectionJob(models.Model):
 
     class Meta:
         db_table = "collection_jobs"
-        indexes: ClassVar[list] = [models.Index(fields=["state", "next_due_at"], name="idx_collection_job_due")]
+        indexes: ClassVar[list] = [
+            models.Index(fields=["state", "next_due_at"], name="idx_collection_job_due"),
+            models.Index(fields=["updated_at", "id"], name="idx_lineage_wakeup_ready",
+                         condition=models.Q(operation="lineage_wakeup", state="ready", last_success__isnull=True)),
+        ]
         constraints = [
             models.CheckConstraint(condition=(models.Q(purpose="metric", contract__isnull=False) | models.Q(purpose__in=["catalog", "content"], contract__isnull=True)), name="ck_collection_job_contract"),
             models.CheckConstraint(condition=models.Q(mode__in=["manual", "recurring", "historical"]), name="ck_collection_job_mode"),
@@ -10638,6 +10659,9 @@ class EventDossierClaim(models.Model):
         indexes: ClassVar[list] = [
             models.Index(fields=["reported_product"], condition=models.Q(reported_product__isnull=False),
                          name="idx_ed_claim_reported_product"),
+            models.Index(MD5(Upper("assertion_text")), models.F("id"),
+                         condition=models.Q(scope_key__startswith="pulse-lineage-v1:", source_archive__isnull=False),
+                         name="idx_ed_lineage_hash_id"),
         ]
         constraints = [
             models.CheckConstraint(

@@ -513,6 +513,7 @@ def _persist_classification_trace(
     model: str,
     run_id: str,
     fingerprint: str,
+    release_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Persist primary → review → final history for every attributed brand.
 
@@ -532,6 +533,7 @@ def _persist_classification_trace(
             model=model,
             run_id=run_id,
             fingerprint=fingerprint,
+            release_manifest=release_manifest,
         )
     stages = {
         stage: _trace_stage_payload(trace, stage)
@@ -630,6 +632,7 @@ def _persist_two_role_classification_trace(
     model: str,
     run_id: str,
     fingerprint: str,
+    release_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Persist a matching content + brand-interpretation pair and final atomically."""
     stages = {stage: _trace_stage_payload(trace, stage) for stage in (
@@ -649,6 +652,14 @@ def _persist_two_role_classification_trace(
     )
     if observed_revisions not in _TWO_ROLE_ALLOWED_REVISION_TRIPLETS:
         raise ValueError("classification_trace_role_revision_mismatch")
+    from core.classification_contract import COMPRESSED_CLASSIFIER_REVISIONS
+
+    if observed_revisions == COMPRESSED_CLASSIFIER_REVISIONS:
+        from core.classified_product_releases import validate_output_manifest
+
+        # Only the publisher's source-bound answer supplies this metadata.
+        # Never accept a provider/caller's arbitrary trace changes_json.
+        metadata["final"]["changes_json"]["release_output"] = validate_output_manifest(release_manifest)
     expected_revisions = dict(zip(
         ("content", "brand_interpretation", "final"), observed_revisions,
         strict=True,
@@ -841,6 +852,10 @@ class _BoundedClassifierClient:
         """Keep the selected request format through the shared budget guard."""
         value = getattr(self._delegate, "request_profile", None)
         return value if isinstance(value, str) and value else None
+
+    @property
+    def release_channels(self):
+        return self._delegate.release_channels
 
     @property
     def deferred_requests(self) -> bool:
@@ -1130,6 +1145,11 @@ def _publish_stage1_classification(
     cfg: Any | None = None,
 ) -> Any:
     """Atomically publish one already-complete, per-brand Stage 1 result."""
+    if isinstance(result, dict) and result.get("release_only") is True:
+        from core.classified_product_releases import persist_release_only
+
+        persist_release_only(post_id=post_id, tweet=tweet, result=result, model=model, run_id=run_id)
+        return None
     if not isinstance(result, dict) or result.get("valid") is not True:
         return None
     by_brand = result.get("by_brand")
@@ -1189,6 +1209,21 @@ def _publish_stage1_classification(
             if not isinstance(promotions, list) or not isinstance(subjects, list):
                 return None
 
+        post = claim.post
+        final_provenance = _v4_stage_provenance(
+            result=result, stage="final", model=model, fingerprint=fingerprint,
+        )
+        from core.classification_contract import COMPRESSED_CLASSIFIER_REVISIONS
+
+        is_combined = final_provenance["prompt_version"] == COMPRESSED_CLASSIFIER_REVISIONS[2]
+        if is_combined != (tweet.get("_classification_pipeline") == "compressed8_pulse_v1"):
+            raise ValueError("classification_release_producer_mismatch")
+        release_findings = release_manifest = None
+        if is_combined:
+            from core.classified_product_releases import prepare_publication_findings
+
+            release_findings, release_manifest = prepare_publication_findings(post=post, tweet=tweet, result=result)
+
         final_judgment_ids = {}
         if "classification_trace" in result:
             final_judgment_ids = _persist_classification_trace(
@@ -1199,17 +1234,14 @@ def _publish_stage1_classification(
                 model=model,
                 run_id=run_id,
                 fingerprint=fingerprint,
+                release_manifest=release_manifest,
             )
 
-        post = claim.post
         content_provenance = _v4_stage_provenance(
             result=result, stage="content", model=model, fingerprint=fingerprint,
         )
         brand_provenance = _v4_stage_provenance(
             result=result, stage="brand_interpretation", model=model, fingerprint=fingerprint,
-        )
-        final_provenance = _v4_stage_provenance(
-            result=result, stage="final", model=model, fingerprint=fingerprint,
         )
         final_trace_metadata: dict[str, Any] = {}
         trace = result.get("classification_trace")
@@ -1311,6 +1343,10 @@ def _publish_stage1_classification(
             )
             if flag_result.outcome not in {"persisted", "cleared"}:
                 raise ValueError("classifier_flags_invalid")
+        if is_combined:
+            from core.classified_product_releases import persist_publication_findings
+
+            persist_publication_findings(post=post, findings=release_findings)
         if cfg is not None:
             _finish_enrichment_stage(
                 post_ids=[post_id],
@@ -2089,6 +2125,11 @@ def _upsert_post(
         write_source_evidence(post, reported_author_location=raw["author_location"])
         post.refresh_from_db(fields=["author_geolocation"])
     return post, created
+
+
+def persist_x_post(raw):
+    """Shared normalized Post/account ingestion for harvest and owned source lookups."""
+    return _upsert_post(raw, account=_upsert_account(raw))
 
 
 def _persist_attribution(
@@ -3729,7 +3770,54 @@ class CycleRunner:
             from monitor.enrichment_worker import process_enrichment_batch
 
             result = process_enrichment_batch(self, kept_posts, **kwargs)
+        if (self.cycle_kind == "scheduled" and not self.dry_run
+                and kwargs.get("repair_manifest") is None and kwargs.get("source_collection_job_id") is None):
+            # Recovery uses already-saved provider observations, never a provider
+            # request. It runs independently of the selected Pulse classifier.
+            from django.db import connection
+
+            measurements = {"queries": 0, "database_ms": 0.0, "affected_rows": 0}
+            started = time.monotonic()
+
+            def measure_admission(execute, sql, params, many, context):
+                query_started = time.monotonic()
+                try:
+                    value = execute(sql, params, many, context)
+                    if sql.lstrip().split(None, 1)[0].upper() in {"INSERT", "UPDATE", "DELETE"}:
+                        measurements["affected_rows"] += max(0, context["cursor"].rowcount)
+                    return value
+                finally:
+                    measurements["queries"] += 1
+                    measurements["database_ms"] += (time.monotonic() - query_started) * 1000
+
+            try:
+                from core.collection_matching import drain_pending_publication_scopes
+
+                with connection.execute_wrapper(measure_admission):
+                    recovery = drain_pending_publication_scopes(max_jobs=1, max_seconds=5)
+            except Exception:
+                logger.exception("Saved provider admission recovery failed")
+                recovery = {"status": "error"}
+            recovery.update(measurements, elapsed_ms=round((time.monotonic() - started) * 1000, 3), provider_calls=0)
+            result["provider_admission_recovery"] = recovery
         if kwargs.get("repair_manifest") is None and settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
+            if self.cfg.llm.classifier_pipeline == "compressed8_pulse_v1":
+                from monitor.pulse_processing import process_saved_findings
+
+                try:
+                    result["product_release_recovery"] = process_saved_findings()
+                except Exception:  # Saved findings remain pending; collection continues.
+                    logger.exception("Classified Pulse recovery failed")
+                    result["product_release_recovery"] = {"status": "error"}
+                if self.cycle_kind == "scheduled":
+                    try:
+                        from core.product_release_acquisition import dispatch_due_recovery
+
+                        result["product_release_acquisition_dispatch"] = dispatch_due_recovery()
+                    except Exception:
+                        logger.exception("Post-collection release recovery dispatch failed")
+                        result["product_release_acquisition_dispatch"] = {"status": "error"}
+                return result
             from core.product_release_detection_queue import enqueue_posts
 
             source_ids = {
@@ -3770,6 +3858,7 @@ class CycleRunner:
         source_collection_job_id: Any | None = None,
         classification_input_snapshot: dict[str, Any] | None = None,
         translation_only: bool = False,
+        pulse_backfill: bool = False,
         fair_queue: bool = False,
         dispatch_guard: Any | None = None,
     ) -> dict[str, Any]:
@@ -3831,7 +3920,7 @@ class CycleRunner:
                 cfg=enrichment_cfg,
                 literal_v2_enabled=self.cfg.llm.literal_translation_v2_enabled,
                 post_ids=selected_post_ids,
-            ) if source_collection_job_id is None else 0
+            ) if source_collection_job_id is None and not pulse_backfill else 0
         )
 
         claim_batch = _claim_enrichment_states(
@@ -3900,6 +3989,14 @@ class CycleRunner:
             )
         for affiliations in affiliations_by_author.values():
             affiliations.sort(key=lambda value: (str(value["brand_id"]), str(value["role"])))
+        profile_accounts = {}
+        if self.cfg.llm.classifier_pipeline == "compressed8_pulse_v1":
+            profile_accounts = {
+                str(account.pk): account
+                for account in Account.objects.filter(
+                    pk__in=author_ids, data_source_id="x"
+                ).select_related("x_details__verified_type")
+            }
         for state in claimed_states:
             post = state.post
             tid = str(post.pk)
@@ -3922,6 +4019,7 @@ class CycleRunner:
                 tweet = {
                     "tweet_id": tid,
                     "text": text,
+                    "author_handle": post.author_handle,
                     "brand_ids": list(brand_ids),
                     "context": context,
                     "source_language": post.lang_detected or post.lang or "",
@@ -3936,7 +4034,7 @@ class CycleRunner:
                     "affiliations": [
                         affiliation
                         for affiliation in affiliations_by_author.get(str(post.author_id), [])
-                        if affiliation["brand_id"] in brand_ids
+                        if self.cfg.llm.classifier_pipeline == "compressed8_pulse_v1" or affiliation["brand_id"] in brand_ids
                     ],
                 }
                 classification_due = (
@@ -3946,7 +4044,29 @@ class CycleRunner:
                 )
                 # The classifier dispatches first below. A requested translation
                 # can then use the same claim without delaying classification.
-                if stage_is_due(state, "translation", state.claimed_at):
+                account = profile_accounts.get(str(post.author_id))
+                if account and classification_due:
+                    from core.official_company_accounts import build_evidence
+
+                    evidence = build_evidence(account, [{
+                        "id": tid,
+                        "text": text,
+                        "author_description": post.author_description,
+                        "profile_bio": post.author_profile_bio,
+                        "observed_at": post.fetched_at.isoformat() if post.fetched_at else None,
+                    }])
+                    sources = [
+                        {**source, "text": source["text"][:2048]}
+                        for source in evidence["sources"]
+                        if source["id"] != f"post:{tid}"
+                    ][:12]
+                    tweet["author_profile_evidence"] = {
+                        "handle": evidence["handle"],
+                        "display_name": (evidence["display_name"] or "")[:256],
+                        "sources": sources,
+                        "domains": evidence["domains"][:16],
+                    }
+                if not pulse_backfill and stage_is_due(state, "translation", state.claimed_at):
                     translation_tweets.append(tweet)
                 if classification_due:
                     classification_tweets.append(tweet)
@@ -4048,7 +4168,8 @@ class CycleRunner:
         # assembled from the source packet before dispatch. `BrandRow` is too
         # thin for this catalog; curated terms/accounts are authoritative.
         classification_publish_ids = {str(t["tweet_id"]) for t in classification_tweets}
-        if getattr(classifier_client, "request_profile", None) == "deepseek_0731":
+        classifier_profile = getattr(classifier_client, "request_profile", None)
+        if classifier_profile in {"deepseek_0731", "compressed8_pulse_v1"}:
             # Deferred replies describe the evidence submitted with their paid
             # request. Replay that exact packet, including its catalog revision,
             # rather than silently replacing it with today's mutable catalog.
@@ -4110,6 +4231,10 @@ class CycleRunner:
                 code = str(exc)[:128]
             for tweet in batch:
                 classification_errors[str(tweet["tweet_id"])] = code
+                if classifier_profile == "compressed8_pulse_v1":
+                    from monitor.pulse_processing import report_error
+
+                    report_error(code=code, stage="classification", post_id=tweet["tweet_id"], run_id=run_id)
         if classification_tweets and classifier_client is None:
             logger.warning("_run_post_fetch: no classifier client — skipping classify")
             self._error_counts["classifier_unavailable"] += 1
@@ -4145,8 +4270,7 @@ class CycleRunner:
                     telemetry_context={"stage": "post_fetch", "run_id": run_id},
                     tracked_catalog_snapshot=(
                         classification_catalog
-                        if getattr(classifier_client, "request_profile", None)
-                        == "deepseek_0731"
+                        if classifier_profile in {"deepseek_0731", "compressed8_pulse_v1"}
                         else None
                     ),
                 )
@@ -4206,14 +4330,25 @@ class CycleRunner:
                         discard_tracked_promotion_subjects,
                     )
 
+                    from monitor.promotion_subject_matcher import (
+                        PromotionSubjectMatcher,
+                    )
+
                     original_count = len(result["promoted_subjects"])
-                    result = discard_tracked_promotion_subjects(result, tweet.get("tracked_brand_catalog") or [])
+                    catalog = tweet.get("tracked_brand_catalog") or []
+                    matcher = PromotionSubjectMatcher(catalog) if classifier_profile == "compressed8_pulse_v1" else None
+                    result = discard_tracked_promotion_subjects(result, catalog, matcher=matcher)
                     removed_subjects = original_count - len(result["promoted_subjects"])
+                publication_model = self.cfg.llm.classifier_model
+                if classifier_profile == "compressed8_pulse_v1":
+                    from x_monitor.compressed_classifier import COMBINED_MODEL
+
+                    publication_model = COMBINED_MODEL
                 flag_result = _publish_stage1_classification(
                     post_id=tid,
                     result=result if isinstance(result, dict) else {},
                     tweet=tweet,
-                    model=self.cfg.llm.classifier_model,
+                    model=publication_model,
                     run_id=run_id,
                     cfg=enrichment_cfg,
                 )
@@ -4223,6 +4358,10 @@ class CycleRunner:
                     str(exc) if isinstance(exc, ValueError) and str(exc).startswith("classification_")
                     else "classification_publication_conflict"
                 )[:128]
+                if classifier_profile == "compressed8_pulse_v1":
+                    from monitor.pulse_processing import report_error
+
+                    report_error(code="classification_publication_conflict", stage="publication", post_id=tid, run_id=run_id)
                 flag_result = None
             if flag_result is not None and flag_result.outcome in {"persisted", "cleared"}:
                 counters["n_tracked_promotion_subjects_removed"] += removed_subjects
@@ -4232,7 +4371,7 @@ class CycleRunner:
                     if flag_result.outcome == "persisted"
                     else "n_unsanctioned_cleared"
                 ] += 1
-                if repair_manifest is not None:
+                if repair_manifest is not None or pulse_backfill:
                     # Exact Stage 1 repair is not a targeted-extraction run.
                     counters["n_classifications_published"] = (
                         counters.get("n_classifications_published", 0) + 1
@@ -4300,6 +4439,7 @@ class CycleRunner:
             called_ids=started_ids["classification"],
             attempts_recorded=True,
         )
+
         translation_succeeded: set[str] = set()
         bounded_translator_client = None
         if translation_tweets and translator_client is None:

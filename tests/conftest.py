@@ -66,7 +66,7 @@ def ensure_shared_business_catalogues_for_database_tests(request):
         ProductType,
     )
     from core.shared_vocabulary import seed_shared_vocabulary
-    if not ProductType.objects.filter(code="llm-model").exists():
+    if not ProductType.objects.filter(code="model-llm").exists():
         seed_shared_vocabulary(catalogues=(
             "product_types", "product_relationship_types", "model_gating_states",
         ))

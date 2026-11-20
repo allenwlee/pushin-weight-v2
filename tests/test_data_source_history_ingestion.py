@@ -875,7 +875,7 @@ def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolat
         repo_id="lab/Second",
         publisher_account=product.publisher_account,
         brand=product.brand,
-        **product_type_fields(Product, "llm-model"),
+        **product_type_fields(Product, "model-llm"),
         private=False,
         disabled=False,
     )

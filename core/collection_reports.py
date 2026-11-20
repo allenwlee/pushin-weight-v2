@@ -236,14 +236,26 @@ def _job_status(job_id, *, now=None, include_run_report=True):
         completed = list(attempt.scopes.filter(
             scope_kind="product_match", enumeration_complete=True,
         ).values_list("outcome", flat=True)) if attempt else []
+        pending_targets = list(job.targets.filter(
+            target_kind="match_candidate", resolution_state="unresolved",
+        ).values_list("pk", "evidence_observation_id", "source_row_index"))
+        locators = {(observation_id, f"target:{pk};row:{row}")
+                    for pk, observation_id, row in pending_targets}
+        resolved = set(CollectionObservationInput.objects.filter(
+            input_observation_id__in={item[0] for item in locators},
+            row_locator__in={item[1] for item in locators},
+            input_role="match_candidate", observation__observation_kind="product_match_decision",
+            observation__processing_outcome="admitted", observation__mapping__isnull=False,
+        ).values_list("input_observation_id", "row_locator")) if locators else set()
+        pending_count = len(locators - resolved)
         matching_progress = {
             "ruleset": scope["ruleset"],
             "preview_sha256": scope["preview_sha256"],
-            "candidate_count": len(scope["matches"]),
+            "candidate_count": len(scope["matches"]) + len(pending_targets),
             "reviewed_by": scope["review"]["reviewed_by"],
             "reviewed_candidate_count": len(scope["review"]["candidate_ids"]),
             "decisions": dict(Counter(completed)),
-            "remaining": max(0, len(scope["matches"]) - len(completed)),
+            "remaining": max(0, len(scope["matches"]) - len(completed)) + pending_count,
         }
     return {
         "schema_version": 1,
