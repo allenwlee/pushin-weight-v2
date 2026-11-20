@@ -262,7 +262,7 @@ UPDATE_COLUMNS = {
     ],
     "posts_untracked_brand_promotions": [("post_id", True), ("promotion_keys", False)],
 }
-REVERSE_SQL = "SET LOCAL lock_timeout = '2s';\nDROP TRIGGER each_facts_brand_identity ON brands;\nDROP TRIGGER each_facts_truncate ON brands;\n"
+REVERSE_SQL = "SET LOCAL lock_timeout = '2s';\nDROP TRIGGER IF EXISTS each_facts_brand_identity ON brands;\nDROP TRIGGER IF EXISTS each_facts_truncate ON brands;\n"
 for table in SOURCE_TABLES:
     for event in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
         if table == "posts" and event in ("INSERT", "DELETE"):
@@ -278,12 +278,12 @@ for table in SOURCE_TABLES:
             condition = " WHEN (" + " OR ".join(changes) + ")"
         level = "STATEMENT" if event == "TRUNCATE" else "ROW"
         TRIGGER_SQL += f"CREATE TRIGGER each_facts_{event.lower()} AFTER {event} ON {table} FOR EACH {level}{condition} EXECUTE FUNCTION each_facts_invalidate();\n"
-        REVERSE_SQL += f"DROP TRIGGER each_facts_{event.lower()} ON {table};\n"
+        REVERSE_SQL += f"DROP TRIGGER IF EXISTS each_facts_{event.lower()} ON {table};\n"
 REVERSE_SQL += """
-DROP FUNCTION each_facts_brand_identity();
-DROP FUNCTION each_facts_invalidate();
-DROP MATERIALIZED VIEW each_brand_post_facts;
-DROP VIEW each_brand_post_facts_source;
+DROP FUNCTION IF EXISTS each_facts_brand_identity();
+DROP FUNCTION IF EXISTS each_facts_invalidate();
+DROP MATERIALIZED VIEW IF EXISTS each_brand_post_facts;
+DROP VIEW IF EXISTS each_brand_post_facts_source;
 DELETE FROM materialization_state WHERE dataset_key='each.brand_post_facts.v1';
 """
 
@@ -535,12 +535,12 @@ def backwards(apps, schema_editor):
     db = schema_editor.connection
     with online_operation(db) as (cursor, schema):
         existing = inspect_existing(cursor)
-        drop_storage(apps, schema_editor)
         for spec in INDEXES:
             if existing[spec[0]] is not None:
                 cursor.execute(
                     f"DROP INDEX CONCURRENTLY {db.ops.quote_name(schema)}.{db.ops.quote_name(spec[0])}"
                 )
+        drop_storage(apps, schema_editor)
 
 
 def remove_indexes(apps, schema_editor):

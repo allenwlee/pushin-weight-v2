@@ -823,6 +823,10 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
     if unknown_views:
         raise PolicyError(f"source_unclassified_view:{min(unknown_views)}")
     required_views = policy.relations.views
+    # Historical source databases predate Each's ordinary oracle. The current
+    # target census still requires the complete declared inventory.
+    if 'each_brand_post_facts_source' not in source.views:
+        required_views = required_views - {'each_brand_post_facts_source'}
     # Supported historical sources predate these scalar-only serving views.
     # The upgraded target still requires the complete current view inventory.
     benchmark_views = frozenset({

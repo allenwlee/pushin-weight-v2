@@ -19,7 +19,8 @@ def run_refresh(*, all_results=False, command="refresh_home_counts"):
     output = StringIO()
     call_command(command, stdout=output)
     result = json.loads(output.getvalue())
-    return result if all_results else result["home.brand_time_counts.v1"]
+    datasets = result["materializations"] if command == "refresh_home_counts" else result
+    return datasets if all_results else datasets["home.brand_time_counts.v1"]
 
 
 def test_command_and_source_writer_leave_other_dataset_publication_unchanged():
@@ -467,7 +468,10 @@ def test_one_failed_dataset_does_not_skip_the_other(monkeypatch):
     with pytest.raises(CommandError):
         call_command("refresh_home_counts", stdout=output)
     assert calls == [definition.dataset_key for definition in refresh_materializations.registered_definitions()]
-    assert json.loads(output.getvalue()) == {
+    result = json.loads(output.getvalue())
+    assert result['status'] == 'unavailable'
+    assert result['error'] == 'RuntimeError'
+    assert result['materializations'] == {
         calls[0]: {"status": "unavailable", "error": "RuntimeError"}, calls[1]: {"status": "busy"},
     }
 
@@ -581,7 +585,7 @@ def test_each_advance_barrier_commits_before_counting_and_generation_publication
     assert refresh_materialization(definition)["status"] == "refreshed"
 
 
-def test_unchanged_cutoff_skips_the_source_barrier_even_when_history_is_dirty(
+def test_unchanged_cutoff_still_drains_source_writers_when_history_is_dirty(
     alternate_materialization,
 ):
     from dataclasses import replace
@@ -601,7 +605,7 @@ def test_unchanged_cutoff_skips_the_source_barrier_even_when_history_is_dirty(
 
     with connection.execute_wrapper(capture):
         assert refresh_materialization(definition)["status"] == "refreshed"
-    assert locks == []
+    assert locks == ['LOCK TABLE "materialization_fixture_inputs" IN SHARE MODE NOWAIT']
 
 
 def test_advance_publication_never_uses_a_clock_newer_than_its_source_barrier(
@@ -757,7 +761,7 @@ def test_explicit_force_refreshes_clean_publication_concurrently_without_invalid
         }
     assert refreshes == ['REFRESH MATERIALIZED VIEW CONCURRENTLY "materialization_fixture_counts"']
     assert observed_settings == [("8MB", "90s")]
-    assert locks == [], "force must not invent a cutoff advance"
+    assert locks == ['LOCK TABLE "materialization_fixture_inputs" IN SHARE MODE NOWAIT'] * 2, "clean and forced checks drain older writers without advancing the cutoff"
     after = MaterializationState.objects.get(pk=definition.dataset_key)
     assert (after.cutoff, after.source_generation, after.published_generation) == (
         before.cutoff, before.source_generation, before.published_generation,

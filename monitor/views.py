@@ -4279,7 +4279,7 @@ def _each_chart_payload(
 
 
 @ensure_csrf_cookie
-@bounded_each_request(html=True, error_locale=_resolve_locale)
+@bounded_each_request(html=True, error_locale=lambda request: _resolve_locale(request, persist=False))
 def dashboard_each(request: HttpRequest) -> HttpResponse:
     locale = _resolve_locale(request)
     window_days = _resolve_home_window(request)

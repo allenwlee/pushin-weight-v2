@@ -599,13 +599,16 @@ Populate it through the service's managed database configuration:
 python manage.py refresh_home_counts
 ```
 
-The command emits JSON with `status` equal to `refreshed`, `skipped`, `busy`,
+The command preserves the homepage's top-level JSON `status`, equal to `refreshed`, `skipped`, `busy`,
 `changed`, or `unavailable`. `changed` means a source write overlapped counting
 and the whole refresh was rolled back; retry at the next poll. A missing
 lifecycle row is repaired in a separate short transaction only when existing
 source writers have finished. A busy source or another refresher causes a
 truthful `busy` result. The repair transaction must commit before counting, so
 run the command outside an enclosing application transaction.
+The additive `materializations` object contains outcomes keyed by dataset;
+`refresh_materializations` emits that dataset-keyed envelope directly. Both
+entry points execute the same independent refresh loop.
 
 Production `pushinweight-home-counts` runs at minutes `7,22,37,52` UTC. A healthy
 same-day poll skips counting. Normal daily publication begins around 00:07 UTC
@@ -652,10 +655,12 @@ operation after consumers no longer use the view.
 ## Each dashboard cache preparation and activation
 
 The deployed `refresh_home_counts` command remains a compatible entry point and
-runs the shared `refresh_materializations` command. It refreshes homepage counts
+runs the shared refresh implementation. It refreshes homepage counts
 and Each raw facts independently, reporting both dataset outcomes; one failure
 does not silently suppress the other. The existing maintenance cron keeps its
 schedule, resource plan and provider-free purpose.
+Its top-level result still describes homepage counts; inspect
+`materializations["each.brand_post_facts.v1"]` for the Each outcome.
 
 For an owner-selected direct release, prepare the exact reviewed candidate on
 that existing production cron before activating its web revision. The additive

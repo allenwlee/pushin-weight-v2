@@ -397,7 +397,7 @@ Times are JST; UTC is given where it identifies a log query.
   - For a fixed review or test clock, the split uses the earlier of the
     published cutoff and that clock's UTC midnight minus one day (homepage
     KTD6 with this dataset's lag).
-- **KTD4. Invalidation: historical-only bump plus a non-waiting daily advance
+- **KTD4. Invalidation: historical-only bump plus a non-waiting publication
   barrier.**
   - Triggers update the dataset row only when an affected post's `created_at`
     is before `date_trunc('day', clock_timestamp(), 'UTC') - interval '1 day'`.
@@ -410,9 +410,11 @@ Times are JST; UTC is given where it identifies a log query.
     transactions from cron and the enrichment worker would lock one shared row
     until commit, and the 100-post `backfill_enrichment` transaction would hold
     it throughout.
-  - The midnight race (a write whose trigger runs before UTC midnight and
-    commits after the refresh snapshot) is closed by a barrier:
-    1. Only when a refresh would advance `cutoff`, `refresh_materialization`
+  - Midnight and date-correction races (a child writer can still see an old
+    recent parent date while a concurrent correction moves it into history)
+    are closed by a barrier:
+    1. Before every Each publication attempt, including same-cutoff rebuilds,
+       `refresh_materialization`
        first runs a separate short transaction: `LOCK TABLE <source tables>
        IN SHARE MODE NOWAIT`, retried up to 10 times at 200 ms intervals,
        then committed immediately.
@@ -421,8 +423,8 @@ Times are JST; UTC is given where it identifies a log query.
        until its immediate commit (milliseconds); a writer arriving in that
        instant waits only that long.
     3. A granted lock proves no write transaction on those tables is in
-       flight. Every later write runs its trigger after midnight and therefore
-       bumps when it touches pre-cutoff posts.
+       flight. Ordinary application writers use READ COMMITTED, so later
+       statements see the committed corrected date and bump for history.
     4. If the lock is never free, the status is `busy`. The previous
        publication stays valid and correct, the live tail is one day longer,
        and the next 15-minute tick retries.
@@ -511,7 +513,7 @@ Times are JST; UTC is given where it identifies a log query.
 
 - **KTD10. Request deadlines include all work.**
   - A request-scoped monotonic deadline owns 15 seconds for the chart endpoint and initial Each page. Nested work, including the three-day DeepSeek ranking and all-live fallback, receives the same deadline. Before each database statement, set the transaction-local statement limit to the smaller of its caller limit and remaining time; use 250 ms or the remaining time for lock waits. Check the deadline between bounded reduction batches and before returning. This is not a new 15 seconds per statement.
-  - Put the narrow reusable guard next to the Each request helpers rather than adding global middleware or duplicating it per tab. A guarded operation owns its transaction or cooperates with an already compatible read-only snapshot. Do not issue isolation/access-mode changes after a caller's transaction has begun querying. Save and restore relevant settings, or unwind the transaction on failure; never leak settings into the next request.
+  - Keep the reusable guard next to the Each request helpers. A SessionMiddleware subclass opens it only for the three Each routes, enclosing the normal session save; every other route delegates unchanged. Reuse the same guard in readers rather than duplicating it per tab. A guarded operation owns its transaction or cooperates with an already compatible read-only snapshot. Do not issue isolation/access-mode changes after a caller's transaction has begun querying. Save and restore relevant settings, or unwind the transaction on failure; never leak settings into the next request.
   - Initial page reads/rendering are bounded too. Its deliberate visible-demand write runs in a separate short best-effort transaction, not inside the chart's read-only snapshot. A parent deadline still caps the overall composition. If the page budget is exhausted before first render, return a small localized HTTP503 page with `Retry-After`, not a half-rendered500.
   - Keep the existing 300-second legend-order cache. Do not add a stale full-payload cache that hides new posts or corrections. On a cold ranking cache, use the same saved-facts reader/deadline; do not recursively create a fresh budget. Percent/volume is still a local browser redraw.
   - Browser chart deadline: 18 seconds, slightly beyond the server budget. Superseded fetch cancellation remains silent. Own deadline/503/network errors show explicit failure and previous-result state; they never destroy good data. No automatic retry loop and no claim that a browser abort cancels PostgreSQL.
@@ -1675,3 +1677,64 @@ Source-specific evidence is reused by the explicit doc-only reuse rule,
 with original12557tests/performance identity retained. Runtime proof must use
 the actual deployed docs-descendant SHA. Final completion and root coordination
 receipt precede the final guarded worktree removal; preserve feature branches.
+
+
+### 2026-11-20 17:12 JST — Native review corrections before production
+
+The full native review at `20261120-163326-20d3f920` returned eight confirmed
+findings. Actual PostgreSQL/caller regressions reproduced normal-session save
+escaping the deadline, timeout-locale retry, stale same-cutoff publication,
+interrupted reverse retry, and the new ordinary-view inventory mismatch. Actual
+operator processes also reproduced wrong-window acceptance and stuck shutdown;
+a separate command regression reproduced the legacy JSON contract change.
+
+Apply the eight coherent fixes and rerun their regressions. The source-writer
+barrier now precedes every Each publication attempt, with the same short NOWAIT
+policy and locks released before counting. This corrects the daily-only
+implementation assumption without adding locks to current-day enrichment writes.
+Independent correctness agreement supplements the original data-migration lens
+for finding8; the process-only proposal passed the observable stale-publication
+regression, and the actual source fix still requires its ordinary green run.
+
+Normal database sessions remain enabled. The Each-only SessionMiddleware scope
+includes persistence in the existing15s/3s allowance; error locale resolution
+uses the existing resolver with `persist=False`. Legacy `refresh_home_counts`
+keeps top-level homepage status and adds a `materializations` envelope; the new
+command retains its direct dataset-keyed envelope. Reverse verifies and removes
+its concurrent indexes before reentrant transactional storage teardown. The
+ordinary source view is classified for current source/target inventories while
+supported pre-Each source databases remain accepted. No staging refresh runs.
+
+The operator verifies returned window identity and has a separate-process
+shutdown watchdog. A cache-only ANALYZE is separately timed within10s after
+initial population, before forced concurrent refresh and latency measurements;
+it is not evidence that missing statistics caused the earlier delay. Logs
+distinguish selected grouping from UTC three-day ranking grouping.
+
+At sealed6fa069c4, the broad functional run passed562tests and364subtests with
+263required PostgreSQL tests, zero skips/errors, and clean38/38Each plus
+5191/5191full normalized obligations. Performance was unperformed because the
+new state home did not own its prepared runtime; reuse the authenticated existing
+state home for the final candidate, preserving every scenario and budget.
+The production before sample measured Meta7d Sentiment5.252s and Post Type14.156s
+with42,537posts in both. Four prior harvest cycles completed213/198/228/233
+inserts in277/284/267/324s;24worker batches published703classifications with
+zero reported enrichment failures. These are baselines, not post-release proof.
+
+The new regression bundle initially passed72tests with one obsolete command
+envelope assertion; update that assertion to check both preserved top-level
+status and complete independent dataset results, then rerun. Source fixtures
+prove behavior only. Actual production cache/refresh/parity/144HTTP gates,
+normal public sessions/background browser flow, and live-operation comparison
+remain required before completion. U12/NVIDIA reorder remains deferred.
+
+Review corrections verification: the72passing regressions included every new
+session, date/publication, reverse, source-inventory, operator and command case.
+The remaining obsolete-envelope assertion was corrected; its rerun plus target
+inventory failure cases and required Ollija checks passed51tests (one required
+PostgreSQL test, no skips/errors). Localized saved30d headline comparison and
+request-isolation checks passed18tests; the non-GET pre-budget check then passed
+after preserving early405rejection. Lint for the changed modules passes and
+`makemigrations --check --dry-run` reports no changes. The actual prepared
+performance runtime authenticated successfully under its owning state home;
+final exact-candidate browser/performance verification follows this checkpoint.

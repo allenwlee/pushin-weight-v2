@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing
 import os
+import signal
 import statistics
 import sys
 from datetime import datetime
@@ -24,6 +26,45 @@ TABS = ("sentiment", "post_types", "lang", "role", "audience_topics",
         "geopolitical_modes", "product_labels", "untracked_brand_promotions")
 
 
+def _watch_shutdown(parent_pid, receiver, seconds):
+    """A separate process can stop even a noncooperative local HTTP handler."""
+    try:
+        if receiver.poll(seconds):
+            try:
+                receiver.recv()
+            except EOFError:
+                pass
+            return
+        print(json.dumps({'event': 'failed', 'reason': 'operator_shutdown_timeout'}), flush=True)
+        os.kill(parent_pid, signal.SIGKILL)
+    finally:
+        receiver.close()
+
+
+def _stop_server(server, thread):
+    context = multiprocessing.get_context('spawn')
+    receiver, sender = context.Pipe(duplex=False)
+    watchdog = context.Process(target=_watch_shutdown, args=(os.getpid(), receiver, 2), daemon=True)
+    watchdog.start()
+    receiver.close()
+    try:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+        if thread.is_alive():
+            raise RuntimeError('Operator HTTP listener did not stop')
+    finally:
+        try:
+            sender.send(True)
+        except BrokenPipeError:
+            pass
+        sender.close()
+        watchdog.join(timeout=1)
+        if watchdog.is_alive():
+            watchdog.terminate()
+            watchdog.join(timeout=1)
+
+
 def prepare_materialization():
     """Use the normal publication path, then compare bounded raw-fact pages."""
     from importlib import import_module
@@ -32,6 +73,7 @@ def prepare_materialization():
 
     from core.materializations import refresh_materialization
     from monitor.each_chart_facts import EACH_FACTS
+    from monitor.each_request_budget import EachRequestBudget
 
     if os.environ.get("PW_DATABASE_ACCESS_MODE") == "serving":
         raise RuntimeError("Preparation requires the existing owner maintenance image")
@@ -42,6 +84,14 @@ def prepare_materialization():
         print(json.dumps({"event": "refresh", "kind": label, "seconds": elapsed, **result}), flush=True)
         if result["status"] not in ({"refreshed", "skipped"} if not force else {"refreshed"}) or elapsed > cap:
             raise RuntimeError("Materialization publication/refresh gate failed")
+        if label == 'initial':
+            # A first heap fill need not have planner column statistics yet.
+            # Measure this separate cache-only operation before the data gates.
+            started = monotonic()
+            with (EachRequestBudget(seconds=10) as budget, budget.query_scope(),
+                  transaction.atomic(), connection.cursor() as cursor):
+                cursor.execute('ANALYZE each_brand_post_facts')
+            print(json.dumps({'event': 'analyze', 'seconds': monotonic()-started}), flush=True)
     module = import_module("core.migrations.0235_each_chart_facts")
     columns = [name.strip() for name in module.COLUMNS.split(",")]
     if len(columns) != 20:
@@ -157,6 +207,8 @@ def main():
             return execute(sql, params, many, context)
         finally:
             phase = "publication_health" if "FROM materialization_state" in sql else "fact_groups" if "WITH facts AS" in sql else "other"
+            if phase == 'fact_groups':
+                phase = 'ranking_fact_groups' if 'UTC' in (params or ()) else 'selected_fact_groups'
             brand = next((p for p in (params or ()) if isinstance(p, str) and p in {"llama", "deepseek"}), None)
             phases.append({"phase": phase, "brand": brand, "ms": round((monotonic()-start)*1000, 3)})
 
@@ -197,10 +249,12 @@ def main():
                         seconds = monotonic()-start
                         row = {"round": round_number+1, "brand": brand, "window": window, "tab": tab,
                             "status": status, "seconds": round(seconds, 6), "database_phases": list(phases),
+                            "returned_window": payload.get('window_days'),
                             "total": sum(payload.get("totals", []))}
                         rows.append(row)
                         print(json.dumps(row), flush=True)
-                        if status != 200 or seconds >= 5 or payload.get("brand") != brand or payload.get("tab") != tab:
+                        if (status != 200 or seconds >= 5 or payload.get("brand") != brand
+                                or payload.get("tab") != tab or payload.get('window_days') != window):
                             print(json.dumps({"event": "failed", "reason": "chart_latency_or_response", "completed": len(rows)}), flush=True)
                             return 1
         values = [row["seconds"] for row in rows]
@@ -211,10 +265,10 @@ def main():
             "scope": "Candidate local HTTP route against existing data; final public web/browser validation remains required"}), flush=True)
         return 0 if passed else 1
     finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=6)
-        connections.close_all()
+        try:
+            _stop_server(server, thread)
+        finally:
+            connections.close_all()
 
 
 if __name__ == "__main__":

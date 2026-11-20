@@ -106,7 +106,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "monitor.each_request_budget.EachSessionMiddleware",
     # LocaleMiddleware must be after SessionMiddleware and before
     # CommonMiddleware so it can parse the language from the session
     # or URL before the request is processed.

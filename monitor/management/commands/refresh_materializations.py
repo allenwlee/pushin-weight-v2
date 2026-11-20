@@ -17,6 +17,9 @@ def registered_definitions():
 class Command(BaseCommand):
     help = "Refresh saved homepage counts and Each post facts independently."
 
+    def format_results(self, results):
+        return results
+
     def handle(self, *args, **options):
         results = {}
         failures = []
@@ -28,6 +31,6 @@ class Command(BaseCommand):
                 results[definition.dataset_key] = {
                     "status": "unavailable", "error": type(error).__name__,
                 }
-        self.stdout.write(json.dumps(results, sort_keys=True))
+        self.stdout.write(json.dumps(self.format_results(results), sort_keys=True))
         if failures:
             raise CommandError("Materialization refresh failed for: " + ", ".join(failures))

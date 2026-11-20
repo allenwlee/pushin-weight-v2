@@ -108,6 +108,8 @@ def _prepare_advance(
 
     Freeze the target before the barrier. A refresh starting across UTC midnight
     must not silently advance to a newer cutoff than the barrier actually proved.
+    Same-cutoff publication also needs the barrier: a child writer may still
+    observe a parent's old recent date while a correction moves it into history.
     """
     if not definition.advance_barrier:
         return True, None
@@ -120,9 +122,7 @@ def _prepare_advance(
         state = cursor.fetchone()
     if state is None:
         return False, None
-    cutoff, target = state
-    if cutoff is not None and cutoff >= target:
-        return True, target
+    _cutoff, target = state
     if connection.in_atomic_block:
         raise RuntimeError("The advance barrier must commit before refresh counting")
     tables = ", ".join(

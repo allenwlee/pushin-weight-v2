@@ -5,7 +5,9 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from math import floor
 from time import monotonic
+from typing import ClassVar
 
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.db import DatabaseError, connection, connections, transaction
 from django.utils.connection import ConnectionProxy
 
@@ -260,11 +262,56 @@ def current_budget() -> EachRequestBudget | None:
     return _active.get()
 
 
+def _unavailable_response(request, *, error, html=False, error_locale=None):
+    from django.http import HttpResponse, JsonResponse
+
+    if html:
+        locale = (error_locale(request) if error_locale is not None
+                  else request.GET.get('locale', 'en')).lower()
+        message = ('页面加载超时，请稍后重试。' if locale.startswith('zh') else
+                   '読み込みがタイムアウトしました。しばらくしてから再試行してください。' if locale.startswith('ja') else
+                   'This page took too long to load. Please try again shortly.')
+        response = HttpResponse(message, status=503)
+    else:
+        response = JsonResponse({'error': error}, status=503)
+    response['Retry-After'] = '60'
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
+class EachSessionMiddleware(SessionMiddleware):
+    """Keep the existing session lifecycle inside the Each-only allowance."""
+
+    async_capable = False
+    scopes: ClassVar[dict[str, tuple[int, str, bool]]] = {
+        '/dashboard/each': (15, 'chart_timeout', True),
+        '/dashboard/each/chart/': (15, 'chart_timeout', False),
+        '/api/v2/dashboard/each/headline/': (3, 'headline_timeout', False),
+    }
+
+    def __call__(self, request):
+        scope = self.scopes.get(request.path_info)
+        if scope is None or (request.path_info == '/api/v2/dashboard/each/headline/'
+                             and request.method != 'GET'):
+            return super().__call__(request)
+        seconds, error, html = scope
+        try:
+            with EachRequestBudget(seconds=seconds) as budget, budget.query_scope():
+                # SessionMiddleware.process_response saves directly inside this
+                # call, before Django converts a middleware exception to a 500.
+                return super().__call__(request)
+        except EachChartUnavailable:
+            from monitor.views import _resolve_locale
+
+            return _unavailable_response(
+                request, error=error, html=html,
+                error_locale=lambda request: _resolve_locale(request, persist=False),
+            )
+
+
 def bounded_each_request(*, seconds=15, error='chart_timeout', html=False, error_locale=None):
     """Bound validation, reads and rendering under one public request deadline."""
     from functools import wraps
-
-    from django.http import HttpResponse, JsonResponse
 
     def decorate(view):
         @wraps(view)
@@ -273,17 +320,8 @@ def bounded_each_request(*, seconds=15, error='chart_timeout', html=False, error
                 with EachRequestBudget(seconds=seconds) as budget, budget.query_scope():
                     return view(request, *args, **kwargs)
             except EachChartUnavailable:
-                if html:
-                    locale = (error_locale(request) if error_locale is not None
-                              else request.GET.get('locale', 'en')).lower()
-                    message = ('页面加载超时，请稍后重试。' if locale.startswith('zh') else
-                               '読み込みがタイムアウトしました。しばらくしてから再試行してください。' if locale.startswith('ja') else
-                               'This page took too long to load. Please try again shortly.')
-                    response = HttpResponse(message, status=503)
-                else:
-                    response = JsonResponse({'error': error}, status=503)
-                response['Retry-After'] = '60'
-                response['Cache-Control'] = 'no-store'
-                return response
+                return _unavailable_response(
+                    request, error=error, html=html, error_locale=error_locale,
+                )
         return bounded
     return decorate

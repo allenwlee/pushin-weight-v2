@@ -30,6 +30,7 @@ WIDTHS = (1440, 390)
 MODES = ("percent", "volume")
 EMPHASIS = ("none", "first", "other")
 SOURCE_PATHS = (
+    "project/settings.py",
     "core/models.py", "core/classification_readers.py", "core/materializations.py",
     "monitor/views.py", "monitor/urls.py", "monitor/each_chart_facts.py",
     "monitor/each_headline.py", "monitor/each_request_budget.py",
