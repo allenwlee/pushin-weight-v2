@@ -1767,3 +1767,43 @@ identities remain byte-identical to75319511. Reuse that evidence with its exact
 measured revision, verify the documentation-only diff, and verify the new release
 SHA on the prepared cron and final public deployment. Actual production data
 measurements remain unperformed and must pass before web/main activation.
+
+
+### 2026-11-20 18:12 JST — complete production parity verifier repair
+
+Production preparation image df4b394b applied0235 online. Initial Each fill
+passed in40.668s, cache-only ANALYZE in1.685s, and actual forced concurrent
+refresh in74.133s. Production web/main remain64ac4fb8. The following parity
+preflight failed its3s statement cap because it counted the complete ordinary
+source view before paging. This is a verifier failure, not a parity pass or
+permission to activate. Source-count reproduction timed out; saved count plus
+outside-cutoff check took257.749ms.
+
+Replace that unbounded count with complete source-key enumeration in native
+(post_id,brand_id) order. Verify every key against the original ordinary source
+view and the saved row, including all20typed fields, NULLs and C collations;
+reject duplicate oracle rows explicitly. Enumerating the original view preserves
+coverage of oracle-only keys. Equal completed-source and saved counts exclude
+extra saved keys. Retain3s statements,250ms locks,8MB and300s total observation.
+Transaction-local nested-loop planning avoids later pages restarting a merge
+join's full parent prefix; measured refresh and public-query plans are unchanged.
+A full2048row middle page measured15.470ms planning plus394.837ms execution,
+with no JIT. This supports a bounded full scan but does not pre-pass that gate.
+
+Regression red reproduced the unbounded source count failure. The repaired
+operator/lifecycle bundle passes6actual PostgreSQL tests, zero skips/errors,
+including2049facts with one post's two brand keys straddling the page boundary,
+oracle-only and missing keys, Python-O duplicate rejection, wrong-window
+rejection and stalled shutdown. Changed-module lint and diff checks are required
+before commit. The separate native scoped review and exact-image production
+preparation must finish before main activation. Reuse75319511's full browser,
+performance and application checks only for byte-identical product surfaces;
+operator-only verification is new and recorded separately.
+
+The second and final fixed20post enrichment observation after migration is
+healthy_with_pending, regression inconclusive and literal-artifact acceptance
+failed (0/20complete,0unhealthy). Classification has succeeded in the sampled
+records, while detected language remains absent, as in the pre-migration cohort.
+Do not retry or select a new cohort, and do not report enrichment acceptance as
+passed. Compare natural harvest/worker throughput separately without provider
+calls or pausing any live operation.

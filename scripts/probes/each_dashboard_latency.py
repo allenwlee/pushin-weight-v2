@@ -103,44 +103,60 @@ def prepare_materialization():
         if name in collated else f'actual."{name}" IS DISTINCT FROM saved."{name}"'
         for name in columns
     )
-    checked, last = 0, None
+    checked, pages, last = 0, 0, None
     started = monotonic()
     with transaction.atomic(), connection.cursor() as cursor:
         cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         cursor.execute("SET LOCAL statement_timeout='3s'")
         cursor.execute("SET LOCAL lock_timeout='250ms'")
         cursor.execute("SET LOCAL work_mem='8MB'")
+        # A merge join can rescan the parent's full prefix on each later page.
+        # These transaction-local choices affect only the read-only verifier;
+        # measured refreshes and public chart queries keep their normal plans.
+        cursor.execute('SET LOCAL enable_mergejoin=off')
+        cursor.execute('SET LOCAL enable_hashjoin=off')
         cursor.execute("SELECT cutoff,source_generation,published_generation FROM materialization_state WHERE dataset_key=%s", [EACH_FACTS.dataset_key])
         cutoff, generation, published = cursor.fetchone()
         if generation != published or generation != result["generation"]:
             raise RuntimeError("History changed before parity snapshot; do not call this a mismatch")
         cursor.execute("SELECT count(*),count(*) FILTER(WHERE created_at >= %s) FROM each_brand_post_facts", [cutoff])
         saved_count, outside = cursor.fetchone()
-        cursor.execute("SELECT count(*) FROM each_brand_post_facts_source WHERE created_at < %s", [cutoff])
-        source_count = cursor.fetchone()[0]
-        if saved_count != source_count or outside:
-            raise RuntimeError("Raw-fact count or cutoff parity mismatch")
+        if outside:
+            raise RuntimeError("Raw-fact cutoff parity mismatch")
         while True:
             if monotonic()-started > 300:
                 raise RuntimeError("Bounded parity observation expired")
-            where = "WHERE (brand_id,post_id) > (%s,%s)" if last else ""
+            where = "AND post_id >= %s AND (post_id,brand_id) > (%s,%s)" if last else ""
+            parameters = [cutoff, last[0], *last] if last else [cutoff]
             cursor.execute(f"""WITH page AS MATERIALIZED (
-                SELECT {module.COLUMNS} FROM each_brand_post_facts {where}
-                ORDER BY brand_id,post_id LIMIT 256
-            ) SELECT count(*),count(*) FILTER(WHERE actual.post_id IS NULL OR {mismatch}),
-                (SELECT brand_id FROM page ORDER BY brand_id DESC,post_id DESC LIMIT 1),
-                (SELECT post_id FROM page ORDER BY brand_id DESC,post_id DESC LIMIT 1)
-            FROM page saved LEFT JOIN LATERAL (
-                SELECT {module.COLUMNS} FROM each_brand_post_facts_source
-                WHERE brand_id=saved.brand_id AND post_id=saved.post_id OFFSET 0
-            ) actual ON TRUE""", list(last) if last else [])
-            count, differences, brand, post = cursor.fetchone()
+                SELECT brand_id,post_id FROM each_brand_post_facts_source
+                WHERE created_at < %s {where}
+                ORDER BY post_id,brand_id LIMIT 2048
+            ) SELECT count(*),count(*) FILTER(WHERE actual.post_id IS NULL
+                OR actual.source_rows <> 1 OR saved.post_id IS NULL OR {mismatch}),
+                (SELECT post_id FROM page ORDER BY post_id DESC,brand_id DESC LIMIT 1),
+                (SELECT brand_id FROM page ORDER BY post_id DESC,brand_id DESC LIMIT 1)
+            FROM page keys LEFT JOIN LATERAL (
+                SELECT {module.COLUMNS},count(*) OVER () AS source_rows
+                FROM each_brand_post_facts_source
+                WHERE brand_id=keys.brand_id AND post_id=keys.post_id OFFSET 0
+            ) actual ON TRUE LEFT JOIN each_brand_post_facts saved
+              ON saved.brand_id=keys.brand_id AND saved.post_id=keys.post_id""", parameters)
+            count, differences, post, brand = cursor.fetchone()
+            if monotonic()-started > 300:
+                raise RuntimeError("Bounded parity observation expired")
             if not count:
                 break
             if differences:
                 raise RuntimeError("Typed raw-fact parity mismatch")
             checked += count
-            last = (brand, post)
+            pages += 1
+            last = (post, brand)
+            if pages % 100 == 0:
+                print(json.dumps({'event': 'parity_progress', 'rows_checked': checked,
+                                  'seconds': monotonic()-started}), flush=True)
+        # Every original source key was compared, including keys absent from
+        # the cache. Equal totals also exclude additional saved keys.
         if checked != saved_count:
             raise RuntimeError("Raw-fact parity coverage mismatch")
     print(json.dumps({"event": "parity", "rows_checked": checked, "seconds": monotonic()-started,
