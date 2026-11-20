@@ -137,9 +137,18 @@ def edition_payload(edition, cfg, *, pictures=None):
     }
 
 
+def _archive_cursor(cursor, *, requested_locale, stable_locale):
+    if not cursor:
+        return None
+    value = signing.loads(cursor, salt="editorial-archive")
+    if stable_locale and value.get("requested_locale") != requested_locale:
+        raise ValueError("cursor filter mismatch")
+    return value
+
+
 def feed_payload(
     cfg, *, track="chatter", locale="en", cursor="", limit=20,
-    source_locale=None, editorial_group=None,
+    source_locale=None, editorial_group=None, stable_locale=False,
 ):
     if track not in TRACKS or locale not in LOCALES:
         raise ValueError("unsupported track or locale")
@@ -151,6 +160,7 @@ def feed_payload(
         payload = shared_feed_payload(
             cfg, track=track, locale=locale, cursor=cursor, limit=limit,
             source_locale=source_locale, editorial_group=editorial_group,
+            stable_locale=stable_locale,
         )
         if track == "chatter" and cfg.chatter.enabled:
             from .chatter_status import delay_status
@@ -159,7 +169,10 @@ def feed_payload(
     if source_locale is not None or editorial_group is not None:
         raise ValueError("Chatter pools require shared storage")
     requested_locale = locale
-    if (
+    value = _archive_cursor(cursor, requested_locale=locale, stable_locale=stable_locale)
+    if value is not None and stable_locale:
+        locale = value["locale"]
+    elif (
         locale != "en"
         and not EditorialEdition.objects.filter(track=track, locale=locale).exists()
     ):
@@ -167,8 +180,7 @@ def feed_payload(
     query = EditorialEdition.objects.filter(track=track, locale=locale).order_by(
         "-published_at", "-id"
     )
-    if cursor:
-        value = signing.loads(cursor, salt="editorial-archive")
+    if value is not None:
         if value["track"] != track or value["locale"] != locale:
             raise ValueError("cursor filter mismatch")
         query = query.filter(
@@ -210,6 +222,7 @@ def feed_payload(
                 "locale": locale,
                 "at": editions[-1].published_at.isoformat(),
                 "id": str(editions[-1].pk),
+                **({"requested_locale": requested_locale} if stable_locale else {}),
             },
             salt="editorial-archive",
         )

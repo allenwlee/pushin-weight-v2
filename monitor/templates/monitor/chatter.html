@@ -1,0 +1,18 @@
+{% extends 'monitor/general.html' %}
+{% load static i18n %}
+{% block title %}{% translate "Chatter" %} · PUSHINWEIGHT{% endblock %}
+{% block body_class %}general-page chatter-page{% endblock %}
+{% block page_assets %}<link rel="stylesheet" href="{% static 'monitor/chatter.css' %}"><script src="{% static 'monitor/general.js' %}" defer></script>{% endblock %}
+{% block page_content %}
+<section id="chatter" class="chatter-archive" aria-labelledby="chatter-title">
+  <div class="chatter-heading"><h1 id="chatter-title"><svg class="icon" aria-hidden="true"><use href="#icon-discourse"></use></svg>{% translate "Chatter" %}</h1></div>
+  {% include 'monitor/editorial/pools.html' %}
+  {% if feed.delay.delayed and feed.items and not request.GET.cursor %}<p class="chatter-delay" role="status">{% translate "Chatter updates are delayed. The latest available story is shown." %}</p>{% endif %}
+  {% if feed.items and feed.locale != feed.requested_locale %}<p class="editorial-fallback">{% translate "This story is currently available in English." %}</p>{% endif %}
+  <div class="archive-list">
+    {% for item in feed.items %}{% include 'monitor/general/_editorial_story.html' with show_asset=True %}
+    {% empty %}<p class="empty-feed">{% if available %}{% translate "No published stories yet." %}{% else %}{% translate "Published stories are currently unavailable." %}{% endif %}</p>{% endfor %}
+  </div>
+  {% if next_url %}<nav class="chatter-pagination" aria-label="{% translate 'Story archive' %}"><a href="{{ next_url }}" rel="next" data-chatter-next>{% translate "Older stories" %} ↓</a></nav>{% endif %}
+</section>
+{% endblock %}
