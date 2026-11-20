@@ -1,11 +1,12 @@
 """Pure half-hour Chatter decisions shared by chronological replay and the worker."""
 
+import json
+import unicodedata
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
-import json
+from itertools import pairwise
 from pathlib import Path
-import unicodedata
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -78,7 +79,7 @@ def decision_packet(observations, cutoff, history):
     trigger = False
     for key, samples in groups.items():
         prev = seen.get(key, {})
-        consecutive = any(b[0] - a[0] == QUARTER for a, b in zip(samples, samples[1:]))
+        consecutive = any(b[0] - a[0] == QUARTER for a, b in pairwise(samples))
         trigger |= not prev or (consecutive and not prev.get("repeated"))
         receipt = samples[-1][1]["observed_at"]
         seen[key] = {
@@ -120,11 +121,13 @@ def decision_packet(observations, cutoff, history):
 
 def selection_request(packet):
     history = packet["history"]
+    pending_ids = {e["episode_id"] for e in history.get("pending", [])}
     recent = [
         {k: e[k] for k in ("episode_id", "title", "last_seen")} | {"state": state}
         for state in ("admitted", "pending")
         for e in history.get(state, [])
-        if instant(e["last_seen"]) > instant(packet["cutoff"]) - HORIZON
+        if (state == "pending" or e["episode_id"] not in pending_ids)
+        and instant(e["last_seen"]) > instant(packet["cutoff"]) - HORIZON
     ]
     rows = [
         {
@@ -152,10 +155,15 @@ def selection_request(packet):
 def apply_selection(packet, reply):
     boundary = instant(packet["cutoff"])
     history = packet["history"]
-    observed = {wording(h["trend_name"]): instant(h["last_seen"]) for h in packet["headlines"]}
+    observed = {
+        wording(h["trend_name"]): instant(h["last_seen"]) for h in packet["headlines"]
+    }
 
     def refresh(entry):
-        last = max([instant(entry["last_seen"])] + [observed[k] for k in entry["wordings"] if k in observed])
+        last = max(
+            [instant(entry["last_seen"])]
+            + [observed[k] for k in entry["wordings"] if k in observed]
+        )
         return {**entry, "last_seen": last.isoformat()}
 
     retained = {
@@ -172,7 +180,10 @@ def apply_selection(packet, reply):
         if e["episode_id"] not in {r["episode_id"] for r in retained["pending"]}
     ]
     earlier = {e["episode_id"]: e for e in retained["admitted"] + retained["pending"]}
-    published = {e["episode_id"] for e in retained["admitted"]}
+    published = {e["episode_id"]: e for e in retained["admitted"]}
+    pending_updates = {
+        e["episode_id"]: e for e in retained["pending"] if e.get("material_change")
+    }
     if packet["needs_ranking"] != (reply is not None):
         raise ValueError("decision and ranking receipt disagree")
     groups = (
@@ -183,7 +194,9 @@ def apply_selection(packet, reply):
         i for g in groups for i in g.headline_ids
     ) != sorted(rows):
         raise ValueError("ranking must cover every headline exactly once")
-    explicit_priors = {group.prior_episode_id for group in groups if group.prior_episode_id}
+    explicit_priors = {
+        group.prior_episode_id for group in groups if group.prior_episode_id
+    }
     queued = []
     handled = set()
     for g in groups:
@@ -214,8 +227,13 @@ def apply_selection(packet, reply):
         if prior:
             handled.add(prior)
         last = max(instant(x["last_seen"]) for x in members).isoformat()
+        if prior in pending_updates and not g.material_change:
+            if g.qualifies:
+                # A previously ranked update still owns its first evidence and call.
+                queued.append(pending_updates[prior])
+            continue
         if prior in published:
-            previous = earlier[prior]
+            previous = published[prior]
             if not g.material_change or not set(keys).difference(previous["wordings"]):
                 refreshed = {
                     **previous,
@@ -256,7 +274,9 @@ def apply_selection(packet, reply):
         record = {k: e[k] for k in ("episode_id", "title", "last_seen", "wordings")}
         if e["episode_id"] in earlier:
             record["wordings"] = sorted(
-                set(earlier[e["episode_id"]]["wordings"]).union(e["wordings"])
+                set(
+                    published.get(e["episode_id"], earlier[e["episode_id"]])["wordings"]
+                ).union(e["wordings"])
             )
         archive.append(record)
     leads = [
