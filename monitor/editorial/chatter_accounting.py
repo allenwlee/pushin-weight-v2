@@ -25,7 +25,7 @@ from monitor.trend_narrative_lifecycle import (
 
 from .chatter_history import WORKFLOW, locked_run
 from .contracts import ProviderReplyError
-from .persistence import _GRAPHICS_PREFIX, BudgetHeld, completed_text_cost
+from .persistence import _GRAPHICS_PREFIX, BudgetHeld, CapacityHeld, completed_text_cost
 
 QUANTUM = Decimal("0.000001")
 
@@ -275,7 +275,7 @@ def call_once(run, stage, kind, ceiling, cfg, send, *, request_metadata=None):
             ).exists()
             or EditorialCall.objects.filter(state="sent").exists()
         ):
-            raise BudgetHeld("editorial provider already in flight")
+            raise CapacityHeld("editorial provider already in flight")
         packet = metadata["request_packet"]
         reference = metadata.get("input_reference")
         if reference:

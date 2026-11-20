@@ -4,6 +4,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from core.models import OriginalContent, OriginalContentCall, OriginalContentRun
@@ -19,6 +20,8 @@ from .chatter_trends import (
     _save,
     _saved_observation,
     checkpoint,
+    envelope_for,
+    runs_in_trial,
     workflow_version,
 )
 from .chatter_windows import (
@@ -31,6 +34,7 @@ from .chatter_windows import (
     wording,
 )
 from .config import EditorialConfig
+from .persistence import CapacityHeld
 from .providers import json_call, request_fingerprint, request_payload
 
 
@@ -250,6 +254,65 @@ def read_window_batch(run, state):
     }
 
 
+def _finish_capacity_wait(run, state):
+    _save(
+        run,
+        state,
+        phase="held",
+        error_code="ranking_capacity_expired",
+        deferred_until=None,
+    )
+    OriginalContentRun.objects.filter(pk=run.pk, fence=run.fence).update(
+        discovery_state="failed"
+    )
+    return {
+        "status": "held",
+        "error_code": "ranking_capacity_expired",
+        "run_id": run.pk,
+    }
+
+
+def _defer_capacity(run, state):
+    from .dispatch import dispatch_chatter_stage
+
+    with transaction.atomic():
+        current = locked_run(run.pk, run.fence)
+        if OriginalContentCall.objects.filter(
+            run=current, stage=WINDOW_RANK_STAGE
+        ).exists():
+            _save(
+                run,
+                state,
+                phase="held",
+                error_code="ranking_send_requires_reconciliation",
+            )
+            return {
+                "status": "held",
+                "run_id": run.pk,
+                "error_code": "ranking_send_requires_reconciliation",
+            }
+        now = timezone.now()
+        deadline = run.interval + 2 * QUARTER
+        if now >= deadline:
+            return _finish_capacity_wait(run, state)
+        due = min(now + timedelta(minutes=1), deadline)
+        _save(
+            run,
+            state,
+            phase="ranking",
+            error_code="ranking_capacity_busy",
+            deferred_until=due.isoformat(),
+        )
+        dispatch_chatter_stage(
+            "discover", envelope_for(run), countdown=(due - now).total_seconds()
+        )
+        return {
+            "status": "waiting_capacity",
+            "run_id": run.pk,
+            "retry_at": due.isoformat(),
+        }
+
+
 def decide_window(run_id, *, transport=None, resume=False):
     """Serialize reservations and freeze ancestry before making a paid call outside the lock."""
     if not shared_storage():
@@ -266,6 +329,16 @@ def decide_window(run_id, *, transport=None, resume=False):
             read_window_batch(run, state)
             return {"status": state.phase, "run_id": run.pk}
         now = timezone.now()
+        if (
+            state.error_code == "ranking_capacity_busy"
+            and state.deferred_until
+            and now < state.deferred_until
+        ):
+            return {
+                "status": "waiting_capacity",
+                "run_id": run.pk,
+                "retry_at": state.deferred_until.isoformat(),
+            }
         can_resume = (
             resume
             and state.phase == "held"
@@ -295,9 +368,20 @@ def decide_window(run_id, *, transport=None, resume=False):
             run.save(update_fields=["fence", "lease_until", "execution_state"])
             _save(run, state, phase="held", error_code="newer_window_frozen")
             return {"status": "held", "run_id": run.pk}
-        if decisions.filter(
-            interval__lt=run.interval, outcome__trends__phase__in=["ranking", "queued"]
-        ).exists():
+        trial = run.config_snapshot["editorial"]["chatter"].get("trial") or {}
+        if (
+            runs_in_trial(decisions, trial.get("scope"))
+            .filter(
+                interval__lt=run.interval,
+                outcome__trends__phase__in=["ranking", "queued"],
+            )
+            .exclude(
+                Q(claim_owner="") | Q(lease_until__lte=now),
+                outcome__trends__error_code="ranking_capacity_busy",
+                interval__lte=now - 2 * QUARTER,
+            )
+            .exists()
+        ):
             return {"status": "waiting_previous", "run_id": run.pk}
         frozen = None if state.freeze_at else _manifest(run, now)
         if not state.freeze_at and frozen is None:
@@ -309,6 +393,15 @@ def decide_window(run_id, *, transport=None, resume=False):
         run.save(
             update_fields=["fence", "claim_owner", "lease_until", "execution_state"]
         )
+        if (
+            state.error_code == "ranking_capacity_busy"
+            and now >= run.interval + 2 * QUARTER
+            and not run.provider_calls.filter(stage=WINDOW_RANK_STAGE).exists()
+        ):
+            OriginalContentRun.objects.filter(pk=run.pk, fence=run.fence).update(
+                claim_owner=""
+            )
+            return _finish_capacity_wait(run, state)
         if can_resume:
             state = _save(run, state, phase="ranking", error_code="")
         if frozen:
@@ -355,8 +448,12 @@ def decide_window(run_id, *, transport=None, resume=False):
                 ranking_sha256=digest(_compact(result)),
                 rank_call_id=call_id,
                 committed_at=timezone.now().isoformat(),
+                error_code="",
+                deferred_until=None,
             )
         return {"status": phase, "run_id": run.pk}
+    except CapacityHeld:
+        return _defer_capacity(run, state)
     except Exception as exc:  # noqa: BLE001 - persist failure at the queued boundary
         from .chatter_chain import _failure
 
