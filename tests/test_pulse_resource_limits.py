@@ -59,7 +59,7 @@ def test_maximum_findings_shape_has_explicit_growth_and_provider_free_replay(mon
     assert len(transport.calls) == 2
     assert models.EventDossier.objects.count() == 8
     assert models.EventDossierSource.objects.count() == 8
-    assert models.EventDossierClaim.objects.count() == 72
+    assert models.EventDossierClaim.objects.count() == 80
     assert models.CollectionEvidenceArchive.objects.filter(capture_kind="product_release_intake").count() == 8
     assert not models.Product.objects.exists()
     settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
@@ -81,7 +81,7 @@ def test_maximum_findings_shape_has_explicit_growth_and_provider_free_replay(mon
                "publication_queries": len(queries), "publication_elapsed_ms": round(elapsed_ms, 3),
                "query_patterns": Counter(re.sub(r"'[^']*'|\b\d+\b", "?", row["sql"])
                                          for row in queries).most_common(20),
-               "identity": first, "replay": replay, "dossiers": 8, "claims": 72,
+               "identity": first, "replay": replay, "dossiers": 8, "claims": 80,
                "physical_provider_requests": 0, "synthetic_transport_requests": len(transport.calls)}
     destination = Path(settings.BASE_DIR) / ".local/p1-resource-workload.json"
     destination.parent.mkdir(exist_ok=True)
