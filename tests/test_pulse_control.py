@@ -165,3 +165,15 @@ def test_non_ascii_diagnostics_also_respect_byte_retention_limit(tmp_path):
     assert (directory / "pulse-control.json").stat().st_size <= MAX_FILE_BYTES
     assert snapshot["discarded_diagnostics"] > 0
     assert len(snapshot["diagnostics"]) + snapshot["discarded_diagnostics"] == 100
+
+
+def test_concurrent_diagnostic_update_does_not_interrupt_processing(monkeypatch, caplog):
+    from monitor import pulse_control
+    from monitor.pulse_processing import report_error
+
+    def conflict(**kwargs):
+        raise pulse_control.PulseControlConflict("control_concurrent_updates")
+
+    monkeypatch.setattr(pulse_control, "record_diagnostic", conflict)
+    report_error(stage="classification", code="enrichment_stopping", post_id="123")
+    assert "Pulse diagnostic unavailable: enrichment_stopping" in caplog.text

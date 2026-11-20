@@ -28,6 +28,7 @@ Preserve source evidence, release decisions and the running harvest. Verify beha
 - Independent review identified conflicting publishers, incompatible product categories, existing identity claims, and release-only retries as regression cases. Preserve conflicting evidence rather than attaching a different model, and permit a valid feed result alongside an earlier independent release result.
 - The HF fallback is a catalog-based inference from a uniquely matching, specifically named model; it cannot prove global name uniqueness. Named publisher evidence takes precedence and ambiguous catalog matches remain unresolved.
 - Six simultaneous Pulse classifications remain subject to the continuous worker's existing per-batch call limit. The prior dollar-limited window has expired; continuous mode does not use that window. Future window-bound runs must use a fingerprint covering the new concurrency. Monitor provider failures and feed latency after rollout.
+- During the first deployment, the outgoing worker's concurrent diagnostic writes conflicted while shutting down, causing a batch-level classifier exception. Treat that diagnostic conflict as nonfatal, just like an unavailable diagnostics store; the original per-post failures remain pending for retry.
 
 ## Delivery Exceptions
 
