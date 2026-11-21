@@ -905,7 +905,7 @@ def registration_identity(state, account):
 
 def register_account(
     state_id, *, cfg, select_for_list=False, preserve_list_intents=False,
-    propagate_conflicts=False, expected_role_creation=None,
+    propagate_conflicts=False, expected_role_creation=None, expected_actions=None,
 ):
     from django.db import IntegrityError, transaction
     from django.utils import timezone
@@ -951,6 +951,11 @@ def register_account(
                     account=account.pk, state=state.pk,
                 ))
             brand, company, name, slug = registration_identity(state, account)
+            if expected_actions is not None and (
+                (brand is None) != (expected_actions["brand_action"] == "create")
+                or (company is None) != (expected_actions["company_action"] == "create")
+            ):
+                raise RegistrationIdentityConflict("organization_action_changed")
             role, role_created = Role.objects.get_or_create(key="official")
             if expected_role_creation is not None and role_created != expected_role_creation:
                 raise RegistrationIdentityConflict("official_role_changed")
@@ -965,16 +970,25 @@ def register_account(
             if company is None:
                 company = Company.objects.create(nickname=slug)
                 set_company_label(company, "und", name)
-            BrandAccount.objects.get_or_create(
+            _, brand_link_created = BrandAccount.objects.get_or_create(
                 brand=brand, account=account, defaults={"role": role}
             )
-            CompanyAccount.objects.get_or_create(
+            _, company_link_created = CompanyAccount.objects.get_or_create(
                 company=company, account=account, defaults={"role": role}
             )
+            if expected_actions is not None and (
+                brand_link_created != (expected_actions["brand_account_action"] == "create")
+                or company_link_created != (expected_actions["company_account_action"] == "create")
+            ):
+                raise RegistrationIdentityConflict("account_link_action_changed")
             if new_organization:
                 from core.publisher_accounts import link_brand_company
 
-                link_brand_company(brand=brand, company=company)
+                _, edge_created = link_brand_company(brand=brand, company=company)
+                if expected_actions is not None and edge_created != (
+                    expected_actions["brand_company_action"] == "create"
+                ):
+                    raise RegistrationIdentityConflict("organization_link_action_changed")
             state.registered_brand = brand
             state.registered_company = company
             state.status = "registered"

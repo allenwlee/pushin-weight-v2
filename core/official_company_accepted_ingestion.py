@@ -828,6 +828,7 @@ def apply_preview(
                             propagate_conflicts=True,
                             expected_role_creation=planned["official_role_action"]
                             == "create",
+                            expected_actions=planned,
                         )
                         if registered is None:
                             raise ValueError("registration did not run")

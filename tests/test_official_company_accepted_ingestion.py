@@ -478,6 +478,79 @@ def test_apply_does_not_create_identity_when_another_writer_races(
     assert not Brand.objects.filter(nickname="racing-lab").exists()
 
 
+def test_apply_rejects_same_identity_with_unpreviewed_reuse(tmp_path, monkeypatch):
+    from core import official_company_accounts
+    from core.models import (
+        Brand,
+        BrandDiscoveryCandidate,
+        Company,
+        CompanyAccount,
+        Role,
+    )
+    from core.official_company_accepted_ingestion import (
+        apply_preview,
+        freeze_accepted,
+        preview_accepted,
+    )
+    from x_monitor.config import OfficialCompanyConfig
+
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "test")
+    state = candidate(982084, 1)
+    queue = freeze_queue(path=tmp_path / "queue.json", total_limit=Decimal(2))
+    state.status = "accepted"
+    state.decision = {"outcome": "accepted", "organization_name": "Action Drift Lab"}
+    state.save()
+    role, _ = Role.objects.get_or_create(pk="official")
+    company = Company.objects.create(nickname="existing-action-company")
+    CompanyAccount.objects.create(account=state.account, company=company, role=role)
+    OfficialCompanyAttempt.objects.create(
+        state=state,
+        evidence_hash=state.evidence_hash,
+        evidence=state.evidence,
+        claim_token="action-drift",
+        model="test",
+        policy_version="v1",
+        status="completed",
+        decision=state.decision,
+        reserved_usd=0,
+        actual_usd=0,
+        budget_keys=["queue-pass:" + queue["run_id"]],
+        completed_at=timezone.now(),
+    )
+    frozen = freeze_accepted(queue=queue, path=tmp_path / "accepted.json")
+    preview = preview_accepted(
+        queue=queue, manifest=frozen, path=tmp_path / "preview.json"
+    )
+    assert preview["members"][0]["brand_action"] == "create"
+    original = official_company_accounts.register_account
+
+    def changed_action(*args, **kwargs):
+        now = timezone.now()
+        brand = Brand.objects.create(nickname="action-drift-lab")
+        BrandDiscoveryCandidate.objects.create(
+            candidate_identity="f" * 64,
+            observed_name="Action Drift Lab",
+            verification_status="confirmed",
+            reviewed_brand=brand,
+            source_identities=[f"official-company-state:{state.pk}"],
+            first_observed_at=now,
+            last_observed_at=now,
+        )
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(official_company_accounts, "register_account", changed_action)
+    result = apply_preview(
+        queue=queue,
+        manifest=frozen,
+        preview=preview,
+        cfg=OfficialCompanyConfig(enabled=True, registration_enabled=True),
+    )
+    assert result[0]["disposition"] == "drift"
+    state.refresh_from_db()
+    assert state.status == "accepted"
+    assert not Brand.objects.filter(nickname="action-drift-lab").exists()
+
+
 def test_apply_rolls_back_identity_changed_after_preview_revalidation(
     tmp_path, monkeypatch
 ):
