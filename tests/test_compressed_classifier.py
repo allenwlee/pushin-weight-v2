@@ -642,3 +642,35 @@ def test_catalog_display_name_is_authoritative_even_when_post_mentions_only_a_pr
     request = build_jev(sample, {"entities": []})["request"]
     assert "Meta and its offerings" in request["questions"]["positive"]["instructions"]
     assert request["state"]["target_umbrella_post_matched_names"]["llama"] == ["Muse"]
+
+
+@pytest.mark.parametrize("brands", [["qwen", "deepseek"], ["deepseek", "qwen"]])
+def test_disputed_release_attribution_preserves_complete_sibling_judgment(brands):
+    from x_monitor.compressed_classifier import build_jev, finish
+
+    sample = case()
+    sample["target_brands"] = brands
+    sample["state"]["tracked_brands"].append(
+        {"brand_id": "deepseek", "aliases": ["DeepSeek"], "products": [], "accounts": []}
+    )
+    prepared = build_jev(sample, extraction(), release_channels=("weights",))
+    mapping = prepared["metadata"]["question_map"]
+    positive = {
+        mapping["qwen"]["identity_namesake_only"],
+        mapping["deepseek"]["relevant"],
+        mapping["deepseek"]["type:hands_on_usage"],
+        mapping["deepseek"]["negative"],
+        mapping["deepseek"]["product:bug"],
+        "release:0:concerns:qwen",
+    }
+    result = finish(sample, prepared, answers(prepared["request"], positive_keys=positive))
+    assert result["contract_valid"], result["contract_errors"]
+    publication = result["publication_result"]
+    assert set(publication["by_brand"]) == set(brands)
+    assert publication["by_brand"]["qwen"]["outcome"] == "context_missing"
+    sibling = publication["by_brand"]["deepseek"]
+    assert sibling["sentiment"] == "negative"
+    assert sibling["post_types"] == ["hands_on_usage"]
+    assert sibling["product_labels"] == ["bug"]
+    assert publication["release_findings"][0]["observed_name"] == "Qwen4"
+    assert publication["release_findings"][0]["brand_id"] is None

@@ -628,7 +628,6 @@ def finish(case, prepared, raw_jev_document):
                 fields = by_brand[brand]
                 local = {key: decoded[actual] for key, actual in meta["question_map"][brand].items()}
                 if brand != "_unattributed" and any(local[key].get("p_yes", 0) >= .5 for key in ("identity_namesake_only", "identity_keyword_only", "identity_word_only")):
-                    errors.append("release_brand_identity_disagreement")
                     continue
                 fields["type:releases_updates"] = True
                 fields["type:other"] = False

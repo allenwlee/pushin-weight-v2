@@ -1490,3 +1490,48 @@ def test_continuous_worker_completes_targeted_and_requested_translation_after_pa
     assert models.EventEvidence.objects.get(source_post=state.post).event.title == "Live Qwen workshop"
     assert len(transport.calls) == len(translator.calls) == 2
     assert result["reserved_dispatches"] == result["provider_requests"] == 5
+
+
+def test_cycle_publishes_sibling_when_release_brand_identity_is_disputed(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    deepseek = models.Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
+    models.PostBrand.objects.create(post=state.post, brand=deepseek)
+    catalog = [
+        {"brand_id": "qwen", "aliases": ["Qwen"], "products": [], "accounts": []},
+        {"brand_id": "deepseek", "aliases": ["DeepSeek"], "products": [], "accounts": []},
+    ]
+    monkeypatch.setattr(cycle, "_classification_tracked_brand_catalog", lambda: catalog)
+    original = transport.messages_create
+
+    def disputed(**kwargs):
+        response = original(**kwargs)
+        if kwargs["model"].startswith("deepseek"):
+            return response
+        request = json.loads(kwargs["messages"][0]["content"])
+        brands = request["state"]["target_brands"]
+        qwen = brands.index("qwen")
+        sibling = brands.index("deepseek")
+        for key in (
+            f"b{qwen}:identity_namesake_only",
+            f"b{sibling}:relevant",
+            f"b{sibling}:type:hands_on_usage",
+            f"b{sibling}:negative",
+            f"b{sibling}:product:bug",
+            "release:0:concerns:qwen",
+        ):
+            response["answers"][key]["noul"] = 0.9
+        return response
+
+    transport.messages_create = disputed
+    runner._run_post_fetch([], run_id="disputed-brand")
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    selected = models.PostBrandClassificationState.objects.get(post=state.post, brand=deepseek)
+    assert selected.sentiment_id == "negative"
+    assert models.PostBrandSignal.objects.filter(
+        post=state.post, brand=deepseek, post_type_id="hands_on_usage", sentiment_id="negative",
+    ).exists()
+    assert models.PostBrandProductLabel.objects.filter(post=state.post, brand=deepseek, product_label_id="bug").exists()
+    assert models.PostBrandClassificationState.objects.get(post=state.post, brand_id="qwen").outcome == "context_missing"
+    assert read_publication_findings(state.pk)[0]["finding"]["brand_id"] is None
+    assert not models.PostBrandClassificationJudgment.objects.filter(post=state.post, validation_state="release_only").exists()
