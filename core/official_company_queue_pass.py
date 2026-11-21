@@ -32,7 +32,7 @@ def _database_identity():
     return {"name": name, "system_identifier": system_identifier}
 
 
-def _environment(manifest=None):
+def _environment(manifest=None, *, allow_isolated_fixture=False):
     value = os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT")
     if value not in {"production", "staging", "test"}:
         raise ValueError("explicit X_MONITOR_DEPLOYMENT_ENVIRONMENT is required")
@@ -42,12 +42,16 @@ def _environment(manifest=None):
         "staging": ("pushinweight_staging", "7673769124639031347"),
     }
     if value == "test":
-        if not database["name"].startswith("test_pw_queue_pass_") or database[
+        existing_fixture = database["name"].startswith("test_pw_queue_pass_") and database[
             "system_identifier"
-        ] not in {
+        ] in {
             "7693527921830478235",  # Local shared PostgreSQL server on fuchitalee.
             "7673769124639031347",  # Staging PostgreSQL server.
-        }:
+        }
+        isolated_fixture = allow_isolated_fixture and (database["name"], database["system_identifier"]) == (
+            "test_pw_queue_pass_official_20261120", "7710258162412109863"
+        )
+        if not (existing_fixture or isolated_fixture):
             raise ValueError(
                 "test environment requires an approved fixture-only database"
             )
@@ -60,14 +64,34 @@ def _environment(manifest=None):
     return value
 
 
-def freeze_queue(*, path, total_limit):
+def _write_new_private_file(path, value, *, prefix):
+    path = Path(path)
+    fd, temp_path = tempfile.mkstemp(prefix=prefix, dir=path.parent)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(_encoded(value) + b"\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        # Linking, unlike replace, refuses to overwrite an existing manifest.
+        os.link(temp_path, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        os.unlink(temp_path)
+
+
+def freeze_queue(*, path, total_limit, allow_isolated_fixture=False):
     """Freeze all queued tiers in one repeatable-read snapshot before any call."""
     total_limit = Decimal(total_limit)
     if not total_limit.is_finite() or total_limit <= 0:
         raise ValueError("total limit must be positive and finite")
     if connection.in_atomic_block:
         raise ValueError("snapshot requires an outermost transaction")
-    environment = _environment()
+    environment = _environment(allow_isolated_fixture=allow_isolated_fixture)
     with transaction.atomic():
         with connection.cursor() as cursor:
             cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
@@ -132,27 +156,11 @@ def freeze_queue(*, path, total_limit):
         "members": members,
     }
     manifest["sha256"] = digest(manifest)
-    path = Path(path)
-    fd, temp_path = tempfile.mkstemp(prefix=".queue-pass-", dir=path.parent)
-    try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(_encoded(manifest) + b"\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        # Linking, unlike replace, refuses to overwrite an existing manifest.
-        os.link(temp_path, path)
-        directory = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
-    finally:
-        os.unlink(temp_path)
+    _write_new_private_file(path, manifest, prefix=".queue-pass-")
     return manifest
 
 
-def read_manifest(path):
+def read_manifest(path, *, allow_isolated_fixture=False):
     manifest = json.loads(Path(path).read_text())
     if not isinstance(manifest, dict):
         raise ValueError("invalid manifest format")  # noqa: TRY004
@@ -205,7 +213,7 @@ def read_manifest(path):
         raise ValueError("invalid cutoff")
     if manifest.get("database") != _database_identity():
         raise ValueError("manifest database does not match connection")
-    _environment(manifest)
+    _environment(manifest, allow_isolated_fixture=allow_isolated_fixture)
     return manifest
 
 

@@ -304,7 +304,16 @@ def resolve_saved_release_finding(*, claim_id):
             cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", [lock_key])
             if not cursor.fetchone()[0]:
                 raise ValueError("Publisher identity is busy; retry")
-        matches = list(Brand.objects.filter(display_name__iexact=attributed_name, is_sentinel=False)[:2])
+        from core.organization_identity_locks import (
+            acquire_writer_identity_locks,
+            organization_lock_keys,
+        )
+        from core.publisher_accounts import brand_name_candidates
+
+        acquire_writer_identity_locks(
+            organization_lock_keys(name=attributed_name, nickname=slug)
+        )
+        matches = list(brand_name_candidates(attributed_name, include_sentinel=False)[:2])
         if len(matches) > 1:
             trusted_publisher = False
         elif matches:
@@ -867,8 +876,14 @@ def _reconcile_missing_release_metadata(*, claim_id, candidate_limit, claim_limi
     """
     from time import monotonic
 
-    from core.models import EventDossier, EventDossierClaim, EventDossierIntakeDecision, ProductReleaseDetail
     from django.db.models import Q
+
+    from core.models import (
+        EventDossier,
+        EventDossierClaim,
+        EventDossierIntakeDecision,
+        ProductReleaseDetail,
+    )
     from core.product_release_dossiers import _read_pulse_packet
     from core.product_release_pipeline import canonical_dossier, merge_dossiers
 

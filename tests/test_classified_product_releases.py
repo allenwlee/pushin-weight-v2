@@ -2053,3 +2053,99 @@ def test_changed_source_overflow_publishes_new_feed_and_preserves_prior_release(
     assert read_publication_findings(state.pk)[0]["finding"] == saved[0]["finding"]
     assert selected_release_revision(state.pk)["content_fingerprint"] == saved_fingerprint
     assert len(transport.calls) == 4
+
+def test_p2_rechecks_publisher_after_matching_ingestion_finishes(
+    monkeypatch, tmp_path, settings
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from time import monotonic
+
+    from django.db import connections, transaction
+
+    from core import publisher_accounts
+    from core.organization_identity_locks import (
+        acquire_ingestion_identity_locks,
+        organization_lock_keys,
+    )
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    pulse_control.initialize(
+        directory=tmp_path, state="running", actor="fixture", reason="test"
+    )
+    state, runner, transport = setup_cycle(monkeypatch, sentinel=True)
+    statement = "Acme Labs released Qwen4 weights today, says reporter."
+    state.post.text = statement
+    state.post.save(update_fields=["text"])
+    transport.document["entities"][0]["evidence"] = statement
+    finding = transport.document["release_findings"]["findings"][0]
+    finding["assertions"][0]["source_excerpt"] = statement
+    finding["issuer_evidence"] = {
+        "relation": "attributed_party",
+        "source_locator": "post",
+        "source_excerpt": statement,
+        "observed_name": "Acme Labs",
+    }
+    runner._run_post_fetch([], run_id="publisher-contention")
+    started, looked_up = Event(), Event()
+    backend = []
+    original_lookup = publisher_accounts.brand_name_candidates
+
+    def checked_lookup(*args, **kwargs):
+        looked_up.set()
+        return original_lookup(*args, **kwargs)
+
+    monkeypatch.setattr(publisher_accounts, "brand_name_candidates", checked_lookup)
+
+    def p2_worker():
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SHOW transaction_isolation")
+                assert cursor.fetchone()[0] == "read committed"
+                cursor.execute("SELECT pg_backend_pid()")
+                backend.append(cursor.fetchone()[0])
+            started.set()
+            return process_saved_findings()
+        finally:
+            connections.close_all()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with transaction.atomic():
+            keys = organization_lock_keys(name="Acme Labs", nickname="acme-labs")
+            assert acquire_ingestion_identity_locks(keys)
+            task = pool.submit(p2_worker)
+            assert started.wait(5)
+            deadline = monotonic() + 5
+            waited = False
+            while monotonic() < deadline:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = %s",
+                        [backend[0]],
+                    )
+                    row = cursor.fetchone()
+                if row and row[0]:
+                    waited = True
+                    break
+                if task.done():
+                    task.result()
+                    break
+                Event().wait(0.02)
+            assert waited and not looked_up.is_set()
+            models.Brand.objects.create(
+                nickname="ingestion-created", display_name="Acme Labs"
+            )
+        outcome = task.result(timeout=10)
+    assert looked_up.is_set()
+    assert outcome["processed"] == 1 and outcome["failed"] == 0
+    assert models.Product.objects.get().brand_id == "ingestion-created"
+    assert (
+        models.Brand.objects.filter(
+            display_name__iexact="Acme Labs", is_sentinel=False
+        ).count()
+        == 1
+    )
+    assert not models.Company.objects.exists()
+    assert not models.BrandAccount.objects.exists()
