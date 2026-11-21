@@ -115,9 +115,9 @@ def test_request_and_response_caps_are_physical_and_fail_closed():
 @pytest.mark.parametrize("valid_model_decision", [True, False])
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.requires_postgres
-def test_hf_exception_registers_but_forged_stale_or_ordinary_model_proofs_cannot(monkeypatch, valid_model_decision):
+def test_model_acceptance_and_hf_proof_keep_independent_evidence(monkeypatch, valid_model_decision):
     from core import official_company_hf
-    from core.models import Account, OfficialCompanyListIntent
+    from core.models import Account, BrandAccount, OfficialCompanyListIntent
     from core.official_company_accounts import (
         enqueue_account,
         evaluate_account,
@@ -128,48 +128,47 @@ def test_hf_exception_registers_but_forged_stale_or_ordinary_model_proofs_cannot
 
     cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True, hf_verification_enabled=True,
                                 max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1))
-    a = Account.objects.create(author_id="918321", handle="examplelab", bio="We develop our own speech models.")
-    state = enqueue_account(a)
+    account = Account.objects.create(author_id="918321", handle="examplelab", bio="We develop our own speech models.")
+    state = enqueue_account(account)
     call = accept if valid_model_decision else lambda *args: {"invalid": True, "usage": {"input_tokens": 10, "output_tokens": 10}}
     assert evaluate_account(state.pk, cfg=cfg, call=call, budget_scope="hf-proof")
     state.refresh_from_db()
     attempt_decision = state.attempt_records.get().decision
-    assert state.status == "review_needed" and register_account(state.pk, cfg=cfg) is None
     state.decision["hf_verification"] = {"outcome": "passed", "signature": "forged"}
     state.save()
-    state.status = "accepted"
-    state.save()
-    assert register_account(state.pk, cfg=cfg) is None
-    state.refresh_from_db()
-    # Use the real verifier transport; only network transport is replaced.
-    original = official_company_hf.verify
-    route, _ = transport()
+    assert not official_company_hf.approved(state)
+    if valid_model_decision:
+        assert state.status == "accepted"
+        assert register_account(state.pk, cfg=cfg) == state.pk
+        state.refresh_from_db()
+        assert state.status == "registered"
+        assert BrandAccount.objects.filter(account=account, role_id="official").exists()
+        assert not OfficialCompanyListIntent.objects.filter(account=account).exists()
+    else:
+        assert state.status == "review_needed"
+        assert register_account(state.pk, cfg=cfg) is None
+        original = official_company_hf.verify
+        route, _ = transport()
 
-    def local_verify(ev, decision, **kwargs):
-        with httpx.Client(transport=route) as client:
-            return original(ev, decision, client=client, **kwargs)
+        def local_verify(ev, decision, **kwargs):
+            with httpx.Client(transport=route) as client:
+                return original(ev, decision, client=client, **kwargs)
 
-    monkeypatch.setattr(official_company_hf, "verify", local_verify)
-    result = official_company_hf.verify_review_candidates(limit=1)
-    assert result == {"checked": 1, "approved": 1}
-    state.refresh_from_db()
-    assert official_company_hf.approved(state)
-    saved_hash = state.evidence_hash
-    state.evidence_hash = "changed"
-    state.save()
-    assert register_account(state.pk, cfg=cfg) is None
-    state.refresh_from_db()
-    state.evidence_hash = saved_hash
-    state.status = "accepted"
-    state.save()
-    assert register_account(state.pk, cfg=cfg) is not None
-    state.refresh_from_db()
-    assert state.status == "registered"
-    assert state.decision["organization_name"] == "Example Lab"
-    intent = OfficialCompanyListIntent.objects.get(account=a)
-    assert intent.state == state
+        monkeypatch.setattr(official_company_hf, "verify", local_verify)
+        assert official_company_hf.verify_review_candidates(limit=1) == {"checked": 1, "approved": 1}
+        state.refresh_from_db()
+        assert official_company_hf.approved(state)
+        saved_hash = state.evidence_hash
+        state.evidence_hash = "changed"
+        assert not official_company_hf.approved(state)
+        state.evidence_hash = saved_hash
+        assert official_company_hf.approved(state)
+        assert register_account(state.pk, cfg=cfg) == state.pk
+        state.refresh_from_db()
+        assert state.status == "registered"
+        assert BrandAccount.objects.filter(account=account, role_id="official").exists()
+        assert not OfficialCompanyListIntent.objects.filter(account=account).exists()
     assert state.attempt_records.get().decision == attempt_decision
-    assert official_company_hf.verify_review_candidates(limit=1) == {"checked": 0, "approved": 0}
 
 
 def test_canonical_hf_namespace_avoids_redirect_without_following_arbitrary_location():

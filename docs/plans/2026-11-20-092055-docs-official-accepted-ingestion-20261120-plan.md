@@ -52,6 +52,8 @@ Occupied staging: if a staged route finds `staging` in use by an unrelated relea
 
 The apply command supports `--max-writes` to bound new registration attempts; already registered accounts are reconciled without consuming the next batch's limit. The remainder is explicitly marked `not_attempted`, and later invocations use the same frozen manifest and reviewed preview. This prepares batching but does not authorize a production run now.
 
+The official-account regression suite had stale assertions for an eight-call harvest plan and a retired automatic human-review prerequisite. The tests now assert the current sixteen-call order and accepted-account registration without Call A selection, while retaining separate signed HF-proof and scheduled HF-fallback coverage. No scheduled product policy was changed by these test repairs.
+
 Earlier staging selection (superseded): the user authorized an isolated staging service. Preserve the other session's shared staging resources and do not restore or clone a production database.
 
 **Owner decision, 2026-11-21 08:18 JST:** A short, bounded wait is allowed when the harvester and the one-time job save the same account or organization simultaneously. Keep harvesting running, do not skip a cycle, and test the actual scheduled path under contention. No global harvester or official-company lock may be acquired by the ingestion.
