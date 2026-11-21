@@ -11,8 +11,12 @@ from core.models import SearchProviderCircuit as CircuitRow
 
 
 class SearchProviderCircuit:
-    def __init__(self, purpose, *, threshold=2, cooldown=180, probe_lease=60):
-        self.purpose = purpose
+    def __init__(self, purpose, *, provider="", endpoint_family="", threshold=2, cooldown=180, probe_lease=60):
+        self.provider = provider
+        self.endpoint_family = endpoint_family
+        self.credential_purpose = purpose if provider else ""
+        identity = f"{provider}\0{endpoint_family}\0{purpose}".encode()
+        self.purpose = "c:" + hashlib.sha256(identity).hexdigest()[:28] if provider else purpose
         self.threshold = max(1, threshold)
         self.cooldown = cooldown
         self.probe_lease = probe_lease
@@ -21,7 +25,10 @@ class SearchProviderCircuit:
         self._fallback_local = threading.local()
 
     def _locked_row(self):
-        CircuitRow.objects.get_or_create(purpose=self.purpose)
+        CircuitRow.objects.get_or_create(purpose=self.purpose, defaults={
+            "provider": self.provider, "endpoint_family": self.endpoint_family,
+            "credential_purpose": self.credential_purpose,
+        })
         return CircuitRow.objects.select_for_update().get(purpose=self.purpose)
 
     def primary_permitted(self, now):

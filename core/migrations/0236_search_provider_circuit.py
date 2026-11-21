@@ -14,6 +14,9 @@ class Migration(migrations.Migration):
             name='SearchProviderCircuit',
             fields=[
                 ('purpose', models.CharField(max_length=32, primary_key=True, serialize=False)),
+                ('provider', models.CharField(blank=True, default='', max_length=32)),
+                ('endpoint_family', models.CharField(blank=True, default='', max_length=64)),
+                ('credential_purpose', models.CharField(blank=True, default='', max_length=32)),
                 ('consecutive_failures', models.PositiveIntegerField(default=0)),
                 ('open_until', models.DateTimeField(blank=True, null=True)),
                 ('probe_lease_until', models.DateTimeField(blank=True, null=True)),

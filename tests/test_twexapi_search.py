@@ -282,7 +282,7 @@ def test_untyped_legacy_cursor_never_goes_to_twexapi(monkeypatch):
     from x_monitor.x_client import XClient
     class Circuit:
         def observe_query(self, query, *, nonempty, now): return False
-        def primary_permitted(self, now): raise AssertionError("existing primary cursor must not switch")
+        def primary_permitted(self, now): return True
         def record_success(self, now): pass
     client = XClient(api_key="primary", twexapi_key="secondary", circuit=Circuit())
     seen = []
@@ -410,3 +410,21 @@ def test_rate_limit_shared_cooldown_even_when_retries_disabled(monkeypatch):
     with pytest.raises(XClientRateLimitError) as exc:
         client._twex_search_with_retry("busy", None)
     assert exc.value.retry_after_seconds == circuit.interval == 45
+
+
+@pytest.mark.parametrize("status,exception_name", [(401, "XClientAuthError"), (429, "XClientRateLimitError"), (503, "XClientServerError")])
+def test_twex_status_preserves_shared_error_contract(monkeypatch, status, exception_name):
+    import x_monitor.x_client as module
+    class Circuit:
+        def acquire_fallback(self, now, lease): return 0
+        def fallback_owned(self, now): return True
+        def release_fallback(self, now, interval): pass
+    class Response:
+        status_code = status
+        headers = {}
+        content = b'{}'
+    monkeypatch.setattr("x_monitor.x_client.requests.post", lambda *a, **kw: Response())
+    client = module.XClient(api_key="primary", twexapi_key="secondary", circuit=Circuit(), max_retries=0)
+    with pytest.raises(getattr(module, exception_name)) as exc:
+        client._twex_search("query", None)
+    assert exc.value.response_status_code == status

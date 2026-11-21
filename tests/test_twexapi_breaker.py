@@ -91,3 +91,45 @@ def test_rate_limit_cooldown_is_shared_between_independent_clients(monkeypatch):
     with pytest.raises(XClientRateLimitError):
         client._twex_search_with_retry("busy", None)
     assert second.acquire_fallback(timezone.now(), 45) > 40
+
+
+def test_provider_and_endpoint_family_have_independent_circuits():
+    from core.models import SearchProviderCircuit as CircuitRow
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+
+    now = timezone.now()
+    failed = SearchProviderCircuit("scheduled", provider="twitterapi", endpoint_family="search", threshold=1)
+    other_family = SearchProviderCircuit("scheduled", provider="twitterapi", endpoint_family="user_info", threshold=1)
+    other_provider = SearchProviderCircuit("scheduled", provider="twexapi", endpoint_family="search", threshold=1)
+    failed.record_failure(now)
+    assert not failed.primary_permitted(now)
+    assert other_family.primary_permitted(now)
+    assert other_provider.primary_permitted(now)
+    assert CircuitRow.objects.get(purpose=failed.purpose).provider == "twitterapi"
+    assert CircuitRow.objects.get(purpose=failed.purpose).endpoint_family == "search"
+
+
+def test_twex_first_falls_back_and_then_probes_recovery(monkeypatch):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient, XClientServerError
+
+    twex = SearchProviderCircuit("scheduled", provider="twexapi", endpoint_family="search", threshold=1, cooldown=1)
+    primary = SearchProviderCircuit("scheduled", provider="twitterapi", endpoint_family="search", threshold=1, cooldown=1)
+    client = XClient(api_key="primary", twexapi_key="secondary", circuit=primary, twex_circuit=twex,
+                     provider_order=("twexapi", "twitterapi"))
+    calls = []
+    def twex_response(*args, **kwargs):
+        calls.append("twexapi")
+        if calls.count("twexapi") == 1:
+            raise XClientServerError("503")
+        return {"code": 200, "data": [{"tweet_id": "1", "user": {}}], "has_next_page": False}
+    monkeypatch.setattr(client, "_twex_search_with_retry", twex_response)
+    monkeypatch.setattr(client, "_get", lambda *a, **kw: calls.append("twitterapi") or {"tweets": [], "has_next_page": False})
+    with pytest.raises(XClientServerError):
+        client.run_search("example")
+    client.run_search("example")
+    from core.models import SearchProviderCircuit as CircuitRow
+    CircuitRow.objects.filter(purpose=twex.purpose).update(open_until=timezone.now() - timedelta(seconds=1))
+    client.run_search("example")
+    assert calls == ["twexapi", "twitterapi", "twexapi"]
+    assert CircuitRow.objects.get(purpose=twex.purpose).open_until is None

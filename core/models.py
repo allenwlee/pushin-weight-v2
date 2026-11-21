@@ -10977,6 +10977,9 @@ class SearchProviderCircuit(models.Model):
     """Durable health and request pacing for a search-provider purpose."""
 
     purpose = models.CharField(max_length=32, primary_key=True)
+    provider = models.CharField(max_length=32, blank=True, default="")
+    endpoint_family = models.CharField(max_length=64, blank=True, default="")
+    credential_purpose = models.CharField(max_length=32, blank=True, default="")
     consecutive_failures = models.PositiveIntegerField(default=0)
     open_until = models.DateTimeField(null=True, blank=True)
     probe_lease_until = models.DateTimeField(null=True, blank=True)
