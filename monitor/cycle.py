@@ -1345,7 +1345,10 @@ def _publish_stage1_classification(
         if canonical is None:
             return None
         if result.get("release_unresolved") is True and not promotion_retry:
-            from core.classified_product_releases import _complete_release_publication, persist_release_only
+            from core.classified_product_releases import (
+                _complete_release_publication,
+                persist_release_only,
+            )
 
             if _complete_release_publication(post_id) is not None:
                 if not result.get("release_overflow_deferred"):
