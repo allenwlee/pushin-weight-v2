@@ -477,7 +477,7 @@ class AdminBrowserTests(StaticLiveServerTestCase):
         with patch("core.official_company_hf.verify", public_verifier):
             self.assertEqual(verify_review_candidates(limit=1)["approved"], 1)
         cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True, list_sync_enabled=True)
-        self.assertIsNotNone(register_account(state.pk, cfg=cfg))
+        self.assertIsNotNone(register_account(state.pk, cfg=cfg, select_for_list=True))
         provider = Mock()
         provider.members.return_value = (set(), True)
         sync_intents(cfg=cfg, client=provider)
