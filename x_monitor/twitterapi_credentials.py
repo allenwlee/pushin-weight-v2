@@ -18,6 +18,12 @@ class TwitterApiCredentialPurpose(str, Enum):
 
 TWITTERAPI_IO_SCHEDULED_API_KEY_ENV = "TWITTERAPI_IO_SCHEDULED_API_KEY"
 TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV = "TWITTERAPI_IO_ON_DEMAND_API_KEY"
+TWEXAPI_API_KEY_ENV = "TWEXAPI_API_KEY"
+
+
+def get_twexapi_api_key(*, environ: Mapping[str, str] | None = None) -> str | None:
+    source = os.environ if environ is None else environ
+    return source.get(TWEXAPI_API_KEY_ENV) or None
 
 _ENV_BY_PURPOSE = {
     TwitterApiCredentialPurpose.SCHEDULED: TWITTERAPI_IO_SCHEDULED_API_KEY_ENV,

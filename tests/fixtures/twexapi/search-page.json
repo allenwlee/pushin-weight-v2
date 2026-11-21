@@ -1,0 +1,277 @@
+{
+  "code": 200,
+  "msg": "success",
+  "data": [
+    {
+      "tweet_id": "2124109376919392422",
+      "is_paid_promotion": false,
+      "text": "✨ Researching now, 102 s in: DeepSeek is arguing; Gemini Nova agrees; Grok did not take part. The final research reply follows.",
+      "created_at": "Sat Nov 21 11:55:14 +0000 2026",
+      "created_at_datetime": "2026-11-21T11:55:14.000Z",
+      "bookmark_count": 0,
+      "bookmarked": false,
+      "community_note": null,
+      "edit_tweet_ids": [
+        "2124109376919392422"
+      ],
+      "editable_until_msecs": "1795265714000",
+      "edits_remaining": "5",
+      "favorite_count": 0,
+      "favorited": false,
+      "full_text": "✨ Researching now, 102 s in: DeepSeek is arguing; Gemini Nova agrees; Grok did not take part. The final research reply follows.",
+      "has_card": false,
+      "has_community_notes": false,
+      "hashtags": [],
+      "cashtags": [],
+      "id": "2124109376919392422",
+      "in_reply_to": "2124108950463250777",
+      "in_reply_to_user_id": "2114786337958047744",
+      "in_reply_to_screen_name": "oneclarityapp",
+      "is_edit_eligible": false,
+      "is_quote_status": false,
+      "quoted_status_id_str": null,
+      "is_translatable": false,
+      "lang": "en",
+      "media": [],
+      "place": null,
+      "poll": null,
+      "possibly_sensitive": false,
+      "possibly_sensitive_editable": null,
+      "quote": null,
+      "quote_count": 0,
+      "related_tweets": [],
+      "replies": [],
+      "reply_count": 0,
+      "reply_to": null,
+      "retweet_count": 0,
+      "retweeted_tweet": null,
+      "thread": null,
+      "thumbnail_title": null,
+      "thumbnail_url": null,
+      "urls": [],
+      "user": {
+        "id": "2114786337958047744",
+        "name": "OneClarity",
+        "screen_name": "oneclarityapp",
+        "created_at": "Mon Oct 26 18:31:57 +0000 2026",
+        "created_at_datetime": "2026-10-26T18:31:57.000Z",
+        "can_dm": true,
+        "can_media_tag": true,
+        "default_profile": true,
+        "default_profile_image": false,
+        "description": "Trustworthy research on topics",
+        "description_urls": [],
+        "urls": [
+          {
+            "url": "https://t.co/RACh9B223H",
+            "expanded_url": "https://oneclarity.app",
+            "display_url": "oneclarity.app"
+          }
+        ],
+        "fast_followers_count": 0,
+        "favourites_count": 2,
+        "followers_count": 41,
+        "following_count": 145,
+        "has_custom_timelines": false,
+        "is_blue_verified": true,
+        "verified_type": "automated",
+        "is_verified": true,
+        "profile_image_shape": "Circle",
+        "is_translator": false,
+        "listed_count": 0,
+        "location": "",
+        "media_count": 10,
+        "normal_followers_count": 41,
+        "pinned_tweet_ids": [],
+        "possibly_sensitive": false,
+        "profile_banner_url": "https://pbs.twimg.com/profile_banners/2114786337958047744/1794502601",
+        "profile_image_url": "https://pbs.twimg.com/profile_images/2114787667443437569/cZS3hE7d_normal.jpg",
+        "protected": false,
+        "statuses_count": 612
+      },
+      "view_count": "3",
+      "view_count_state": null,
+      "status": null,
+      "target_count": null
+    },
+    {
+      "tweet_id": "2124109016125337728",
+      "is_paid_promotion": false,
+      "text": "Your own article states that DeepSeek spent $1B on its compute cluster and that $6M is misleading???\n\nSo how can we quote it as the only metric to take into consideration (again these are your own words not mine).\n\n$6M is just the training cost here. It doesn't count the infrastructure that High Flyer conveniently had invested in.\n\nIf you have the infra, the data, the architecture and the insight a pre-taining run is possibly the least of your costs. \n\nAnd R1 was only 670B params compared to OAIs massive 2T. Which is why it was so cheap to pretrain. \n\nI think we conveniently forget that DeepSeek's parent company HiFlyer is an HFT that has had deep tech and infrastructure experience built over a decade. \n\nAlso DeepSeek was built primarily by distilling ANT and OAI models (it's a whole thing)\n\nI feel we really don't understand the nuances of how DeepSeek was built.",
+      "created_at": "Sat Nov 21 11:53:48 +0000 2026",
+      "created_at_datetime": "2026-11-21T11:53:48.000Z",
+      "bookmark_count": 0,
+      "bookmarked": false,
+      "community_note": null,
+      "edit_tweet_ids": [
+        "2124109016125337728"
+      ],
+      "editable_until_msecs": "1795265628000",
+      "edits_remaining": "5",
+      "favorite_count": 0,
+      "favorited": false,
+      "full_text": "Your own article states that DeepSeek spent $1B on its compute cluster and that $6M is misleading???\n\nSo how can we quote it as the only metric to take into consideration (again these are your own words not mine).\n\n$6M is just the training cost here. It doesn't count the infrastructure that High Flyer conveniently had invested in.\n\nIf you have the infra, the data, the architecture and the insight a pre-taining run is possibly the least of your costs. \n\nAnd R1 was only 670B params compared to OAIs massive 2T. Which is why it was so cheap to pretrain. \n\nI think we conveniently forget that DeepSeek's parent company HiFlyer is an HFT that has had deep tech and infrastructure experience built over a decade. \n\nAlso DeepSeek was built primarily by distilling ANT and OAI models (it's a whole thing)\n\nI feel we really don't understand the nuances of how DeepSeek was built.",
+      "has_card": false,
+      "has_community_notes": false,
+      "hashtags": [],
+      "cashtags": [],
+      "id": "2124109016125337728",
+      "in_reply_to": "2124107317776154998",
+      "in_reply_to_user_id": "15344522",
+      "in_reply_to_screen_name": "s_ketharaman",
+      "is_edit_eligible": false,
+      "is_quote_status": false,
+      "quoted_status_id_str": null,
+      "is_translatable": false,
+      "lang": "en",
+      "media": [
+        {
+          "id": "2124108353798639616",
+          "type": "photo",
+          "display_url": "pic.x.com/ZbiV9Wzb4H",
+          "expanded_url": "https://x.com/original_ngv/status/2124109016125337728/photo/1",
+          "media_url": "https://pbs.twimg.com/media/HXpZSzSbkAAqHt9.jpg",
+          "url": "https://t.co/ZbiV9Wzb4H",
+          "height": 322,
+          "width": 1512,
+          "features": {
+            "large": {
+              "faces": []
+            },
+            "medium": {
+              "faces": []
+            },
+            "orig": {
+              "faces": []
+            },
+            "small": {
+              "faces": []
+            }
+          },
+          "original_info": {
+            "focus_rects": [
+              {
+                "h": 322,
+                "w": 575,
+                "x": 0,
+                "y": 0
+              },
+              {
+                "h": 322,
+                "w": 322,
+                "x": 103,
+                "y": 0
+              },
+              {
+                "h": 322,
+                "w": 282,
+                "x": 123,
+                "y": 0
+              },
+              {
+                "h": 322,
+                "w": 161,
+                "x": 184,
+                "y": 0
+              },
+              {
+                "h": 322,
+                "w": 1512,
+                "x": 0,
+                "y": 0
+              }
+            ],
+            "height": 322,
+            "width": 1512
+          },
+          "sizes": {
+            "large": {
+              "h": 322,
+              "resize": "fit",
+              "w": 1512
+            },
+            "medium": {
+              "h": 256,
+              "resize": "fit",
+              "w": 1200
+            },
+            "small": {
+              "h": 145,
+              "resize": "fit",
+              "w": 680
+            },
+            "thumb": {
+              "h": 150,
+              "resize": "crop",
+              "w": 150
+            }
+          },
+          "source_status_id": null,
+          "source_user_id": null,
+          "duration_millis": null,
+          "aspect_ratio": null,
+          "video_info": null,
+          "streams": []
+        }
+      ],
+      "place": null,
+      "poll": null,
+      "possibly_sensitive": false,
+      "possibly_sensitive_editable": null,
+      "quote": null,
+      "quote_count": 0,
+      "related_tweets": [],
+      "replies": [],
+      "reply_count": 1,
+      "reply_to": null,
+      "retweet_count": 0,
+      "retweeted_tweet": null,
+      "thread": null,
+      "thumbnail_title": null,
+      "thumbnail_url": null,
+      "urls": [],
+      "user": {
+        "id": "1647239562748387332",
+        "name": "enji vi",
+        "screen_name": "original_ngv",
+        "created_at": "Sat Apr 15 14:05:13 +0000 2023",
+        "created_at_datetime": "2023-04-15T14:05:13.000Z",
+        "can_dm": true,
+        "can_media_tag": true,
+        "default_profile": true,
+        "default_profile_image": false,
+        "description": "author • manager - creatives x gtm  • public speaker • building AI that automates marketing • DM for collabs",
+        "description_urls": [],
+        "urls": [],
+        "fast_followers_count": 0,
+        "favourites_count": 52685,
+        "followers_count": 7517,
+        "following_count": 1820,
+        "has_custom_timelines": false,
+        "is_blue_verified": true,
+        "verified_type": "blue",
+        "is_verified": true,
+        "profile_image_shape": "Circle",
+        "is_translator": false,
+        "listed_count": 18,
+        "location": "Wherever I need to be",
+        "media_count": 1874,
+        "normal_followers_count": 7517,
+        "pinned_tweet_ids": [
+          "1960016547562545662"
+        ],
+        "possibly_sensitive": false,
+        "profile_banner_url": "https://pbs.twimg.com/profile_banners/1647239562748387332/1752260199",
+        "profile_image_url": "https://pbs.twimg.com/profile_images/1943741159928737792/lxN6ZhuA_normal.jpg",
+        "protected": false,
+        "statuses_count": 18232
+      },
+      "view_count": "4",
+      "view_count_state": null,
+      "status": null,
+      "target_count": null
+    }
+  ],
+  "has_next_page": true,
+  "next_cursor": "fixture-cursor"
+}

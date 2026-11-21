@@ -873,6 +873,14 @@ def adopt_completed_backfill_result(run_id, *, verify_only=False):
     return {"run_id": str(run.pk), "copied": marker is None, "distinct_posts": len(ids)}
 
 
+def _select_prefetch(*, direct_staging, has_prefetch, collection_options, force_twexapi):
+    if force_twexapi:
+        if direct_staging or has_prefetch:
+            raise CommandError("TwexAPI-only collection requires a new archive job without prefetched pages")
+        return False
+    return direct_staging or collection_options is not None or has_prefetch
+
+
 def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_options=None):
     from monitor.backfill_prefetch import Prefetcher, PrefetchOptions
     from monitor.cycle import CycleRunner
@@ -882,9 +890,16 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
     job = CollectionJob.objects.get(pk=job_id)
     from core.models import CollectionRequest
     direct_staging = job.scope.get("response_storage") in {"staging", "database"}
-    use_prefetch = direct_staging or collection_options is not None or CollectionRequest.objects.filter(
+    has_prefetch = CollectionRequest.objects.filter(
         attempt__run__job=job, request_category="x_backfill_prefetch",
     ).exists()
+    # The prefetch transport speaks only TwitterAPI.io. Forced Twex searches
+    # must use the serial runner and cannot resume prefetched pages.
+    force_twexapi = os.environ.get("TWEXAPI_FORCE_SEARCH") == "1"
+    use_prefetch = _select_prefetch(
+        direct_staging=direct_staging, has_prefetch=has_prefetch,
+        collection_options=collection_options, force_twexapi=force_twexapi,
+    )
     current_policy = job.scope.get("adapter") == POLICY_ADAPTER_VERSION
     raw_cfg = load_config(Path("config.yaml"))
     cfg = bounded_backfill_config(raw_cfg, enrichment_limit=1, collection_policy=current_policy)
@@ -974,8 +989,8 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
                 try:
                     stats = CycleRunner(cfg=cfg, cycle_kind="backfill", dry_run=False,
                                         _backfill_call_ids=[owner["call_id"]], _backfill_context=context,
-                                        _relevancy_llm_call=budget.relevance(cfg) if current_policy else None,
-                                        _max_llm_calls=budget.remaining_llm_calls).run()
+                                        _relevancy_llm_call=budget.relevance(cfg) if current_policy and not force_twexapi else None,
+                                        _max_llm_calls=0 if force_twexapi else budget.remaining_llm_calls).run()
                 except (StaleClaim, BackfillBudgetExhausted):
                     raise
                 except Exception as exc:  # noqa: BLE001 - retain this scope and continue independent queries
