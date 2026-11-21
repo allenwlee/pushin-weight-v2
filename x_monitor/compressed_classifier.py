@@ -12,6 +12,7 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from core.classification_contract import (
     AUDIENCE_TOPIC_KEYS,
@@ -486,7 +487,113 @@ def _and(values):
     return False if False in values else None if None in values else True
 
 
-def combine(decoded, state, rows, errors, fields=FIELDS):
+def _only_qualified_name_matches(state):
+    target = state.get("target_brand")
+    entry = next((item for item in state.get("tracked_brands", []) if item.get("brand_id") == target), {})
+    visible = _original_catalog_text(state)
+    qualified = False
+    domains = {domain.lower().rstrip(".") for domain in entry.get("domains", []) if domain}
+    terms = [entry.get("display_name") or "", *entry.get("aliases", []), *entry.get("products", []), *domains]
+    for url_match in re.finditer(r'https?://[^\s<>"\']+', visible, flags=re.IGNORECASE):
+        try:
+            hostname = (urlsplit(url_match.group()).hostname or "").lower().rstrip(".")
+        except ValueError:
+            hostname = ""
+        if any(hostname == domain or hostname.endswith("." + domain) for domain in domains):
+            return False
+        if any(term and _catalog_term_pattern(term.strip('"').strip()).search(url_match.group()) for term in terms):
+            qualified = True
+    visible = re.sub(r'https?://[^\s<>"\']+', ' ', visible, flags=re.IGNORECASE)
+    for raw in terms:
+        term = raw.strip('"').strip()
+        if not term or not _catalog_term_long_enough(term, 3) or "/" in term:
+            continue
+        if term.isalpha() and re.search(r"(?<!\w)" + re.escape(term) + r"\d", visible, re.IGNORECASE):
+            return False
+        for match in _catalog_term_pattern(term).finditer(visible):
+            if re.match(r"\.[A-Za-z][A-Za-z0-9_-]*", visible[match.end():]):
+                qualified = True
+            elif (re.match(r"\s+[A-Z][a-z]{2,}\b", visible[match.end():])
+                  and not re.match(r"\s+(?:Announces|Releases|Launches|Introduces|Updates|Unveils|Adds|Makes|Reports|Says|New)\b", visible[match.end():])):
+                qualified = True
+            elif (term.isalpha() and match.group().islower()
+                  and re.match(r"\s+(?:analysis|comparison|discussion|commentary|study)\b", visible[match.end():], re.IGNORECASE)):
+                continue
+            else:
+                return False
+    official = any(item.get("reviewed") is True and item.get("brand_id") == target
+                   and item.get("role") in ("official", "staff")
+                   for item in state.get("author_affiliations", []) if isinstance(item, dict))
+    return qualified or not official
+
+
+def _identity_veto(decoded, *, state):
+    relevance = decoded.get("relevant", {})
+    identity_vote = _has_identity_vote(decoded)
+    return bool(identity_vote and (state.get("target_brand") == "_unattributed"
+                or (relevance.get("valid") and relevance.get("assigned") is False)
+                or (relevance.get("valid") and relevance.get("assigned") is True
+                    and _only_qualified_name_matches(state))))
+
+
+def _has_identity_vote(decoded):
+    return any(decoded.get(key, {}).get("valid") and decoded[key].get("p_yes", 0) >= .5
+               for key in ("identity_namesake_only", "identity_keyword_only", "identity_word_only"))
+
+
+def _only_hardware_pairing_mentions(state):
+    """Recognize a target solely credited as hardware paired with something else."""
+    target = state.get("target_brand")
+    entry = next((item for item in state.get("tracked_brands", []) if item.get("brand_id") == target), {})
+    terms = [entry.get("display_name") or "", *entry.get("aliases", [])]
+    text = _original_catalog_text(state)
+    matches = [match for term in terms if term and _catalog_term_long_enough(term, 3)
+               for match in _catalog_term_pattern(term).finditer(text)]
+    if not matches:
+        return False
+    for match in matches:
+        before = text[max(0, match.start() - 24):match.start()]
+        after = text[match.end():match.end() + 40]
+        if not (re.search(r"\bpaired\s+with\s+$", before, re.IGNORECASE)
+                and re.match(r"\s+(?:GPUs?|CPUs?|APUs?)(?:\s*,\s*just\s+like\b|\s*[.!?\n]|\s*$)",
+                             after, re.IGNORECASE)):
+            return False
+    return True
+
+
+def _other_release_notes_target_lines(state):
+    """Return target-bearing bullet points in another product's release notes."""
+    target = state.get("target_brand")
+    entry = next((item for item in state.get("tracked_brands", []) if item.get("brand_id") == target), {})
+    terms = [entry.get("display_name") or "", *entry.get("aliases", [])]
+    patterns = [_catalog_term_pattern(term) for term in terms if term and _catalog_term_long_enough(term, 3)]
+    text = _original_catalog_text(state)
+    lines = text.splitlines()
+    heading = next((i for i, line in enumerate(lines)
+                    if re.search(r"\balso in this release\s*:", line, re.IGNORECASE)), None)
+    if heading is None or any(pattern.search("\n".join(lines[:heading + 1])) for pattern in patterns):
+        return []
+    matching = [line for line in lines[heading + 1:] if any(pattern.search(line) for pattern in patterns)]
+    if not matching:
+        return []
+    return matching if all(re.match(r"\s*[-*]\s+", line) for line in matching) else []
+
+
+def _only_other_release_notes_mentions(state):
+    lines = _other_release_notes_target_lines(state)
+    return bool(lines) and not any(re.search(
+        r"\b(?:announc(?:e[sd]?|ing)|releas(?:e[sd]?|ing)|launch(?:es|ed|ing)?|"
+        r"introduc(?:e[sd]?|ing))\b", line, re.IGNORECASE) for line in lines)
+
+
+def _release_note_has_target_evaluation(state):
+    return any(re.search(r"\b(?:excellent|amazing|great|terrible|awful|"
+                         r"(?:really\s+)?well|love|hate|better|worse|faster|slower|impressive)\b",
+                         line, re.IGNORECASE)
+               for line in _other_release_notes_target_lines(state))
+
+
+def combine(decoded, state, rows, errors, fields=FIELDS, *, identity_veto=None):
     """Flattened selected Cycle 8 assembly; no earlier experiment overrides."""
     def v(key):
         answer = decoded.get(key, {})
@@ -521,14 +628,20 @@ def combine(decoded, state, rows, errors, fields=FIELDS):
             final[key] = None
     specifics = _or(final["promotion:" + key] for key in PROMOTION_KEYS[1:])
     final["promotion:general"] = False if specifics is True else None if specifics is None else v("untracked_pitch")
-    wrong = any(decoded.get(k, {}).get("valid") and decoded[k].get("p_yes", 0) >= .5
-                for k in ("identity_namesake_only", "identity_keyword_only", "identity_word_only"))
+    wrong = _identity_veto(decoded, state=state) if identity_veto is None else identity_veto
     if wrong:
         for key in final:
             if key.startswith(("type:", "topic:", "product:", "geo:")):
                 final[key] = False
         final["outcome"] = "context_missing"
         final["sentiment"] = final["china_national_stance"] = final["us_national_stance"] = "unknown"
+    elif (v("relevant") is True and _has_identity_vote(decoded)
+          and (_only_hardware_pairing_mentions(state) or _only_other_release_notes_mentions(state))):
+        final["type:releases_updates"] = False
+        if not any(final[key] is True for key in fields if key.startswith("type:") and key != "type:other"):
+            final["type:other"] = True
+        if not _release_note_has_target_evaluation(state):
+            final["sentiment"] = "neutral"
     elsewhere = decoded.get("evaluation_elsewhere", {})
     if final["outcome"] == "classified" and elsewhere.get("valid") and elsewhere.get("p_yes", 0) >= .7:
         final["sentiment"] = "neutral"
@@ -570,6 +683,7 @@ def finish(case, prepared, raw_jev_document):
     decoded, extra = _decode(raw_jev_document, prepared["request"])
     rows, extraction_errors = meta["extraction_rows"], meta["extraction_errors"]
     by_brand = {}
+    identity_vetoes = {}
     errors = []
     invalid = [key for key, answer in decoded.items() if not answer["valid"]]
     if invalid:
@@ -580,7 +694,10 @@ def finish(case, prepared, raw_jev_document):
         errors.append("jev_context_overflow")
     for brand in targets:
         local = {key: decoded[actual] for key, actual in meta["question_map"][brand].items()}
-        by_brand[brand] = combine(local, {**state, "target_brand": brand}, rows, extraction_errors, FIELDS)
+        brand_state = {**state, "target_brand": brand}
+        identity_vetoes[brand] = _identity_veto(local, state=brand_state)
+        by_brand[brand] = combine(local, brand_state, rows, extraction_errors, FIELDS,
+                                  identity_veto=identity_vetoes[brand])
     findings = meta.get("release_findings")
     selected_findings = []
     if meta.get("release_error"):
@@ -626,8 +743,12 @@ def finish(case, prepared, raw_jev_document):
                 if brand != "_unattributed" and decoded[prefix + ":concerns:" + brand]["assigned"] is not True:
                     continue
                 fields = by_brand[brand]
+                if brand != "_unattributed" and identity_vetoes[brand]:
+                    continue
                 local = {key: decoded[actual] for key, actual in meta["question_map"][brand].items()}
-                if brand != "_unattributed" and any(local[key].get("p_yes", 0) >= .5 for key in ("identity_namesake_only", "identity_keyword_only", "identity_word_only")):
+                if (brand != "_unattributed" and brand not in publishers and _has_identity_vote(local)
+                        and (_only_hardware_pairing_mentions({**state, "target_brand": brand})
+                             or _only_other_release_notes_mentions({**state, "target_brand": brand}))):
                     continue
                 fields["type:releases_updates"] = True
                 fields["type:other"] = False
@@ -735,6 +856,12 @@ def finish(case, prepared, raw_jev_document):
     ) and all(key.startswith("release:") or (promotion_unresolved and key in promotion_question_ids) for key in invalid)
     publication = {"by_brand": canonical or {}, "untracked_brand_promotions": promotions,
                    "promoted_subjects": subjects, "valid": not errors or release_unresolved or promotion_unresolved}
+    identity_keys = ("relevant", "identity_namesake_only", "identity_keyword_only", "identity_word_only")
+    if all(decoded[meta["question_map"][brand][key]]["valid"] for brand in targets for key in identity_keys):
+        publication["identity_votes"] = {
+            brand: {key: decoded[meta["question_map"][brand][key]]["p_yes"] for key in identity_keys}
+            for brand in targets
+        }
     if release_unresolved:
         publication["release_unresolved"] = True
     if promotion_unresolved:

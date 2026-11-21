@@ -232,3 +232,23 @@ def test_bulk_reader_uses_three_queries_for_many_pairs(django_assert_num_queries
 def test_empty_bulk_read_uses_no_queries(django_assert_num_queries):
     with django_assert_num_queries(0):
         assert read_brand_scalars_many([]) == {}
+
+
+def test_old_compressed_feed_only_judgment_stays_visible_after_identity_revision():
+    from monitor.views import _feed_axes_complete_post_ids
+
+    rows = [{"post_id": "post-1", "brand_id": "qwen",
+             "selected_final_judgment__changes_json": {},
+             "selected_final_judgment__prompt_version": "compressed8-pulse-merge-v2",
+             "selected_final_judgment__validation_state": "validated"}]
+    assert _feed_axes_complete_post_ids(["post-1"], brand_pairs=[("post-1", "qwen")], state_rows=rows) == {"post-1"}
+
+
+def test_unmarked_legacy_v1_judgment_does_not_claim_feed_completion():
+    from monitor.views import _feed_axes_complete_post_ids
+
+    rows = [{"post_id": "post-1", "brand_id": "qwen",
+             "selected_final_judgment__changes_json": {},
+             "selected_final_judgment__prompt_version": "compressed8-pulse-merge-v1",
+             "selected_final_judgment__validation_state": "validated"}]
+    assert not _feed_axes_complete_post_ids(["post-1"], brand_pairs=[("post-1", "qwen")], state_rows=rows)
