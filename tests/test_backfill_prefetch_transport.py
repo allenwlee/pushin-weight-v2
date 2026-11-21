@@ -80,3 +80,53 @@ def test_total_http_deadline_stops_trickling_server(slow_part):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_captured_twex_page_normalizes_and_tags_cursor():
+    import json
+    from pathlib import Path
+    from types import SimpleNamespace
+    from monitor.backfill_prefetch import CapturedPage
+    body = json.loads((Path(__file__).parent / "fixtures/twexapi/search-page.json").read_text())
+    request = SimpleNamespace(endpoint_url="https://api.twexapi.io/twitter/advanced_search/page", received_at=None,
+                              request_config="x:twexapi")
+    page = next(CapturedPage(request, {}, False, body=body).pages())
+    assert page.items[0]["id"] == str(body["data"][0]["tweet_id"])
+    assert page.next_cursor == "twexapi:fixture-cursor"
+
+
+def test_twex_prefetch_accounts_one_physical_call_and_raw_receipt(monkeypatch):
+    import json
+    from pathlib import Path
+    from monitor.backfill_prefetch import PrefetchRoute, fetch_page
+    from x_monitor.x_client import XClient
+    body = json.loads((Path(__file__).parent / "fixtures/twexapi/search-page.json").read_text())
+    raw = json.dumps(body).encode()
+    class Response:
+        status_code = 200
+        headers = {}
+        content = raw
+        def json(self): return body
+    calls = []
+    monkeypatch.setattr(XClient, "_bounded_request", lambda self, method, url, timeout, **kw: calls.append((method, url, kw["payload"])) or Response())
+    result = fetch_page(PrefetchRoute("twexapi", "fixture-secret"), {"query": "Qwen", "cursor": "abc"}, max_bytes=100000, timeout=30)
+    assert result.error is None and result.response["raw_results"] == len(body["data"])
+    assert calls == [("POST", "https://api.twexapi.io/twitter/advanced_search/page", {"searchTerms": ["Qwen"], "sortBy": "Latest", "next_cursor": "abc"})]
+    assert result.body == Response.content
+
+
+def test_known_busy_prefetch_empty_is_unresolved_not_a_success(monkeypatch):
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+    from monitor.backfill_prefetch import Prefetcher, PrefetchRoute, TransportResult
+    class Circuit:
+        def observe_query(self, query, *, nonempty, now): return True
+        def is_probe(self): return False
+    controller = object.__new__(Prefetcher)
+    controller.routes = {7: PrefetchRoute("twitterapi:on_demand", "fixture")}
+    controller.router = SimpleNamespace(provider_circuits={"twitterapi:on_demand": Circuit()})
+    request = SimpleNamespace(pk=7, cursor_before=None, scope_run=object())
+    monkeypatch.setattr("monitor.backfill_prefetch._params", lambda scope: {"query": "Qwen"})
+    result = TransportResult(b'{"tweets":[]}', {"status_code": 200, "raw_results": 0}, None, datetime.now(UTC), 0.1)
+    assessed = controller._assess_route_result(request, result)
+    assert assessed.error == "XClientServerError"

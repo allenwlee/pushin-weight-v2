@@ -48,6 +48,19 @@ class SearchProviderCircuit:
     def is_probe(self):
         return bool(getattr(self._probe_local, "owner", None))
 
+    def abandon_probe(self):
+        owner = getattr(self._probe_local, "owner", None)
+        if owner is None:
+            return
+        with transaction.atomic():
+            row = self._locked_row()
+            if row.probe_owner == owner:
+                row.probe_owner = None
+                row.probe_lease_until = None
+                row.save(update_fields=["probe_owner", "probe_lease_until", "updated_at"])
+        self._probe_local.owner = None
+        self.probe_claimed = False
+
     def record_failure(self, now):
         with transaction.atomic():
             row = self._locked_row()

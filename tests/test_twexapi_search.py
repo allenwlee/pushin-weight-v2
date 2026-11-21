@@ -271,6 +271,7 @@ def test_missing_fallback_key_preserves_primary_defaults(monkeypatch):
     from x_monitor.x_client import XClient
 
     monkeypatch.delenv("TWEXAPI_API_KEY", raising=False)
+    monkeypatch.delenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", raising=False)
     monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "fixture")
     monkeypatch.setenv("TWITTERAPI_SEARCH_TIMEOUT_SECONDS", "not-a-number")
     client = XClient.from_env(TwitterApiCredentialPurpose.SCHEDULED)

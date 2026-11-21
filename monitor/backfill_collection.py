@@ -911,8 +911,9 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
     if job.next_retry_at and job.next_retry_at > datetime.now(UTC):
         remaining = max(1, int((job.next_retry_at - datetime.now(UTC)).total_seconds()) + 1)
         raise BackfillProviderSafetyError(429, retry_after_seconds=min(300, remaining))
-    # Resolve this exact key before claiming or sending any HTTP request.
-    require_twitterapi_api_key(TwitterApiCredentialPurpose.ON_DEMAND)
+    # Resolve the configured ordered providers before claiming work or HTTP.
+    from x_monitor.x_client import XClient
+    XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
     seconds = job.budgets["seconds"]
     if scope.get("deadline") and any(not unit.get("enumeration_complete") for unit in scope["units"]):
         seconds = min(seconds, (datetime.fromisoformat(scope["deadline"]) - datetime.now(UTC)).total_seconds())

@@ -43,7 +43,7 @@ def parse_provider_order(value: str | None) -> tuple[str, ...]:
     if value is None:
         return ("twitterapi", "twexapi")
     names = tuple(part.strip().lower() for part in value.split(","))
-    if not names or any(name not in {"twitterapi", "twexapi"} for name in names) or len(set(names)) != len(names):
+    if not names or any(name not in {"twitterapi", "twitterapi:scheduled", "twitterapi:on_demand", "twexapi"} for name in names) or len(set(names)) != len(names):
         raise ValueError("X_DATA_PROVIDER_ORDER must list distinct known providers")
     return names
 

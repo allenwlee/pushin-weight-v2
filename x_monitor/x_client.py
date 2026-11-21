@@ -12,6 +12,7 @@ TwitterAPI.io. Rationale:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import os
@@ -28,7 +29,6 @@ from x_monitor.twitterapi_credentials import (
     TwitterApiCredentialPurpose,
     get_twitterapi_api_key,
     get_twexapi_api_key,
-    require_twitterapi_api_key,
 )
 
 log = logging.getLogger(__name__)
@@ -191,12 +191,13 @@ def _twexapi_tweet(item):
     return converted
 
 
-def twexapi_search_page(data, *, max_results=20, page_number=1):
+def twexapi_search_page(data, *, max_results=20, page_number=1, received_at=None, received_monotonic=None):
     if not isinstance(data, dict) or data.get("code") != 200 or not isinstance(data.get("data"), list):
         raise ValueError("TwexAPI search response invalid")
     normalized = {"tweets": [_twexapi_tweet(item) for item in data["data"]],
                   "has_next_page": data.get("has_next_page"), "next_cursor": data.get("next_cursor")}
-    return search_page_from_response(normalized, page_number=page_number, max_results=max_results)
+    return search_page_from_response(normalized, page_number=page_number, max_results=max_results,
+                                     received_at=received_at, received_monotonic=received_monotonic)
 
 
 @dataclass(frozen=True)
@@ -217,7 +218,7 @@ class XClient:
     scheduled collection or explicitly launched on-demand work.
     """
 
-    api_key: str
+    api_key: str = field(repr=False)
     base_url: str = TWITTERAPI_BASE
     timeout_s: int = 60
     max_retries: int = 2
@@ -226,6 +227,8 @@ class XClient:
     circuit: Any = field(default=None, repr=False, kw_only=True)
     twex_circuit: Any = field(default=None, repr=False, kw_only=True)
     provider_order: tuple[str, ...] = field(default=("twitterapi", "twexapi"), kw_only=True)
+    provider_credentials: dict[str, str] = field(default_factory=dict, repr=False, kw_only=True)
+    provider_circuits: dict[str, Any] = field(default_factory=dict, repr=False, kw_only=True)
     twexapi_interval_s: float = field(default=6.0, kw_only=True)
     search_timeout_s: int = field(default=15, kw_only=True)
     search_max_retries: int = field(default=0, kw_only=True)
@@ -247,44 +250,70 @@ class XClient:
     ) -> XClient:
         from x_monitor.x_data_provider import parse_provider_order
 
-        order_setting = os.environ.get("X_DATA_PROVIDER_ORDER")
-        order = parse_provider_order(order_setting)
-        primary_key = (require_twitterapi_api_key(purpose) if "twitterapi" in order
-                       else get_twitterapi_api_key(purpose) or "")
+        manual_override = os.environ.get("X_DATA_PROVIDER_ORDER_ON_DEMAND") if purpose == TwitterApiCredentialPurpose.ON_DEMAND else None
+        order_setting = manual_override if manual_override is not None else os.environ.get("X_DATA_PROVIDER_ORDER")
+        if order_setting is None:
+            preferred = "scheduled" if purpose == TwitterApiCredentialPurpose.SCHEDULED else "on_demand"
+            alternate = "on_demand" if preferred == "scheduled" else "scheduled"
+            order = (f"twitterapi:{preferred}", f"twitterapi:{alternate}", "twexapi")
+        else:
+            order = parse_provider_order(order_setting)
+            if purpose == TwitterApiCredentialPurpose.ON_DEMAND and manual_override is None and {
+                "twitterapi:scheduled", "twitterapi:on_demand"
+            }.issubset(order):
+                order = tuple("twitterapi:on_demand" if name == "twitterapi:scheduled" else
+                              "twitterapi:scheduled" if name == "twitterapi:on_demand" else name for name in order)
+        scheduled = get_twitterapi_api_key(TwitterApiCredentialPurpose.SCHEDULED)
+        ondemand = get_twitterapi_api_key(TwitterApiCredentialPurpose.ON_DEMAND)
+        credentials = {name: value for name, value in (
+            ("twitterapi:scheduled", scheduled), ("twitterapi:on_demand", ondemand)) if value}
+        primary_key = get_twitterapi_api_key(purpose) or ""
         key = get_twexapi_api_key()
         force = purpose == TwitterApiCredentialPurpose.ON_DEMAND and os.getenv("TWEXAPI_FORCE_SEARCH") == "1"
         if force and not key:
             raise RuntimeError("TWEXAPI_API_KEY is required for forced TwexAPI search")
-        if not key and order_setting is not None and "twexapi" in order:
-            raise RuntimeError("TWEXAPI_API_KEY is required by X_DATA_PROVIDER_ORDER")
-        if not key:
-            return cls(api_key=primary_key)
+        seen = set()
+        available = []
+        for name in order:
+            if name == "twitterapi":
+                name = "twitterapi:scheduled" if purpose == TwitterApiCredentialPurpose.SCHEDULED else "twitterapi:on_demand"
+            value = key if name == "twexapi" else credentials.get(name)
+            if value and (name == "twexapi" or value not in seen):
+                available.append(name)
+                if name != "twexapi": seen.add(value)
+        if not available:
+            raise RuntimeError("No configured X data provider credential is available")
+        if len(available) == 1 and available[0].startswith("twitterapi:") and not key:
+            return cls(api_key=credentials[available[0]])
         from x_monitor.search_provider_circuit import SearchProviderCircuit
 
         interval = float(os.getenv("TWEXAPI_INTERVAL_SECONDS", "6"))
         timeout = int(os.getenv("TWITTERAPI_SEARCH_TIMEOUT_SECONDS", "15"))
         retries = int(os.getenv("TWITTERAPI_SEARCH_MAX_RETRIES", "0"))
-        threshold = int(os.getenv("TWEXAPI_BREAKER_FAILURE_THRESHOLD", "2"))
+        threshold = int(os.getenv("TWEXAPI_BREAKER_FAILURE_THRESHOLD", "1"))
         cooldown = int(os.getenv("TWEXAPI_BREAKER_COOLDOWN_SECONDS", "180"))
         if not math.isfinite(interval) or interval <= 0 or timeout <= 0 or retries < 0 or threshold < 1 or cooldown < 1:
             raise ValueError("invalid TwexAPI search fallback configuration")
-        circuit = SearchProviderCircuit(
-            purpose.value, provider="twitterapi", endpoint_family="search", threshold=threshold, cooldown=cooldown,
-        )
+        circuits = {name: SearchProviderCircuit(hashlib.sha256(credentials[name].encode()).hexdigest()[:16], provider="twitterapi", endpoint_family="search", threshold=threshold, cooldown=cooldown)
+                    for name in available if name.startswith("twitterapi:")}
+        primary_name = next((name for name in available if name.startswith("twitterapi:")), None)
+        circuit = circuits.get(primary_name) or SearchProviderCircuit("search-history")
         # Twex uses one account key for both scheduled and on-demand work.
-        twex_circuit = SearchProviderCircuit("shared", provider="twexapi", endpoint_family="search", threshold=threshold, cooldown=cooldown)
-        return cls(api_key=primary_key, twexapi_key=key, circuit=circuit,
-                   twex_circuit=twex_circuit, provider_order=order,
+        twex_identity = hashlib.sha256(key.encode()).hexdigest()[:16] if key else "not-configured"
+        twex_circuit = SearchProviderCircuit(twex_identity, provider="twexapi", endpoint_family="search", threshold=threshold, cooldown=cooldown)
+        return cls(api_key=primary_key or (credentials.get(primary_name) if primary_name else ""), twexapi_key=key, circuit=circuit,
+                   twex_circuit=twex_circuit, provider_order=tuple(available), provider_credentials=credentials, provider_circuits=circuits,
                    twexapi_interval_s=interval, search_timeout_s=timeout,
                    search_max_retries=retries, force_twexapi=force)
 
     # --- low-level HTTP --------------------------------------------------
 
-    def _headers(self) -> dict[str, str]:
-        if not self.api_key:
+    def _headers(self, credential: str | None = None) -> dict[str, str]:
+        credential = self.api_key if credential is None else credential
+        if not credential:
             raise RuntimeError("TwitterAPI credential is required for this endpoint")
         return {
-            "X-API-Key": self.api_key,
+            "X-API-Key": credential,
             "Accept": "application/json",
         }
 
@@ -297,6 +326,8 @@ class XClient:
         capture_raw: bool = False,
         raw_sink: Callable[[bytes], None] | None = None,
         max_retries: int | None = None,
+        credential: str | None = None,
+        credential_name: str | None = None,
     ) -> Any:
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
@@ -307,16 +338,20 @@ class XClient:
             n_attempts = attempt + 1
             if self.before_request is not None:
                 self.before_request(timeout_s or self.timeout_s)
+            trace_params = dict(params)
+            if credential_name:
+                trace_params["_credential_purpose"] = credential_name
             exchange = (
-                self.on_exchange_start(path, dict(params))
+                self.on_exchange_start(path, trace_params)
                 if self.on_exchange_start is not None else None
             )
             try:
                 if self.max_response_bytes is None:
-                    r = requests.get(url, params=params, headers=self._headers(),
+                    r = requests.get(url, params=params, headers=self._headers(credential),
                                      timeout=timeout_s or self.timeout_s)
                 else:
-                    r = self._get_bounded(url, params, timeout_s or self.timeout_s)
+                    bounded_options = {"credential": credential} if credential is not None else {}
+                    r = self._get_bounded(url, params, timeout_s or self.timeout_s, **bounded_options)
             except requests.RequestException as e:
                 if self.on_exchange_finish is not None:
                     self.on_exchange_finish(exchange, {
@@ -356,8 +391,10 @@ class XClient:
                     "attempt": n_attempts,
                     "response_bytes": len(r.content),
                 }
-                if self.twexapi_key:
+                if self.twexapi_key or credential_name:
                     receipt["provider"] = "twitterapi"
+                if credential_name:
+                    receipt["credential_purpose"] = credential_name
                 self.after_response(receipt)
             if r.status_code == 401:
                 exc = XClientAuthError(
@@ -395,16 +432,16 @@ class XClient:
                 exc.response_status_code = r.status_code
                 raise exc
             # Success — record into the per-instance log before returning.
-            self._record_request(path, params, r, t0, n_attempts)
+            self._record_request(path, params, r, t0, n_attempts, credential_name=credential_name)
             parsed = r.json()
             return (r.content, parsed) if capture_raw else parsed
         if last_exc:
             raise last_exc
         raise RuntimeError("TwitterAPI.io call failed without a recorded exception")
 
-    def _get_bounded(self, url, params, timeout):
+    def _get_bounded(self, url, params, timeout, *, credential=None):
         """Opt-in transport with a total deadline, including slow headers/body."""
-        return self._bounded_request("GET", url, timeout, params=params, headers=self._headers())
+        return self._bounded_request("GET", url, timeout, params=params, headers=self._headers(credential))
 
     def _bounded_request(self, method, url, timeout, *, params=None, payload=None, headers=None, max_bytes=None):
         import asyncio
@@ -451,6 +488,7 @@ class XClient:
         response: "requests.Response",
         t0: float,
         n_attempts: int,
+        credential_name: str | None = None,
     ) -> None:
         """Append one entry to self._request_log for a completed _get call.
 
@@ -490,8 +528,10 @@ class XClient:
                 "attempts": n_attempts,
                 "has_next_page": bool(body.get("has_next_page") or body.get("next_cursor")),
             }
-            if self.twexapi_key:
+            if self.twexapi_key or credential_name:
                 entry["provider"] = "twitterapi"
+            if credential_name:
+                entry["credential_purpose"] = credential_name
             self._request_log.append(entry)
         except Exception as exc:  # never let logging break a real call
             log.debug("failed to record http request: %s", exc)
@@ -527,10 +567,17 @@ class XClient:
 
     # --- public surface (mirrors the old ApifyClient) --------------------
 
-    def _choose_search_provider(self):
+    def _choose_search_provider(self, excluded=frozenset()):
         if self.force_twexapi:
             return "twexapi"
         for provider in self.provider_order:
+            if provider in excluded:
+                continue
+            if provider.startswith("twitterapi:"):
+                circuit = self.provider_circuits[provider]
+                if circuit.primary_permitted(datetime.now(timezone.utc)):
+                    return provider
+                continue
             if provider == "twitterapi" and (not self.circuit or self.circuit.primary_permitted(datetime.now(timezone.utc))):
                 return provider
             if provider == "twexapi" and self.twexapi_key and self.circuit and (
@@ -542,7 +589,7 @@ class XClient:
     def _twex_guarded_search(self, *args, **kwargs):
         try:
             result = self._twex_search_with_retry(*args, **kwargs)
-        except (XClientServerError, requests.Timeout, requests.ConnectionError, ValueError):
+        except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError, ValueError):
             if self.twex_circuit:
                 self.twex_circuit.record_failure(datetime.now(timezone.utc))
             raise
@@ -657,6 +704,37 @@ class XClient:
             return self._twex_search(query, cursor, **kwargs)
 
     def _iter_search_pages(
+        self, query, max_results, *, max_pages=5, max_per_page=20,
+        since_time=None, cursor=None, can_start_page=None,
+    ):
+        # A failed first page has not committed any coverage, so a different
+        # credential may safely retry the identical bounded query. Never move
+        # a continuation token or a partially received walk to another source.
+        if not self.provider_circuits or cursor is not None or self.force_twexapi:
+            yield from self._iter_search_pages_once(query, max_results, max_pages=max_pages,
+                max_per_page=max_per_page, since_time=since_time, cursor=cursor, can_start_page=can_start_page)
+            return
+        excluded = set()
+        while True:
+            if can_start_page is not None and not can_start_page():
+                raise TimeoutError("search deadline reached before provider dispatch")
+            provider = self._choose_search_provider(excluded)
+            yielded = False
+            try:
+                for page in self._iter_search_pages_once(query, max_results, max_pages=max_pages,
+                        max_per_page=max_per_page, since_time=since_time, cursor=None,
+                        can_start_page=can_start_page, selected_provider=provider):
+                    yielded = True
+                    yield page
+                return
+            except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError):
+                if yielded:
+                    raise
+                excluded.add(provider)
+                if len(excluded) >= len(self.provider_order):
+                    raise
+
+    def _iter_search_pages_once(
         self,
         query: str,
         max_results: int,
@@ -666,12 +744,13 @@ class XClient:
         since_time: int | None = None,
         cursor: str | None = None,
         can_start_page: Callable[[], bool] | None = None,
+        selected_provider: str | None = None,
     ) -> Iterator[SearchPage]:
         """Yield normalized pages without fetching the next page early."""
         from x_monitor.x_data_provider import TwitterAPIProvider, TwexAPIProvider
 
         n_returned = 0
-        provider = "primary"
+        provider = selected_provider or "primary"
         if self.force_twexapi and cursor and not cursor.startswith("twexapi:"):
             raise ValueError("cannot use a primary cursor with forced TwexAPI search")
         if cursor and cursor.startswith("twexapi:"):
@@ -681,10 +760,17 @@ class XClient:
                 raise XClientServerError("TwexAPI cursor held while provider circuit is open")
             provider = "twexapi"
             cursor = cursor.removeprefix("twexapi:")
+        elif cursor and cursor.startswith("twitterapi:"):
+            parts = cursor.split(":", 2)
+            provider = ":".join(parts[:2])
+            if provider not in self.provider_circuits or not self.provider_circuits[provider].primary_permitted(datetime.now(timezone.utc)):
+                raise XClientServerError("TwitterAPI cursor held while provider circuit is open")
+            cursor = parts[2]
         elif cursor and self.circuit and not self.circuit.primary_permitted(datetime.now(timezone.utc)):
             raise XClientServerError("TwitterAPI cursor held while provider circuit is open")
-        elif not cursor and self.twexapi_key and self.circuit:
+        elif not cursor and selected_provider is None and (self.twexapi_key or self.provider_circuits) and self.circuit:
             provider = self._choose_search_provider()
+        active_circuit = self.provider_circuits.get(provider, self.circuit)
         for page_number in range(1, max(1, max_pages) + 1):
             if n_returned >= max_results:
                 return
@@ -724,22 +810,26 @@ class XClient:
                     self.twex_circuit.record_success(datetime.now(timezone.utc))
                 if page.next_cursor:
                     page = replace(page, next_cursor="twexapi:" + page.next_cursor)
-            elif self.twexapi_key and self.circuit:
+            elif (self.twexapi_key or self.provider_circuits) and active_circuit:
                 try:
                     adapter = TwitterAPIProvider(self)
+                    credential = self.provider_credentials.get(provider)
+                    credential_option = {"credential": credential, "credential_name": provider} if credential is not None else {}
                     data = adapter.search_page(query, cursor, limit=params["limit"], timeout_s=self.search_timeout_s,
-                                               max_retries=self.search_max_retries)
+                                               max_retries=self.search_max_retries, **credential_option)
                     page = adapter.normalize_page(data, page_number=page_number, max_results=max_results - n_returned)
                     if not page.items and (page.has_more or page.continuation_invalid or cursor):
                         raise XClientServerError("primary empty page when continuation expected")
                     if page_number == 1 and not cursor:
-                        expected = self.circuit.observe_query(query, nonempty=bool(page.items), now=datetime.now(timezone.utc))
-                        if not page.items and (expected or self.circuit.is_probe()):
+                        expected = active_circuit.observe_query(query, nonempty=bool(page.items), now=datetime.now(timezone.utc))
+                        if not page.items and (expected or active_circuit.is_probe()):
                             raise XClientServerError("primary empty page on expected nonempty search")
-                except (XClientServerError, requests.Timeout, requests.ConnectionError):
-                    self.circuit.record_failure(datetime.now(timezone.utc))
+                except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError):
+                    active_circuit.record_failure(datetime.now(timezone.utc))
                     raise
-                self.circuit.record_success(datetime.now(timezone.utc))
+                active_circuit.record_success(datetime.now(timezone.utc))
+                if page.next_cursor and provider.startswith("twitterapi:"):
+                    page = replace(page, next_cursor=provider + ":" + page.next_cursor)
             else:
                 adapter = TwitterAPIProvider(self)
                 data = adapter.search_page(query, cursor, limit=params["limit"])
@@ -748,7 +838,12 @@ class XClient:
             yield page
             if n_returned >= max_results or not page.has_more or page.clipped:
                 return
-            cursor = page.next_cursor.removeprefix("twexapi:") if provider == "twexapi" else page.next_cursor
+            if provider == "twexapi":
+                cursor = page.next_cursor.removeprefix("twexapi:")
+            elif provider.startswith("twitterapi:"):
+                cursor = page.next_cursor.removeprefix(provider + ":")
+            else:
+                cursor = page.next_cursor
 
     def _walk_search(
         self,
@@ -873,7 +968,9 @@ class XClient:
         )
         from x_monitor.x_data_provider import TwitterAPIProvider, TwexAPIProvider
 
-        if self.twexapi_key and self.circuit and self._choose_search_provider() == "twexapi":
+        provider = self._choose_search_provider() if self.circuit else "primary"
+        active_circuit = self.provider_circuits.get(provider, self.circuit)
+        if provider == "twexapi":
             raw_body, data = TwexAPIProvider(self).search_page(effective_query, None, capture_raw=True, raw_sink=receipt_sink)
             raw_items = data["data"]
             expected = self.circuit.observe_query(effective_query, nonempty=bool(raw_items), now=datetime.now(timezone.utc))
@@ -900,22 +997,25 @@ class XClient:
         }
         try:
             options = ({"timeout_s": self.search_timeout_s, "max_retries": self.search_max_retries}
-                       if self.twexapi_key and self.circuit else {})
+                       if (self.twexapi_key or self.provider_circuits) and active_circuit else {})
+            if provider in self.provider_credentials:
+                options["credential"] = self.provider_credentials[provider]
+                options["credential_name"] = provider
             raw_body, data = TwitterAPIProvider(self).search_page(effective_query, limit=params["limit"], capture_raw=True, raw_sink=receipt_sink, **options)
-        except (XClientServerError, requests.Timeout, requests.ConnectionError):
-            if self.twexapi_key and self.circuit:
-                self.circuit.record_failure(datetime.now(timezone.utc))
+        except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError):
+            if (self.twexapi_key or self.provider_circuits) and active_circuit:
+                active_circuit.record_failure(datetime.now(timezone.utc))
             raise
         raw_items = _search_results(data)
-        if self.twexapi_key and self.circuit:
+        if (self.twexapi_key or self.provider_circuits) and active_circuit:
             if not raw_items and (data.get("has_next_page") or data.get("next_cursor")):
-                self.circuit.record_failure(datetime.now(timezone.utc))
+                active_circuit.record_failure(datetime.now(timezone.utc))
                 raise XClientServerError("primary empty page when continuation expected")
-            expected = self.circuit.observe_query(effective_query, nonempty=bool(raw_items), now=datetime.now(timezone.utc))
-            if not raw_items and (expected or self.circuit.is_probe()):
-                self.circuit.record_failure(datetime.now(timezone.utc))
+            expected = active_circuit.observe_query(effective_query, nonempty=bool(raw_items), now=datetime.now(timezone.utc))
+            if not raw_items and (expected or active_circuit.is_probe()):
+                active_circuit.record_failure(datetime.now(timezone.utc))
                 raise XClientServerError("primary empty page on expected nonempty search")
-            self.circuit.record_success(datetime.now(timezone.utc))
+            active_circuit.record_success(datetime.now(timezone.utc))
         normalized = []
         normalization_errors = 0
         for item in raw_items[:max_results]:

@@ -133,3 +133,26 @@ def test_twex_first_falls_back_and_then_probes_recovery(monkeypatch):
     client.run_search("example")
     assert calls == ["twexapi", "twitterapi", "twexapi"]
     assert CircuitRow.objects.get(purpose=twex.purpose).open_until is None
+
+
+def test_scheduled_failure_uses_on_demand_and_persists_independent_circuits(monkeypatch):
+    from core.models import SearchProviderCircuit as CircuitRow
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient, XClientServerError
+
+    monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "scheduled-fixture")
+    monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "ondemand-fixture")
+    monkeypatch.delenv("TWEXAPI_API_KEY", raising=False)
+    monkeypatch.delenv("X_DATA_PROVIDER_ORDER", raising=False)
+    client = XClient.from_env(TwitterApiCredentialPurpose.SCHEDULED)
+    seen = []
+    def fake_get(*args, **kwargs):
+        seen.append(kwargs["credential"])
+        if seen[-1] == "scheduled-fixture": raise XClientServerError("503")
+        return {"tweets": [], "has_next_page": False}
+    monkeypatch.setattr(client, "_get", fake_get)
+    assert client.run_search("Qwen") == ([], False)
+    assert seen == ["scheduled-fixture", "ondemand-fixture"]
+    first = CircuitRow.objects.get(purpose=client.provider_circuits["twitterapi:scheduled"].purpose)
+    second = CircuitRow.objects.get(purpose=client.provider_circuits["twitterapi:on_demand"].purpose)
+    assert first.open_until is not None and second.open_until is None
