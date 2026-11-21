@@ -296,7 +296,7 @@ def read_publication_findings(post_id):
     return findings
 
 
-def persist_release_only(*, post_id, tweet, result, model, run_id):
+def persist_release_only(*, post_id, tweet, result, model, run_id, preserve_selected=False):
     """Save a complete release answer without publishing incomplete sibling axes."""
     from django.db import transaction
     from django.utils import timezone
@@ -328,7 +328,18 @@ def persist_release_only(*, post_id, tweet, result, model, run_id):
             "revision": catalog_revision, "brands": tweet.get("tracked_brand_catalog"),
         })
         fingerprint = _two_role_fingerprint(tweet, tracked_catalog=catalog)
-        findings, manifest = prepare_publication_findings(post=claim.post, tweet=tweet, result=result)
+        if preserve_selected:
+            publication = _selected_release_publication(post_id)
+            if publication is None:
+                raise ValueError("classification_release_generation_incomplete")
+            saved = read_publication_findings(post_id)
+            if saved is None:
+                raise ValueError("classification_release_generation_incomplete")
+            fingerprint = publication[0]["content_fingerprint"]
+            findings = [row["finding"] for row in saved]
+            manifest = _output_manifest(findings)
+        else:
+            findings, manifest = prepare_publication_findings(post=claim.post, tweet=tweet, result=result)
         revision = hashlib.sha256(_encoded({"post_id": post_id, "fingerprint": fingerprint,
                                            "producer": "pulse-release-only-v1"}).encode()).hexdigest()
         metadata = {"release_output": manifest, "brand_ids": brands}
