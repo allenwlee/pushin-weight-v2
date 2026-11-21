@@ -518,6 +518,7 @@ def _persist_classification_trace(
     fingerprint: str,
     release_manifest: dict[str, Any] | None = None,
     release_unresolved: bool = False,
+    release_overflow_deferred: bool = False,
     promotion_unresolved: bool = False,
     promotion_retry_reason: str | None = None,
     feed_input_fingerprints: dict[str, str] | None = None,
@@ -543,6 +544,7 @@ def _persist_classification_trace(
             fingerprint=fingerprint,
             release_manifest=release_manifest,
             release_unresolved=release_unresolved,
+            release_overflow_deferred=release_overflow_deferred,
             promotion_unresolved=promotion_unresolved,
             promotion_retry_reason=promotion_retry_reason,
             feed_input_fingerprints=feed_input_fingerprints,
@@ -647,6 +649,7 @@ def _persist_two_role_classification_trace(
     fingerprint: str,
     release_manifest: dict[str, Any] | None = None,
     release_unresolved: bool = False,
+    release_overflow_deferred: bool = False,
     promotion_unresolved: bool = False,
     promotion_retry_reason: str | None = None,
     feed_input_fingerprints: dict[str, str] | None = None,
@@ -680,6 +683,8 @@ def _persist_two_role_classification_trace(
         metadata["final"]["changes_json"]["release_output"] = validate_output_manifest(release_manifest)
     if observed_revisions == COMPRESSED_CLASSIFIER_REVISIONS and (release_unresolved or promotion_unresolved):
         metadata["final"]["changes_json"]["feed_axes_complete"] = True
+    if release_overflow_deferred:
+        metadata["final"]["changes_json"]["release_overflow_deferred"] = True
     if promotion_retry_reason:
         metadata["final"]["changes_json"]["promotion_retry_reason"] = promotion_retry_reason
     expected_revisions = dict(zip(
@@ -1181,6 +1186,20 @@ def _parse_published_classifications(
     return canonical
 
 
+def _overflow_ready_fingerprint(rows, brand_ids):
+    """Only reuse complete feed and promotion decisions for the same packet."""
+    if not rows or set(brand_ids) != {row.brand_id for row in rows}:
+        return None
+    if not all(row.selected_final_judgment is not None
+               and row.selected_final_judgment.validation_state == "validated"
+               and isinstance(row.selected_final_judgment.changes_json, dict)
+               and row.selected_final_judgment.changes_json.get("release_overflow_deferred") is True
+               for row in rows):
+        return None
+    fingerprints = {row.input_context_fingerprint for row in rows}
+    return fingerprints.pop() if len(fingerprints) == 1 else None
+
+
 def _publish_stage1_classification(
     *,
     post_id: str,
@@ -1195,6 +1214,22 @@ def _publish_stage1_classification(
     if isinstance(result, dict) and result.get("release_only") is True:
         from core.classified_product_releases import persist_release_only
 
+        if result.get("release_retry_completed") is True:
+            with transaction.atomic():
+                claim = PostEnrichmentState.objects.select_for_update().filter(post_id=post_id).first()
+                rows = list(PostBrandClassificationState.objects.select_for_update(of=("self",)).filter(
+                    post_id=post_id,
+                ).select_related("selected_final_judgment"))
+                fingerprint = tweet.get("_overflow_feed_fingerprint")
+                if (claim is None or not fingerprint
+                        or _overflow_ready_fingerprint(rows, tweet.get("brand_ids") or []) != fingerprint):
+                    return None
+                if not persist_release_only(post_id=post_id, tweet=tweet, result=result, model=model, run_id=run_id):
+                    return None
+                if cfg is not None:
+                    _finish_enrichment_stage(post_ids=[post_id], run_id=run_id, stage="classification",
+                                             succeeded_ids={post_id}, error_code="classification_incomplete", cfg=cfg)
+                return _ClassificationPublishOutcome(outcome="preserved")
         persist_release_only(post_id=post_id, tweet=tweet, result=result, model=model, run_id=run_id)
         return None
     if not isinstance(result, dict) or result.get("valid") is not True:
@@ -1306,14 +1341,23 @@ def _publish_stage1_classification(
                 else:
                     feed_replacement_reasons.pop(row.brand_id, None)
         promotion_retry = bool(preserved_brands)
-        if result.get("release_unresolved") is True and not promotion_retry:
-            from core.classified_product_releases import _complete_release_publication
-
-            if _complete_release_publication(post_id) is not None:
-                return None
         canonical = _parse_published_classifications(by_brand, expected)
         if canonical is None:
             return None
+        if result.get("release_unresolved") is True and not promotion_retry:
+            from core.classified_product_releases import (
+                _complete_release_publication,
+                persist_release_only,
+            )
+
+            if _complete_release_publication(post_id) is not None:
+                if not result.get("release_overflow_deferred"):
+                    return None
+                if not persist_release_only(
+                    post_id=post_id, tweet=tweet, result={"valid": False, "release_only": True},
+                    model=model, run_id=run_id, preserve_selected=True,
+                ):
+                    raise ValueError("classification_release_only_not_persisted")
         for row in prior_states:
             if row.outcome == "context_missing" and canonical[row.brand_id]["outcome"] == "classified":
                 feed_replacement_reasons.setdefault(row.brand_id, "unresolved_feed_improved")
@@ -1370,6 +1414,7 @@ def _publish_stage1_classification(
                 fingerprint=fingerprint,
                 release_manifest=release_manifest,
                 release_unresolved=result.get("release_unresolved") is True,
+                release_overflow_deferred=result.get("release_overflow_deferred") is True,
                 promotion_unresolved=result.get("promotion_unresolved") is True,
                 promotion_retry_reason=(
                     "fill_unresolved_promotion"
@@ -4367,6 +4412,21 @@ class CycleRunner:
                 tweet["_classification_catalog_revision"] = classification_catalog[
                     "revision"
                 ]
+
+            if classifier_profile == "compressed8_pulse_v1" and repair_manifest is None:
+                prior_by_post = {}
+                for row in PostBrandClassificationState.objects.filter(
+                    post_id__in=[str(tweet["tweet_id"]) for tweet in classification_tweets],
+                ).select_related("selected_final_judgment").only(
+                    "post_id", "brand_id", "input_context_fingerprint", "selected_final_judgment_id",
+                    "selected_final_judgment__validation_state", "selected_final_judgment__changes_json",
+                ):
+                    prior_by_post.setdefault(str(row.post_id), []).append(row)
+                for tweet in classification_tweets:
+                    rows = prior_by_post.get(str(tweet["tweet_id"]), [])
+                    fingerprint = _overflow_ready_fingerprint(rows, tweet["brand_ids"])
+                    if fingerprint:
+                        tweet["_overflow_feed_fingerprint"] = fingerprint
 
         newly_failed = 0
 

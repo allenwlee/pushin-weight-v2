@@ -1886,3 +1886,170 @@ def test_explicit_reassessment_can_replace_completed_feed_and_records_reason(mon
     assert selected.selected_final_judgment_id != prior_id
     assert selected.selected_final_judgment.changes_json['feed_replacement_reason'] == 'explicit_reassessment'
     assert read_publication_findings(state.pk)
+
+
+def test_worker_publishes_feed_and_retries_release_after_jev_overflow(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = compressed_classifier._context_limits
+
+    def limits(request):
+        result = original(request)
+        if any(key.startswith("release:") for key in request["questions"]):
+            result["context_valid"] = False
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    runner._run_post_fetch([], run_id="overflow-feed")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    assert len(transport.calls) == 2
+    selected = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment
+    assert selected is not None
+    from monitor.views import _enrich_posts_with_classifications
+
+    rows = _enrich_posts_with_classifications(models.Post.objects.filter(pk=state.pk))
+    assert rows[0]["classifications_by_brand"]["qwen"]["classification_status"] == "classified"
+    assert rows[0]["classifications_by_brand"]["qwen"]["post_types"]
+    assert selected_release_revision(state.pk) is None
+    assert read_publication_findings(state.pk) is None
+
+
+def test_worker_saves_release_when_only_release_questions_fit(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = compressed_classifier._context_limits
+
+    def limits(request):
+        result = original(request)
+        if any(not key.startswith("release:") for key in request["questions"]):
+            result["context_valid"] = False
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    runner._run_post_fetch([], run_id="overflow-release")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    assert len(transport.calls) == 2
+    assert not models.PostBrandClassificationState.objects.filter(post_id=state.pk).exists()
+    assert selected_release_revision(state.pk) is not None
+    assert read_publication_findings(state.pk)[0]["finding"]["observed_name"] == "Qwen4"
+
+
+def test_overflow_retry_finishes_release_without_replacing_saved_feed(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = compressed_classifier._context_limits
+
+    def limits(request):
+        result = original(request)
+        keys = request["questions"]
+        if any(key.startswith("release:") for key in keys) and any(not key.startswith("release:") for key in keys):
+            result["context_valid"] = False
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    runner._run_post_fetch([], run_id="overflow-first")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    previous = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment_id
+    assert previous is not None
+    state.classification_next_attempt_at = timezone.now() - timedelta(seconds=1)
+    state.save(update_fields=["classification_next_attempt_at"])
+    runner._run_post_fetch([], run_id="overflow-retry")
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    assert len(transport.calls) == 4
+    assert models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment_id == previous
+    assert read_publication_findings(state.pk)[0]["finding"]["observed_name"] == "Qwen4"
+
+
+def test_overflow_retry_does_not_reuse_feed_after_source_changes(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = compressed_classifier._context_limits
+
+    def limits(request):
+        result = original(request)
+        keys = request["questions"]
+        if any(key.startswith("release:") for key in keys) and any(not key.startswith("release:") for key in keys):
+            result["context_valid"] = False
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    runner._run_post_fetch([], run_id="overflow-first-changed")
+    models.Post.objects.filter(pk=state.pk).update(text=state.post.text + " A correction follows.")
+    state.refresh_from_db()
+    state.classification_next_attempt_at = timezone.now() - timedelta(seconds=1)
+    state.save(update_fields=["classification_next_attempt_at"])
+    runner._run_post_fetch([], run_id="overflow-second-changed")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    request = json.loads(transport.calls[-1]["messages"][0]["content"])
+    assert any(not key.startswith("release:") for key in request["questions"])
+    assert selected_release_revision(state.pk) is None
+
+
+def test_overflow_with_unresolved_promotion_does_not_mark_feed_complete_for_release_retry(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    original_limits = compressed_classifier._context_limits
+    original_send = transport.messages_create
+
+    def limits(request):
+        result = original_limits(request)
+        keys = request["questions"]
+        if any(key.startswith("release:") for key in keys) and any(not key.startswith("release:") for key in keys):
+            result["context_valid"] = False
+        return result
+
+    def send(**kwargs):
+        result = original_send(**kwargs)
+        if not kwargs["model"].startswith("deepseek"):
+            result["answers"].pop("untracked_pitch", None)
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    monkeypatch.setattr(transport, "messages_create", send)
+    runner._run_post_fetch([], run_id="overflow-promotion-unknown")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    final = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment
+    assert final.changes_json.get("release_overflow_deferred") is not True
+
+
+def test_changed_source_overflow_publishes_new_feed_and_preserves_prior_release(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    runner._run_post_fetch([], run_id="complete-before-overflow")
+    saved = read_publication_findings(state.pk)
+    saved_fingerprint = selected_release_revision(state.pk)["content_fingerprint"]
+    previous = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment_id
+    assert saved[0]["finding"]["observed_name"] == "Qwen4"
+    models.Post.objects.filter(pk=state.pk).update(text=state.post.text + " A correction follows.")
+    state.refresh_from_db()
+    state.classification_status = "pending"
+    state.classification_next_attempt_at = timezone.now() - timedelta(seconds=1)
+    state.save(update_fields=["classification_status", "classification_next_attempt_at"])
+    original = compressed_classifier._context_limits
+
+    def limits(request):
+        result = original(request)
+        keys = request["questions"]
+        if any(key.startswith("release:") for key in keys) and any(not key.startswith("release:") for key in keys):
+            result["context_valid"] = False
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    runner._run_post_fetch([], run_id="changed-overflow")
+    current = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment_id
+    assert current != previous
+    assert read_publication_findings(state.pk)[0]["finding"] == saved[0]["finding"]
+    assert selected_release_revision(state.pk)["content_fingerprint"] == saved_fingerprint
+    assert len(transport.calls) == 4
