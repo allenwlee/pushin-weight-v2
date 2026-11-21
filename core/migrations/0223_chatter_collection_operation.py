@@ -18,7 +18,7 @@ if FORWARD == PREVIOUS.FORWARD:
 
 
 class Migration(migrations.Migration):
-    dependencies: ClassVar[list] = [("core", "0222_merge_chatter_and_affiliation_permissions"), ("core", "0235_each_chart_facts")]
+    dependencies: ClassVar[list] = [("core", "0222_merge_chatter_and_affiliation_permissions")]
     operations: ClassVar[list] = [
         migrations.RunSQL("SET LOCAL lock_timeout = '5s'", migrations.RunSQL.noop),
         migrations.RunSQL(FORWARD, PREVIOUS.FORWARD),
