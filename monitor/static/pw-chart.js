@@ -231,6 +231,8 @@
     var dataset = chart.data.datasets[args.index];
     var last = points[points.length - 1];
     if (!last) return;
+    // Null is unsearched, not a measured zero; never draw a zero beacon there.
+    if (dataset.data[points.length - 1] === null) return;
     var position = { x: last.x, y: last.y };
     if (last.skip || !Number.isFinite(position.y)) {
       // An empty latest five-minute bucket is drawn as a gap; its beacon sits at 0.
@@ -1008,6 +1010,7 @@
           fill: false,
           segment: {
             borderDash: function (context) {
+              if ((payload.partial_buckets || [])[context.p1DataIndex]) return [4, 4];
               // The focused line is solid end to end; the dashed partial last
               // day stays only on solid-pattern lines.
               if (focusedBrand() === brand) return [];
@@ -1030,10 +1033,11 @@
           pointHitRadius: granularity === 'minute' ? 8 : 0,
           tension: granularity === 'minute' ? 0.3 : 0,
           fill: false,
-          segment: partialDay
+          segment: partialDay || (payload.partial_buckets || []).some(Boolean)
             ? {
                 borderDash: function (context) {
-                  return context.p1DataIndex === days.length - 1 ? [4, 4] : undefined;
+                  return (payload.partial_buckets || [])[context.p1DataIndex] ||
+                    (partialDay && context.p1DataIndex === days.length - 1) ? [4, 4] : undefined;
                 },
               }
             : undefined,
@@ -1610,10 +1614,12 @@
   }
 
   function updateProjectionStates(region, payload, announce) {
+    var chartPartial = (payload.partial_buckets || []).some(Boolean);
     setStatus(
       region.querySelector('[data-pw-chart-status]'),
-      region.getAttribute('data-pw-chart-empty-text') || 'No chart data in this window',
-      payloadIsEmpty(payload)
+      chartPartial ? (region.getAttribute('data-pw-chart-partial-text') || 'Recent chart data is incomplete') :
+        (region.getAttribute('data-pw-chart-empty-text') || 'No chart data in this window'),
+      chartPartial || payloadIsEmpty(payload)
     );
     setStatus(
       document.querySelector('[data-pw-pulse-status]'),

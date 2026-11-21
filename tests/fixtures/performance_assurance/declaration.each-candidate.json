@@ -4,7 +4,7 @@
   "package_source_revision": "0390f3c42195856a67afcb1d62464052cebf3476",
   "fixture": {
     "path": "tests/fixtures/performance_assurance/each-seed.json",
-    "sha256": "1bbef5ee292b5939aa673bef3de69a123c886b6fcc0528979bee3648effafc3f"
+    "sha256": "7ca7e4f6e0631f191beba6e335b10e660009634c81c09c7229780f668eb48eca"
   },
   "base_origin": "http://127.0.0.1:8792",
   "asset_origins": [],

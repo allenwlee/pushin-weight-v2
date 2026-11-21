@@ -3786,6 +3786,15 @@ def _build_home_chart_payload(
                     series[brand][day_index[day_str]] += row["count"]
                     totals[brand] += row["count"]
 
+    partial_buckets = []
+    if window_days == 1:
+        covered_until = datetime.fromisoformat(coverage["chart_end_at"]) if coverage else chart_start
+        partial_buckets = [datetime.fromisoformat(day) >= covered_until for day in days]
+        for values in series.values():
+            for index, partial in enumerate(partial_buckets):
+                if partial and values[index] == 0:
+                    values[index] = None
+
     computed_at = pulse["computed_at"]
     trend_narrative, top_voices = _home_chart_sidecars(
         window_days, normalized_filters, brand_nicknames, locale, requested_at, computed_at,
@@ -3802,6 +3811,7 @@ def _build_home_chart_payload(
         "computed_at": computed_at,
         "fetched_at": computed_at,
         "harvest_coverage": coverage,
+        "partial_buckets": partial_buckets,
         "pulse": pulse,
         "trend_narrative": trend_narrative,
         "top_voices": top_voices,
