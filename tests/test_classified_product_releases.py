@@ -1870,3 +1870,19 @@ def test_retry_does_not_replace_an_unimproved_context_missing_judgment(monkeypat
     selected.refresh_from_db()
     assert selected.outcome == 'context_missing'
     assert selected.selected_final_judgment_id == selected_id
+
+
+def test_explicit_reassessment_can_replace_completed_feed_and_records_reason(monkeypatch):
+    state, publication = captured_publication(monkeypatch)
+    selected = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    prior_id = selected.selected_final_judgment_id
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(
+        claim_run_id='explicit-reassessment', claim_expires_at=timezone.now() + timedelta(minutes=5),
+    )
+    publication['run_id'] = 'explicit-reassessment'
+    publication['force_feed_reassessment'] = True
+    cycle._publish_stage1_classification(**publication)
+    selected.refresh_from_db()
+    assert selected.selected_final_judgment_id != prior_id
+    assert selected.selected_final_judgment.changes_json['feed_replacement_reason'] == 'explicit_reassessment'
+    assert read_publication_findings(state.pk)
