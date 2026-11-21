@@ -142,6 +142,17 @@ services:
         sync: false
       - key: DEEPINFRA_API_KEY
         sync: false
+      # Chatter uses the existing owner account and scheduled collection key.
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: TWITTERAPI_IO_SCHEDULED_API_KEY
+        sync: false
+      - key: PUSHINWEIGHT_X_LIST_CLIENT_ID
+        sync: false
+      - key: PUSHINWEIGHT_X_LIST_CLIENT_SECRET
+        sync: false
+      - key: PUSHINWEIGHT_X_LIST_ENCRYPTION_KEY
+        sync: false
       - key: X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED
         value: "True"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE

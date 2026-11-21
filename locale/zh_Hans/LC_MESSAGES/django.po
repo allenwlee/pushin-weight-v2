@@ -1427,3 +1427,15 @@ msgstr "部分谱系证据无效，需要调查。"
 #: monitor/pulse_views.py
 msgid "Some non-X lineage evidence is pending; automatic recovery is not available yet."
 msgstr "部分非 X 谱系证据仍在等待处理；自动恢复尚不可用。"
+
+msgid "Source language"
+msgstr "来源语言"
+
+msgid "Rest"
+msgstr "其他"
+
+msgid "Giants"
+msgstr "巨头"
+
+msgid "Chatter updates are delayed. The latest available story is shown."
+msgstr "Chatter 更新延迟，当前显示最近发布的报道。"

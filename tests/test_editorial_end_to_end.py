@@ -275,6 +275,24 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
     monkeypatch.setenv("DEEPINFRA_API_KEY", "deepinfra-test-only")
     monkeypatch.setenv("EDITORIAL_CONFIG_PATH", "config/editorial-english-launch.yaml")
     cfg = load_editorial_config()
+    # Keep the legacy shared-editor Chatter path under regression coverage.
+    legacy_route = cfg.routes["chatter"].model_copy(update={
+        "model": "gpt-6-sol",
+        "endpoint": "https://api.openai.com/v1/chat/completions",
+        "key_env": "OPENAI_API_KEY",
+    })
+    cfg = cfg.model_copy(update={
+        "chatter": cfg.chatter.model_copy(update={"enabled": False}),
+        "routes": {**cfg.routes, "chatter": legacy_route},
+        "locale_routes": {
+            name: route.model_copy(update={
+                "model": "gpt-6.1-sol",
+                "endpoint": "https://api.openai.com/v1/chat/completions",
+                "key_env": "OPENAI_API_KEY",
+            })
+            for name, route in cfg.locale_routes.items()
+        },
+    })
     post = Post.objects.create(
         tweet_id="2106428676351090999",
         text="A major model release.",

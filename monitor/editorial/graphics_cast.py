@@ -63,8 +63,11 @@ def cast_manifest(saved, selection):
     assets, gaps, picked = [], [], set()
     for identities in sorted(matches.values(), key=lambda group: -len(next(iter(group.values()))[0])):
         if len(identities) != 1:
-            gaps.append('ambiguous_subject_name')
-            continue
+            source_linked = {person: match for person, match in identities.items() if linked[person]}
+            if len(source_linked) != 1:
+                gaps.append('ambiguous_subject_name')
+                continue
+            identities = source_linked
         person, (name, evidence) = next(iter(identities.items()))
         if person in picked or len(assets) >= 3:
             continue

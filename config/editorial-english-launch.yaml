@@ -43,10 +43,9 @@ routes:
     <<: *factual
     request_profile: editorial_writer_v1
   chatter: &chatter
-    model: gpt-6-sol
-    endpoint: https://api.openai.com/v1/chat/completions
-    # Provision this exact variable from fuchitalee's ~/.env.secrets at launch.
-    key_env: OPENAI_API_KEY
+    model: openai/gpt-6-sol
+    endpoint: https://openrouter.ai/api/v1/chat/completions
+    key_env: OPENROUTER_API_KEY
     reasoning: medium
     vision: true
     # Catalog input $2/M; reserve $2.50/M including the published cache-write rate.
@@ -56,7 +55,7 @@ routes:
 locale_routes:
   chatter:ja: &native_chatter
     <<: *chatter
-    model: gpt-6.1-sol
+    model: openai/gpt-6.1-sol
     reasoning: high
     timeout_seconds: 300
     max_output_tokens: 16384
@@ -64,3 +63,20 @@ locale_routes:
     <<: *native_chatter
 reviewer:
   <<: *native_chatter
+  model: gpt-6.1-sol
+  endpoint: https://api.openai.com/v1/chat/completions
+  key_env: OPENAI_API_KEY
+
+chatter:
+  enabled: true
+  discovery_lane: personalized-trends-v2
+  ranking: &chatter_ranking
+    model: openai/gpt-6-sol
+    endpoint: https://openrouter.ai/api/v1/chat/completions
+    key_env: OPENROUTER_API_KEY
+    reasoning: medium
+    max_output_tokens: 8192
+    timeout_seconds: 180
+    input_usd_per_million: 2.5
+    output_usd_per_million: 10
+  selector: *chatter_ranking

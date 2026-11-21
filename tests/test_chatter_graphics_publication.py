@@ -503,6 +503,7 @@ def test_rolling_edition_owns_one_writer_pitch_and_its_video_inputs(
     row, _, _ = frozen_chatter
     personalized(row, "en", "giant")
     person, _, photo = person_photo("Source Maker", photo=with_cast)
+    person_photo("Source Maker", photo=False)
     subject = "Source Maker announces a preview"
     if image_status == "changed_cast_bytes":
         from core.models import Account

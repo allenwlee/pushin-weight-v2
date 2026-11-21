@@ -56,10 +56,17 @@ def test_manual_watch_command_is_rejected_before_dispatch():
 
 def test_bounded_watch_uses_on_demand_credential_purpose(monkeypatch):
     from pathlib import Path
+
     from django.conf import settings
+
     from monitor.editorial import dispatch
 
-    cfg = watch.watch_profile(watch.load_editorial_config(Path(settings.BASE_DIR) / "config/editorial-chatter-staging.yaml"), *ARGS[2:])
+    cfg = watch.watch_profile(
+        watch.load_editorial_config(
+            Path(settings.BASE_DIR) / "config/editorial-chatter-staging.yaml"
+        ),
+        *ARGS[2:],
+    )
     observed = {}
 
     def reserve(*args, **kwargs):
@@ -67,5 +74,25 @@ def test_bounded_watch_uses_on_demand_credential_purpose(monkeypatch):
         return {"status": "enqueued"}
 
     monkeypatch.setattr(dispatch, "dispatch_chatter_due_slot", reserve)
-    dispatch.dispatch_chatter_cycle("tick", START, kind="scheduled", dry_run=False, cfg=cfg)
+    dispatch.dispatch_chatter_cycle(
+        "tick", START, kind="scheduled", dry_run=False, cfg=cfg
+    )
     assert observed["purpose"] == "on-demand"
+
+
+def test_production_profile_routes_chatter_through_personalized_trends():
+    from pathlib import Path
+
+    from django.conf import settings
+
+    cfg = watch.load_editorial_config(
+        Path(settings.BASE_DIR) / "config/editorial-english-launch.yaml"
+    )
+    assert cfg.chatter.enabled
+    assert cfg.chatter.discovery_lane == "personalized-trends-v2"
+    assert cfg.chatter.trial is None
+    assert cfg.chatter.selector == cfg.chatter.ranking
+    assert cfg.chatter.ranking.model == "openai/gpt-6-sol"
+    assert cfg.routes["chatter"].model == "openai/gpt-6-sol"
+    assert cfg.routes["chatter"].vision
+    assert all(route.key_env == "OPENROUTER_API_KEY" for route in cfg.locale_routes.values())

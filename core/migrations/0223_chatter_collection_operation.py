@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from django.db import migrations
 
-PREVIOUS = import_module("core.migrations.0210_release_acquisition_operation")
+PREVIOUS = import_module("core.migrations.0229_lineage_wakeup_instruction_guard")
 GRAMMAR = dict(PREVIOUS.GRAMMAR, chatter_search={
     "credential_purpose": "string", "workflow_version": "string", "pricing_sha256": "string",
 })
@@ -18,7 +18,7 @@ if FORWARD == PREVIOUS.FORWARD:
 
 
 class Migration(migrations.Migration):
-    dependencies: ClassVar[list] = [("core", "0222_merge_chatter_and_affiliation_permissions")]
+    dependencies: ClassVar[list] = [("core", "0222_merge_chatter_and_affiliation_permissions"), ("core", "0235_each_chart_facts")]
     operations: ClassVar[list] = [
         migrations.RunSQL("SET LOCAL lock_timeout = '5s'", migrations.RunSQL.noop),
         migrations.RunSQL(FORWARD, PREVIOUS.FORWARD),
