@@ -10971,3 +10971,22 @@ class PersonnelChangeDetail(models.Model):
                 name="ck_ed_person_role_owner",
             ),
         ]
+
+
+class SearchProviderCircuit(models.Model):
+    """Durable health and request pacing for a search-provider purpose."""
+
+    purpose = models.CharField(max_length=32, primary_key=True)
+    consecutive_failures = models.PositiveIntegerField(default=0)
+    open_until = models.DateTimeField(null=True, blank=True)
+    probe_lease_until = models.DateTimeField(null=True, blank=True)
+    probe_owner = models.UUIDField(null=True, blank=True)
+    next_fallback_request_at = models.DateTimeField(null=True, blank=True)
+    fallback_owner = models.UUIDField(null=True, blank=True)
+    fallback_lease_until = models.DateTimeField(null=True, blank=True)
+    observed_nonempty_streak = models.PositiveIntegerField(default=0)
+    last_nonempty_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "search_provider_circuits"
