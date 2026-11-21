@@ -756,14 +756,47 @@ def run_case(case, call, *, release_channels=None, max_tokens=parser.CLASSIFIER_
     return _run_prepared_case(case, request, call, release_channels=release_channels)
 
 
-def _run_prepared_case(case, request, call, *, release_channels):
+def _run_prepared_case(case, request, call, *, release_channels, retry_release_only=False):
     extraction = call("ds", request, "extraction")
     prepared = build_jev(case, extraction, release_channels=release_channels)
+    if not prepared["metadata"]["context_valid"] and release_channels is not None:
+        feed = build_jev(case, extraction, release_channels=None)
+        if feed["metadata"]["context_valid"] and not retry_release_only:
+            # Keep the feed judgment while deferring all release decisions.
+            feed["metadata"]["release_error"] = "release_questions_invalid"
+            prepared = feed
+        elif prepared["metadata"].get("release_findings") is not None:
+            release_request = {
+                **prepared["request"],
+                "questions": {key: question for key, question in prepared["request"]["questions"].items()
+                              if key.startswith("release:")},
+            }
+            limits = _context_limits(release_request)
+            if limits["context_valid"] or not release_request["questions"]:
+                # Decode against the full question set: unanswered feed axes
+                # remain invalid, while supported release findings can persist.
+                prepared["metadata"]["context_valid"] = True
+                response = (call("jev", release_request, "classification")
+                            if release_request["questions"] else {})
+                response_answers = response.get("answers") if isinstance(response, dict) else None
+                extras = set(response_answers or {}) - set(release_request["questions"])
+                if extras:
+                    result = finish(case, prepared, {})
+                    result["contract_errors"].append("unexpected_jev_answers")
+                else:
+                    result = finish(case, prepared, response)
+                result["request_stages"] = (["extraction", "classification"]
+                                            if release_request["questions"] else ["extraction"])
+                return result
     if not prepared["metadata"]["context_valid"]:
         result = finish(case, prepared, {})
         result["request_stages"] = ["extraction"]
         return result
     result = finish(case, prepared, call("jev", prepared["request"], "classification"))
+    if (prepared["metadata"].get("release_error") == "release_questions_invalid"
+            and result["publication_result"].get("valid")
+            and not result["publication_result"].get("promotion_unresolved")):
+        result["publication_result"]["release_overflow_deferred"] = True
     result["request_stages"] = ["extraction", "classification"]
     return result
 
@@ -851,13 +884,18 @@ def classify_batch(tweets, brand_registry, client, *, max_tokens, on_batch_error
                                    "input_fingerprints": {case["case_id"]: fingerprint}},
                 )
 
-            output = _run_prepared_case(case, first, call, release_channels=channels)
+            retry_release_only = tweet.get("_overflow_feed_fingerprint") == fingerprint
+            if retry_release_only:
+                output = _run_prepared_case(case, first, call, release_channels=channels, retry_release_only=True)
+            else:
+                output = _run_prepared_case(case, first, call, release_channels=channels)
             if not output["contract_valid"] and not output["publication_result"].get("valid"):
                 partial = output["publication_result"]
                 if partial.get("release_independent_valid"):
                     return {"valid": False, "release_only": True,
                             "release_findings": partial["release_findings"],
                             "release_findings_version": partial["release_findings_version"],
+                            "release_retry_completed": retry_release_only,
                             "classification_model": COMBINED_MODEL}
                 raise ValueError("classification_compressed_invalid:" + ",".join(output["contract_errors"]))
             result = output["publication_result"]

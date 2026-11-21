@@ -674,3 +674,139 @@ def test_disputed_release_attribution_preserves_complete_sibling_judgment(brands
     assert sibling["product_labels"] == ["bug"]
     assert publication["release_findings"][0]["observed_name"] == "Qwen4"
     assert publication["release_findings"][0]["brand_id"] is None
+
+
+def test_release_questions_overflow_keeps_feed_and_marks_release_unresolved():
+    from x_monitor.compressed_classifier import build_jev, run_case
+
+    sample = case()
+    brands = ["qwen"] + [f"brand{i}" for i in range(16)]
+    sample["target_brands"] = brands
+    sample["state"]["tracked_brands"] = [
+        {"brand_id": b, "aliases": [b], "products": [], "accounts": []} for b in brands
+    ]
+    combined = build_jev(sample, extraction(), release_channels=("weights",))
+    feed = build_jev(sample, extraction(), release_channels=None)
+    assert not combined["metadata"]["context_valid"]
+    assert feed["metadata"]["context_valid"]
+    calls = []
+
+    def call(provider, request, stage):
+        calls.append((provider, stage))
+        return extraction() if provider == "ds" else answers(request)
+
+    result = run_case(sample, call, release_channels=("weights",))
+    assert calls == [("ds", "extraction"), ("jev", "classification")]
+    assert result["publication_result"]["valid"]
+    assert set(result["publication_result"]["by_brand"]) == set(brands)
+    assert result["publication_result"]["release_unresolved"]
+    assert not result["publication_result"].get("release_independent_valid")
+
+
+def test_feed_itself_overflows_but_release_fits_and_is_saved_independently():
+    from x_monitor.compressed_classifier import build_jev, run_case
+
+    sample = case()
+    brands = ["qwen"] + [f"brand{i}" for i in range(17)]
+    sample["target_brands"] = brands
+    sample["state"]["tracked_brands"] = [
+        {"brand_id": b, "aliases": [b], "products": [], "accounts": []} for b in brands
+    ]
+    assert not build_jev(sample, extraction(), release_channels=None)["metadata"]["context_valid"]
+    calls = []
+
+    def call(provider, request, stage):
+        calls.append((provider, stage))
+        return extraction() if provider == "ds" else answers(request)
+
+    result = run_case(sample, call, release_channels=("weights",))
+    assert calls == [("ds", "extraction"), ("jev", "classification")]
+    assert not result["publication_result"]["valid"]
+    assert result["publication_result"]["release_independent_valid"]
+    assert result["publication_result"]["release_findings"][0]["observed_name"] == "Qwen4"
+
+
+def test_oversized_source_that_cannot_fit_either_request_sends_no_jev_call():
+    from x_monitor.compressed_classifier import run_case
+
+    sample = case()
+    sample["state"]["source_text"] = "large " * 30000
+    document = extraction()
+    document["entities"] = []
+    document["release_findings"]["findings"] = []
+    calls = []
+
+    def call(provider, request, stage):
+        calls.append((provider, stage))
+        return document
+
+    result = run_case(sample, call, release_channels=("weights",))
+    assert calls == [("ds", "extraction")]
+    assert not result["publication_result"]["valid"]
+    assert result["publication_result"]["release_independent_valid"]
+    assert result["publication_result"]["release_findings"] == ()
+
+
+def test_release_only_response_cannot_supply_unasked_feed_answers():
+    from x_monitor.compressed_classifier import build_jev, run_case
+
+    sample = case()
+    brands = ["qwen"] + [f"brand{i}" for i in range(17)]
+    sample["target_brands"] = brands
+    sample["state"]["tracked_brands"] = [
+        {"brand_id": b, "aliases": [b], "products": [], "accounts": []} for b in brands
+    ]
+    full_request = build_jev(sample, extraction(), release_channels=("weights",))["request"]
+
+    def call(provider, request, stage):
+        if provider == "ds":
+            return extraction()
+        assert all(key.startswith("release:") for key in request["questions"])
+        return answers(full_request)
+
+    result = run_case(sample, call, release_channels=("weights",))
+    assert not result["publication_result"]["valid"]
+    assert not result["publication_result"]["by_brand"]
+    assert "unexpected_jev_answers" in result["contract_errors"]
+
+
+def test_feed_overflow_preserves_valid_empty_release_decision():
+    from x_monitor.compressed_classifier import run_case
+
+    sample = case()
+    brands = ["qwen"] + [f"brand{i}" for i in range(17)]
+    sample["target_brands"] = brands
+    sample["state"]["tracked_brands"] = [
+        {"brand_id": b, "aliases": [b], "products": [], "accounts": []} for b in brands
+    ]
+    document = extraction()
+    document["release_findings"]["findings"] = []
+    calls = []
+
+    def call(provider, request, stage):
+        calls.append((provider, stage))
+        return document if provider == "ds" else answers(request)
+
+    result = run_case(sample, call, release_channels=("weights",))
+    assert calls == [("ds", "extraction")]
+    assert not result["publication_result"]["valid"]
+    assert result["publication_result"]["release_independent_valid"]
+    assert result["publication_result"]["release_findings"] == ()
+
+
+def test_oversized_source_with_nonempty_release_sends_no_oversized_jev_request():
+    from x_monitor.compressed_classifier import run_case
+
+    sample = case()
+    sample["state"]["source_text"] += " large" * 30000
+    calls = []
+
+    def call(provider, request, stage):
+        calls.append((provider, stage))
+        return extraction()
+
+    result = run_case(sample, call, release_channels=("weights",))
+    assert calls == [("ds", "extraction")]
+    assert not result["publication_result"]["valid"]
+    assert not result["publication_result"].get("release_independent_valid")
+    assert "jev_context_overflow" in result["contract_errors"]
