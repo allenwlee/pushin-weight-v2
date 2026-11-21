@@ -152,6 +152,7 @@ from x_monitor.attribution import (
     UNATTRIBUTED_BRAND_ID,
     LLMCallBudgetExhausted,
     MentionRow,
+    _canonical_reviewed_affiliations,
     _two_role_fingerprint,
     _two_role_revisions,
     attribute_to_brands,
@@ -518,6 +519,9 @@ def _persist_classification_trace(
     release_manifest: dict[str, Any] | None = None,
     release_unresolved: bool = False,
     promotion_unresolved: bool = False,
+    promotion_retry_reason: str | None = None,
+    feed_input_fingerprints: dict[str, str] | None = None,
+    feed_replacement_reasons: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Persist primary → review → final history for every attributed brand.
 
@@ -540,6 +544,9 @@ def _persist_classification_trace(
             release_manifest=release_manifest,
             release_unresolved=release_unresolved,
             promotion_unresolved=promotion_unresolved,
+            promotion_retry_reason=promotion_retry_reason,
+            feed_input_fingerprints=feed_input_fingerprints,
+            feed_replacement_reasons=feed_replacement_reasons,
         )
     stages = {
         stage: _trace_stage_payload(trace, stage)
@@ -641,6 +648,9 @@ def _persist_two_role_classification_trace(
     release_manifest: dict[str, Any] | None = None,
     release_unresolved: bool = False,
     promotion_unresolved: bool = False,
+    promotion_retry_reason: str | None = None,
+    feed_input_fingerprints: dict[str, str] | None = None,
+    feed_replacement_reasons: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Persist a matching content + brand-interpretation pair and final atomically."""
     stages = {stage: _trace_stage_payload(trace, stage) for stage in (
@@ -670,6 +680,8 @@ def _persist_two_role_classification_trace(
         metadata["final"]["changes_json"]["release_output"] = validate_output_manifest(release_manifest)
     if observed_revisions == COMPRESSED_CLASSIFIER_REVISIONS and (release_unresolved or promotion_unresolved):
         metadata["final"]["changes_json"]["feed_axes_complete"] = True
+    if promotion_retry_reason:
+        metadata["final"]["changes_json"]["promotion_retry_reason"] = promotion_retry_reason
     expected_revisions = dict(zip(
         ("content", "brand_interpretation", "final"), observed_revisions,
         strict=True,
@@ -783,10 +795,15 @@ def _persist_two_role_classification_trace(
             if not created and any(getattr(row, field) != value for field, value in expected_values.items()):
                 raise ValueError("classification_trace_revision_conflict")
             rows[stage] = row
+        final_metadata = {**metadata["final"], "changes_json": dict(metadata["final"]["changes_json"])}
+        if feed_input_fingerprints and brand_id in feed_input_fingerprints:
+            final_metadata["changes_json"]["feed_input_fingerprint"] = feed_input_fingerprints[brand_id]
+        if feed_replacement_reasons and brand_id in feed_replacement_reasons:
+            final_metadata["changes_json"]["feed_replacement_reason"] = feed_replacement_reasons[brand_id]
         final, created = PostBrandClassificationJudgment.objects.get_or_create(
             post_id=post_id, brand_id=brand_id, revision_id=revision_id, stage="final",
             defaults={
-                "canonical_judgment": final_rows[brand_id], **metadata["final"],
+                "canonical_judgment": final_rows[brand_id], **final_metadata,
                 "parent_judgment": None,
                 "content_judgment": rows["content"],
                 "brand_interpretation_judgment": rows["brand_interpretation"],
@@ -794,10 +811,14 @@ def _persist_two_role_classification_trace(
         )
         expected_final = {
             "post_id": post_id, "brand_id": brand_id, "revision_id": revision_id,
-            "stage": "final", "canonical_judgment": final_rows[brand_id], **metadata["final"],
+            "stage": "final", "canonical_judgment": final_rows[brand_id], **final_metadata,
             "parent_judgment_id": None, "content_judgment_id": rows["content"].pk,
             "brand_interpretation_judgment_id": rows["brand_interpretation"].pk,
         }
+        if not created and isinstance(final.changes_json, dict) and "feed_input_fingerprint" not in final.changes_json:
+            expected_changes = dict(expected_final["changes_json"])
+            expected_changes.pop("feed_input_fingerprint", None)
+            expected_final["changes_json"] = expected_changes
         if not created and any(getattr(final, field) != value for field, value in expected_final.items()):
             raise ValueError("classification_trace_revision_conflict")
         # Foreign-key constraints cannot express "same post/brand/revision".
@@ -1168,6 +1189,7 @@ def _publish_stage1_classification(
     model: str,
     run_id: str,
     cfg: Any | None = None,
+    force_feed_reassessment: bool = False,
 ) -> Any:
     """Atomically publish one already-complete, per-brand Stage 1 result."""
     if isinstance(result, dict) and result.get("release_only") is True:
@@ -1195,11 +1217,6 @@ def _publish_stage1_classification(
         if (claim is None or claim.claim_run_id != str(run_id)[:128]
                 or claim.claim_expires_at is None or claim.claim_expires_at <= django_timezone.now()):
             return None
-        if result.get("release_unresolved") is True:
-            from core.classified_product_releases import _complete_release_publication
-
-            if _complete_release_publication(post_id) is not None:
-                return None
         expected = set(
             PostBrand.objects.filter(post_id=post_id).values_list(
                 "brand_id", flat=True
@@ -1207,6 +1224,48 @@ def _publish_stage1_classification(
         )
         if not expected or set(by_brand) != expected:
             return None
+        prior_states = list(
+            PostBrandClassificationState.objects.filter(post_id=post_id, brand_id__in=expected)
+            .select_related("selected_final_judgment")
+        )
+        feed_input = {
+            key: tweet.get(key)
+            for key in ("text", "english_translation", "context", "source_language", "author_handle")
+        }
+        affiliations = _canonical_reviewed_affiliations(tweet.get("affiliations"))
+        feed_input_fingerprints = {}
+        for brand_id in expected:
+            brand_input = {
+                **feed_input,
+                "brand_id": brand_id,
+                "affiliations": [row for row in affiliations if row["brand_id"] == brand_id],
+            }
+            feed_input_fingerprints[brand_id] = hashlib.sha256(
+                json.dumps(brand_input, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+        feed_replacement_reasons = {}
+        for row in prior_states:
+            final = row.selected_final_judgment
+            if final is None or not isinstance(final.changes_json, dict):
+                continue
+            previous = final.changes_json.get("feed_input_fingerprint")
+            if force_feed_reassessment:
+                feed_replacement_reasons[row.brand_id] = "explicit_reassessment"
+            elif previous and previous != feed_input_fingerprints[row.brand_id]:
+                feed_replacement_reasons[row.brand_id] = "feed_material_source_changed"
+        preserved_brands = {
+            row.brand_id for row in prior_states
+            if not force_feed_reassessment
+            and (
+                row.outcome == "classified"
+                or (row.outcome == "context_missing" and by_brand[row.brand_id].get("outcome") == "context_missing")
+            )
+            and row.selected_final_judgment is not None
+            and isinstance(row.selected_final_judgment.changes_json, dict)
+            and row.selected_final_judgment.validation_state == "validated"
+            and row.selected_final_judgment.changes_json.get("feed_input_fingerprint")
+                in (None, feed_input_fingerprints[row.brand_id])
+        }
         is_v4 = all("audience_topics" in row for row in by_brand.values())
         catalog_revision = str(tweet.get("_classification_catalog_revision") or "")
         if is_v4 and not catalog_revision:
@@ -1225,9 +1284,39 @@ def _publish_stage1_classification(
             tweet,
             tracked_catalog=tracked_catalog,
         )
+        trace = result.get("classification_trace")
+        final_trace = trace.get("final", {}) if isinstance(trace, dict) else {}
+        selector = final_trace.get("selector_version", "") if isinstance(final_trace, dict) else ""
+        if selector:
+            repeated_brands = {
+                row.brand_id for row in prior_states
+                if row.selected_final_judgment is not None
+                and row.selected_final_judgment.revision_id == _classification_revision_id(
+                    post_id=post_id, brand_id=row.brand_id, run_id=run_id,
+                    input_fingerprint=fingerprint, selector_version=selector,
+                )
+            }
+            preserved_brands -= repeated_brands
+            for row in prior_states:
+                if row.brand_id not in repeated_brands or not isinstance(row.selected_final_judgment.changes_json, dict):
+                    continue
+                reason = row.selected_final_judgment.changes_json.get("feed_replacement_reason")
+                if reason:
+                    feed_replacement_reasons[row.brand_id] = reason
+                else:
+                    feed_replacement_reasons.pop(row.brand_id, None)
+        promotion_retry = bool(preserved_brands)
+        if result.get("release_unresolved") is True and not promotion_retry:
+            from core.classified_product_releases import _complete_release_publication
+
+            if _complete_release_publication(post_id) is not None:
+                return None
         canonical = _parse_published_classifications(by_brand, expected)
         if canonical is None:
             return None
+        for row in prior_states:
+            if row.outcome == "context_missing" and canonical[row.brand_id]["outcome"] == "classified":
+                feed_replacement_reasons.setdefault(row.brand_id, "unresolved_feed_improved")
 
         is_v4 = all("audience_topics" in row for row in canonical.values())
         if is_v4:
@@ -1254,6 +1343,21 @@ def _publish_stage1_classification(
 
             release_findings, release_manifest = prepare_publication_findings(post=post, tweet=tweet, result=result)
 
+        if promotion_retry and preserved_brands != expected:
+            from core.classified_product_releases import (
+                persist_release_only,
+                read_publication_findings,
+            )
+
+            prior_release = read_publication_findings(post_id)
+            if prior_release is not None:
+                saved_release = {"valid": False, "release_only": True}
+                if not persist_release_only(
+                    post_id=post_id, tweet=tweet, result=saved_release, model=model,
+                    run_id=run_id, preserve_selected=True,
+                ):
+                    raise ValueError("classification_release_only_not_persisted")
+
         final_judgment_ids = {}
         if "classification_trace" in result:
             final_judgment_ids = _persist_classification_trace(
@@ -1267,6 +1371,12 @@ def _publish_stage1_classification(
                 release_manifest=release_manifest,
                 release_unresolved=result.get("release_unresolved") is True,
                 promotion_unresolved=result.get("promotion_unresolved") is True,
+                promotion_retry_reason=(
+                    "fill_unresolved_promotion"
+                    if promotion_retry and not result.get("promotion_unresolved") else None
+                ),
+                feed_input_fingerprints=feed_input_fingerprints,
+                feed_replacement_reasons=feed_replacement_reasons,
             )
 
         content_provenance = _v4_stage_provenance(
@@ -1295,6 +1405,8 @@ def _publish_stage1_classification(
             else STAGE1_PROMPT_V23_VERSION
         )
         for brand_id, classification in canonical.items():
+            if brand_id in preserved_brands:
+                continue
             PostBrandSignal.objects.filter(
                 post_id=post_id, brand_id=brand_id
             ).delete()
@@ -1353,7 +1465,7 @@ def _publish_stage1_classification(
 
             extension_outcome = persist_v4_extensions(
                 post=post,
-                canonical=canonical,
+                canonical={brand_id: row for brand_id, row in canonical.items() if brand_id not in preserved_brands},
                 result=result,
                 final_judgment_ids=final_judgment_ids,
                 fingerprint=fingerprint,
@@ -1375,10 +1487,22 @@ def _publish_stage1_classification(
             )
             if flag_result.outcome not in {"persisted", "cleared"}:
                 raise ValueError("classifier_flags_invalid")
-        if is_combined and not result.get("release_unresolved"):
+        if is_combined and not result.get("release_unresolved") and not promotion_retry:
             from core.classified_product_releases import persist_publication_findings
 
             persist_publication_findings(post=post, findings=release_findings)
+        elif is_combined and not result.get("release_unresolved") and promotion_retry:
+            from core.classified_product_releases import (
+                _selected_release_publication,
+                persist_release_only,
+            )
+
+            if _selected_release_publication(post_id) is None:
+                release_only = {**result, "valid": False, "release_only": True}
+                if not persist_release_only(
+                    post_id=post_id, tweet=tweet, result=release_only, model=model, run_id=run_id
+                ):
+                    raise ValueError("classification_release_only_not_persisted")
         if cfg is not None and not result.get("release_unresolved") and not result.get("promotion_unresolved"):
             _finish_enrichment_stage(
                 post_ids=[post_id],
@@ -4306,6 +4430,7 @@ class CycleRunner:
                     model=publication_model,
                     run_id=run_id,
                     cfg=enrichment_cfg,
+                    force_feed_reassessment=repair_manifest is not None,
                 )
             except (DatabaseError, ValueError, KeyError) as exc:
                 logger.warning("_run_post_fetch: Stage 1 publish failed for %s: %s", tid, exc)

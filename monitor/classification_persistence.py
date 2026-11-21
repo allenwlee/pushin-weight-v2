@@ -494,7 +494,7 @@ def persist_v4_extensions(
     if not subjects:
         raise ValueError("classification_untracked_promotion_subject_missing")
 
-    primary_final_judgment = final_judgment_ids.get(sorted(canonical)[0]) if final_judgment_ids else None
+    primary_final_judgment = final_judgment_ids[min(final_judgment_ids)] if final_judgment_ids else None
     promotion, _created = PostUntrackedBrandPromotion.objects.update_or_create(
         post=post,
         defaults={
