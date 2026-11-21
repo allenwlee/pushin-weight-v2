@@ -1512,3 +1512,20 @@ def test_on_demand_factory_does_not_fall_back_to_scheduled_key(monkeypatch):
     call = build_discovery_call(cfg, credential_env="DEEPINFRA_ON_DEMAND")
     assert call is not None
     assert call.credential_revision != build_discovery_call(cfg).credential_revision
+
+
+def test_task_staging_guard_accepts_only_exact_fixture_database(monkeypatch):
+    from core.official_company_queue_pass import _environment
+
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "test")
+    identity = {"name": "test_pw_queue_pass_official_20261120", "system_identifier": "7710258162412109863"}
+    monkeypatch.setattr("core.official_company_queue_pass._database_identity", lambda: identity)
+    with pytest.raises(ValueError, match="fixture-only"):
+        _environment()
+    assert _environment(allow_isolated_fixture=True) == "test"
+    identity["name"] = "test_pw_queue_pass_other"
+    with pytest.raises(ValueError, match="fixture-only"):
+        _environment(allow_isolated_fixture=True)
+    identity.update(name="test_pw_queue_pass_official_20261120", system_identifier="7667808775691038771")
+    with pytest.raises(ValueError, match="fixture-only"):
+        _environment(allow_isolated_fixture=True)

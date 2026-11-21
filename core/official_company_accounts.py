@@ -808,15 +808,20 @@ def _hold_existing_tracked_account(state):
     return True
 
 
-def register_account(state_id, *, cfg, select_for_list=False):
-    from django.db import IntegrityError, transaction
-    from django.db.models import Q
-    from django.utils import timezone
+class RegistrationIdentityConflict(ValueError):
+    """The evidence does not uniquely identify an organization."""
+
+
+def registration_slug(name, account):
+    """Derive the scheduled writer's organization key from accepted evidence."""
     from django.utils.text import slugify
 
-    from core.company_labels import set_company_label
+    return slugify(name)[:64] or "lab-" + x_account_identifier(account)
+
+
+def registration_identity(state, account):
+    """Resolve the scheduled writer's identity decisions without writing."""
     from core.models import (
-        Account,
         Brand,
         BrandAccount,
         BrandCompany,
@@ -824,6 +829,95 @@ def register_account(state_id, *, cfg, select_for_list=False):
         Company,
         CompanyAccount,
         CompanyLabel,
+    )
+
+    brands, companies = official_organization_links(account)
+    if len(brands) > 1 or len(companies) > 1:
+        raise RegistrationIdentityConflict("multiple_official_organizations")
+    if (
+        BrandAccount.objects.filter(account=account)
+        .exclude(role_id="official")
+        .exists()
+        or CompanyAccount.objects.filter(account=account)
+        .exclude(role_id="official")
+        .exists()
+    ):
+        raise RegistrationIdentityConflict("conflicting_account_role")
+    brand = brands[0].brand if brands else None
+    company = companies[0].company if companies else None
+    # A reviewed candidate is reusable only when its evidence names this
+    # stable account. A handle or similar name alone is never identity.
+    reviewed = list(
+        BrandDiscoveryCandidate.objects.filter(
+            verification_status="confirmed",
+            reviewed_brand__isnull=False,
+            source_identities__contains=[f"official-company-state:{state.pk}"],
+        )
+        .values_list("reviewed_brand_id", flat=True)
+        .distinct()
+    )
+    if len(reviewed) > 1 or (brand and reviewed and brand.pk != reviewed[0]):
+        raise RegistrationIdentityConflict("conflicting_reviewed_identity")
+    if brand is None and reviewed:
+        brand = Brand.objects.get(pk=reviewed[0])
+    if brand and not company:
+        linked = list(
+            BrandCompany.objects.filter(brand=brand).select_related("company")
+        )
+        if len(linked) > 1:
+            raise RegistrationIdentityConflict("ambiguous_brand_ownership")
+        company = linked[0].company if linked else None
+    if company and not brand:
+        linked = list(
+            BrandCompany.objects.filter(company=company).select_related("brand")
+        )
+        if len(linked) > 1:
+            raise RegistrationIdentityConflict("ambiguous_company_brand")
+        brand = linked[0].brand if linked else None
+    name = state.decision.get("organization_name")
+    if not isinstance(name, str) or not name.strip():
+        raise RegistrationIdentityConflict("organization_name_missing")
+    slug = registration_slug(name, account)
+    from core.publisher_accounts import brand_name_candidates
+
+    if brand is None and brand_name_candidates(name, nickname=slug).exists():
+        raise RegistrationIdentityConflict("existing_brand_identity_collision")
+    if (
+        company is None
+        and (
+            Company.objects.filter(nickname=slug).exists()
+            or CompanyLabel.objects.filter(
+                locale_id="und", label__iexact=name
+            ).exists()
+        )
+    ):
+        raise RegistrationIdentityConflict("existing_company_identity_collision")
+    if (
+        brand
+        and company
+        and BrandCompany.objects.filter(brand=brand)
+        .exclude(company=company)
+        .exists()
+    ):
+        raise RegistrationIdentityConflict("inconsistent_organization_edges")
+    return brand, company, name, slug
+
+
+def register_account(
+    state_id, *, cfg, select_for_list=False, preserve_list_intents=False,
+    propagate_conflicts=False, expected_role_creation=None, expected_actions=None,
+):
+    from django.db import IntegrityError, transaction
+    from django.utils import timezone
+
+    from core.company_labels import set_company_label
+    from core.models import (
+        Account,
+        Brand,
+        BrandAccount,
+        BrandDiscoveryCandidate,
+        Company,
+        CompanyAccount,
         OfficialCompanyAccountState,
         OfficialCompanyListIntent,
         Role,
@@ -831,9 +925,8 @@ def register_account(state_id, *, cfg, select_for_list=False):
 
     if not cfg.registration_enabled:
         return None
-
-    class IdentityConflict(ValueError):
-        pass
+    if preserve_list_intents and select_for_list:
+        raise ValueError("cannot select a list while preserving list intents")
 
     try:
         with transaction.atomic():
@@ -846,99 +939,62 @@ def register_account(state_id, *, cfg, select_for_list=False):
                 return None
             account = Account.objects.select_for_update().get(pk=state.account_id)
             x_account_identifier(account)
-            brands, companies = official_organization_links(account)
-            if len(brands) > 1 or len(companies) > 1:
-                raise IdentityConflict("multiple_official_organizations")
-            if (
-                BrandAccount.objects.filter(account=account)
-                .exclude(role_id="official")
-                .exists()
-                or CompanyAccount.objects.filter(account=account)
-                .exclude(role_id="official")
-                .exists()
-            ):
-                raise IdentityConflict("conflicting_account_role")
-            brand = brands[0].brand if brands else None
-            company = companies[0].company if companies else None
-            # A reviewed candidate is reusable only when its evidence names this
-            # stable account. A handle or similar name alone is never identity.
-            reviewed = list(
-                BrandDiscoveryCandidate.objects.filter(
-                    verification_status="confirmed",
-                    reviewed_brand__isnull=False,
-                    source_identities__contains=[f"official-company-state:{state.pk}"],
+            name_for_lock = state.decision.get("organization_name")
+            if isinstance(name_for_lock, str) and name_for_lock.strip():
+                from core.organization_identity_locks import (
+                    acquire_writer_identity_locks,
+                    organization_lock_keys,
                 )
-                .values_list("reviewed_brand_id", flat=True)
-                .distinct()
-            )
-            if len(reviewed) > 1 or (brand and reviewed and brand.pk != reviewed[0]):
-                raise IdentityConflict("conflicting_reviewed_identity")
-            if brand is None and reviewed:
-                brand = Brand.objects.get(pk=reviewed[0])
-            if brand and not company:
-                linked = list(
-                    BrandCompany.objects.filter(brand=brand).select_related("company")
-                )
-                if len(linked) > 1:
-                    raise IdentityConflict("ambiguous_brand_ownership")
-                company = linked[0].company if linked else None
-            if company and not brand:
-                linked = list(
-                    BrandCompany.objects.filter(company=company).select_related("brand")
-                )
-                if len(linked) > 1:
-                    raise IdentityConflict("ambiguous_company_brand")
-                brand = linked[0].brand if linked else None
-            name = state.decision.get("organization_name")
-            if not isinstance(name, str) or not name.strip():
-                raise IdentityConflict("organization_name_missing")
-            slug = slugify(name)[:64] or "lab-" + x_account_identifier(account)
-            if (
-                brand is None
-                and Brand.objects.filter(
-                    Q(nickname=slug) | Q(display_name__iexact=name)
-                ).exists()
+
+                acquire_writer_identity_locks(organization_lock_keys(
+                    name=name_for_lock, nickname=registration_slug(name_for_lock, account),
+                    account=account.pk, state=state.pk,
+                ))
+            brand, company, name, slug = registration_identity(state, account)
+            if expected_actions is not None and (
+                (brand is None) != (expected_actions["brand_action"] == "create")
+                or (company is None) != (expected_actions["company_action"] == "create")
             ):
-                raise IdentityConflict("existing_brand_identity_collision")
-            if (
-                company is None
-                and (
-                    Company.objects.filter(nickname=slug).exists()
-                    or CompanyLabel.objects.filter(
-                        locale_id="und", label__iexact=name
-                    ).exists()
-                )
-            ):
-                raise IdentityConflict("existing_company_identity_collision")
-            if (
-                brand
-                and company
-                and BrandCompany.objects.filter(brand=brand)
-                .exclude(company=company)
-                .exists()
-            ):
-                raise IdentityConflict("inconsistent_organization_edges")
-            role, _ = Role.objects.get_or_create(key="official")
+                raise RegistrationIdentityConflict("organization_action_changed")
+            role, role_created = Role.objects.get_or_create(key="official")
+            if expected_role_creation is not None and role_created != expected_role_creation:
+                raise RegistrationIdentityConflict("official_role_changed")
             new_organization = brand is None and company is None
             if brand is None:
+                if preserve_list_intents:
+                    from core.publisher_accounts import brand_name_candidates
+
+                    if brand_name_candidates(name, nickname=slug).exists():
+                        raise RegistrationIdentityConflict("existing_brand_identity_collision")
                 brand = Brand.objects.create(nickname=slug, display_name=name)
             if company is None:
                 company = Company.objects.create(nickname=slug)
                 set_company_label(company, "und", name)
-            BrandAccount.objects.get_or_create(
+            _, brand_link_created = BrandAccount.objects.get_or_create(
                 brand=brand, account=account, defaults={"role": role}
             )
-            CompanyAccount.objects.get_or_create(
+            _, company_link_created = CompanyAccount.objects.get_or_create(
                 company=company, account=account, defaults={"role": role}
             )
+            if expected_actions is not None and (
+                brand_link_created != (expected_actions["brand_account_action"] == "create")
+                or company_link_created != (expected_actions["company_account_action"] == "create")
+            ):
+                raise RegistrationIdentityConflict("account_link_action_changed")
             if new_organization:
                 from core.publisher_accounts import link_brand_company
 
-                link_brand_company(brand=brand, company=company)
+                _, edge_created = link_brand_company(brand=brand, company=company)
+                if expected_actions is not None and edge_created != (
+                    expected_actions["brand_company_action"] == "create"
+                ):
+                    raise RegistrationIdentityConflict("organization_link_action_changed")
             state.registered_brand = brand
             state.registered_company = company
             state.status = "registered"
             state.save()
+            if preserve_list_intents:
+                return state.pk
             intent = OfficialCompanyListIntent.objects.select_for_update().filter(
                 list_id=int(cfg.list_id), account=account
             ).first()
@@ -973,14 +1029,16 @@ def register_account(state_id, *, cfg, select_for_list=False):
                 intent.attempts = 0
                 intent.save()
             return intent.pk if select_for_list else state.pk
-    except (IdentityConflict, IntegrityError, ValueError) as exc:
+    except (IntegrityError, ValueError) as exc:
+        if propagate_conflicts:
+            raise
         with transaction.atomic():
             state = OfficialCompanyAccountState.objects.select_for_update().get(
                 pk=state_id
             )
             state.status = "review_needed"
             state.last_error = (
-                str(exc) if isinstance(exc, IdentityConflict) else type(exc).__name__
+                str(exc) if isinstance(exc, RegistrationIdentityConflict) else type(exc).__name__
             )
             state.save()
             name = state.decision.get("organization_name")
