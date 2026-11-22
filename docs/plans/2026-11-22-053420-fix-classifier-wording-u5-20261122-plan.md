@@ -38,7 +38,7 @@ Occupied staging: if a staged route finds `staging` in use by an unrelated relea
 
 ## Delivery Exceptions
 
-U4 is open for review and must not be merged by this task. Preserve its approved identity behavior in the comparison; do not claim U4 is deployed. Use an independent branch off current main. No production writes, backfills, schema changes, or provider calls beyond the separately approved U5 experiment. The experiment's total paid-call cap is $20; project cost before dispatch and record actual spend as calls complete. Stop before a projected or actual overrun. The user has not authorized merging U4.
+U4 is open for review and must not be merged by this task. Preserve its approved identity behavior in the comparison; do not claim U4 is deployed. This branch started independently from current main, then was rebased on U4 for combined testing because U4 remains unmerged. Its PR targets the U4 branch so its diff contains only U5. No production writes, backfills, schema changes, or provider calls beyond the separately approved U5 experiment. The experiment's total paid-call cap is $20; project cost before dispatch and record actual spend as calls complete. Stop before a projected or actual overrun. The user has not authorized merging U4.
 
 # Goal
 
@@ -65,3 +65,5 @@ Current wording agreed with the owner's expected outcome on 3/4 cases; longer Me
 A second frozen, synthetic control set covers Meta-the-company, the Muse app, generic meta analysis and a person's muse. Both wordings matched all four expected outcomes; no new false match appeared in these controls. Its eight calls had a $1.167065088 conservative upper bound plus the prior actual usage. Across both trials, 16 calls used $0.002299416 calculated from provider-reported input tokens and the published rate; each reservation and amount is recorded in the local ledgers. No retry was made. These controls are deliberately simple and cannot establish broad model accuracy.
 
 Historical saved scoring reproduces the separate 117-case exact results: full versus shortened wording 54 versus 47 for type, 78 versus 72 for topic, and 91 versus 90 for sentiment. Their historical models, inputs and selector differ from the current prompt; do not attribute those scores to this candidate or the November 21 cohort. Both archives report 4/4 controls.
+
+All 121 historical request pairs (117 scored cases and four controls) use the same model and ordered question IDs, but all 121 also differ in the shared `state.rules` field. Their score difference therefore cannot be attributed solely to question length. The new four-post and four-control trials freeze the same shared state within each pair and alter only the three identity-question instructions; they are separate, much smaller experiments.

@@ -2135,6 +2135,6 @@ def test_v3_retry_preserves_v2_brand_and_release_while_sibling_improves(monkeypa
     sibling.refresh_from_db()
     assert first.selected_final_judgment_id == selected_id
     assert sibling.outcome == "classified"
-    assert sibling.selected_final_judgment.prompt_version == "compressed8-pulse-merge-v3"
+    assert sibling.selected_final_judgment.prompt_version == "compressed8-pulse-merge-v4"
     assert read_publication_findings(state.pk)[0]["finding"] == old_release[0]["finding"]
     assert selected_release_revision(state.pk)["content_fingerprint"] == old_fingerprint
