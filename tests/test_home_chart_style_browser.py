@@ -252,7 +252,7 @@ class HomeChartCoverageAxisBrowserTests(StaticLiveServerTestCase):
         self.harvested = timezone.now() - timedelta(minutes=47)
         seed_general_style_home(self, harvested_at=self.harvested)
 
-    def test_one_day_axis_ends_at_harvest_coverage_not_request_time(self) -> None:
+    def test_one_day_axis_ends_at_current_closed_boundary_not_stale_coverage(self) -> None:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -266,12 +266,25 @@ class HomeChartCoverageAxisBrowserTests(StaticLiveServerTestCase):
                         state["payload"]["harvest_coverage"]["chart_end_at"],
                         coverage_end.isoformat(),
                     )
+                    axis_end = closed_five_minute_boundary(timezone.now())
+                    self.assertEqual(
+                        state["payload"]["days"][-1],
+                        (axis_end - timedelta(minutes=5)).isoformat(),
+                    )
+                    self.assertGreater(len(state["payload"]["days"]), 280)
                     expected = page.evaluate(
                         "([end, locale]) => window.pwTime.clockText(new Date(end), locale)",
-                        [coverage_end.isoformat(), locale],
+                        [axis_end.isoformat(), locale],
                     )
                     self.assertEqual(state["lastTick"], expected)
                     self.assertRegex(state["lastTick"], pattern)
+                    self.assertNotEqual(
+                        state["lastTick"],
+                        page.evaluate(
+                            "([end, locale]) => window.pwTime.clockText(new Date(end), locale)",
+                            [coverage_end.isoformat(), locale],
+                        ),
+                    )
                     run.context.close()
             finally:
                 browser.close()

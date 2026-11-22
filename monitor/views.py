@@ -504,17 +504,15 @@ def _dashboard_now() -> datetime:
 
 
 def _one_day_chart_end(at: datetime, coverage: dict[str, str] | None) -> datetime:
-    """End the 1-day series at searched coverage, or at staging's review clock."""
+    """End the 1-day series at the latest closed five-minute boundary.
+
+    Harvest coverage is still attached to the payload for context, but a stale
+    or missing completed cycle must not freeze or empty the chart.
+    """
     from monitor.harvest_coverage import closed_five_minute_boundary
 
-    start = closed_five_minute_boundary(at) - timedelta(days=1)
-    if coverage:
-        return max(start, datetime.fromisoformat(coverage["chart_end_at"]))
-    if settings.OLLIJA_STAGING_MODE:
-        # Copied snapshots carry no scheduled-harvest records; the review
-        # clock already marks where the copied posts end.
-        return closed_five_minute_boundary(at)
-    return start
+    del coverage
+    return closed_five_minute_boundary(at)
 
 
 # ============================================================================
