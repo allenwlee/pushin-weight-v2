@@ -86,6 +86,7 @@ def test_captured_twex_page_normalizes_and_tags_cursor():
     import json
     from pathlib import Path
     from types import SimpleNamespace
+
     from monitor.backfill_prefetch import CapturedPage
     body = json.loads((Path(__file__).parent / "fixtures/twexapi/search-page.json").read_text())
     request = SimpleNamespace(endpoint_url="https://api.twexapi.io/twitter/advanced_search/page", received_at=None,
@@ -98,13 +99,15 @@ def test_captured_twex_page_normalizes_and_tags_cursor():
 def test_twex_prefetch_accounts_one_physical_call_and_raw_receipt(monkeypatch):
     import json
     from pathlib import Path
+
     from monitor.backfill_prefetch import PrefetchRoute, fetch_page
     from x_monitor.x_client import XClient
     body = json.loads((Path(__file__).parent / "fixtures/twexapi/search-page.json").read_text())
     raw = json.dumps(body).encode()
     class Response:
         status_code = 200
-        headers = {}
+        @property
+        def headers(self): return {}
         content = raw
         def json(self): return body
     calls = []
@@ -118,6 +121,7 @@ def test_twex_prefetch_accounts_one_physical_call_and_raw_receipt(monkeypatch):
 def test_known_busy_prefetch_empty_is_unresolved_not_a_success(monkeypatch):
     from datetime import UTC, datetime
     from types import SimpleNamespace
+
     from monitor.backfill_prefetch import Prefetcher, PrefetchRoute, TransportResult
     class Circuit:
         def observe_query(self, query, *, nonempty, now): return True
