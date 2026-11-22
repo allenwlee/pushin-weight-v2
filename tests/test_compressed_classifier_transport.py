@@ -38,7 +38,7 @@ def test_selected_batch_entry_uses_two_accounted_calls_and_versioned_trace(optio
     assert dispatches[0]["max_tokens"] == expected_max_tokens
     assert make_extraction_request(sample, release_channels=Client.release_channels, **options)["max_tokens"] == expected_max_tokens
     assert all(row["_batch_context"]["post_ids"] == [sample["case_id"]] for row in dispatches)
-    assert result["classification_trace"]["final"]["prompt_version"] == "compressed8-pulse-merge-v3"
+    assert result["classification_trace"]["final"]["prompt_version"] == "compressed8-pulse-merge-v4"
     assert result["release_findings"][0]["observed_name"] == "Qwen4"
 
 

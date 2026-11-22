@@ -28,6 +28,7 @@ from x_monitor import attribution as parser
 from x_monitor.compressed_classifier_prompts import (
     CHANNEL_MEANINGS,
     EXTRACTION,
+    META_IDENTITY_QUESTIONS,
     QUESTIONS,
     RELEASE_EXTRACTION,
     RULES,
@@ -250,7 +251,8 @@ def _umbrella(request, state, targets, question_map):
         for key, qid in question_map[brand].items():
             if key not in POST_QUESTIONS:
                 question = request["questions"][qid]
-                question["instructions"] = QUESTIONS[key].format(b=scope)
+                wording = META_IDENTITY_QUESTIONS.get(key, QUESTIONS[key]) if brand == "llama" else QUESTIONS[key]
+                question["instructions"] = wording.format(b=scope)
     request["state"]["umbrella_meaning"] = (
         "Each target ID is a database key for a tracked company and its product umbrella. "
         "The matched names are members of that target, not separate targets. Judge the relevant company or product mentioned in the source; "
