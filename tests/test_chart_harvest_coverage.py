@@ -87,7 +87,7 @@ def record_harvest(
 
 
 @pytest.mark.parametrize("locale", ["en", "zh_cn", "zh_hans", "ja"])
-def test_both_chart_routes_end_at_last_closed_searched_bucket(client, locale):
+def test_both_chart_routes_end_at_latest_closed_boundary(client, locale):
     brand = Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
     run = record_harvest(NOW.replace(minute=31, second=43), optional=True)
     for tweet_id, minutes in (("covered", 13), ("too-new", 1)):
@@ -108,7 +108,11 @@ def test_both_chart_routes_end_at_last_closed_searched_bucket(client, locale):
                 data["harvest_coverage"]["searched_through"]
                 == "2026-10-27T08:31:43+00:00"
             )
-            assert data["days"][-1] == "2026-10-27T08:25:00+00:00"
+            # Coverage ended at 08:30, but the axis follows the request clock
+            # (08:42 -> last closed bucket start 08:35). The 08:41 post is still
+            # past that closed boundary, so it stays off the chart.
+            assert data["days"][-1] == "2026-10-27T08:35:00+00:00"
+            assert len(data["days"]) == 288
             totals = data["totals"]
             assert sum(totals.values() if isinstance(totals, dict) else totals) == 1
 
@@ -125,17 +129,18 @@ def test_failed_or_partial_cycle_does_not_advance_chart_coverage(failure):
     assert latest_scheduled_coverage(NOW)["run_id"] == str(earlier.pk)
 
 
-def test_empty_search_is_coverage_and_unknown_is_not_a_zero_count_chart(client):
+def test_empty_search_is_coverage_and_missing_coverage_still_fills_the_axis(client):
     Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
     with patch("monitor.views._dashboard_now", return_value=NOW):
         _clear_home_pulse_cache()
         unknown = client.get("/chart/", {"window": 1}, secure=True).json()
-        assert unknown["days"] == []
         assert unknown["harvest_coverage"] is None
+        assert unknown["days"][-1] == "2026-10-27T08:35:00+00:00"
+        assert len(unknown["days"]) == 288
         run = record_harvest(NOW - timedelta(minutes=5))
         known = client.get("/chart/", {"window": 1}, secure=True).json()
         assert known["harvest_coverage"]["run_id"] == str(run.pk)
-        assert known["days"]
+        assert known["days"][-1] == unknown["days"][-1]
         assert not any(known["series"]["deepseek"])
 
 
@@ -166,5 +171,25 @@ def test_new_complete_run_invalidates_cached_chart_without_changing_request_time
         latest = record_harvest(NOW - timedelta(minutes=5))
         second = client.get("/chart/", {"window": 1}, secure=True).json()
     assert first["computed_at"] == second["computed_at"]
+    assert first["days"][-1] == "2026-10-27T08:35:00+00:00"
+    assert second["days"] == first["days"]
     assert second["harvest_coverage"]["run_id"] == str(latest.pk)
-    assert len(second["days"]) - len(first["days"]) == 3
+    assert first["harvest_coverage"]["run_id"] != second["harvest_coverage"]["run_id"]
+
+
+def test_stale_coverage_cycle_does_not_freeze_chart_end(client):
+    Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
+    stale = record_harvest(NOW - timedelta(hours=18))
+    post = Post.objects.create(
+        tweet_id="after-coverage", created_at=NOW - timedelta(minutes=8)
+    )
+    PostBrand.objects.create(post=post, brand=Brand.objects.get(nickname="deepseek"))
+    _clear_home_pulse_cache()
+    with patch("monitor.views._dashboard_now", return_value=NOW):
+        data = client.get("/chart/", {"window": 1}, secure=True).json()
+    assert data["harvest_coverage"]["run_id"] == str(stale.pk)
+    assert data["days"][-1] == "2026-10-27T08:35:00+00:00"
+    assert len(data["days"]) == 288
+    # The stale cycle ended ~18 hours ago; a later post still appears on the axis.
+    assert data["series"]["deepseek"][-2] == 1
+    assert sum(data["series"]["deepseek"]) == 1
