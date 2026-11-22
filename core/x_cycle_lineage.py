@@ -276,7 +276,9 @@ class ScheduledCycleLineage:
             attempt = run.attempts.get(pk=self.claim.attempt_id)
             return begin_request(
                 attempt, scope, endpoint_url=endpoint_url,
-                cursor=params.get("cursor"),
+                method="POST" if endpoint_url.startswith("https://api.twexapi.io/") else "GET",
+                cursor=params.get("cursor") or params.get("next_cursor"),
+                request_config=params.get("_credential_purpose"),
                 requested_start_at=scope.requested_start_at,
                 requested_end_at=scope.requested_end_at,
             )
@@ -315,7 +317,7 @@ class ScheduledCycleLineage:
             "scheduled provider already has an exchange owner",
         )
         api.on_exchange_start = lambda path, params: self.begin_exchange(
-            scope_id, endpoint_url=f"{api.base_url}{path}", params=params,
+            scope_id, endpoint_url=path if path.startswith("https://") else f"{api.base_url}{path}", params=params,
         )
         api.on_exchange_finish = self.finish_exchange
 

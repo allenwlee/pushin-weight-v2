@@ -233,3 +233,101 @@ def test_no_bytes_for_concurrent_responses_makes_no_request(http_pages, monkeypa
         execute_job(job.pk, collection_options={"concurrency": 20})
     assert not state["requests"]
     assert not CollectionRequest.objects.exists()
+
+
+def test_staging_uses_twex_after_both_twitter_circuits_fail(pipeline, monkeypatch):  # noqa: F811
+    import json
+    from datetime import UTC, datetime
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient
+    from monitor.backfill_prefetch import PrefetchRoute, TransportResult
+    from tests.test_backfill_prefetch import REAL_FROM_ENV
+
+    job = staged_job(monkeypatch, 1)
+    monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "fixture-ondemand")
+    monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "fixture-scheduled")
+    monkeypatch.setenv("TWEXAPI_API_KEY", "fixture-twex")
+    monkeypatch.setenv("TWEXAPI_BREAKER_FAILURE_THRESHOLD", "1")
+    monkeypatch.delenv("X_DATA_PROVIDER_ORDER", raising=False)
+    monkeypatch.setattr(XClient, "from_env", classmethod(REAL_FROM_ENV))
+    router = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+    for circuit in router.provider_circuits.values():
+        circuit.record_failure(datetime.now(UTC))
+    calls = []
+    def fetch(route, params, *, max_bytes, timeout):
+        assert isinstance(route, PrefetchRoute)
+        calls.append(route.name)
+        raw = json.dumps({"code": 200, "data": [{"tweet_id": "991", "full_text": "Qwen release", "lang": "en", "created_at": "Sun Aug 09 00:10:00 +0000 2026", "user": {"screen_name": "tester"}}], "has_next_page": False, "next_cursor": None}).encode()
+        return TransportResult(raw, {"status_code": 200, "raw_results": 1, "response_bytes": len(raw), "provider": "twexapi"}, None, datetime.now(UTC), 0.01)
+    monkeypatch.setattr("monitor.backfill_staging.fetch_page", fetch)
+    report = execute_job(job.pk, collection_options={"concurrency": 1})
+    assert report["collection_drained"] and calls == ["twexapi"]
+    receipt = CollectionRequest.objects.get(attempt__run__job=job)
+    assert receipt.http_method == "POST" and receipt.endpoint_url == "https://api.twexapi.io/twitter/advanced_search/page"
+    assert receipt.archive_id is None and Post.objects.filter(pk="991").exists()
+
+
+@pytest.mark.parametrize("failure_status", [401, 503])
+def test_staging_records_each_failure_before_switching_to_next_provider(pipeline, monkeypatch, failure_status):  # noqa: F811
+    import json
+    from datetime import UTC, datetime
+    from x_monitor.x_client import XClient
+    from monitor.backfill_prefetch import PrefetchRoute, TransportResult
+    from tests.test_backfill_prefetch import REAL_FROM_ENV
+    job = staged_job(monkeypatch, 1)
+    monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "fixture-ondemand")
+    monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "fixture-scheduled")
+    monkeypatch.setenv("TWEXAPI_API_KEY", "fixture-twex")
+    monkeypatch.setenv("TWEXAPI_BREAKER_FAILURE_THRESHOLD", "1")
+    monkeypatch.delenv("X_DATA_PROVIDER_ORDER", raising=False)
+    monkeypatch.setattr(XClient, "from_env", classmethod(REAL_FROM_ENV))
+    calls = []
+    def fetch(route, params, *, max_bytes, timeout):
+        assert isinstance(route, PrefetchRoute)
+        calls.append(route.name)
+        if route.name != "twexapi":
+            raw = json.dumps({"error": failure_status}).encode()
+            return TransportResult(raw, {"status_code": failure_status, "raw_results": 0, "response_bytes": len(raw)}, "XClientAuthError" if failure_status == 401 else "XClientServerError", datetime.now(UTC), 0.01)
+        raw = json.dumps({"code": 200, "data": [{"tweet_id": "992", "full_text": "Qwen release", "lang": "en", "created_at": "Sun Aug 09 00:10:00 +0000 2026", "user": {"screen_name": "tester"}}], "has_next_page": False, "next_cursor": None}).encode()
+        return TransportResult(raw, {"status_code": 200, "raw_results": 1, "response_bytes": len(raw), "provider": "twexapi"}, None, datetime.now(UTC), 0.01)
+    monkeypatch.setattr("monitor.backfill_staging.fetch_page", fetch)
+    report = execute_job(job.pk, collection_options={"concurrency": 1})
+    assert report["collection_drained"]
+    assert calls == ["twitterapi:on_demand", "twitterapi:scheduled", "twexapi"]
+    receipts = list(CollectionRequest.objects.filter(attempt__run__job=job).order_by("ordinal"))
+    assert [r.http_status for r in receipts] == [failure_status, failure_status, 200]
+    assert [r.http_method for r in receipts] == ["GET", "GET", "POST"]
+    assert all(r.accounting_complete for r in receipts)
+    assert Post.objects.filter(pk="992").exists()
+
+
+def test_staging_twex_pagination_waits_and_keeps_cursor(pipeline, monkeypatch):  # noqa: F811
+    import json
+    from datetime import UTC, datetime
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient
+    from monitor.backfill_prefetch import PrefetchRoute, TransportResult
+    from tests.test_backfill_prefetch import REAL_FROM_ENV
+    job = staged_job(monkeypatch, 1)
+    monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "fixture-ondemand")
+    monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "fixture-scheduled")
+    monkeypatch.setenv("TWEXAPI_API_KEY", "fixture-twex")
+    monkeypatch.setenv("TWEXAPI_BREAKER_FAILURE_THRESHOLD", "1")
+    monkeypatch.setenv("TWEXAPI_INTERVAL_SECONDS", "0.1")
+    monkeypatch.delenv("X_DATA_PROVIDER_ORDER", raising=False)
+    monkeypatch.setattr(XClient, "from_env", classmethod(REAL_FROM_ENV))
+    router = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+    for circuit in router.provider_circuits.values(): circuit.record_failure(datetime.now(UTC))
+    calls = []
+    def fetch(route, params, *, max_bytes, timeout):
+        assert isinstance(route, PrefetchRoute) and route.name == "twexapi"
+        calls.append(params.get("cursor"))
+        first = len(calls) == 1
+        raw = json.dumps({"code": 200, "data": [{"tweet_id": "993" if first else "994", "full_text": "Qwen release", "lang": "en", "created_at": "Sun Aug 09 00:10:00 +0000 2026", "user": {"screen_name": "tester"}}], "has_next_page": first, "next_cursor": "cursor-twex" if first else None}).encode()
+        return TransportResult(raw, {"status_code": 200, "raw_results": 1, "response_bytes": len(raw), "provider": "twexapi"}, None, datetime.now(UTC), 0.01)
+    monkeypatch.setattr("monitor.backfill_staging.fetch_page", fetch)
+    report = execute_job(job.pk, collection_options={"concurrency": 1})
+    assert report["collection_drained"] and calls == [None, "cursor-twex"]
+    receipts = list(CollectionRequest.objects.filter(attempt__run__job=job).order_by("ordinal"))
+    assert receipts[1].cursor_before == "twexapi:cursor-twex"
+    assert set(Post.objects.filter(pk__in=["993", "994"]).values_list("pk", flat=True)) == {"993", "994"}

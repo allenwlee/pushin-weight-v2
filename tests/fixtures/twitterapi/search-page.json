@@ -1,0 +1,88 @@
+{
+  "tweets": [
+    {
+      "type": "tweet",
+      "id": "2124251193518006466",
+      "url": "https://x.com/5fakb48/status/2124251193518006466",
+      "twitterUrl": "https://twitter.com/5fakb48/status/2124251193518006466",
+      "text": "I have given Gemini Neon the hardest problems in data science possible today.\n\nI will have a review end of month. I had like 2 weeks to serious profits with a Kimi level model doing finishing details, however Neon is making amazing little quality of life upgrades as it goes.",
+      "source": "",
+      "retweetCount": 0,
+      "replyCount": 0,
+      "likeCount": 0,
+      "quoteCount": 0,
+      "viewCount": 4,
+      "createdAt": "Sat Nov 21 21:18:45 +0000 2026",
+      "lang": "en",
+      "bookmarkCount": 0,
+      "isReply": false,
+      "possiblySensitive": false,
+      "inReplyToId": null,
+      "conversationId": "2124251193518006466",
+      "displayTextRange": [
+        0,
+        275
+      ],
+      "inReplyToUserId": null,
+      "inReplyToUsername": null,
+      "author": {
+        "type": "user",
+        "userName": "5fakb48",
+        "url": "https://x.com/5fakb48",
+        "twitterUrl": "https://twitter.com/5fakb48",
+        "id": "819616436037545988",
+        "name": "GW IS NOT REAL / BACKRUNPAPI5",
+        "isVerified": false,
+        "isBlueVerified": false,
+        "verifiedType": null,
+        "profilePicture": "https://pbs.twimg.com/profile_images/2119600119158824962/wBl_8tiA_normal.jpg",
+        "coverPicture": "https://pbs.twimg.com/profile_banners/819616436037545988/1776006782",
+        "description": "",
+        "location": "Schizo World TRNC",
+        "followers": 1122,
+        "following": 2257,
+        "status": "",
+        "canDm": false,
+        "canMediaTag": false,
+        "createdAt": "Thu Jan 12 18:46:00 +0000 2017",
+        "entities": {
+          "description": {
+            "urls": []
+          },
+          "url": {}
+        },
+        "fastFollowersCount": 0,
+        "favouritesCount": 14426,
+        "hasCustomTimelines": true,
+        "isTranslator": false,
+        "mediaCount": 1114,
+        "statusesCount": 10025,
+        "withheldInCountries": [],
+        "affiliatesHighlightedLabel": {},
+        "possiblySensitive": false,
+        "pinnedTweetIds": [
+          "2121277462160056451"
+        ],
+        "profile_bio": {
+          "description": "Chairman of Memetic Warfare \n\n$MDINU maximalist / stay purple\n\n📤📨 API Transfer Station 📨📥\n\n//assembly//\n\nUNIX Maximalist",
+          "entities": {
+            "description": {}
+          }
+        },
+        "isAutomated": false,
+        "automatedBy": null
+      },
+      "extendedEntities": {},
+      "card": null,
+      "place": {},
+      "entities": {},
+      "isRetweet": false,
+      "isQuote": false,
+      "quoted_tweet": null,
+      "retweeted_tweet": null,
+      "article": null
+    }
+  ],
+  "has_next_page": true,
+  "next_cursor": "fixture-cursor"
+}

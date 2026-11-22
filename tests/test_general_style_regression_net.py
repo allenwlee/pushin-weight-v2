@@ -83,6 +83,9 @@ def _apply_intended(value: Any) -> Any:
         return value
     if isinstance(value, dict):
         result = {key: _apply_intended(item) for key, item in value.items()}
+        if "harvest_coverage" in value and "colors" in value and "days" in value:
+            # This baseline has fresh completed coverage; no tail is partial.
+            result["partial_buckets"] = ([False] * len(value["days"]) if value.get("window_days") == 1 else [])
         if value.get("tab") == "lang" and "zh" not in result["series"]:
             # The fixture has detected languages on every post. The new source-only
             # series is empty and sorts next to Simplified Chinese at the same count.

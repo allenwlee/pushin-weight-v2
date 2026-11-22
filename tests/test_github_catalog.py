@@ -902,7 +902,10 @@ def test_authenticated_draft_releases_never_enter_saved_public_evidence():
 @pytest.mark.django_db(transaction=True)
 def test_saved_github_release_detection_waits_for_pulse_identity_resume(settings, monkeypatch, tmp_path):
     from core import models
-    from core.product_release_source_queue import drain_observations, enqueue_saved_observations
+    from core.product_release_source_queue import (
+        drain_observations,
+        enqueue_saved_observations,
+    )
     from monitor import pulse_control
 
     settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False

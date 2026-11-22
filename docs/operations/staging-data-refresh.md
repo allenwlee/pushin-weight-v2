@@ -132,7 +132,9 @@ TO staging_refresh_reader;
 -- Homepage count publication state is environment-local. Its native view
 -- definition travels through pg_dump/restore; after a refresh, run
 -- python manage.py refresh_home_counts before checking materialized-path use.
+-- Search-provider health and pacing leases are also environment-local.
 GRANT MAINTAIN ON
+  search_provider_circuits,
   enrichment_budget_windows,
   collection_scope_rare_hits,
   materialization_state,

@@ -526,13 +526,14 @@ def test_from_env_reads_only_designated_key(monkeypatch, purpose, environment_na
         ),
     ],
 )
-def test_from_env_does_not_fall_back(monkeypatch, purpose, missing_name, other_name):
+def test_from_env_uses_other_declared_credential_when_primary_missing(monkeypatch, purpose, missing_name, other_name):
     monkeypatch.delenv(missing_name, raising=False)
     monkeypatch.setenv(other_name, "wrong-purpose-secret")
     monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "legacy-secret")
 
-    with pytest.raises(RuntimeError, match=missing_name):
-        XClient.from_env(purpose)
+    client = XClient.from_env(purpose)
+    assert client.api_key == "wrong-purpose-secret"
+    assert client.api_key != "legacy-secret"
 
 
 # --- normalizer unit tests -----------------------------------------------

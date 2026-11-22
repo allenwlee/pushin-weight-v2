@@ -40,9 +40,11 @@ from core.models import (
 from monitor.backfill_prefetch import (
     CapturedPage,
     Prefetcher,
+    PrefetchRateDeferred,
     _endpoint,
     _params,
-    _request_identity,
+    _route_config,
+    _recorded_provider,
     fetch_page,
 )
 from monitor.backfill_retry import (
@@ -53,11 +55,8 @@ from monitor.backfill_retry import (
     transient,
 )
 from monitor.run_lock import backfill_yield_requested, harvest_writer_lock
-from x_monitor.twitterapi_credentials import (
-    TwitterApiCredentialPurpose,
-    require_twitterapi_api_key,
-)
-from x_monitor.x_client import SEARCH_PATH
+from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+from x_monitor.x_client import SEARCH_PATH, XClient
 
 CATEGORY = "x_backfill_staging"
 
@@ -106,6 +105,12 @@ class StagingPrefetcher(Prefetcher):
         with fenced_run(self.claim) as (_, run):
             self.retry.save(run)
 
+    def _routed_auth_fallback(self, request, status):
+        provider = _recorded_provider(request)
+        order = self.router.provider_order if self.router else ()
+        return bool(status == 401 and not request.cursor_before and provider in order
+                    and order.index(provider) < len(order) - 1 and not self.router.force_twexapi)
+
     def _pending(self, scope):
         consumed = CollectionScopeRequestUse.objects.filter(
             scope_run__run__job_id=self.claim.job_id, scope_run__scope_kind="x_query",
@@ -124,19 +129,21 @@ class StagingPrefetcher(Prefetcher):
                 original_scope = copy(request.scope_run)
                 original_scope.cursor = request.cursor_before
                 require(request.error_code == 'operator_reconciled_interruption'
-                        and request.http_method == 'GET' and not request.accounting_complete
-                        and request.request_config == _request_identity(original_scope)
-                        and request.endpoint_url == _endpoint(original_scope),
+                        and (request.http_method == 'GET' or (request.http_method == 'POST' and _recorded_provider(request) == 'twexapi'))
+                        and not request.accounting_complete
+                        and request.request_config == _route_config(original_scope, _recorded_provider(request))
+                        and request.endpoint_url == _endpoint(original_scope, _recorded_provider(request)),
                         'interrupted retry ancestry changed')
                 if request.cursor_before == scope.cursor:
                     group = group or request.request_group or str(request.pk)
                 continue
-            if (request.http_method == "GET" and request.transport_outcome in {"received", "transport_error", "timeout"}
-                    and transient(request.error_code, request.http_status, policy=self.retry.policy)):
+            if ((request.http_method == "GET" or (request.http_method == "POST" and _recorded_provider(request) == "twexapi")) and request.transport_outcome in {"received", "transport_error", "timeout"}
+                    and (transient(request.error_code, request.http_status, policy=self.retry.policy)
+                         or self._routed_auth_fallback(request, request.http_status))):
                 original_scope = copy(request.scope_run)
                 original_scope.cursor = request.cursor_before
-                require(request.request_config == _request_identity(original_scope)
-                        and request.endpoint_url == _endpoint(original_scope), "staging retry ancestry changed")
+                require(request.request_config == _route_config(original_scope, _recorded_provider(request))
+                        and request.endpoint_url == _endpoint(original_scope, _recorded_provider(request)), "staging retry ancestry changed")
                 if request.cursor_before == scope.cursor:
                     failures += 1
                     last_failure = max(last_failure or request.started_at, request.received_at or request.started_at)
@@ -151,8 +158,8 @@ class StagingPrefetcher(Prefetcher):
             if request.body_lost or request.http_status != 200:
                 continue
             require(request.error_code is None, "invalid staging response requires reconciliation")
-            require(request.cursor_before == scope.cursor and request.request_config == _request_identity(scope)
-                    and request.endpoint_url == _endpoint(scope), "staging cursor or query ancestry changed")
+            require(request.cursor_before == scope.cursor and request.request_config == _route_config(scope, _recorded_provider(request))
+                    and request.endpoint_url == _endpoint(scope, _recorded_provider(request)), "staging cursor or query ancestry changed")
             # The successful receipt is durable but its page did not commit. Be
             # explicit about paid refetch and never claim identical search recall.
             with fenced_run(self.claim):
@@ -167,6 +174,7 @@ class StagingPrefetcher(Prefetcher):
         return not_before, group
 
     def _save(self, request, result):
+        self._finish_route(request, result)
         body = None
         if result.body is not None:
             try:
@@ -174,15 +182,23 @@ class StagingPrefetcher(Prefetcher):
             except (ValueError, TypeError):
                 pass
         raw = body.get("tweets", body.get("data", [])) if isinstance(body, dict) else []
-        ids = [str(row.get("id", "")) if isinstance(row, dict) else "" for row in raw] if isinstance(raw, list) else []
-        response = {"path": SEARCH_PATH, "status_code": result.response.get("status_code"),
+        ids = [str(row.get("id") or row.get("tweet_id") or "") if isinstance(row, dict) else "" for row in raw] if isinstance(raw, list) else []
+        response = {"path": result.response.get("path", SEARCH_PATH), "provider": result.response.get("provider", "twitterapi"),
+                    "status_code": result.response.get("status_code"),
                     "raw_results": len(ids), "response_bytes": len(result.body or b"")}
         cursor = body.get("next_cursor") if isinstance(body, dict) else None
-        retryable = transient(result.error, response["status_code"], policy=self.retry.policy)
+        retryable = (transient(result.error, response["status_code"], policy=self.retry.policy)
+                     or self._routed_auth_fallback(request, response["status_code"]))
         retry_after = None
         if retryable:
+            provider = _recorded_provider(request)
+            order = self.router.provider_order if self.router else ()
+            another_provider = (provider in order and order.index(provider) < len(order) - 1
+                                and not request.cursor_before and not self.router.force_twexapi)
+            delay = 0 if another_provider and response["status_code"] in {401, 500, 502, 503, 504} else max(
+                random.uniform(5, 10), result.retry_after_seconds or 0)
             retry_after = result.received_at + timedelta(seconds=max(
-                random.uniform(5, 10), result.retry_after_seconds or 0))
+                delay, result.retry_after_seconds or 0))
         # Receipt, counters and lightweight metadata commit together. No body is
         # passed to finish_request, so no immutable evidence archive is created.
         with fenced_run(self.claim) as (_, run):
@@ -209,7 +225,8 @@ class StagingPrefetcher(Prefetcher):
 
     def _failed(self, request, result):
         self._save(request, result)
-        if not transient(result.error, result.response.get("status_code"), policy=self.retry.policy):
+        if (not transient(result.error, result.response.get("status_code"), policy=self.retry.policy)
+                and not self._routed_auth_fallback(request, result.response.get("status_code"))):
             self._check_error(result)
 
     @staticmethod
@@ -222,12 +239,14 @@ class StagingPrefetcher(Prefetcher):
             raise RuntimeError("staging transport or response failed")
 
     def pages(self, deferred_scopes):
-        key = require_twitterapi_api_key(TwitterApiCredentialPurpose.ON_DEMAND)
+        self.router = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+        key = self.router.api_key
         futures = {}
         admission_open = True
         with ThreadPoolExecutor(max_workers=self.options.concurrency, thread_name_prefix="x-staging-http") as pool:
             try:
                 while futures or admission_open:
+                    rate_wait = 0
                     # Account errors before any new admission. Successful
                     # responses remain bounded and are ingested while draining.
                     for future in list(futures):
@@ -272,19 +291,39 @@ class StagingPrefetcher(Prefetcher):
                             if not lease.acquired or backfill_yield_requested():
                                 admission_open = False
                                 break
-                            with fenced_run(self.claim):
-                                self.budget.claim_api_request(30)
-                                attempt = CollectionAttempt.objects.get(pk=self.claim.attempt_id)
-                                request = begin_request(attempt, scope, endpoint_url=_endpoint(scope), cursor=scope.cursor,
-                                    request_config=_request_identity(scope), request_category=CATEGORY,
-                                    request_group=group, request_revision=self.retry.policy)
-                            self.metrics["retry_requests"] += int(group is not None)
-                            future = pool.submit(fetch_page, key, _params(scope), max_bytes=max_bytes, timeout=30)
-                            futures[future] = (scope, request, max_bytes)
+                            try:
+                                route = self._select_route(scope)
+                            except PrefetchRateDeferred as exc:
+                                rate_wait = exc.seconds
+                                break
+                            provider = route.name if route else None
+                            try:
+                                with fenced_run(self.claim):
+                                    self.budget.claim_api_request(30)
+                                    attempt = CollectionAttempt.objects.get(pk=self.claim.attempt_id)
+                                    request = begin_request(attempt, scope, endpoint_url=_endpoint(scope, provider), cursor=scope.cursor,
+                                        method="POST" if provider == "twexapi" else "GET",
+                                        request_config=_route_config(scope, provider), request_category=CATEGORY,
+                                        request_group=group, request_revision=self.retry.policy)
+                                self.metrics["retry_requests"] += int(group is not None)
+                                future = pool.submit(fetch_page, route or key, _params(scope), max_bytes=max_bytes, timeout=30)
+                                futures[future] = (scope, request, max_bytes)
+                                if route:
+                                    self.routes[request.pk] = route
+                            except Exception:
+                                if provider == "twexapi":
+                                    self.router.circuit.release_fallback(datetime.now(UTC), self.router.twexapi_interval_s)
+                                raise
                             self.next_start = time.monotonic() + 1 / self.options.starts_per_second
                             self.metrics["max_outstanding"] = max(self.metrics["max_outstanding"], sum(not f.done() for f in futures))
                             self.metrics["max_buffered"] = max(self.metrics["max_buffered"], len(futures))
                     if not futures:
+                        if rate_wait:
+                            wait_for_slot = min(rate_wait, 30)
+                            if self.budget.can_start(wait_for_slot + 38):
+                                time.sleep(wait_for_slot)  # Outside the writer lock and transaction.
+                                continue
+                            return
                         if self.retry.phase == "open":
                             self.retry_at = datetime.fromtimestamp(self.retry.until, UTC)
                             self._save_retry()
@@ -299,7 +338,7 @@ class StagingPrefetcher(Prefetcher):
                     # futures retain their reservation and cannot grow unbounded.
                     future = next(iter(done))
                     scope, request, _ = futures.pop(future)
-                    result = future.result()
+                    result = self._assess_route_result(request, future.result())
                     if result.error:
                         self._failed(request, result)
                         continue
@@ -312,7 +351,7 @@ class StagingPrefetcher(Prefetcher):
                 first_error = None
                 for future, (_, request, _) in futures.items():
                     try:
-                        self._save(request, future.result())
+                        self._save(request, self._assess_route_result(request, future.result()))
                     except Exception as exc:  # noqa: BLE001 - account other started requests before raising
                         first_error = first_error or exc
                 if first_error is not None:

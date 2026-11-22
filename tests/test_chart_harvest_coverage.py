@@ -137,6 +137,8 @@ def test_empty_search_is_coverage_and_missing_coverage_still_fills_the_axis(clie
         assert unknown["harvest_coverage"] is None
         assert unknown["days"][-1] == "2026-10-27T08:35:00+00:00"
         assert len(unknown["days"]) == 288
+        assert all(unknown["partial_buckets"])
+        assert all(value is None for value in unknown["series"]["deepseek"])
         run = record_harvest(NOW - timedelta(minutes=5))
         known = client.get("/chart/", {"window": 1}, secure=True).json()
         assert known["harvest_coverage"]["run_id"] == str(run.pk)
@@ -175,6 +177,9 @@ def test_new_complete_run_invalidates_cached_chart_without_changing_request_time
     assert second["days"] == first["days"]
     assert second["harvest_coverage"]["run_id"] == str(latest.pk)
     assert first["harvest_coverage"]["run_id"] != second["harvest_coverage"]["run_id"]
+    assert any(first["partial_buckets"])
+    # A 5-minute-old cycle can still leave the newest displayed bucket unsearched.
+    assert first["partial_buckets"].count(True) > second["partial_buckets"].count(True)
 
 
 def test_stale_coverage_cycle_does_not_freeze_chart_end(client):
@@ -192,4 +197,32 @@ def test_stale_coverage_cycle_does_not_freeze_chart_end(client):
     assert len(data["days"]) == 288
     # The stale cycle ended ~18 hours ago; a later post still appears on the axis.
     assert data["series"]["deepseek"][-2] == 1
-    assert sum(data["series"]["deepseek"]) == 1
+    assert sum(value or 0 for value in data["series"]["deepseek"]) == 1
+    assert any(data["partial_buckets"])
+
+
+def test_stale_coverage_marks_unsearched_tail_without_freezing_the_axis(client):
+    Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
+    record_harvest(NOW - timedelta(minutes=47))
+    _clear_home_pulse_cache()
+    with patch("monitor.views._dashboard_now", return_value=NOW):
+        data = client.get("/chart/", {"window": 1}, secure=True).json()
+    from monitor.harvest_coverage import closed_five_minute_boundary
+    assert data["days"][-1] == (closed_five_minute_boundary(NOW) - timedelta(minutes=5)).isoformat()
+    assert len(data["days"]) == 288
+    partial = data["partial_buckets"]
+    assert any(partial) and not all(partial)
+    assert all(value is None for value, is_partial in zip(data["series"]["deepseek"], partial) if is_partial)
+
+
+def test_stale_tail_keeps_observed_posts_but_does_not_invent_empty_counts(client):
+    brand = Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
+    record_harvest(NOW - timedelta(minutes=47))
+    post = Post.objects.create(tweet_id="observed-partial", created_at=NOW - timedelta(minutes=12))
+    PostBrand.objects.create(post=post, brand=brand)
+    _clear_home_pulse_cache()
+    with patch("monitor.views._dashboard_now", return_value=NOW):
+        data = client.get("/chart/", {"window": 1}, secure=True).json()
+    partial_values = [value for value, partial in zip(data["series"]["deepseek"], data["partial_buckets"]) if partial]
+    assert 1 in partial_values and None in partial_values
+    assert 0 not in partial_values

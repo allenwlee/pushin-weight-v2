@@ -2,7 +2,9 @@
 
 import hashlib
 import json
+import os
 import re
+from contextlib import contextmanager
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
@@ -18,12 +20,26 @@ from scripts.backfill_month import (
 from x_monitor.config import load_config
 
 
+@contextmanager
+def _force_twexapi_search():
+    previous = os.environ.get("TWEXAPI_FORCE_SEARCH")
+    os.environ["TWEXAPI_FORCE_SEARCH"] = "1"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("TWEXAPI_FORCE_SEARCH", None)
+        else:
+            os.environ["TWEXAPI_FORCE_SEARCH"] = previous
+
+
 class Command(BaseCommand):
     help = (
         "Collect and enrich historical X windows, with optional aggregate evaluation."
     )
 
     def add_arguments(self, parser):
+        parser.add_argument("--twexapi-only", action="store_true", help="Use TwexAPI for collect-only historical search.")
         parser.add_argument(
             "--since", help="Inclusive date or ISO time, UTC if no offset."
         )
@@ -123,6 +139,8 @@ class Command(BaseCommand):
     def _handle(self, *args, **options):
         try:
             phase = options["phase"]
+            if options["twexapi_only"] and phase != "collect":
+                raise CommandError("--twexapi-only requires --phase collect")
             if options["response_storage"] is not None:
                 if options["manifest"] or options["month_recipe"]:
                     raise CommandError("saved instructions own response storage")
@@ -243,7 +261,15 @@ class Command(BaseCommand):
                 else:
                     if runtime is not None:
                         execution["runtime_attestation"] = runtime
-                    run_phases(frozen, cfg, phase=phase, **preferences, **execution)
+                    if options["twexapi_only"]:
+                        from x_monitor.twitterapi_credentials import get_twexapi_api_key
+
+                        if not get_twexapi_api_key():
+                            raise CommandError("TWEXAPI_API_KEY is required for --twexapi-only")
+                        with _force_twexapi_search():
+                            run_phases(frozen, cfg, phase=phase, **preferences, **execution)
+                    else:
+                        run_phases(frozen, cfg, phase=phase, **preferences, **execution)
             else:
                 self.stdout.write(json.dumps(frozen, sort_keys=True))
         except (OSError, ValueError, KeyError, TypeError) as exc:

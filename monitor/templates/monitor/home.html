@@ -251,6 +251,7 @@
         </div>
       <section class="home-chart-wrap" data-pw-chart data-pw-locale="{{ active_locale }}"
                data-pw-chart-empty-text="{% if is_zh_chrome %}本窗口暂无图表数据{% elif is_ja_chrome %}この期間にはグラフデータがありません{% else %}No chart data in this window{% endif %}"
+               data-pw-chart-partial-text="{% if is_zh_chrome %}近期图表数据不完整{% elif is_ja_chrome %}直近のグラフデータは不完全です{% else %}Recent chart data is incomplete{% endif %}"
                data-pw-chart-error-text="{% if is_zh_chrome %}图表刷新失败，显示上次结果{% elif is_ja_chrome %}グラフの更新に失敗しました。前回の結果を表示しています{% else %}Chart refresh failed; showing last result{% endif %}"
                data-pw-pulse-empty-text="{% if is_zh_chrome %}本窗口暂无脉冲数据{% elif is_ja_chrome %}この期間には動向データがありません{% else %}No pulse data in this window{% endif %}"
                data-pw-pulse-error-text="{% if is_zh_chrome %}脉冲刷新失败，显示上次结果{% elif is_ja_chrome %}動向データの更新に失敗しました。前回の結果を表示しています{% else %}Pulse refresh failed; showing last result{% endif %}"

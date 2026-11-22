@@ -256,7 +256,7 @@ class HomeChartCoverageAxisBrowserTests(StaticLiveServerTestCase):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
-                for locale, pattern in (("en", r"^\d{1,2}:\d{2}[ap]m$"), ("ja", r"^\d{2}:\d{2}$")):
+                for locale, pattern in (("en", r"^\d{1,2}:\d{2}[ap]m$"), ("ja", r"^\d{2}:\d{2}$"), ("zh_hans", r"^\d{2}:\d{2}$")):
                     run = open_page(browser, self.live_server_url)
                     page = run.page
                     goto_home(run, self.live_server_url, f"locale={locale}&window=1")
@@ -285,6 +285,10 @@ class HomeChartCoverageAxisBrowserTests(StaticLiveServerTestCase):
                             [coverage_end.isoformat(), locale],
                         ),
                     )
+                    self.assertTrue(any(state["payload"]["partial_buckets"]))
+                    status = page.locator("[data-pw-chart-status]")
+                    self.assertTrue(status.is_visible())
+                    self.assertEqual(status.inner_text(), {"en": "Recent chart data is incomplete", "ja": "直近のグラフデータは不完全です", "zh_hans": "近期图表数据不完整"}[locale])
                     run.context.close()
             finally:
                 browser.close()
