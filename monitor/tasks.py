@@ -369,7 +369,7 @@ def edit_content_picture(content_kind, content_id, source_platform="x"):
     return picture_for_content(content_kind, content_id, source_platform=source_platform)
 
 
-@shared_task(name='monitor.tasks.research_chatter_person', autoretry_for=(), max_retries=0,
+@shared_task(name='monitor.tasks.research_chatter_person', queue='graphics-review', autoretry_for=(), max_retries=0,
              ignore_result=True, acks_late=True, reject_on_worker_lost=True, soft_time_limit=450, time_limit=480)
 def research_chatter_person(work_id):
     from core.staff_assets.person_research import run_research

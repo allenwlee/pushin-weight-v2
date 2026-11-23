@@ -26,6 +26,19 @@ def phrase(value):
     return rf"(?<!\w){re.escape(value)}(?!\w)"
 
 
+def named_employers(subject, passage):
+    """Read explicitly named employers even when the catalog has no entry yet."""
+    name = phrase(subject)
+    org_word = r"[A-Z][\w&-]*"
+    org = rf"(?P<org>{org_word}(?:[ \t]+{org_word}){{0,3}})"
+    title = rf"(?i:{KNOWN_TITLES})"
+    patterns = (
+        rf"(?<!\w){org}(?:['’]s)?[ \t]+{title}[ \t]+(?i:{name})",
+        rf"(?i:{name}),[ \t]+(?:(?i:the|a|an)[ \t]+)?{title}(?i:{_PREP}){org}",
+    )
+    return {m['org'] for pattern in patterns for m in re.finditer(pattern, passage)}
+
+
 def sourced_role(
     subject, organization, passage, title=None, *, own_profile=False, quote=None
 ):

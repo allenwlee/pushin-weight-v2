@@ -173,7 +173,9 @@ def test_ambiguous_or_unsuitable_never_becomes_cast(run, monkeypatch, flags, exp
 def test_source_and_search_pages_share_one_cap_and_deadline(run, monkeypatch):
     _, inputs = run
     first, second = "https://site.example/story", "https://site.example/interview"
-    inputs["evidence"]["source_urls"] = [first, second]
+    inputs["evidence"]["source_urls"] = [
+        "https://x.com/i/status/123", first, second, "https://t.co/shortlink",
+    ]
     inputs["evidence"]["affiliation"] = {"brand_id": "mistral"}
     inputs["evidence"]["source_url"] = first
     calls = fake_sources(

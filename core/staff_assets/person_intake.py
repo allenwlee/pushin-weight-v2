@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q, Value
-from django.db.models.functions import Lower, StrIndex
+from django.db.models.functions import Collate, Lower, StrIndex
 
 from core.account_identity import upsert_account
 from core.models import (
@@ -44,7 +44,7 @@ from core.staff_assets.arrivals import without_collection_registration
 from core.staff_assets.intake import observed_time, validate_record
 from core.staff_assets.job_history import normalized
 from core.staff_assets.job_history_identity import IdentityHold, validate_x_identity
-from core.staff_assets.person_roles import KNOWN_TITLES, phrase, sourced_role
+from core.staff_assets.person_roles import KNOWN_TITLES, named_employers, phrase, sourced_role
 from core.staff_assets.population import is_official
 from core.staff_assets.queue import _lock
 
@@ -54,7 +54,9 @@ def _mentioned(model, passage, fields):
     aliases = {}
     for pos, field in enumerate(fields):
         key = f"match_{pos}"
-        aliases[key] = StrIndex(Lower(Value(passage)), Lower(field))
+        # After folding case, match literal bytes. Locale-aware substring scans
+        # are extremely slow on multilingual story passages in staging.
+        aliases[key] = StrIndex(Collate(Lower(Value(passage)), "C"), Lower(field))
         where |= Q(**{key + "__gt": 0}) & ~Q(**{field: ""})
     return model.objects.alias(**aliases).filter(where)
 
@@ -121,6 +123,11 @@ def _organization(subject, passage, evidence, gaps):
             ):
                 roles[name] = relation
                 break
+    if not roles and not stated:
+        for org in named_employers(subject, passage):
+            role = sourced_role(subject, org, passage, title)
+            if role:
+                roles[org] = role
     if len(roles) != 1:
         if proposal or roles:
             gaps.append("affiliation_unresolved")
@@ -402,6 +409,24 @@ def _stored_subject_matches(ids, subject, evidence, *, unique):
     return matched
 
 
+def personal_accounts_named(subject):
+    """Display-name candidates still need independent evidence before linking."""
+    return list(
+        Account.x.filter(display_name__iexact=subject)
+        .exclude(account_kind__in=("organization", "channel"))
+        .exclude(
+            pk__in=BrandAccount.objects.filter(role_id="official").values(
+                "account_id"
+            )
+        )
+        .exclude(
+            pk__in=CompanyAccount.objects.filter(role_id="official").values(
+                "account_id"
+            )
+        )
+    )
+
+
 def _resolve(
     subject,
     evidence,
@@ -412,6 +437,7 @@ def _resolve(
     candidates,
     account_candidates,
     occupation,
+    account_lookup,
 ):
     named = PersonName.objects.filter(full_name__iexact=subject).exclude(
         review_status="rejected"
@@ -430,20 +456,7 @@ def _resolve(
     account, native = _account(evidence.get("personal_account"), account_candidates)
     org_accounts = None
     if not (account or native or evidence.get("personal_account")) and role:
-        accounts = (
-            Account.x.filter(display_name__iexact=subject)
-            .exclude(account_kind__in=("organization", "channel"))
-            .exclude(
-                pk__in=BrandAccount.objects.filter(role_id="official").values(
-                    "account_id"
-                )
-            )
-            .exclude(
-                pk__in=CompanyAccount.objects.filter(role_id="official").values(
-                    "account_id"
-                )
-            )
-        )
+        accounts = account_lookup(subject)
         org_accounts = _staff_account_ids(brand, company)
         # A display name can locate a candidate. The catalog staff link or the
         # account's own matching employer/title must independently identify it.
@@ -747,7 +760,8 @@ def _account_roles(account, brand, company, result, apply):
 
 
 def create_or_update_person(
-    subject, evidence, needs=frozenset({"portrait"}), *, apply=True, collect=True
+    subject, evidence, needs=frozenset({"portrait"}), *, apply=True, collect=True,
+    account_lookup=personal_accounts_named,
 ):
     """Preview or reconcile one attributed subject. Author/reporter fields are never identity inputs.
 
@@ -765,7 +779,7 @@ def create_or_update_person(
     if needs - {"portrait", "jobs"}:
         raise ValueError("Unsupported person intake need")
     subject = subject.strip()
-    identity = _reconcile_person(subject, evidence, needs, apply)
+    identity = _reconcile_person(subject, evidence, needs, apply, account_lookup)
     if collect and apply:
         from core.staff_assets.person_research import collect_missing
 
@@ -773,7 +787,7 @@ def create_or_update_person(
     return identity
 
 
-def _reconcile_person(subject, evidence, needs, apply):
+def _reconcile_person(subject, evidence, needs, apply, account_lookup):
     passage = evidence.get("passage") or ""
     reference = evidence.get("source_url") or str(evidence.get("source_id") or "")
     when = evidence.get("observed_at")
@@ -826,6 +840,7 @@ def _reconcile_person(subject, evidence, needs, apply):
                     candidates,
                     account_candidates,
                     occupation,
+                    account_lookup,
                 )
         except (IdentityConflict, Person.DoesNotExist, ValidationError) as exc:
             person, account, native, creating, read_only_identity = (

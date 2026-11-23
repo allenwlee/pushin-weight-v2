@@ -284,7 +284,6 @@ PULSE_CONTROL_R2_KEY = env("PULSE_CONTROL_R2_KEY", default="pulse/control-v1.jso
 GRAPHICS_RECONCILER_ENABLED = env.bool("GRAPHICS_RECONCILER_ENABLED", default=False)
 GRAPHICS_REQUIRE_SHARED_MEDIA = env.bool("GRAPHICS_REQUIRE_SHARED_MEDIA", default=False)
 CELERY_TASK_ROUTES = {
-    "monitor.tasks.research_chatter_person": {"queue": "graphics-review"},
     "monitor.tasks.advance_graphics_package": {"queue": "graphics-creation"},
     "monitor.tasks.submit_graphics_video": {"queue": "graphics-creation"},
     "monitor.tasks.poll_graphics_video": {"queue": "graphics-creation"},
