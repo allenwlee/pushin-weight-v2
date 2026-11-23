@@ -615,6 +615,10 @@ class XClient:
     def _twex_guarded_search(self, *args, **kwargs):
         try:
             result = self._twex_search_with_retry(*args, **kwargs)
+        except XClientRateLimitError as exc:
+            if self.twex_circuit:
+                self.twex_circuit.record_rate_limit(datetime.now(UTC), exc.retry_after_seconds)
+            raise
         except XClientRouteUnavailable:
             if self.twex_circuit:
                 self.twex_circuit.abandon_probe()
@@ -831,13 +835,8 @@ class XClient:
                 params["cursor"] = cursor
             if provider == "twexapi":
                 adapter = TwexAPIProvider(self)
-                try:
-                    options = {"retry_rate_limit": False} if selected_provider else {}
-                    data = adapter.search_page(query, cursor, can_start_page=can_start_page, **options)
-                except XClientRateLimitError as exc:
-                    if self.twex_circuit:
-                        self.twex_circuit.record_rate_limit(datetime.now(timezone.utc), exc.retry_after_seconds)
-                    raise
+                options = {"retry_rate_limit": False} if selected_provider else {}
+                data = adapter.search_page(query, cursor, can_start_page=can_start_page, **options)
                 try:
                     page = adapter.normalize_page(data, page_number=page_number, max_results=remaining)
                 except (TypeError, ValueError, KeyError) as exc:
@@ -846,7 +845,9 @@ class XClient:
                     raise XClientServerError("TwexAPI search response invalid") from exc
                 if _unresolved_empty_page(page, data, cursor):
                     if self.twex_circuit:
-                        if cursor and data.get("has_next_page") is True and page.next_cursor:
+                        if (cursor and data.get("has_next_page") is True
+                                and isinstance(page.next_cursor, str) and page.next_cursor
+                                and page.next_cursor not in seen_cursors):
                             # TwexAPI can advertise another page even after returning
                             # zero posts. Hold coverage and release any recovery probe.
                             self.twex_circuit.abandon_probe()

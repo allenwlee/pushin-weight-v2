@@ -402,3 +402,40 @@ def test_saved_twex_empty_tail_preserves_real_failures(monkeypatch, rate_limited
         assert route.primary_permitted(now)
         route.record_failure(now)
         assert not route.primary_permitted(now)
+
+
+@pytest.mark.parametrize("next_cursor", ["saved", {"bad": "cursor"}])
+def test_invalid_twex_cursor_remains_a_failure(monkeypatch, next_cursor):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient, XClientServerError
+
+    route = SearchProviderCircuit("bad-cursor", threshold=1)
+    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("history"),
+                     twex_circuit=route, provider_order=("twexapi",))
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: {
+        "code": 200, "data": [], "has_next_page": True, "next_cursor": next_cursor})
+    with pytest.raises(XClientServerError):
+        next(client.run_search_pages("Qwen", cursor="twexapi:saved"))
+    assert not route.primary_permitted(timezone.now())
+
+
+def test_forced_raw_receipt_429_keeps_provider_retry_after(monkeypatch):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient, XClientRateLimitError
+
+    now = timezone.now()
+    route = SearchProviderCircuit("raw-probe", threshold=1, cooldown=1, probe_lease=10)
+    route.record_failure(now - timedelta(minutes=1))
+    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("history"),
+                     twex_circuit=route, provider_order=("twexapi",), force_twexapi=True)
+
+    def throttled(*args, **kwargs):
+        error = XClientRateLimitError("429")
+        error.retry_after_seconds = 45
+        raise error
+
+    monkeypatch.setattr(client, "_twex_search_with_retry", throttled)
+    with pytest.raises(XClientRateLimitError):
+        client.run_search_page_with_raw("Qwen", since_time=10, until_time=20)
+    assert not route.primary_permitted(now + timedelta(seconds=40))
+    assert route.primary_permitted(now + timedelta(seconds=46))
