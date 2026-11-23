@@ -429,3 +429,51 @@ def test_twex_status_preserves_shared_error_contract(monkeypatch, status, except
     with pytest.raises(getattr(module, exception_name)) as exc:
         client._twex_search("query", None)
     assert exc.value.response_status_code == status
+
+
+def test_unbounded_twex_search_stops_on_repeated_provider_cursor(monkeypatch):
+    from copy import deepcopy
+
+    from x_monitor.x_client import XClient
+
+    class Circuit:
+        def observe_query(self, query, *, nonempty, now):
+            return False
+
+        def primary_permitted(self, now):
+            return False
+
+        def acquire_fallback(self, now, lease):
+            return 0
+
+        def fallback_owned(self, now):
+            return True
+
+        def release_fallback(self, now, interval):
+            pass
+
+    first = json.loads((Path(__file__).parent / "fixtures/twexapi/search-page.json").read_text())
+    first.update(has_next_page=True, next_cursor="same")
+    pages = [first, deepcopy(first)]
+    calls = []
+
+    class Response:
+        status_code = 200
+
+        def __init__(self, body):
+            self.headers = {}
+            self.body = body
+            self.content = json.dumps(body).encode()
+
+        def json(self):
+            return self.body
+
+    def send(*args, **kwargs):
+        calls.append(kwargs["json"])
+        return Response(pages.pop(0))
+
+    monkeypatch.setattr("x_monitor.x_client.requests.post", send)
+    client = XClient(api_key="primary", twexapi_key="secondary", circuit=Circuit(), force_twexapi=True)
+    result = list(client.run_search_pages("DeepSeek", max_results=None, max_pages=None))
+    assert len(calls) == 2
+    assert result[-1].continuation_invalid is True
