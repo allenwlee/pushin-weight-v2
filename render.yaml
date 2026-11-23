@@ -567,6 +567,8 @@ services:
     buildCommand: ./build.sh
     startCommand: python manage.py run_cycle --scheduled
     envVars:
+      - key: TWEXAPI_BREAKER_FAILURE_THRESHOLD
+        value: "2"
       - key: PULSE_CONTROL_R2_BUCKET
         value: pushinweight-media-production
       - key: X_MONITOR_CLASSIFIER_PIPELINE

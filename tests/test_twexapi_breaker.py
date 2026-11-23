@@ -52,6 +52,38 @@ def test_expired_probe_cannot_close_newer_probe():
     assert old.primary_permitted(now + timedelta(seconds=7))
 
 
+def test_probe_keeps_failures_until_a_complete_search():
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+
+    now = timezone.now()
+    circuit = SearchProviderCircuit("intermediate-probe", threshold=2, cooldown=1)
+    circuit.record_failure(now)
+    circuit.record_failure(now)
+    assert circuit.primary_permitted(now + timedelta(seconds=2))
+    assert not SearchProviderCircuit("intermediate-probe").primary_permitted(now + timedelta(seconds=2))
+    circuit.record_failure(now + timedelta(seconds=2))
+    assert not circuit.primary_permitted(now + timedelta(seconds=2))
+    assert circuit.primary_permitted(now + timedelta(seconds=4))
+    circuit.record_success(now + timedelta(seconds=4))
+    circuit.record_failure(now + timedelta(seconds=4))
+    assert circuit.primary_permitted(now + timedelta(seconds=4))
+
+
+def test_recovery_probe_renews_its_lease_and_cannot_revive_after_expiry():
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+
+    now = timezone.now()
+    circuit = SearchProviderCircuit("renew-probe", threshold=1, cooldown=1, probe_lease=10)
+    other = SearchProviderCircuit("renew-probe", threshold=1, cooldown=1, probe_lease=10)
+    circuit.record_failure(now)
+    assert circuit.primary_permitted(now + timedelta(seconds=2))
+    assert circuit.renew_probe(now + timedelta(seconds=10))
+    assert not other.primary_permitted(now + timedelta(seconds=13))
+    assert other.primary_permitted(now + timedelta(seconds=21))
+    assert not circuit.renew_probe(now + timedelta(seconds=21))
+    assert not circuit.is_probe()
+
+
 def test_first_page_empty_is_suspicious_only_after_repeated_recent_nonempty_windows():
     from x_monitor.search_provider_circuit import SearchProviderCircuit
 
@@ -63,6 +95,100 @@ def test_first_page_empty_is_suspicious_only_after_repeated_recent_nonempty_wind
         assert not circuit.observe_query(f"DeepSeek since_time:{i} until_time:{i + 1}", nonempty=True, now=now)
     assert circuit.observe_query("DeepSeek since_time:5 until_time:6", nonempty=False, now=now)
     assert not circuit.observe_query("DeepSeek since_time:7 until_time:8", nonempty=False, now=now + timedelta(hours=1))
+
+
+@pytest.mark.parametrize("threshold", [1, 2])
+def test_partial_page_failure_does_not_have_to_block_an_independent_query(monkeypatch, threshold):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient, XClientServerError
+
+    twex = SearchProviderCircuit("isolated-partial", provider="twexapi", endpoint_family="search",
+                                 threshold=threshold, cooldown=180)
+    history = SearchProviderCircuit("isolated-history")
+    client = XClient(api_key="", twexapi_key="fixture", circuit=history, twex_circuit=twex,
+                     provider_order=("twexapi",))
+    responses = iter([
+        {"code": 200, "data": [{"tweet_id": "1", "user": {}}], "has_next_page": True, "next_cursor": "one"},
+        {"code": 200, "data": [], "has_next_page": True, "next_cursor": "two"},
+        {"code": 200, "data": [{"tweet_id": "2", "user": {}}], "has_next_page": False, "next_cursor": None},
+    ])
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *args, **kwargs: next(responses))
+    posts, incomplete = client.run_search("first")
+    assert len(posts) == 1 and incomplete
+    if threshold == 1:
+        with pytest.raises(XClientServerError, match="no configured search provider"):
+            client.run_search("independent")
+    else:
+        posts, incomplete = client.run_search("independent")
+        assert len(posts) == 1 and not incomplete
+
+
+def test_scheduled_breaker_threshold_setting_applies_to_both_providers(monkeypatch):
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient
+
+    monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "fake-primary")
+    monkeypatch.setenv("TWEXAPI_API_KEY", "fake-twex")
+    monkeypatch.setenv("X_DATA_PROVIDER_ORDER", "twexapi,twitterapi:scheduled")
+    monkeypatch.setenv("TWEXAPI_BREAKER_FAILURE_THRESHOLD", "2")
+    client = XClient.from_env(TwitterApiCredentialPurpose.SCHEDULED)
+    assert client.twex_circuit.threshold == 2
+    assert client.provider_circuits["twitterapi:scheduled"].threshold == 2
+
+
+def test_repeated_incomplete_searches_open_circuit_despite_good_first_pages(monkeypatch):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient, XClientServerError
+
+    twex = SearchProviderCircuit("repeated-partial", provider="twexapi", endpoint_family="search", threshold=2)
+    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("repeated-history"),
+                     twex_circuit=twex, provider_order=("twexapi",))
+    responses = iter([
+        {"code": 200, "data": [{"tweet_id": "1", "user": {}}], "has_next_page": True, "next_cursor": "one"},
+        {"code": 200, "data": [], "has_next_page": True, "next_cursor": "two"},
+        {"code": 200, "data": [{"tweet_id": "2", "user": {}}], "has_next_page": True, "next_cursor": "three"},
+        {"code": 200, "data": [], "has_next_page": True, "next_cursor": "four"},
+    ])
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *args, **kwargs: next(responses))
+    assert client.run_search("first")[1] is True
+    assert client.run_search("second")[1] is True
+    with pytest.raises(XClientServerError, match="no configured search provider"):
+        client.run_search("third")
+
+
+def test_successfully_bounded_search_resets_previous_failure(monkeypatch):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient
+
+    circuit = SearchProviderCircuit("bounded-search", provider="twexapi", endpoint_family="search", threshold=2)
+    circuit.record_failure(timezone.now())
+    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("bounded-history"),
+                     twex_circuit=circuit, provider_order=("twexapi",))
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *args, **kwargs: {
+        "code": 200, "data": [{"tweet_id": "1", "user": {}}], "has_next_page": True, "next_cursor": "next"})
+    list(client._iter_search_pages("bounded", 1, max_pages=1))
+    circuit.record_failure(timezone.now())
+    assert circuit.primary_permitted(timezone.now())
+
+
+def test_interrupted_search_releases_recovery_probe(monkeypatch):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient
+
+    now = timezone.now()
+    circuit = SearchProviderCircuit("interrupted", provider="twexapi", endpoint_family="search",
+                                    threshold=1, cooldown=0)
+    circuit.record_failure(now)
+    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("interrupted-history"),
+                     twex_circuit=circuit, provider_order=("twexapi",))
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *args, **kwargs: {
+        "code": 200, "data": [{"tweet_id": "1", "user": {}}], "has_next_page": True, "next_cursor": "next"})
+    pages = client._iter_search_pages("interrupted", 20)
+    next(pages)
+    other = SearchProviderCircuit("interrupted", provider="twexapi", endpoint_family="search")
+    assert not other.primary_permitted(timezone.now())
+    pages.close()
+    assert other.primary_permitted(timezone.now())
 
 
 def test_twex_transport_has_wall_clock_and_byte_bounds(monkeypatch):

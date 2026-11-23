@@ -801,6 +801,10 @@ class XClient:
         while max_pages is None or page_number < max(1, max_pages):
             if max_results is not None and n_returned >= max_results:
                 return
+            page_circuit = self.twex_circuit if provider == "twexapi" else active_circuit
+            renew = getattr(page_circuit, "renew_probe", None)
+            if renew and not renew(datetime.now(timezone.utc)):
+                raise XClientRouteUnavailable("search recovery probe lease expired")
             page_number += 1
             remaining = None if max_results is None else max_results - n_returned
             params: dict[str, Any] = {
@@ -841,8 +845,6 @@ class XClient:
                         if self.twex_circuit:
                             self.twex_circuit.record_failure(datetime.now(timezone.utc))
                         raise XClientServerError("TwexAPI empty page on expected nonempty search")
-                if self.twex_circuit:
-                    self.twex_circuit.record_success(datetime.now(timezone.utc))
                 if page.next_cursor:
                     page = replace(page, next_cursor="twexapi:" + page.next_cursor)
             elif (self.twexapi_key or self.provider_circuits) and active_circuit:
@@ -868,7 +870,6 @@ class XClient:
                 except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError):
                     active_circuit.record_failure(datetime.now(timezone.utc))
                     raise
-                active_circuit.record_success(datetime.now(timezone.utc))
                 if page.next_cursor and provider.startswith("twitterapi:"):
                     page = replace(page, next_cursor=provider + ":" + page.next_cursor)
             else:
@@ -885,7 +886,22 @@ class XClient:
                 page = replace(page, continuation_invalid=True)
             n_returned += len(page.items)
             seen_ids.update(ids)
-            yield page
+            page_circuit = (self.twex_circuit if provider == "twexapi" else active_circuit
+                            if self.twexapi_key or self.provider_circuits else None)
+            if page_circuit:
+                if page.continuation_invalid:
+                    page_circuit.record_failure(datetime.now(timezone.utc))
+                elif (not page.has_more or page.clipped
+                      or (max_results is not None and n_returned >= max_results)
+                      or (max_pages is not None and page_number >= max(1, max_pages))):
+                    page_circuit.record_success(datetime.now(timezone.utc))
+            try:
+                yield page
+            except GeneratorExit:
+                is_probe = getattr(page_circuit, "is_probe", None)
+                if is_probe and is_probe():
+                    page_circuit.abandon_probe()
+                raise
             if (max_results is not None and n_returned >= max_results) or not page.has_more or page.clipped or page.continuation_invalid:
                 return
             if provider == "twexapi":

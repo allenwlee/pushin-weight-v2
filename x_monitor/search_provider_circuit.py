@@ -48,6 +48,20 @@ class SearchProviderCircuit:
     def is_probe(self):
         return bool(getattr(self._probe_local, "owner", None))
 
+    def renew_probe(self, now):
+        owner = getattr(self._probe_local, "owner", None)
+        if owner is None:
+            return True
+        with transaction.atomic():
+            row = self._locked_row()
+            if row.probe_owner != owner or not row.probe_lease_until or row.probe_lease_until <= now:
+                self._probe_local.owner = None
+                self.probe_claimed = False
+                return False
+            row.probe_lease_until = now + timedelta(seconds=self.probe_lease)
+            row.save(update_fields=["probe_lease_until", "updated_at"])
+            return True
+
     def abandon_probe(self):
         owner = getattr(self._probe_local, "owner", None)
         if owner is None:
