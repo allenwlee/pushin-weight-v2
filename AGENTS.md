@@ -43,6 +43,12 @@ For reference-document work, read and follow
 The same canonical skill is exposed at `.agents/skills/updating-reference-docs`
 for agents using that discovery path.
 
+Put research on vendor APIs, pricing, test results, and terms under
+[`docs/external_vendors/`](docs/external_vendors/README.md). Use the
+peer `tapi/`, `twex/`, and `xdev/` directories for X providers and
+`comparisons/` for cross-provider studies. Link implemented behavior in
+`docs/reference/` and live procedures in `docs/operations/`.
+
 ## General-page launch coordination
 
 Before general-launch work, read the shared

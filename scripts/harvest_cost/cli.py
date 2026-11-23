@@ -8,7 +8,7 @@ Usage:
   python -m scripts.harvest_cost --input path/to/run.json --out report.md
   python -m scripts.harvest_cost --tweet-credits 20 --input run.json
 
-Rates default from docs/external_vendors/twitterapi*/twitterapi_index.md.
+Rates default from docs/external_vendors/tapi/api/index.md.
 """
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--pricing-file",
         type=Path,
         default=None,
-        help="Pricing markdown (default: docs/external_vendors/twitterapi*/twitterapi_index.md)",
+        help="Pricing markdown (default: docs/external_vendors/tapi/api/index.md)",
     )
     p.add_argument("--tweet-credits", type=float, default=None)
     p.add_argument("--call-floor-credits", type=float, default=None)

@@ -1,5 +1,7 @@
 # X provider request history and announcements
 
+For provider contracts, prices, terms, and completed comparisons, see [External vendor research](../external_vendors/README.md).
+
 Searches for X posts stay under the same X collection job and run when the client switches between TwitterAPI.io and TwexAPI. Each physical send gets its own request receipt. The receipt stores the provider and credential purpose as small typed fields. The existing staging-specific receipt counter and its constraints are unchanged. The general returned-count field is nullable because some receipts have no usable result count.
 
 Run the read-only usage report for an explicit time window:

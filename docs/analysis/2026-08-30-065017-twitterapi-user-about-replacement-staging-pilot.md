@@ -45,7 +45,7 @@ The unavailable success variant contains no profile ID. It can update only
 `unavailable`, `unavailable_reason`, and the fetch checkpoint, and only while
 the selected Account still owns the requested handle. Normal profile responses
 retain the strict returned-ID match. The corrected live endpoint reference is
-[`get_user_about.md`](../external_vendors/twitterapi_docs/endpoint/get_user_about.md).
+[`get_user_about.md`](../external_vendors/tapi/api/endpoint/get_user_about.md).
 
 ## Time and scale projection
 

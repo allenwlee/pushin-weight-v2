@@ -32,7 +32,7 @@ before proposing a new one.
 | `docs/handoffs/` | Continuity notes that help another person or agent resume a specific session or task. | Include current state, completed work, remaining work, and important constraints. A handoff is not the canonical product reference. |
 | `docs/notes/` | Short-lived working notes that do not yet have a more suitable home. | Move durable findings to the appropriate folder; avoid making this a permanent catch-all. |
 | `docs/screenshots/` | Screenshots and other captured visual evidence. | Keep evidence with its named review or iteration where practical; do not treat a screenshot alone as a specification. |
-| `docs/external_vendors/` | Vendor documentation, integrations, pricing evidence, and vendor-specific research. | Keep vendor material under its existing vendor folder when one exists. Separate PushinWeight's current integration behavior into `reference/`. |
+| [`docs/external_vendors/`](external_vendors/README.md) | Vendor API contracts, pricing, legal sources, and vendor-focused test results. | Use `tapi/`, `twex/`, and `xdev/` for X provider material and `comparisons/` for studies across X providers. Link current PushinWeight behavior in `reference/` and live procedures in `operations/`. |
 | `docs/ollija/` | Ollija-specific project workflow records and generated guidance. | Use only for material about the Ollija workflow, not general implementation plans or product documentation. |
 
 ## Choose by purpose
@@ -41,9 +41,11 @@ When a document could fit in more than one folder, use this order:
 
 1. Put current, reusable descriptions of how PushinWeight works in
    `reference/`.
-2. Put measured results and test or evaluation evidence in `analysis/`.
-3. Put external-source findings in `research/`; put a diagnosis of a PushinWeight
-   behavior in `investigations/`.
+2. Put research and measured results about a vendor’s contract, behavior, pricing,
+   or terms under [`external_vendors/`](external_vendors/README.md).
+3. Put measured results and test evidence about PushinWeight in `analysis/`.
+   Put general external-source findings in `research/` and PushinWeight
+   diagnoses in `investigations/`.
 4. Put instructions for operating or deploying the system in `operations/` or
    `deploy/`.
 5. Put proposed future work in `plans/`, and early exploration in
@@ -52,7 +54,7 @@ When a document could fit in more than one folder, use this order:
 
 Keep executable tests and machine fixtures in the repository's `tests/` tree,
 not in a new `docs/test/` folder. A report that explains test results belongs
-in `analysis/` and should link to its code or fixture.
+in its subject’s folder and should link to its code or fixture.
 
 ## Reference-document rules
 

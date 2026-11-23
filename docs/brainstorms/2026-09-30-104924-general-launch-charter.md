@@ -2060,8 +2060,8 @@ Language controls currently demonstrate navigation labels only.
 
 - [General Launch Index](2026-09-30-104924-general-launch-index.md)
 - [Longitudinal and agentic-media research](/Users/fuchitalee/development/pushin-weight-v2/docs/research/2026-09-28-111844-agentic-ai-media-advantages.md), especially section 4 and Appendix A.
-- [TwitterAPI.io compliance materials](../external_vendors/twitterapi_docs/compliance)
-- [X compliance materials](../external_vendors/x_twitter/compliance)
+- [TwitterAPI.io compliance materials](../external_vendors/tapi/legal/README.md)
+- [X compliance materials](../external_vendors/xdev/legal/README.md)
 - [G5 maintained design reference](/Users/fuchitalee/development/pushin-weight-v2/docs/ideation/2026-10-01-190859-g5-general-homepage.md) — current prototype, source sketch, provenance and iteration boundaries.
 - [First-screen prototype](/Users/fuchitalee/development/pushin-weight-v2/docs/ideation/mockups/2026-10-01-190859-g5-general-homepage/01-above-the-fold/screens/index.html) — maintained in place as the design evolves; sample data.
 - [Original prototype decisions and limitations](/Users/fuchitalee/development/pushin-weight-v2/docs/ideation/mockups/2026-10-01-190859-g5-general-homepage/decisions.md) — preserved September 29 evidence, not the current G5 decision record.
