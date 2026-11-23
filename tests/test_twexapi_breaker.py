@@ -98,9 +98,9 @@ def test_first_page_empty_is_suspicious_only_after_repeated_recent_nonempty_wind
 
 
 @pytest.mark.parametrize("threshold", [1, 2])
-def test_partial_page_failure_does_not_have_to_block_an_independent_query(monkeypatch, threshold):
+def test_twex_empty_continuation_allows_an_independent_query(monkeypatch, threshold):
     from x_monitor.search_provider_circuit import SearchProviderCircuit
-    from x_monitor.x_client import XClient, XClientServerError
+    from x_monitor.x_client import XClient
 
     twex = SearchProviderCircuit("isolated-partial", provider="twexapi", endpoint_family="search",
                                  threshold=threshold, cooldown=180)
@@ -115,12 +115,8 @@ def test_partial_page_failure_does_not_have_to_block_an_independent_query(monkey
     monkeypatch.setattr(client, "_twex_search_with_retry", lambda *args, **kwargs: next(responses))
     posts, incomplete = client.run_search("first")
     assert len(posts) == 1 and incomplete
-    if threshold == 1:
-        with pytest.raises(XClientServerError, match="no configured search provider"):
-            client.run_search("independent")
-    else:
-        posts, incomplete = client.run_search("independent")
-        assert len(posts) == 1 and not incomplete
+    posts, incomplete = client.run_search("independent")
+    assert len(posts) == 1 and not incomplete
 
 
 def test_scheduled_breaker_threshold_setting_applies_to_both_providers(monkeypatch):
@@ -136,24 +132,34 @@ def test_scheduled_breaker_threshold_setting_applies_to_both_providers(monkeypat
     assert client.provider_circuits["twitterapi:scheduled"].threshold == 2
 
 
-def test_repeated_incomplete_searches_open_circuit_despite_good_first_pages(monkeypatch):
+@pytest.mark.parametrize("provider", ["twexapi", "twitterapi:scheduled"])
+def test_provider_rules_for_live_c2_page_sequence(monkeypatch, provider):
     from x_monitor.search_provider_circuit import SearchProviderCircuit
     from x_monitor.x_client import XClient, XClientServerError
 
-    twex = SearchProviderCircuit("repeated-partial", provider="twexapi", endpoint_family="search", threshold=2)
-    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("repeated-history"),
-                     twex_circuit=twex, provider_order=("twexapi",))
-    responses = iter([
-        {"code": 200, "data": [{"tweet_id": "1", "user": {}}], "has_next_page": True, "next_cursor": "one"},
-        {"code": 200, "data": [], "has_next_page": True, "next_cursor": "two"},
-        {"code": 200, "data": [{"tweet_id": "2", "user": {}}], "has_next_page": True, "next_cursor": "three"},
-        {"code": 200, "data": [], "has_next_page": True, "next_cursor": "four"},
-    ])
-    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *args, **kwargs: next(responses))
-    assert client.run_search("first")[1] is True
-    assert client.run_search("second")[1] is True
-    with pytest.raises(XClientServerError, match="no configured search provider"):
-        client.run_search("third")
+    route = SearchProviderCircuit("live-c2", provider=provider, endpoint_family="search", threshold=1)
+    client = XClient(api_key="fixture", twexapi_key="fixture", circuit=route, twex_circuit=route,
+                     provider_order=(provider,), provider_circuits={provider: route})
+    calls = []
+
+    def fetch(query, cursor):
+        calls.append((query, cursor))
+        count = {None: 20, "second": 7, "third": 0}[cursor] if query == "C2" else 1
+        items = [{"id": str(len(calls) * 100 + i)} for i in range(count)]
+        return {"code": 200, "data": items, "tweets": items, "has_next_page": query == "C2",
+                "next_cursor": {None: "second", "second": "third", "third": "fourth"}[cursor] if query == "C2" else None}
+
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda q, c, **kw: fetch(q, c))
+    monkeypatch.setattr(client, "_get", lambda path, params, **kw: fetch(params["query"], params.get("cursor")))
+    posts, incomplete = client.run_search("C2")
+    assert len(posts) == 27 and incomplete
+    assert calls == [("C2", None), ("C2", "second"), ("C2", "third")]
+    if provider == "twexapi":
+        assert len(client.run_search("B3")[0]) == 1
+        assert calls[-1] == ("B3", None)
+    else:
+        with pytest.raises(XClientServerError, match="no configured"):
+            client.run_search("B3")
 
 
 def test_successfully_bounded_search_resets_previous_failure(monkeypatch):
@@ -343,9 +349,9 @@ def test_routed_continuation_requires_explicit_end(monkeypatch, route, tail, inc
     assert circuit.primary_permitted(timezone.now()) == (not incomplete)
 
 
-def test_twex_partial_recovery_holds_only_affected_query_until_independent_failure(monkeypatch):
+def test_twex_recovery_can_dispatch_after_multiple_incomplete_windows(monkeypatch):
     from x_monitor.search_provider_circuit import SearchProviderCircuit
-    from x_monitor.x_client import XClient, XClientServerError
+    from x_monitor.x_client import XClient
 
     def new_client():
         route = SearchProviderCircuit("resume-fixture", provider="twexapi", endpoint_family="search", threshold=2)
@@ -364,64 +370,35 @@ def test_twex_partial_recovery_holds_only_affected_query_until_independent_failu
 
     monkeypatch.setattr(XClient, "_twex_search_with_retry", fetch)
     assert client.run_search("Qwen", since_time=10, until_time=20)[1]
-    other = new_client()
-    with pytest.raises(XClientServerError):
-        other.run_search("Qwen", since_time=20, until_time=30)
-    assert other.run_search("DeepSeek")[1]
-    with pytest.raises(XClientServerError):
-        new_client().run_search("Claude")
-    assert calls == [("Qwen", None), ("Qwen", "next"), ("DeepSeek", None), ("DeepSeek", "next")]
+    assert new_client().run_search("Qwen", since_time=20, until_time=30)[1]
+    assert new_client().run_search("DeepSeek")[1]
+    assert new_client().run_search("B3")[1]
+    assert calls == [(q, c) for q in ("Qwen", "Qwen", "DeepSeek", "B3") for c in (None, "next")]
 
 
-def test_late_partial_response_cannot_cancel_provider_rate_limit():
-    from x_monitor.search_provider_circuit import SearchProviderCircuit
-
-    route = SearchProviderCircuit("late-partial", provider="twexapi", endpoint_family="search", threshold=2)
-    other = SearchProviderCircuit("late-partial", provider="twexapi", endpoint_family="search", threshold=2)
-    now = timezone.now()
-    assert route.primary_permitted(now, query="Qwen")
-    other.record_rate_limit(now, 45)
-    route.record_failure(now, partial_query="Qwen")
-    assert not route.primary_permitted(now + timedelta(seconds=44), query="DeepSeek")
-    assert route.primary_permitted(now + timedelta(seconds=46), query="DeepSeek")
-
-
-def test_independent_partial_failure_preserves_previous_transport_failure():
-    from x_monitor.search_provider_circuit import SearchProviderCircuit
-
-    route = SearchProviderCircuit("mixed-failures", provider="twexapi", endpoint_family="search", threshold=2)
-    now = timezone.now()
-    route.record_failure(now)
-    route.record_failure(now, partial_query="Qwen")
-    assert not route.primary_permitted(now, query="DeepSeek")
-
-
-def test_partial_on_a_saved_twex_cursor_holds_query_for_other_search_readers(monkeypatch):
-    from types import SimpleNamespace
-
-    from monitor.backfill_prefetch import Prefetcher
-    from monitor.backfill_resources import BackfillBudgetExhausted
+@pytest.mark.parametrize("rate_limited", [False, True])
+def test_saved_twex_empty_tail_preserves_real_failures(monkeypatch, rate_limited):
     from x_monitor.search_provider_circuit import SearchProviderCircuit
     from x_monitor.x_client import XClient, XClientServerError
 
+    now = timezone.now()
     route = SearchProviderCircuit("saved-cursor", provider="twexapi", endpoint_family="search", threshold=2)
+    route.record_failure(now)
     client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("history"),
                      twex_circuit=route, provider_order=("twexapi",))
-    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: {
-        "code": 200, "data": [], "has_next_page": True, "next_cursor": "ambiguous",
-    })
+
+    def fetch(query, cursor, **options):
+        if rate_limited:
+            route.record_rate_limit(now, 45)
+        return {"code": 200, "data": [], "has_next_page": True, "next_cursor": "ambiguous"}
+
+    monkeypatch.setattr(client, "_twex_search_with_retry", fetch)
     with pytest.raises(XClientServerError, match="empty page"):
         next(client.run_search_pages("Qwen", cursor="twexapi:saved"))
-    assert not route.primary_permitted(timezone.now(), query="Qwen")
-    assert route.primary_permitted(timezone.now(), query="DeepSeek")
-
-    prefetch = Prefetcher(None, None, None, SimpleNamespace(concurrency=1, starts_per_second=1))
-    prefetch.router = client
-    monkeypatch.setattr("monitor.backfill_prefetch._params", lambda scope: {"query": "Qwen"})
-    with pytest.raises(XClientServerError, match="no configured"):
-        prefetch._select_route(SimpleNamespace(cursor=None))
-    with pytest.raises(BackfillBudgetExhausted, match="held"):
-        prefetch._select_route(SimpleNamespace(cursor="twexapi:saved"))
-    client.force_twexapi = True
-    with pytest.raises(XClientServerError, match="held"):
-        next(client.run_search_pages("Qwen"))
+    if rate_limited:
+        assert not route.primary_permitted(now + timedelta(seconds=44))
+        assert route.primary_permitted(now + timedelta(seconds=46))
+    else:
+        assert route.primary_permitted(now)
+        route.record_failure(now)
+        assert not route.primary_permitted(now)

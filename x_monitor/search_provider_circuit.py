@@ -10,10 +10,6 @@ from django.db import transaction
 from core.models import SearchProviderCircuit as CircuitRow
 
 
-def _base_query(query):
-    return re.sub(r"\s+(?:since_time|until_time):\d+", "", query).strip()
-
-
 class SearchProviderCircuit:
     def __init__(self, purpose, *, provider="", endpoint_family="", threshold=2, cooldown=180, probe_lease=60):
         self.provider = provider
@@ -35,15 +31,9 @@ class SearchProviderCircuit:
         })
         return CircuitRow.objects.select_for_update().get(purpose=self.purpose)
 
-    def _partial_query_key(self, query):
-        identity = f"{self.purpose}\0{_base_query(query)}".encode()
-        return "p:" + hashlib.sha256(identity).hexdigest()[:28]
-
-    def primary_permitted(self, now, *, query=None):
+    def primary_permitted(self, now):
         with transaction.atomic():
             row = self._locked_row()
-            if query and CircuitRow.objects.filter(purpose=self._partial_query_key(query), open_until__gt=now).exists():
-                return False
             if row.open_until is None:
                 return True
             if row.open_until > now or (row.probe_lease_until and row.probe_lease_until > now):
@@ -85,25 +75,12 @@ class SearchProviderCircuit:
         self._probe_local.owner = None
         self.probe_claimed = False
 
-    def record_failure(self, now, *, partial_query=None):
+    def record_failure(self, now):
         with transaction.atomic():
             row = self._locked_row()
             owner = getattr(self._probe_local, "owner", None)
             if row.open_until is not None and (owner is None or owner != row.probe_owner):
                 return
-            if partial_query is not None:
-                # An empty continuation after real posts proves a problem with this
-                # query. Give an independent query a chance after a recovery probe.
-                key = self._partial_query_key(partial_query)
-                if CircuitRow.objects.filter(purpose=key, open_until__gt=now).exists():
-                    return
-                if row.open_until is not None:
-                    row.consecutive_failures = 0
-                CircuitRow.objects.update_or_create(purpose=key, defaults={
-                    "provider": self.provider, "endpoint_family": "search_partial",
-                    "credential_purpose": self.credential_purpose, "open_until": now + timedelta(seconds=self.cooldown),
-                })
-                row.open_until = row.probe_lease_until = row.probe_owner = None
             row.consecutive_failures += 1
             if row.consecutive_failures >= self.threshold:
                 row.open_until = now + timedelta(seconds=self.cooldown)
@@ -168,7 +145,7 @@ class SearchProviderCircuit:
                                          fallback_lease_until__gt=now).exists()
 
     def observe_query(self, query, *, nonempty, now, minimum=3, within_seconds=2700):
-        base = _base_query(query)
+        base = re.sub(r"\s+(?:since_time|until_time):\d+", "", query).strip()
         key = "q:" + hashlib.sha256(base.encode()).hexdigest()[:28]
         with transaction.atomic():
             CircuitRow.objects.get_or_create(purpose=key)

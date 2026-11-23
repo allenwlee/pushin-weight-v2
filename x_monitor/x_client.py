@@ -591,9 +591,9 @@ class XClient:
 
     # --- public surface (mirrors the old ApifyClient) --------------------
 
-    def _choose_search_provider(self, excluded=frozenset(), *, query=None):
+    def _choose_search_provider(self, excluded=frozenset()):
         if self.force_twexapi:
-            if self.twex_circuit and not self.twex_circuit.primary_permitted(datetime.now(UTC), query=query):
+            if self.twex_circuit and not self.twex_circuit.primary_permitted(datetime.now(UTC)):
                 raise XClientServerError("TwexAPI search held during cooldown")
             return "twexapi"
         for provider in self.provider_order:
@@ -607,7 +607,7 @@ class XClient:
             if provider == "twitterapi" and (not self.circuit or self.circuit.primary_permitted(datetime.now(timezone.utc))):
                 return provider
             if provider == "twexapi" and self.twexapi_key and self.circuit and (
-                not self.twex_circuit or self.twex_circuit.primary_permitted(datetime.now(timezone.utc), query=query)
+                not self.twex_circuit or self.twex_circuit.primary_permitted(datetime.now(timezone.utc))
             ):
                 return provider
         raise XClientServerError("no configured search provider is available")
@@ -751,7 +751,7 @@ class XClient:
         while True:
             if can_start_page is not None and not can_start_page():
                 raise TimeoutError("search deadline reached before provider dispatch")
-            provider = self._choose_search_provider(excluded, query=query)
+            provider = self._choose_search_provider(excluded)
             yielded = False
             try:
                 for page in self._iter_search_pages_once(query, max_results, max_pages=max_pages,
@@ -789,7 +789,7 @@ class XClient:
         if cursor and cursor.startswith("twexapi:"):
             if not self.twexapi_key or not self.circuit:
                 raise ValueError("TwexAPI cursor requires the fallback credential")
-            if self.twex_circuit and not self.twex_circuit.primary_permitted(datetime.now(timezone.utc), query=query):
+            if self.twex_circuit and not self.twex_circuit.primary_permitted(datetime.now(timezone.utc)):
                 raise XClientServerError("TwexAPI cursor held while provider circuit is open")
             provider = "twexapi"
             cursor = cursor.removeprefix("twexapi:")
@@ -802,7 +802,7 @@ class XClient:
         elif cursor and self.circuit and not self.circuit.primary_permitted(datetime.now(timezone.utc)):
             raise XClientServerError("TwitterAPI cursor held while provider circuit is open")
         elif not cursor and selected_provider is None and (self.twexapi_key or self.provider_circuits) and self.circuit:
-            provider = self._choose_search_provider(query=query)
+            provider = self._choose_search_provider()
         active_circuit = self.provider_circuits.get(provider, self.circuit)
         page_number = 0
         seen_cursors = {cursor} if cursor else set()
@@ -846,8 +846,12 @@ class XClient:
                     raise XClientServerError("TwexAPI search response invalid") from exc
                 if _unresolved_empty_page(page, data, cursor):
                     if self.twex_circuit:
-                        partial = cursor and data.get("has_next_page") is True and page.next_cursor
-                        self.twex_circuit.record_failure(datetime.now(timezone.utc), partial_query=query if partial else None)
+                        if cursor and data.get("has_next_page") is True and page.next_cursor:
+                            # TwexAPI can advertise another page even after returning
+                            # zero posts. Hold coverage and release any recovery probe.
+                            self.twex_circuit.abandon_probe()
+                        else:
+                            self.twex_circuit.record_failure(datetime.now(timezone.utc))
                     raise XClientServerError("TwexAPI empty page when continuation expected")
                 if page_number == 1 and not cursor:
                     expected = self.circuit.observe_query(query, nonempty=bool(page.items), now=datetime.now(timezone.utc))
@@ -1048,7 +1052,7 @@ class XClient:
         )
         from x_monitor.x_data_provider import TwitterAPIProvider, TwexAPIProvider
 
-        provider = self._choose_search_provider(query=effective_query) if self.circuit else "primary"
+        provider = self._choose_search_provider() if self.circuit else "primary"
         active_circuit = self.provider_circuits.get(provider, self.circuit)
         if provider == "twexapi":
             raw_body, data = TwexAPIProvider(self).search_page(effective_query, None, capture_raw=True, raw_sink=receipt_sink)
