@@ -92,7 +92,7 @@ def test_large_saved_retrieval_ledger_does_not_block_the_real_selector_send(
 
 
 @pytest.mark.parametrize("ranked", [1], indirect=True)
-@pytest.mark.parametrize("builder", ["chatter-selection-v1", "chatter-selection-v2"])
+@pytest.mark.parametrize("builder", ["chatter-selection-v1", "chatter-selection-v2", "chatter-selection-v3"])
 def test_saved_selector_request_keeps_its_builder_and_reconstructs_after_lease(
     ranked, builder
 ):
@@ -102,6 +102,13 @@ def test_saved_selector_request_keeps_its_builder_and_reconstructs_after_lease(
     if builder.endswith("v1"):
         built = request("selection", payload, cfg)
     reference = {"run_id": run.pk, "stage": "selector:0", "builder": builder}
+    if builder.endswith("v3"):
+        from monitor.editorial.chatter_inputs import _render_selection_input, _selector_request
+
+        _, rendered = _render_selection_input(
+            run, "selector:0", run.outcome["selection_inputs"]["selector:0"], reference
+        )
+        built = _selector_request(rendered, cfg, builder)
     body = request_payload(cfg.chatter.selector, built)
     content = OriginalContent.objects.filter(run=run).first()
     call = producer(content, "en")
@@ -132,7 +139,7 @@ def test_rolling_selector_uses_short_prompt_and_reconstructs_exactly(ranked, mon
     payload = _selection_packet(run, cfg)
     built, full = _selection_request(run, "selector:0", payload, cfg)
     assert built["system"] == _ROLLING_SELECTOR_SYSTEM
-    assert built["input_reference"]["builder"] == "chatter-selection-v3"
+    assert built["input_reference"]["builder"] == "chatter-selection-v4"
     assert json.loads(built["user"])["candidates"] == payload["candidates"]
     sent = []
 
@@ -146,3 +153,43 @@ def test_rolling_selector_uses_short_prompt_and_reconstructs_exactly(ranked, mon
     assert len(sent) == 1
     assert reconstruct_selection_request(call) == sent[0]
     assert full == payload
+
+
+def test_selector_v4_bounds_excerpts_without_changing_saved_sources(monkeypatch):
+    from types import SimpleNamespace
+    from monitor.editorial.chatter_inputs import _render_selection_input
+
+    sources = {
+        str(i): {"id": str(i), "original_text": "long text " * 600,
+                 "stored_quote": "quote " * 600, "excerpt_truncated": False}
+        for i in range(74)
+    }
+    saved = deepcopy(sources)
+    monkeypatch.setattr("monitor.editorial.chatter_inputs.resolved_sources", lambda _: sources)
+    run = SimpleNamespace(pk=100, snapshot={})
+    payload = {"candidates": [{"post_ids": list(sources)}], "coverage": {}}
+    reference = {"run_id": 100, "stage": "selector:0", "builder": "chatter-selection-v4"}
+    full, rendered = _render_selection_input(run, "selector:0", {"schema_version": 1, "payload": payload}, reference)
+    assert sources == saved
+    assert len(full["candidates"][0]["evidence"][0]["original_text"]) == 6000
+    assert len(rendered["candidates"][0]["evidence"]) == 74
+    assert all(len(row["original_text"]) == 1200 and len(row["stored_quote"]) == 1200
+               and row["excerpt_truncated"] for row in rendered["candidates"][0]["evidence"])
+    reference["builder"] = "chatter-selection-v3"
+    _, legacy = _render_selection_input(run, "selector:0", {"schema_version": 1, "payload": payload}, reference)
+    assert len(legacy["candidates"][0]["evidence"][0]["original_text"]) == 6000
+
+
+def test_selector_excerpt_limit_counts_utf8_bytes(monkeypatch):
+    from types import SimpleNamespace
+    from monitor.editorial.chatter_inputs import _render_selection_input
+
+    source = {"id": "1", "original_text": "汉" * 1000, "stored_quote": "", "excerpt_truncated": False}
+    monkeypatch.setattr("monitor.editorial.chatter_inputs.resolved_sources", lambda _: {"1": source})
+    payload = {"candidates": [{"post_ids": ["1"]}], "coverage": {}}
+    ref = {"run_id": 1, "stage": "selector:0", "builder": "chatter-selection-v4"}
+    full, rendered = _render_selection_input(SimpleNamespace(pk=1, snapshot={}), "selector:0", {"schema_version": 1, "payload": payload}, ref)
+    excerpt = rendered["candidates"][0]["evidence"][0]
+    assert len(excerpt["original_text"].encode("utf-8")) == 1200
+    assert excerpt["excerpt_truncated"]
+    assert full["candidates"][0]["evidence"][0]["original_text"] == "汉" * 1000

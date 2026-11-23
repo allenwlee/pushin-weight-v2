@@ -28,6 +28,8 @@ from .writing import writer_request
 _SELECTION_V1 = "chatter-selection-v1"
 _SELECTION_V2 = "chatter-selection-v2"
 _SELECTION_V3 = "chatter-selection-v3"
+_SELECTION_V4 = "chatter-selection-v4"
+_SELECTOR_EXCERPT_BYTES = 1200
 
 # Personalized Trends already performs discovery and ranking. Keep this selector
 # focused on the six publication pools and their existing evidence contract.
@@ -46,7 +48,7 @@ _ROLLING_SELECTOR_SYSTEM = (
 
 
 def _selector_request(rendered, cfg, builder):
-    system = _ROLLING_SELECTOR_SYSTEM if builder == _SELECTION_V3 else None
+    system = _ROLLING_SELECTOR_SYSTEM if builder in {_SELECTION_V3, _SELECTION_V4} else None
     return request("selection", rendered, cfg, system_override=system)
 
 
@@ -219,7 +221,7 @@ def _selection_request(run, stage, payload, cfg):
     prior = run.provider_calls.filter(stage=stage, batch_key="").only("request_packet").first()
     reference = prior.request_packet["input_reference"] if prior else {
         "run_id": run.pk, "stage": stage,
-        "builder": _SELECTION_V3 if run.scope_key == DECISION_SCOPE else _SELECTION_V2,
+        "builder": _SELECTION_V4 if run.scope_key == DECISION_SCOPE else _SELECTION_V2,
     }
     full, rendered = _render_selection_input(current, stage, stored, reference)
     built = _selector_request(rendered, cfg, reference["builder"])
@@ -229,7 +231,7 @@ def _selection_request(run, stage, payload, cfg):
 
 def _render_selection_input(run, stage, stored, reference):
     builder = reference.get("builder")
-    if (builder not in {_SELECTION_V1, _SELECTION_V2, _SELECTION_V3}
+    if (builder not in {_SELECTION_V1, _SELECTION_V2, _SELECTION_V3, _SELECTION_V4}
             or reference != {"run_id": run.pk, "stage": stage, "builder": builder}):
         raise ValueError("unknown selection input builder")
     if set(stored) != {"schema_version", "payload"} or stored["schema_version"] != 1:
@@ -239,7 +241,7 @@ def _render_selection_input(run, stage, stored, reference):
     for candidate in payload["candidates"]:
         candidate["evidence"] = [sources[identity] for identity in candidate["post_ids"]]
     rendered = payload
-    if builder in {_SELECTION_V2, _SELECTION_V3} and payload["coverage"].get("gathering") is not None:
+    if builder in {_SELECTION_V2, _SELECTION_V3, _SELECTION_V4} and payload["coverage"].get("gathering") is not None:
         gathering = payload["coverage"]["gathering"]
         # Execution receipts remain in the immutable projection, outside model context.
         summary = {
@@ -257,6 +259,17 @@ def _render_selection_input(run, stage, stored, reference):
             } for lead in gathering["leads"]],
         }
         rendered = {**payload, "coverage": {**payload["coverage"], "gathering": summary}}
+    if builder == _SELECTION_V4:
+        # The immutable source packet stays complete for the writer and audit.
+        # Only selector excerpts are bounded; every post and identity remains.
+        rendered = deepcopy(rendered)
+        for candidate in rendered["candidates"]:
+            for source in candidate["evidence"]:
+                for key in ("original_text", "stored_quote"):
+                    text = source.get(key)
+                    if isinstance(text, str) and len(text.encode("utf-8")) > _SELECTOR_EXCERPT_BYTES:
+                        source[key] = text.encode("utf-8")[:_SELECTOR_EXCERPT_BYTES].decode("utf-8", "ignore")
+                        source["excerpt_truncated"] = True
     # History expansion uses the full saved projection, rather than re-projecting a summary.
     return payload, rendered
 
