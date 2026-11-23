@@ -1234,3 +1234,51 @@ def test_paired_hardware_without_identity_conflict_keeps_existing_labels():
     brand = result["publication_result"]["by_brand"]["nemo_megatron"]
     assert brand["sentiment"] == "positive"
     assert brand["post_types"] == ["releases_updates"]
+
+
+def test_identity_conflict_does_not_transfer_other_product_launch_or_praise_in_prose():
+    from x_monitor.compressed_classifier import build_jev, finish
+
+    sample = case()
+    sample["state"]["source_text"] = "Maya v1.1.64 is out and excellent. Qwen files now work."
+    prepared = build_jev(sample, {"entities": []})
+    response = answers(prepared["request"], positive_keys={"relevant", "identity_namesake_only", "type:releases_updates", "positive"})
+    result = finish(sample, prepared, response)
+    brand = result["publication_result"]["by_brand"]["qwen"]
+    assert brand["outcome"] == "classified"
+    assert brand["post_types"] == ["other"]
+    assert brand["sentiment"] == "neutral"
+
+
+def test_identity_conflict_capitalized_description_is_not_a_namesake():
+    from x_monitor.compressed_classifier import build_jev, finish
+
+    sample = case()
+    sample["state"]["source_text"] = "Qwen Models are excellent."
+    prepared = build_jev(sample, {"entities": []})
+    response = answers(prepared["request"], positive_keys={"relevant", "identity_namesake_only", "positive"})
+    result = finish(sample, prepared, response)
+    brand = result["publication_result"]["by_brand"]["qwen"]
+    assert brand["outcome"] == "classified"
+    assert brand["sentiment"] == "positive"
+
+
+@pytest.mark.parametrize("text,types,sentiment", [
+    ("Maya is out and excellent with support for Qwen files.", ["other"], "neutral"),
+    ("Qwen4 weights are available today.", ["releases_updates"], "positive"),
+    ("Maya is out. Qwen files now work and Qwen Models are excellent.", ["other"], "positive"),
+])
+def test_conflicting_identity_vote_binds_launch_and_praise_to_target(text, types, sentiment):
+    from x_monitor.compressed_classifier import build_jev, finish
+
+    sample = case()
+    sample["state"]["source_text"] = text
+    prepared = build_jev(sample, {"entities": []})
+    response = answers(prepared["request"], positive_keys={
+        "relevant", "identity_namesake_only", "type:releases_updates", "positive",
+    })
+    result = finish(sample, prepared, response)
+    brand = result["publication_result"]["by_brand"]["qwen"]
+    assert brand["outcome"] == "classified"
+    assert brand["post_types"] == types
+    assert brand["sentiment"] == sentiment
