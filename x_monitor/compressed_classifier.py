@@ -566,7 +566,11 @@ def _target_claims(state):
             matches.extend(re.finditer(r"(?<!\w)" + re.escape(term) + r"\d[\w.-]*", visible, re.IGNORECASE))
         for match in matches:
             before, after = visible[:match.start()], visible[match.end():]
-            release |= bool(
+            # Releasing compatibility with a product is a release of the integrator's work.
+            compatibility = re.match(
+                rf"{_TARGET_MODIFIERS}\s+(?:support|compatibility|integration)\b", after, re.IGNORECASE,
+            )
+            release |= not compatibility and bool(
                 re.match(rf"{_TARGET_MODIFIERS}\s+{_RELEASE_PREDICATE}\b", after, re.IGNORECASE)
                 or re.search(rf"\b{_RELEASE_VERB}\s+(?:(?:the|new)\s+)*$", before, re.IGNORECASE)
             )

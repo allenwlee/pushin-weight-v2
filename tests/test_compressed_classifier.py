@@ -1265,6 +1265,7 @@ def test_identity_conflict_capitalized_description_is_not_a_namesake():
 
 @pytest.mark.parametrize("text,types,sentiment", [
     ("Maya is out and excellent with support for Qwen files.", ["other"], "neutral"),
+    ("Maya released Qwen support today.", ["other"], "neutral"),
     ("Qwen4 weights are available today.", ["releases_updates"], "positive"),
     ("Maya is out. Qwen files now work and Qwen Models are excellent.", ["other"], "positive"),
 ])
