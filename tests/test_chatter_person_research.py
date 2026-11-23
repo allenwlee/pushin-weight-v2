@@ -213,3 +213,45 @@ def test_same_person_sources_keep_the_official_page_and_skip_search(
     assert PAGE in work.context["evidence"]["source_urls"]
     assert research_chatter_person.run(work.pk) == "complete"
     assert calls["search"] == []
+
+
+def test_legacy_episode_can_research_a_founder_outside_the_catalog(monkeypatch):
+    from unittest.mock import Mock
+    from core.staff_assets import person_intake
+    from core.models import BrandAccount, CompanyAccount
+    from monitor.editorial.graphics_cast import story_subjects
+
+    subject = "Robin Hart"
+    passage = "🎤 Heliograph founder Robin Hart talked to the press."
+    saved = {
+        "facts_as_of": timezone.now().isoformat(),
+        "handoff": {
+            "subject": "Robin Hart speaks at the summit",
+            "fact_items": [{
+                "fact_id": "F01",
+                "supporting_passage": passage,
+                "source_refs": ["https://news.example/interview"],
+            }],
+        },
+    }
+    saved["handoff"]["fact_items"][0]["supporting_passage"] = (
+        "Robin Hart interviewed Heliograph founder Jane Miller."
+    )
+    assert list(story_subjects(saved, {})) == []
+    saved["handoff"]["fact_items"][0]["supporting_passage"] = passage
+    saved["handoff"]["fact_items"].append({
+        "fact_id": "F02",
+        "supporting_passage": "Heliograph founder Robin Hart answered another question.",
+        "source_refs": ["https://news.example/second-report"],
+    })
+    lookup = Mock(wraps=person_intake.personal_accounts_named)
+    monkeypatch.setattr(person_intake, "personal_accounts_named", lookup)
+    state = prepare_person_cast(saved, {}, timezone.now())
+    lookup.assert_called_once_with(subject)
+    entry, = state["subjects"]
+    assert entry["name"] == subject and entry["work_id"]
+    work = StaffCollectionWork.objects.get(pk=entry["work_id"])
+    assert work.context["evidence"]["passage"] == passage
+    assert not BrandAccount.objects.exists() and not CompanyAccount.objects.exists()
+    repeat = prepare_person_cast(saved, {}, timezone.now())
+    assert repeat["subjects"][0]["work_id"] == work.pk

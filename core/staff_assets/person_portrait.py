@@ -166,6 +166,10 @@ def _once(work, provider, params, send, *, deadline=None):
     return response
 
 
+def _social_url(url):
+    return urlsplit(url).hostname in {"x.com", "www.x.com", "twitter.com", "www.twitter.com", "t.co"}
+
+
 def _source_urls(observations):
     urls = []
     for row in observations:
@@ -174,16 +178,16 @@ def _source_urls(observations):
             supplied = []
         for value in [*supplied, row.get("source_url")]:
             url = public_url(value)
-            if url and url not in urls:
-                urls.append(url)
+            if not url or url in urls:
+                continue
+            parsed = urlsplit(url)
+            if (row.get("passage") and parsed.hostname in {"x.com", "www.x.com", "twitter.com", "www.twitter.com"}
+                and re.search(r"/status/\d+/?$", parsed.path)):
+                # This post is already in the evidence packet.
+                continue
+            urls.append(url)
     # The story already contains its X passages. Use linked non-social sources first.
-    return sorted(
-        urls,
-        key=lambda url: (
-            (urlsplit(url).hostname or "").casefold()
-            in {"x.com", "www.x.com", "twitter.com", "www.twitter.com", "t.co"}
-        ),
-    )
+    return sorted(urls, key=_social_url)
 
 
 def _query(name, observations, *, jobs_only):
@@ -477,6 +481,10 @@ def _lookup(person, subject, observations, work, facematch, result, *, jobs, por
     elapsed = (timezone.now() - start).total_seconds() if start else 0
     deadline = time.monotonic() + PAGE_SECONDS - elapsed
     urls = _source_urls(observations)
+    last = LIMITS["portrait_page"] - 1
+    if len(urls) > last and _social_url(urls[last]) and os.environ.get("EXA_API_KEY"):
+        # Keep the last slot available for a portrait source instead of another social link.
+        urls = urls[:last]
     visited = set()
     pages = []
     origin = "story_source"

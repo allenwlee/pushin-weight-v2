@@ -5,15 +5,16 @@ import re
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
-from functools import partial
+from functools import lru_cache, partial
 
 from botocore.exceptions import BotoCoreError, ClientError
 from django.core.files.storage import storages
 from django.db.models import Value
-from django.db.models.functions import Lower, StrIndex, Trim
+from django.db.models.functions import Collate, Lower, StrIndex, Trim
 from django.utils import timezone
 
 from core.models import PersonAccount, PersonMedia, PersonName
+from core.staff_assets.person_roles import named_employers, sourced_role
 from core.staff_assets.graphics_references import (
     read_graphics_references,
     read_staff_object_before,
@@ -49,7 +50,7 @@ def story_subjects(saved, selection):
     # so the saved gap distinguishes a named subject from an unknown identity.
     names = (PersonName.objects.filter(person__merged_into__isnull=True)
              .exclude(review_status='rejected')
-             .alias(name_position=StrIndex(Lower(Value(subject)), Lower(Trim('full_name'))))
+             .alias(name_position=StrIndex(Collate(Lower(Value(subject)), "C"), Lower(Trim('full_name'))))
              .filter(name_position__gt=0))
     for person_id, name in names.values_list('person_id', 'full_name'):
         name = name.strip()
@@ -68,7 +69,17 @@ def story_subjects(saved, selection):
     # The ranker can supply a cold-start subject within its existing call.
     # Validate each name against both the headline and the selected primary sources.
     hints = {}
-    for name in (selection.get("people") or [])[:3]:
+    names = selection.get("people") or []
+    if "people" not in selection:
+        # Older rankings did not name their subjects. Recover a headline name
+        # only when a primary passage explicitly attributes an employer and role.
+        likely_names = dict.fromkeys(name for headline in headlines for name in
+            re.findall(r"(?<!\w)[A-Z][a-zA-Z’'-]+(?:[ \t]+[A-Z][a-zA-Z’'-]+){1,2}(?!\w)", headline))
+        names = [name for name in likely_names if any(
+            sourced_role(name, org, fact['supporting_passage'])
+            for fact in facts if name in fact['supporting_passage']
+            for org in named_employers(name, fact['supporting_passage']))]
+    for name in names[:3]:
         if not isinstance(name, str) or not name.strip() or len(name) > 200:
             continue
         pattern = rf"(?<!\w){re.escape(name)}(?!\w)"
@@ -201,18 +212,22 @@ def recipe_refs(assets):
 
 def prepare_person_cast(saved, selection, started, *, foreground=None):
     """Reconcile every sourced observation before choosing or requesting a portrait."""
-    from core.staff_assets.person_intake import create_or_update_person
+    from core.staff_assets.person_intake import create_or_update_person, personal_accounts_named
     from core.staff_assets.person_research import collect_missing
 
     foreground = foreground or ForegroundPortraits(started)
     subjects, gaps = [], []
+    # The same name may appear in dozens of posts. Check the account directory
+    # once per subject, while validating role and affiliation on every passage.
+    accounts_for_story = lru_cache(maxsize=3)(personal_accounts_named)
     for name, known_id, facts in story_subjects(saved, selection):
         matches = {}
         links = defaultdict(list)
         unresolved = set()
         for fact in facts:
             evidence = fact_evidence(name, fact, known_id, saved)
-            identity = create_or_update_person(name, evidence, needs={'portrait'}, collect=False)
+            identity = create_or_update_person(name, evidence, needs={'portrait'}, collect=False,
+                                               account_lookup=accounts_for_story)
             if identity.get('person_id'):
                 key = str(identity['person_id'])
                 links[key].extend(evidence['source_urls'])
