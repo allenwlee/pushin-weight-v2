@@ -144,6 +144,13 @@ def _unresolved_empty_page(page, response, requested_cursor):
             or (bool(requested_cursor) and response.get("has_next_page") is not False))
 
 
+def twex_empty_with_cursor(response):
+    """TwexAPI can return an empty window while still advertising another page."""
+    return (response.get("code") == 200 and response.get("data") == []
+            and response.get("has_next_page") is True
+            and isinstance(response.get("next_cursor"), str) and bool(response["next_cursor"].strip()))
+
+
 def _twexapi_tweet(item):
     if not isinstance(item, dict):
         raise TypeError("TwexAPI tweet must be an object")
@@ -250,6 +257,9 @@ class XClient:
     search_max_retries: int = field(default=0, kw_only=True)
     force_twexapi: bool = field(default=False, kw_only=True)
     default_credential_route: str | None = field(default=None, repr=False, kw_only=True)
+    # One scheduled cycle owns this client. Only an observed 429 arms a wait.
+    _twex_retry_at: float | None = field(default=None, init=False, repr=False)
+    _rate_limit_wait_used: bool = field(default=False, init=False, repr=False)
     before_request: Callable[[float], None] | None = None
     after_response: Callable[[dict[str, Any]], None] | None = None
     on_exchange_start: Callable[[str, dict[str, Any]], Any] | None = None
@@ -742,7 +752,7 @@ class XClient:
 
     def _iter_search_pages(
         self, query, max_results, *, max_pages=5, max_per_page=20,
-        since_time=None, cursor=None, can_start_page=None,
+        since_time=None, cursor=None, can_start_page=None, can_wait_for_rate_limit=None,
     ):
         # A failed first page has not committed any coverage, so a different
         # credential may safely retry the identical bounded query. Never move
@@ -755,7 +765,23 @@ class XClient:
         while True:
             if can_start_page is not None and not can_start_page():
                 raise TimeoutError("search deadline reached before provider dispatch")
-            provider = self._choose_search_provider(excluded)
+            try:
+                provider = self._choose_search_provider(excluded)
+            except XClientServerError:
+                # A failed keyword retains its window. Give a subsequent keyword
+                # a single chance once the provider's short Retry-After expires.
+                if (can_wait_for_rate_limit is None or self._twex_retry_at is None
+                        or self._rate_limit_wait_used or "twexapi" in excluded):
+                    raise
+                wait = self._twex_retry_at - time.monotonic()
+                if not 0 < wait <= 30 or not can_wait_for_rate_limit(wait):
+                    raise
+                self._rate_limit_wait_used = True
+                log.info("Scheduled search waiting %.2fs after TwexAPI 429", wait)
+                time.sleep(wait)
+                continue
+            if provider == "twexapi":
+                self._twex_retry_at = None
             yielded = False
             try:
                 for page in self._iter_search_pages_once(query, max_results, max_pages=max_pages,
@@ -764,7 +790,10 @@ class XClient:
                     yielded = True
                     yield page
                 return
-            except (XClientServerError, XClientAuthError, XClientRateLimitError, requests.Timeout, requests.ConnectionError):
+            except (XClientServerError, XClientAuthError, XClientRateLimitError, requests.Timeout, requests.ConnectionError) as exc:
+                if (provider == "twexapi" and can_wait_for_rate_limit is not None
+                        and isinstance(exc, XClientRateLimitError) and 0 < exc.retry_after_seconds <= 30):
+                    self._twex_retry_at = time.monotonic() + exc.retry_after_seconds
                 if yielded:
                     raise
                 excluded.add(provider)
@@ -844,15 +873,14 @@ class XClient:
                         self.twex_circuit.record_failure(datetime.now(timezone.utc))
                     raise XClientServerError("TwexAPI search response invalid") from exc
                 if _unresolved_empty_page(page, data, cursor):
-                    if self.twex_circuit:
-                        if (cursor and data.get("has_next_page") is True
-                                and isinstance(page.next_cursor, str) and page.next_cursor
-                                and page.next_cursor not in seen_cursors):
-                            # TwexAPI can advertise another page even after returning
-                            # zero posts. Hold coverage and release any recovery probe.
+                    if twex_empty_with_cursor(data) and page.next_cursor not in seen_cursors:
+                        if self.twex_circuit:
                             self.twex_circuit.abandon_probe()
-                        else:
-                            self.twex_circuit.record_failure(datetime.now(timezone.utc))
+                        if not cursor:
+                            yield replace(page, continuation_invalid=True, has_more=False, next_cursor=None)
+                            return
+                    elif self.twex_circuit:
+                        self.twex_circuit.record_failure(datetime.now(timezone.utc))
                     raise XClientServerError("TwexAPI empty page when continuation expected")
                 if page_number == 1 and not cursor:
                     expected = self.circuit.observe_query(query, nonempty=bool(page.items), now=datetime.now(timezone.utc))
@@ -936,6 +964,7 @@ class XClient:
         max_per_page: int = 20,
         since_time: int | None = None,
         can_start_page: Callable[[], bool] | None = None,
+        can_wait_for_rate_limit: Callable[[float], bool] | None = None,
     ) -> tuple[list[dict[str, Any]], bool]:
         """Aggregate page-wise progress for compatibility with older callers."""
 
@@ -948,6 +977,7 @@ class XClient:
             max_per_page=max_per_page,
             since_time=since_time,
             can_start_page=can_start_page,
+            can_wait_for_rate_limit=can_wait_for_rate_limit,
         )
         while True:
             # Check immediately before advancing the shared lazy iterator;
@@ -1058,6 +1088,10 @@ class XClient:
         if provider == "twexapi":
             raw_body, data = TwexAPIProvider(self).search_page(effective_query, None, capture_raw=True, raw_sink=receipt_sink)
             raw_items = data["data"]
+            if twex_empty_with_cursor(data):
+                if self.twex_circuit:
+                    self.twex_circuit.abandon_probe()
+                return raw_body, data, [], True, 0
             expected = self.circuit.observe_query(effective_query, nonempty=bool(raw_items), now=datetime.now(timezone.utc))
             if not raw_items and (data.get("has_next_page") or data.get("next_cursor") or expected):
                 if self.twex_circuit:
@@ -1123,6 +1157,7 @@ class XClient:
         since_time: int | None = None,
         until_time: int | None = None,
         can_start_page: Callable[[], bool] | None = None,
+        can_wait_for_rate_limit: Callable[[float], bool] | None = None,
     ) -> tuple[list[dict[str, Any]], bool]:
         """Run an X advanced-search query via TwitterAPI.io.
 
@@ -1168,6 +1203,8 @@ class XClient:
             until_time=until_time,
         )
         admission = {"can_start_page": can_start_page} if can_start_page is not None else {}
+        if can_wait_for_rate_limit is not None:
+            admission["can_wait_for_rate_limit"] = can_wait_for_rate_limit
         return self._walk_search(
             effective_query,
             max_results,

@@ -110,3 +110,17 @@ def test_scheduled_search_checks_remaining_time_between_pages(call, monkeypatch)
     assert outcome == "ok"
     assert [item["id"] for item in items] == ["1", "2", "3", "4", "5"]
     assert len(requests) == 5
+
+
+def test_scheduled_429_wait_reserves_time_for_dispatch(call):
+    from unittest.mock import Mock
+
+    runner = _runner()
+    runner.cycle_kind = "scheduled"
+    api = CaptureApi()
+    deadline = Mock()
+    deadline.remaining.return_value = 194
+    runner._fetch_tweets(call, api, window=(100, 200), deadline=deadline)
+    assert api.kwargs["can_wait_for_rate_limit"](6)
+    deadline.remaining.return_value = 193
+    assert not api.kwargs["can_wait_for_rate_limit"](6)

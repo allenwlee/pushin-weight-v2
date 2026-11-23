@@ -42,14 +42,30 @@ def test_empty_page_advertising_continuation_is_not_a_healthy_probe(monkeypatch,
     from monitor import backfill_prefetch
 
     body = {"code": 200, "data": [], "tweets": [], "has_next_page": True, "next_cursor": "next"}
-    circuit = SimpleNamespace(is_probe=lambda: True)
+    from unittest.mock import Mock
+    circuit = Mock()
+    circuit.is_probe.return_value = True
     prefetcher = backfill_prefetch.Prefetcher(None, None, None, backfill_prefetch.PrefetchOptions())
-    prefetcher.router = SimpleNamespace(twex_circuit=circuit, provider_circuits={provider: circuit})
+    prefetcher.router = SimpleNamespace(twex_circuit=circuit, provider_circuits={provider: circuit},
+                                        circuit=circuit, twexapi_interval_s=1)
     prefetcher.routes = {"request": SimpleNamespace(name=provider)}
     request = SimpleNamespace(pk="request", cursor_before=None)
     result = backfill_prefetch.TransportResult(body=json.dumps(body).encode(),
         response={"status_code": 200, "raw_results": 0}, error=None, received_at=datetime.now(UTC), seconds=0)
-    assert prefetcher._assess_route_result(request, result).error == "XClientServerError"
+    assessed = prefetcher._assess_route_result(request, result)
+    prefetcher._finish_route(request, assessed)
+    if provider == "twexapi":
+        assert assessed.error is None and assessed.inconclusive_empty
+        circuit.abandon_probe.assert_called_once_with()
+        circuit.record_failure.assert_not_called()
+        request.endpoint_url = "https://api.twexapi.io/twitter/advanced_search/page"
+        request.received_at = result.received_at
+        page, = backfill_prefetch.CapturedPage(request, assessed.response, False, body).pages()
+        assert page.continuation_invalid and page.next_cursor is None
+    else:
+        assert assessed.error == "XClientServerError"
+        circuit.record_failure.assert_called_once()
+    circuit.record_success.assert_not_called()
 
 
 @pytest.mark.parametrize("provider", ["twitterapi:scheduled", "twexapi"])

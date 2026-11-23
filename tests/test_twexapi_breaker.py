@@ -439,3 +439,134 @@ def test_forced_raw_receipt_429_keeps_provider_retry_after(monkeypatch):
         client.run_search_page_with_raw("Qwen", since_time=10, until_time=20)
     assert not route.primary_permitted(now + timedelta(seconds=40))
     assert route.primary_permitted(now + timedelta(seconds=46))
+
+
+def test_quiet_twex_first_page_holds_only_its_window(monkeypatch):
+    from core.models import SearchProviderCircuit as CircuitRow
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient
+
+    route = SearchProviderCircuit("C4", threshold=1)
+    route.record_failure(timezone.now() - timedelta(minutes=10))
+    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("history"),
+                     twex_circuit=route, provider_order=("twexapi",))
+    calls = []
+
+    def fetch(query, cursor, **options):
+        calls.append((query, cursor))
+        if query == "C4":
+            return {"code": 200, "data": [], "has_next_page": True, "next_cursor": "opaque"}
+        return {"code": 200, "data": [{"id": "23"}], "has_next_page": False}
+
+    monkeypatch.setattr(client, "_twex_search_with_retry", fetch)
+    assert client.run_search("C4") == ([], True)
+    row = CircuitRow.objects.get(purpose=route.purpose)
+    assert row.consecutive_failures == 1 and row.probe_owner is None
+    assert [item["id"] for item in client.run_search("B3")[0]] == ["23"]
+    assert calls == [("C4", None), ("B3", None)]
+
+
+@pytest.mark.parametrize(("delay", "budget", "waits"), [(6, 15, 1), (6, 2, 0), (60, 90, 0)])
+def test_scheduled_keyword_after_real_429_waits_at_most_once(monkeypatch, delay, budget, waits):
+    from core.models import SearchProviderCircuit as CircuitRow
+    from x_monitor import x_client
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient, XClientRateLimitError, XClientServerError
+
+    route = SearchProviderCircuit("rate-window", threshold=1)
+    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("history"),
+                     twex_circuit=route, provider_order=("twexapi",))
+    sleeps, calls = [], []
+
+    def fetch(query, cursor, **options):
+        calls.append(query)
+        exc = XClientRateLimitError("busy")
+        exc.retry_after_seconds = delay
+        raise exc
+
+    def sleep(seconds):
+        assert 0 < seconds <= delay
+        sleeps.append(seconds)
+        CircuitRow.objects.filter(purpose=route.purpose).update(open_until=timezone.now() - timedelta(seconds=1))
+
+    monkeypatch.setattr(client, "_twex_search_with_retry", fetch)
+    monkeypatch.setattr(x_client.time, "sleep", sleep)
+    for query in ["C2", "B3", "C7"]:
+        with pytest.raises((XClientRateLimitError, XClientServerError)):
+            client.run_search(query, can_wait_for_rate_limit=lambda seconds: seconds <= budget)
+    assert len(sleeps) == waits
+    assert calls == (["C2", "B3"] if waits else ["C2"])
+
+
+def test_available_fallback_takes_priority_over_waiting(monkeypatch):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient, XClientRateLimitError
+
+    twex = SearchProviderCircuit("busy-twex")
+    primary = SearchProviderCircuit("healthy-twitterapi")
+    client = XClient(api_key="one", twexapi_key="two", circuit=primary, twex_circuit=twex,
+                     provider_order=("twexapi", "twitterapi"))
+    calls = []
+
+    def limited(*args, **options):
+        calls.append("twexapi")
+        error = XClientRateLimitError("busy")
+        error.retry_after_seconds = 6
+        raise error
+
+    def available(*args, **options):
+        calls.append("twitterapi")
+        return {"tweets": [{"id": "42"}], "has_next_page": False}
+
+    monkeypatch.setattr(client, "_twex_search_with_retry", limited)
+    monkeypatch.setattr(client, "_get", available)
+    for query in ["C2", "B3"]:
+        posts, truncated = client.run_search(query, can_wait_for_rate_limit=lambda delay: pytest.fail("needless wait"))
+        assert [item["id"] for item in posts] == ["42"] and not truncated
+    assert calls == ["twexapi", "twitterapi", "twitterapi"]
+
+
+def test_continuation_429_keeps_prefix_and_next_keyword_recovers(monkeypatch):
+    from core.models import SearchProviderCircuit as CircuitRow
+    from x_monitor import x_client
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient, XClientRateLimitError
+
+    route = SearchProviderCircuit("continuation-429")
+    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("history"),
+                     twex_circuit=route, provider_order=("twexapi",))
+    calls = []
+
+    def fetch(query, cursor, **options):
+        calls.append((query, cursor))
+        if cursor:
+            exc = XClientRateLimitError("busy")
+            exc.retry_after_seconds = 6
+            raise exc
+        return {"code": 200, "data": [{"id": query}], "has_next_page": query == "C2",
+                "next_cursor": "second" if query == "C2" else None}
+
+    def sleep(seconds):
+        assert 0 < seconds <= 6
+        CircuitRow.objects.filter(purpose=route.purpose).update(open_until=timezone.now() - timedelta(seconds=1))
+
+    monkeypatch.setattr(client, "_twex_search_with_retry", fetch)
+    monkeypatch.setattr(x_client.time, "sleep", sleep)
+    for query in ["C2", "B3", "C7"]:
+        posts, truncated = client.run_search(query, can_wait_for_rate_limit=lambda seconds: True)
+        assert [post["id"] for post in posts] == [query] and truncated == (query == "C2")
+    assert calls == [("C2", None), ("C2", "second"), ("B3", None), ("C7", None)]
+
+
+def test_raw_first_page_returns_original_receipt_and_holds_window(monkeypatch):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient
+
+    route = SearchProviderCircuit("raw-empty", threshold=1)
+    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("history"),
+                     twex_circuit=route, provider_order=("twexapi",))
+    data = {"code": 200, "data": [], "has_next_page": True, "next_cursor": "opaque"}
+    raw = b'{"code":200,"data":[],"has_next_page":true,"next_cursor":"opaque"}'
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: (raw, data))
+    assert client.run_search_page_with_raw("C4", since_time=10, until_time=20) == (raw, data, [], True, 0)
+    assert route.primary_permitted(timezone.now())

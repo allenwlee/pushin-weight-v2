@@ -2923,6 +2923,9 @@ class CycleRunner:
                 page_admission["can_start_page"] = (
                     lambda: deadline.remaining() >= request_envelope
                 )
+                page_admission["can_wait_for_rate_limit"] = (
+                    lambda delay: deadline.remaining() >= delay + request_envelope
+                )
             else:
                 page_budget = int(deadline.remaining() // request_envelope)
                 if page_budget < 1:
