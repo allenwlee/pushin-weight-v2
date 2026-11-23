@@ -190,6 +190,7 @@ class WindowCheckpoint(Checkpoint):
     lane: Literal["personalized-trends-v2"] = ROLLING_LANE
     terminal_at: AwareDatetime | None = None
     selected_developments: list[SelectedDevelopment] = Field(default_factory=list, max_length=200)
+    reopen_episode_ids: list[str] | None = Field(default=None, max_length=200)
     freeze_at: AwareDatetime | None = None
     manifest: list[WindowPointer] = Field(default_factory=list, max_length=4)
     missing_slots: list[AwareDatetime] = Field(default_factory=list, max_length=4)

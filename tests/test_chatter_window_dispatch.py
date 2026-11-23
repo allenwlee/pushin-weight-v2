@@ -340,3 +340,65 @@ def test_abandoned_foreign_trial_does_not_stall_a_new_decision(rolling):
         assert decide_window(current.pk, transport=Mock())["status"] == "empty"
         previous.refresh_from_db()
         assert checkpoint(previous).phase == "queued"
+
+
+def test_unpublished_failed_or_finished_admissions_can_reopen(monkeypatch):
+    from types import SimpleNamespace
+    from monitor.editorial.chatter_window_runs import _reopen_unpublished_episodes
+
+    cutoff = BOUNDARY + timedelta(hours=1)
+    previous = SimpleNamespace(interval=BOUNDARY, outcome={"window_result": {"history": {
+        "admitted": [{"episode_id": value} for value in ("failed", "failed2", "passed", "published", "active", "unknown")]
+    }}})
+    def owner(identity, phase, execution, lease):
+        return SimpleNamespace(pk=identity, outcome={"phase": phase, "window_result": {
+            "admissions": [{"episode_id": identity}]}}, execution_state=execution, lease_until=lease)
+    owners = [owner("failed", "held", "running", cutoff + timedelta(minutes=1)),
+              owner("passed", "complete", "completed", cutoff),
+              owner("published", "complete", "completed", cutoff),
+              owner("active", "discovered", "running", cutoff + timedelta(minutes=1))]
+    published_query = Mock()
+    published_query.values_list.return_value = ["published"]
+    monkeypatch.setattr("monitor.editorial.chatter_window_runs.OriginalContent.objects.filter", Mock(return_value=published_query))
+    owners[0].outcome["window_result"]["admissions"].append({"episode_id": "failed2"})
+    unresolved = Mock(return_value=False)
+    monkeypatch.setattr("monitor.editorial.chatter_window_runs._admission_has_unresolved_work", unresolved)
+    run_query = Mock()
+    run_query.order_by.return_value.only.return_value = owners
+    monkeypatch.setattr("monitor.editorial.chatter_window_runs.OriginalContentRun.objects.filter", Mock(return_value=run_query))
+    assert _reopen_unpublished_episodes(previous, cutoff) == ["failed", "failed2", "passed"]
+    assert unresolved.call_count == 2
+    assert _reopen_unpublished_episodes(None, cutoff) == []
+
+
+def test_reopened_admission_is_not_reintroduced_by_selected_snapshot():
+    from types import SimpleNamespace
+    from monitor.editorial.chatter_window_runs import _admitted_after_reopening
+
+    selected = [SimpleNamespace(episode_id="failed", title="Failed", selected_at=BOUNDARY, wordings=[]),
+                SimpleNamespace(episode_id="live", title="Live", selected_at=BOUNDARY, wordings=[])]
+    history = {"admitted": [{"episode_id": "failed"}, {"episode_id": "live"}]}
+    current = _admitted_after_reopening(history, selected, ["failed"])
+    legacy = _admitted_after_reopening(history, selected, None)
+    assert [row["episode_id"] for row in current] == ["live"]
+    assert {row["episode_id"] for row in legacy} == {"failed", "live"}
+
+
+def test_uncertain_provider_or_running_graphics_blocks_readmission(monkeypatch):
+    from types import SimpleNamespace
+    from monitor.editorial.chatter_window_runs import _admission_has_unresolved_work
+
+    calls = Mock()
+    graphics = Mock()
+    monkeypatch.setattr("monitor.editorial.chatter_sources.source_resume_is_safe", lambda _: True)
+    monkeypatch.setattr("monitor.editorial.chatter_window_runs.OriginalContentCall.objects.filter", calls)
+    monkeypatch.setattr("monitor.editorial.chatter_window_runs.OriginalContentRun.objects.filter", graphics)
+    run = SimpleNamespace(pk=123)
+    calls.return_value.exists.return_value = True
+    assert _admission_has_unresolved_work(run)
+    graphics.assert_not_called()
+    calls.return_value.exists.return_value = False
+    graphics.return_value.exists.return_value = True
+    assert _admission_has_unresolved_work(run)
+    graphics.return_value.exists.return_value = False
+    assert not _admission_has_unresolved_work(run)

@@ -118,6 +118,84 @@ def _selected_developments(cutoff):
     return list(developments.values())
 
 
+def _admission_has_unresolved_work(run):
+    from monitor.editorial.chatter_sources import source_resume_is_safe
+
+    if not source_resume_is_safe(run):
+        return True
+    if OriginalContentCall.objects.filter(
+        Q(run=run) | Q(run__workflow_key="graphics-package", run__snapshot__request__run_id=run.pk),
+        state__in=(OriginalContentCall.State.RESERVED, OriginalContentCall.State.SENT,
+                   OriginalContentCall.State.AMBIGUOUS),
+    ).exists():
+        return True
+    return OriginalContentRun.objects.filter(
+        workflow_key="graphics-package", snapshot__request__run_id=run.pk,
+        execution_state__in=("preparing", "running"),
+    ).exists()
+
+
+def _reopen_unpublished_episodes(previous, cutoff):
+    """Freeze failed or finished admissions that never reached publication."""
+    if previous is None:
+        return []
+    admitted = previous.outcome["window_result"]["history"].get("admitted", [])
+    identities = {entry["episode_id"] for entry in admitted}
+    if not identities:
+        return []
+    published = set(
+        OriginalContent.objects.filter(
+            workflow_key="social-brief", published_at__lte=cutoff,
+            selection__episode_id__in=identities,
+        ).values_list("selection__episode_id", flat=True)
+    )
+    unpublished = identities - published
+    if not unpublished:
+        return []
+    owner = {}
+    runs = OriginalContentRun.objects.filter(
+        scope_key=DECISION_SCOPE, interval__lte=previous.interval,
+        interval__gt=cutoff - HORIZON,
+    ).order_by("-interval").only(
+        "outcome", "execution_state", "scope_key", "workflow_key", "interval",
+        "facts_as_of", "cycle_started_at", "source_cycle_id", "snapshot",
+    )
+    for prior in runs:
+        for admission in prior.outcome.get("window_result", {}).get("admissions", []):
+            identity = admission.get("episode_id")
+            if identity in unpublished:
+                owner.setdefault(identity, prior)
+    retry = []
+    unresolved = {}
+    for identity in unpublished:
+        prior = owner.get(identity)
+        if prior and (prior.outcome.get("phase") == "held"
+                      or prior.execution_state in {"completed", "failed"}):
+            if prior.pk not in unresolved:
+                unresolved[prior.pk] = _admission_has_unresolved_work(prior)
+            if not unresolved[prior.pk]:
+                retry.append(identity)
+    return sorted(retry)
+
+
+def _admitted_after_reopening(history, selected_developments, reopen_episode_ids):
+    reopened = set(reopen_episode_ids or [])
+    admitted = {e["episode_id"]: e for e in history.get("admitted", []) if e["episode_id"] not in reopened}
+    for selected in selected_developments:
+        if selected.episode_id in reopened:
+            continue
+        admitted.setdefault(
+            selected.episode_id,
+            {
+                "episode_id": selected.episode_id,
+                "title": selected.title,
+                "last_seen": selected.selected_at.isoformat(),
+                "wordings": selected.wordings,
+            },
+        )
+    return list(admitted.values())
+
+
 def _compact(result):
     # The provider owns the complete ranking and the collection ledger owns
     # the raw feed. Keep only future queue state, admissions, and expiry IDs.
@@ -168,18 +246,9 @@ def _packet(run, state):
         ):
             raise ValueError("previous_decision_changed")
         history = saved["history"]
-    admitted = {e["episode_id"]: e for e in history.get("admitted", [])}
-    for selected in state.selected_developments:
-        admitted.setdefault(
-            selected.episode_id,
-            {
-                "episode_id": selected.episode_id,
-                "title": selected.title,
-                "last_seen": selected.selected_at.isoformat(),
-                "wordings": selected.wordings,
-            },
-        )
-    history = {**history, "admitted": list(admitted.values())}
+    history = {**history, "admitted": _admitted_after_reopening(
+        history, state.selected_developments, state.reopen_episode_ids
+    )}
     packet = decision_packet(observations, run.interval, history)
     if packet["missing_slots"] != [slot.isoformat() for slot in state.missing_slots]:
         raise ValueError("window_manifest_changed")
@@ -423,6 +492,7 @@ def decide_window(run_id, *, transport=None, resume=False):
                 manifest=manifest,
                 missing_slots=missing,
                 selected_developments=_selected_developments(freeze),
+                reopen_episode_ids=_reopen_unpublished_episodes(previous, freeze),
                 previous_id=previous.pk if previous else None,
                 previous_sha256=checkpoint(previous).ranking_sha256
                 if previous
