@@ -19,7 +19,11 @@ from datetime import UTC, datetime, timedelta
 from django.conf import settings
 from django.db.models import Sum
 
-from core.collection_capture import begin_request, finish_request
+from core.collection_capture import (
+    begin_request,
+    ensure_x_provider_catalog,
+    finish_request,
+)
 from core.collection_staging import (
     adopt_retry_state,
     adopt_staging_receipt,
@@ -243,6 +247,7 @@ class StagingPrefetcher(Prefetcher):
 
     def pages(self, deferred_scopes):
         self.router = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+        ensure_x_provider_catalog()
         key = self.router.api_key
         futures = {}
         admission_open = True
@@ -308,7 +313,7 @@ class StagingPrefetcher(Prefetcher):
                                         method="POST" if provider == "twexapi" else "GET",
                                         request_config=_route_config(scope, provider), request_category=CATEGORY,
                                         request_group=group, request_revision=self.retry.policy,
-                                        **_request_provider_fields(provider or self.router.default_credential_route))
+                                        **_request_provider_fields(provider or getattr(self.router, "default_credential_route", None)))
                                 self.metrics["retry_requests"] += int(group is not None)
                                 future = pool.submit(fetch_page, route or key, _params(scope), max_bytes=max_bytes, timeout=30)
                                 futures[future] = (scope, request, max_bytes)

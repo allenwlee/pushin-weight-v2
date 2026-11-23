@@ -16,7 +16,12 @@ from urllib.parse import urlencode
 
 from django.db.models import Sum
 
-from core.collection_capture import begin_request, finish_request, read_document
+from core.collection_capture import (
+    begin_request,
+    ensure_x_provider_catalog,
+    finish_request,
+    read_document,
+)
 from core.collection_state import fenced_run, x_scope_ownership
 from core.measurement_taxonomy import require
 from core.models import (
@@ -339,6 +344,7 @@ class Prefetcher:
 
     def pages(self, deferred_scopes):
         self.router = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+        ensure_x_provider_catalog()
         key = self.router.api_key
         with ThreadPoolExecutor(max_workers=self.options.concurrency,
                                 thread_name_prefix="x-backfill-http") as pool:
@@ -405,7 +411,7 @@ class Prefetcher:
                                         method="POST" if provider == "twexapi" else "GET",
                                         cursor=scope.cursor, request_config=_route_config(scope, provider),
                                         request_category="x_backfill_prefetch",
-                                        **_request_provider_fields(provider or self.router.default_credential_route))
+                                        **_request_provider_fields(provider or getattr(self.router, "default_credential_route", None)))
                                     request.body_lost = False
                                     request.selection_accounted = False
                                     request.save(update_fields=["body_lost", "selection_accounted"])

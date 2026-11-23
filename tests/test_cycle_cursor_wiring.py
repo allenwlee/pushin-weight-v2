@@ -293,23 +293,27 @@ def test_empty_window_still_advances_cursor(wired):
     )
 
 
+def _assert_held_and_replayable(call, failed_request):
+    from core.models import CallState, HarvestBacklogWindow
+
+    identity = _cursor_key(call)
+    assert not CallState.objects.filter(**identity, last_completed_at__isnull=False).exists()
+    window = HarvestBacklogWindow.objects.get(**identity)
+    assert int(window.remaining_since.timestamp()) == failed_request["since_time"]
+    assert int(window.remaining_until.timestamp()) == failed_request["until_time"]
+
+
 def test_rate_limit_error_does_not_advance_cursor(wired):
     """R2: the window must be retried, not skipped."""
-    from core.models import CallState
-
     call = _planned()
-    wired(calls=[call], raise_exc=XClientRateLimitError("429"))
-    assert not CallState.objects.filter(**_cursor_key(call)).exists(), (
-        "cursor advanced despite a failed fetch -- that window is now lost"
-    )
+    api, _ = wired(calls=[call], raise_exc=XClientRateLimitError("429"))
+    _assert_held_and_replayable(call, api.calls[0])
 
 
 def test_auth_error_does_not_advance_cursor(wired):
-    from core.models import CallState
-
     call = _planned()
-    _, stats = wired(calls=[call], raise_exc=XClientAuthError("401"))
-    assert not CallState.objects.filter(**_cursor_key(call)).exists()
+    api, stats = wired(calls=[call], raise_exc=XClientAuthError("401"))
+    _assert_held_and_replayable(call, api.calls[0])
     assert stats["errors"], "auth failure should be recorded in cycle errors"
 
 
@@ -355,9 +359,9 @@ def test_one_failing_call_does_not_block_the_others(wired):
         "aborted the rest of the cycle"
     )
     # The failed call holds its cursor; the two that succeeded advance theirs.
-    assert not CallState.objects.filter(call_id="B1").exists()
-    assert CallState.objects.filter(call_id="B2").exists()
-    assert CallState.objects.filter(call_id="C1").exists()
+    _assert_held_and_replayable(calls[0], api.calls[0])
+    assert CallState.objects.filter(call_id="B2", last_completed_at__isnull=False).exists()
+    assert CallState.objects.filter(call_id="C1", last_completed_at__isnull=False).exists()
 
 
 # --- cursor drives the next window --------------------------------------
@@ -777,10 +781,11 @@ def test_non_truncated_full_cap_advances_cursor(wired, monkeypatch):
 def test_scheduled_provider_entities_reach_post_and_consumers(
     monkeypatch, seeded_policy_keywords, provider_tweet_entities, legacy,
 ):
-    from core.models import Post
+    from core.models import DataSource, Post
     from core.product_verification import source_repo_evidence
     from x_monitor.attribution import attribute_to_brands
 
+    DataSource.objects.filter(pk="twitterapi").delete()
     entities = provider_tweet_entities
     if legacy:
         entities["hashtags"][0]["tag"] = entities["hashtags"][0].pop("text")

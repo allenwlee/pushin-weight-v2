@@ -11,6 +11,7 @@ from django.utils import timezone
 from core.collection_capture import (
     archive_legacy,
     begin_request,
+    ensure_x_provider_catalog,
     finish_request,
     link_request,
     read_document,
@@ -173,6 +174,7 @@ def register_scheduled_cycle(calls, *, limits):
             "scheduled calls require unique roles")
     require(set(limits) == {"requests", "bytes", "seconds", "items"},
             "scheduled limits require four finite bounds")
+    ensure_x_provider_catalog()
     source, _ = DataSource.objects.get_or_create(
         pk="x", defaults={"name": "X", "source_type": "social"},
     )

@@ -21,7 +21,17 @@ from core.models import (
     CollectionEvidenceArchive,
     CollectionObservationInput,
     CollectionRequest,
+    DataSource,
 )
+
+
+def ensure_x_provider_catalog():
+    """Register evidence sources without enabling jobs or provider dispatch."""
+    providers = {"twitterapi": "TwitterAPI.io", "twexapi": "TwexAPI"}
+    existing = set(DataSource.objects.filter(pk__in=providers).values_list("pk", flat=True))
+    for key, name in providers.items():
+        if key not in existing:
+            DataSource.objects.get_or_create(pk=key, defaults={"name": name, "source_type": "social"})
 
 
 def archive_document(
