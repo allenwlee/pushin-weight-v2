@@ -384,3 +384,44 @@ def test_late_partial_response_cannot_cancel_provider_rate_limit():
     route.record_failure(now, partial_query="Qwen")
     assert not route.primary_permitted(now + timedelta(seconds=44), query="DeepSeek")
     assert route.primary_permitted(now + timedelta(seconds=46), query="DeepSeek")
+
+
+def test_independent_partial_failure_preserves_previous_transport_failure():
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+
+    route = SearchProviderCircuit("mixed-failures", provider="twexapi", endpoint_family="search", threshold=2)
+    now = timezone.now()
+    route.record_failure(now)
+    route.record_failure(now, partial_query="Qwen")
+    assert not route.primary_permitted(now, query="DeepSeek")
+
+
+def test_partial_on_a_saved_twex_cursor_holds_query_for_other_search_readers(monkeypatch):
+    from types import SimpleNamespace
+
+    from monitor.backfill_prefetch import Prefetcher
+    from monitor.backfill_resources import BackfillBudgetExhausted
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient, XClientServerError
+
+    route = SearchProviderCircuit("saved-cursor", provider="twexapi", endpoint_family="search", threshold=2)
+    client = XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("history"),
+                     twex_circuit=route, provider_order=("twexapi",))
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: {
+        "code": 200, "data": [], "has_next_page": True, "next_cursor": "ambiguous",
+    })
+    with pytest.raises(XClientServerError, match="empty page"):
+        next(client.run_search_pages("Qwen", cursor="twexapi:saved"))
+    assert not route.primary_permitted(timezone.now(), query="Qwen")
+    assert route.primary_permitted(timezone.now(), query="DeepSeek")
+
+    prefetch = Prefetcher(None, None, None, SimpleNamespace(concurrency=1, starts_per_second=1))
+    prefetch.router = client
+    monkeypatch.setattr("monitor.backfill_prefetch._params", lambda scope: {"query": "Qwen"})
+    with pytest.raises(XClientServerError, match="no configured"):
+        prefetch._select_route(SimpleNamespace(cursor=None))
+    with pytest.raises(BackfillBudgetExhausted, match="held"):
+        prefetch._select_route(SimpleNamespace(cursor="twexapi:saved"))
+    client.force_twexapi = True
+    with pytest.raises(XClientServerError, match="held"):
+        next(client.run_search_pages("Qwen"))

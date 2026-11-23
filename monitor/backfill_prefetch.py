@@ -231,11 +231,12 @@ class Prefetcher:
             name = "twitterapi:on_demand"
             circuit = self.router.provider_circuits.get(name)
         else:
-            name = self.router._choose_search_provider()
+            name = self.router._choose_search_provider(query=_params(scope)["query"])
             circuit = self.router.twex_circuit if name == "twexapi" else self.router.provider_circuits[name]
             # The selector has already claimed any half-open probe.
             return self._make_route(name, circuit)
-        if circuit is None or not circuit.primary_permitted(datetime.now(UTC)):
+        options = {"query": _params(scope)["query"]} if name == "twexapi" else {}
+        if circuit is None or not circuit.primary_permitted(datetime.now(UTC), **options):
             raise BackfillBudgetExhausted("Provider cursor held while its circuit is unavailable")
         return self._make_route(name, circuit)
 

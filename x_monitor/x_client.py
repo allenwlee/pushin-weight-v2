@@ -19,7 +19,7 @@ import os
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any
 
 import requests
@@ -593,6 +593,8 @@ class XClient:
 
     def _choose_search_provider(self, excluded=frozenset(), *, query=None):
         if self.force_twexapi:
+            if self.twex_circuit and not self.twex_circuit.primary_permitted(datetime.now(UTC), query=query):
+                raise XClientServerError("TwexAPI search held during cooldown")
             return "twexapi"
         for provider in self.provider_order:
             if provider in excluded:
@@ -844,7 +846,7 @@ class XClient:
                     raise XClientServerError("TwexAPI search response invalid") from exc
                 if _unresolved_empty_page(page, data, cursor):
                     if self.twex_circuit:
-                        partial = n_returned > 0 and data.get("has_next_page") is True and page.next_cursor
+                        partial = cursor and data.get("has_next_page") is True and page.next_cursor
                         self.twex_circuit.record_failure(datetime.now(timezone.utc), partial_query=query if partial else None)
                     raise XClientServerError("TwexAPI empty page when continuation expected")
                 if page_number == 1 and not cursor:

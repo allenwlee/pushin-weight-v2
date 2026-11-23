@@ -95,11 +95,9 @@ class SearchProviderCircuit:
                 # An empty continuation after real posts proves a problem with this
                 # query. Give an independent query a chance after a recovery probe.
                 key = self._partial_query_key(partial_query)
-                holds = CircuitRow.objects.filter(provider=self.provider, endpoint_family="search_partial",
-                                                  credential_purpose=self.credential_purpose, open_until__gt=now)
-                if holds.filter(purpose=key).exists():
+                if CircuitRow.objects.filter(purpose=key, open_until__gt=now).exists():
                     return
-                if owner or not holds.exists():
+                if row.open_until is not None:
                     row.consecutive_failures = 0
                 CircuitRow.objects.update_or_create(purpose=key, defaults={
                     "provider": self.provider, "endpoint_family": "search_partial",
