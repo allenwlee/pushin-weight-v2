@@ -925,9 +925,11 @@ def test_identity_rule_has_new_merge_revision_and_retains_previous_read_compatib
     from core.classification_contract import COMPRESSED_CLASSIFIER_REVISIONS, COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS
 
     previous = ("compressed8-pulse-content-v2", "compressed8-pulse-brand-v2", "compressed8-pulse-merge-v2")
+    identity = ("compressed8-pulse-content-v2", "compressed8-pulse-brand-v2", "compressed8-pulse-merge-v3")
     assert previous in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS
-    assert COMPRESSED_CLASSIFIER_REVISIONS[:2] == previous[:2]
-    assert COMPRESSED_CLASSIFIER_REVISIONS[2] != previous[2]
+    assert identity in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS
+    assert COMPRESSED_CLASSIFIER_REVISIONS[0] == previous[0]
+    assert COMPRESSED_CLASSIFIER_REVISIONS[2] not in {previous[2], identity[2]}
 
 
 def test_llama_cpp_namesake_does_not_become_a_meta_label_on_conflicting_vote():

@@ -71,6 +71,14 @@ QUESTIONS = {
     'us_national_stance': 'Author\'s adopted US national stance while discussing {b}? Mere quotation/company evaluation excluded.',
 }
 
+# Meta's stored brand key is "llama"; Muse is one of its AI offerings. Keep
+# these examples scoped to that target so other brands retain their questions.
+META_IDENTITY_QUESTIONS = {
+    'identity_namesake_only': 'Is every apparent mention of {b} actually a separately operated project or product unrelated to the tracked company? A reference to Meta AI or its Muse AI app, including Muse creation and invitation codes, is not an unrelated namesake. Do not infer identity solely from a common word or a hashtag.',
+    'identity_keyword_only': 'Are all apparent references to {b} only irrelevant keyword or hashtag stuffing, with no actual discussion or use of the tracked company or its products? Discussion, use, referral or invitation codes for the Meta AI Muse app are product discussion, even if accompanied by hashtags.',
+    'identity_word_only': 'Are all apparent references to {b} only ordinary language unrelated to the AI company or its products? The word muse meaning a person or inspiration, including discussion of song lyrics, is ordinary language. A reference to Meta AI Muse as an AI app, its outputs or invitation codes is not an ordinary-word-only mention.',
+}
+
 STANCE_CRITERIA = {
     "none": "No adopted national stance.",
     "mild_pro": "Mild favorable national evaluation.",

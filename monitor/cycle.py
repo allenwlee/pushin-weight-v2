@@ -146,7 +146,6 @@ from monitor.post_enrichment import (
 )
 from monitor.rare_type_telemetry import build_rare_type_cycle_summary
 from x_monitor.attribution import (
-    _MAX_RETRIES,
     _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
     _TWO_ROLE_ALLOWED_REVISION_TRIPLETS,
     UNATTRIBUTED_BRAND_ID,
@@ -4153,6 +4152,10 @@ class CycleRunner:
             fair_queue=fair_queue,
         )
         claimed_states = list(claim_batch.states)
+        from monitor.post_artifacts import read_literal_english_many
+
+        english_by_post = (read_literal_english_many([state.post for state in claimed_states])
+                           if not translation_only else {})
         counters["n_enrichment_claimed"] = len(claimed_states)
         counters["n_enrichment_claimed_current_cycle"] = len(
             claim_batch.current_cycle_post_ids
@@ -4248,7 +4251,7 @@ class CycleRunner:
                     # translation cycle.  Fresh translations replace this
                     # literal value below, after the artifact is validated.
                     "english_translation": (
-                        _present_text(post.text_en)
+                        _present_text(english_by_post.get(tid))
                         or (text if (post.lang_detected or post.lang) == "en" else "")
                     ),
                     "affiliations": [

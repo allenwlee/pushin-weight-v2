@@ -484,12 +484,8 @@ def record_post_synthesis_failure(
     return artifact
 
 
-def read_post_content_many(
-    posts: Sequence[Post],
-) -> dict[str, PostContentProjection]:
-    """Bulk-read normalized current artifacts with explicit legacy fallback."""
-    post_ids = [str(post.pk) for post in posts]
-    translations = {
+def _current_literal_translations(post_ids: Sequence[str]) -> dict[str, PostTranslationArtifact]:
+    return {
         str(artifact.post_id): artifact
         for artifact in PostTranslationArtifact.objects.filter(
             post_id__in=post_ids,
@@ -499,6 +495,31 @@ def read_post_content_many(
             Prefetch("texts", queryset=PostTranslationText.objects.order_by("locale"))
         )
     }
+
+
+def _literal_for_post(post: Post, translation: PostTranslationArtifact | None) -> tuple[dict[str, str], bool]:
+    stale = bool(translation is not None and translation.source_content_fingerprint != source_content_fingerprint(post))
+    literal = ({} if stale else {row.locale: row.text for row in translation.texts.all()}
+               if translation is not None else _legacy_literal(post))
+    literal.update(source_literal(post))
+    return literal, stale
+
+
+def read_literal_english_many(posts: Sequence[Post]) -> dict[str, str]:
+    """Read current English translations for classification in a bounded batch."""
+    if not posts:
+        return {}
+    translations = _current_literal_translations([str(post.pk) for post in posts])
+    return {str(post.pk): _literal_for_post(post, translations.get(str(post.pk)))[0].get("en", "")
+            for post in posts}
+
+
+def read_post_content_many(
+    posts: Sequence[Post],
+) -> dict[str, PostContentProjection]:
+    """Bulk-read normalized current artifacts with explicit legacy fallback."""
+    post_ids = [str(post.pk) for post in posts]
+    translations = _current_literal_translations(post_ids)
     syntheses = {
         str(artifact.post_id): artifact
         for artifact in PostSynthesisArtifact.objects.filter(
@@ -522,19 +543,7 @@ def read_post_content_many(
         post_id = str(post.pk)
         translation = translations.get(post_id)
         synthesis = syntheses.get(post_id)
-        stale_translation = bool(
-            translation is not None
-            and translation.source_content_fingerprint != source_content_fingerprint(post)
-        )
-        literal = (
-            {} if stale_translation else
-            {row.locale: row.text for row in translation.texts.all()}
-            if translation is not None
-            else _legacy_literal(post)
-        )
-        # The current source is authoritative even when a cached translation
-        # is incomplete or belongs to an older version of the post.
-        literal.update(source_literal(post))
+        literal, stale_translation = _literal_for_post(post, translation)
         rich = (
             {row.locale: row.text for row in synthesis.texts.all()}
             if synthesis is not None
