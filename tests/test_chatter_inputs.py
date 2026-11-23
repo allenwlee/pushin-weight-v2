@@ -119,3 +119,30 @@ def test_saved_selector_request_keeps_its_builder_and_reconstructs_after_lease(
     call.request_hash = "0" * 64
     with pytest.raises(ValueError, match="hash mismatch"):
         reconstruct_selection_request(call)
+
+@pytest.mark.parametrize("ranked", [1], indirect=True)
+def test_rolling_selector_uses_short_prompt_and_reconstructs_exactly(ranked, monkeypatch):
+    from monitor.editorial.chatter_inputs import _ROLLING_SELECTOR_SYSTEM
+    from monitor.editorial.chatter_trends import DECISION_SCOPE
+
+    run, cfg = gathered(ranked, 3)
+    run.scope_key = DECISION_SCOPE
+    run.save(update_fields=["scope_key"])
+    monkeypatch.setenv(cfg.chatter.selector.key_env, "fixture-only")
+    payload = _selection_packet(run, cfg)
+    built, full = _selection_request(run, "selector:0", payload, cfg)
+    assert built["system"] == _ROLLING_SELECTOR_SYSTEM
+    assert built["input_reference"]["builder"] == "chatter-selection-v3"
+    assert json.loads(built["user"])["candidates"] == payload["candidates"]
+    sent = []
+
+    def transport(endpoint, key, body, **kwargs):
+        sent.append(body)
+        return wire({"fixture": True}, cfg.chatter.selector.model)
+
+    json_call(run, "selector:0", cfg.chatter.selector, built, cfg,
+              transport=transport, reservation=call_once)
+    call = run.provider_calls.get(stage="selector:0")
+    assert len(sent) == 1
+    assert reconstruct_selection_request(call) == sent[0]
+    assert full == payload

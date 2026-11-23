@@ -28,18 +28,19 @@ def prompts():
     )
 
 
-def request(stage, payload, cfg):
+def request(stage, payload, cfg, *, system_override=None):
     book = prompts()
     entry = book[stage]
+    selected_entry = entry if system_override is None else {**entry, "system": system_override}
     return {
-        "system": entry["system"],
+        "system": selected_entry["system"],
         "user": json.dumps(
             {**payload, "output_schema": entry["schema"]},
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
         ),
-        "packet_version": book["version"] + ":" + digest(entry),
+        "packet_version": book["version"] + ":" + digest(selected_entry),
         "reservation_usd": cfg.chatter.discovery_reservation_usd
         if stage == "semantic"
         else cfg.chatter.selector_reservation_usd,

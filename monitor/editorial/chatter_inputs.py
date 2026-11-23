@@ -27,6 +27,26 @@ from .writing import writer_request
 
 _SELECTION_V1 = "chatter-selection-v1"
 _SELECTION_V2 = "chatter-selection-v2"
+_SELECTION_V3 = "chatter-selection-v3"
+
+# Personalized Trends already performs discovery and ranking. Keep this selector
+# focused on the six publication pools and their existing evidence contract.
+_ROLLING_SELECTOR_SYSTEM = (
+    "You are Chatter front-page editor, inspired by the New York Post. "
+    "Use only the supplied evidence. Classify every candidate by source language "
+    "and configured editorial group, citing evidence. Independently rank eligible "
+    "candidates in each of the six supplied pools. For every pool, decide whether "
+    "to keep its incumbent, publish, follow up, replace, or leave it empty; rank "
+    "all eligible candidates. Weigh current attention, story interest, source "
+    "support, persistence, and visual potential without inventing facts or metrics. "
+    "Give concise reasons and preserve uncertainty. Return JSON matching output_schema."
+)
+
+
+def _selector_request(rendered, cfg, builder):
+    system = _ROLLING_SELECTOR_SYSTEM if builder == _SELECTION_V3 else None
+    return request("selection", rendered, cfg, system_override=system)
+
 
 
 def _expanded_history(identities, run):
@@ -192,19 +212,22 @@ def _selection_request(run, stage, payload, cfg):
             }
             current.save(update_fields=["outcome", "updated_at"])
             run.outcome = current.outcome
+    from .chatter_trends import DECISION_SCOPE
+
     prior = run.provider_calls.filter(stage=stage, batch_key="").only("request_packet").first()
     reference = prior.request_packet["input_reference"] if prior else {
-        "run_id": run.pk, "stage": stage, "builder": _SELECTION_V2,
+        "run_id": run.pk, "stage": stage,
+        "builder": _SELECTION_V3 if run.scope_key == DECISION_SCOPE else _SELECTION_V2,
     }
     full, rendered = _render_selection_input(current, stage, stored, reference)
-    built = request("selection", rendered, cfg)
+    built = _selector_request(rendered, cfg, reference["builder"])
     built["input_reference"] = reference
     return built, full
 
 
 def _render_selection_input(run, stage, stored, reference):
     builder = reference.get("builder")
-    if (builder not in {_SELECTION_V1, _SELECTION_V2}
+    if (builder not in {_SELECTION_V1, _SELECTION_V2, _SELECTION_V3}
             or reference != {"run_id": run.pk, "stage": stage, "builder": builder}):
         raise ValueError("unknown selection input builder")
     if set(stored) != {"schema_version", "payload"} or stored["schema_version"] != 1:
@@ -214,7 +237,7 @@ def _render_selection_input(run, stage, stored, reference):
     for candidate in payload["candidates"]:
         candidate["evidence"] = [sources[identity] for identity in candidate["post_ids"]]
     rendered = payload
-    if builder == _SELECTION_V2 and payload["coverage"].get("gathering") is not None:
+    if builder in {_SELECTION_V2, _SELECTION_V3} and payload["coverage"].get("gathering") is not None:
         gathering = payload["coverage"]["gathering"]
         # Execution receipts remain in the immutable projection, outside model context.
         summary = {
@@ -285,7 +308,8 @@ def reconstruct_selection_request(call):
     cfg = EditorialConfig.model_validate(run.config_snapshot["editorial"])
     stored = run.outcome["selection_inputs"][call.stage]
     _, payload = _render_selection_input(run, call.stage, stored, call.request_packet["input_reference"])
-    body = request_payload(cfg.chatter.selector, request("selection", payload, cfg))
+    ref = call.request_packet["input_reference"]
+    body = request_payload(cfg.chatter.selector, _selector_request(payload, cfg, ref["builder"]))
     if (
         request_fingerprint(body)[1]
         != call.request_hash
