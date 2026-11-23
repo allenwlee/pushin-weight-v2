@@ -15,6 +15,7 @@ from core.staff_assets.public_fetch import fetch_public_response
 from monitor.editorial.graphics_contracts import (
     TERMINAL_MEDIA_FAILURES,
     build_messages,
+    copy_writer_route,
     normalize_treatments,
     validate_stage_output,
 )
@@ -25,6 +26,7 @@ XAI_IMAGES = 'https://api.x.ai/v1/images/'
 XAI_VIDEOS = 'https://api.x.ai/v1/videos/'
 TEXT_MODEL = 'openai/gpt-6-sol'
 IMAGE_MODEL = 'grok-imagine-image-2.0'
+REFERENCE_VIDEO_MODEL = 'grok-imagine-video-1.5'
 VIDEO_MODEL = 'grok-imagine-video-1.5-lite'
 MAX_INPUT_BYTES = 12 * 1024 * 1024
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
@@ -75,7 +77,7 @@ def _data_uri(asset):
     return 'data:' + mime + ';base64,' + base64.b64encode(data).decode('ascii')
 
 
-def build_text_request(pack, stage, data, *, attachments=(), instruction=None):
+def build_text_request(pack, stage, data, *, attachments=(), instruction=None, writer_route=None):
     if stage not in {'C1', 'G0', 'G1', 'E1'}:
         raise ValueError('Not a Graphics language-model stage')
     messages = build_messages(pack, stage, data, instruction=instruction)
@@ -85,6 +87,16 @@ def build_text_request(pack, stage, data, *, attachments=(), instruction=None):
     for index, asset in enumerate(attachments, 1):
         content.append({'type': 'text', 'text': f"Image {index}: asset_ref={asset['asset_ref']}; role={asset['role']}"})
         content.append({'type': 'image_url', 'image_url': {'url': _data_uri(asset)}})
+    if writer_route is not None:
+        from .providers import request_payload
+
+        if stage != 'C1':
+            raise ValueError('configured writer route is only for text C1')
+        route = copy_writer_route(writer_route)
+        body = request_payload(route, {'system': messages['system'], 'user': messages['task'],
+            'images': [_data_uri(asset) for asset in attachments], 'visual_essential': bool(attachments)})
+        return {'endpoint': route.endpoint, 'body': body, 'timeout': route.timeout_seconds,
+                'writer_route': route.model_dump(mode='json')}
     body = {
         'model': TEXT_MODEL,
         'messages': [
@@ -127,12 +139,25 @@ def build_image_request(pack, stage, treatment, assets):
     return {'endpoint': XAI_IMAGES + ('edits' if inputs else 'generations'), 'body': body, 'timeout': 140}
 
 
-def build_video_request(pack, stage, treatment, still):
+def build_video_request(pack, stage, treatment, still, *, writer_motion=None, portraits=()):
     expected = {'V1': 'A', 'V-B': 'B'}.get(stage)
     if expected is None or treatment.get('candidate_id') != expected:
         raise ValueError('Video candidate mismatch')
     body = {'model': VIDEO_MODEL, 'prompt': _call(pack, stage)['system'] + '\n\n' + treatment['motion_prompt'],
             'duration': 5, 'resolution': '720p', 'image': {'url': _data_uri(still)}}
+    if writer_motion is not None:
+        if not isinstance(writer_motion, str) or not writer_motion.strip():
+            raise ValueError('Missing saved writer motion')
+        body['prompt'] = writer_motion
+    if portraits:
+        if writer_motion is None:
+            raise ValueError('Cast-backed video needs saved writer motion')
+        body['model'] = REFERENCE_VIDEO_MODEL
+        body['reference_images'] = [{'url': _data_uri(p)} for p in portraits]
+        labels = ['<IMAGE_0> is the pinned opening artwork.']
+        for index, portrait in enumerate(portraits, 1):
+            labels.append(f"<IMAGE_{index}> preserves the identity of {portrait['person_name']}.")
+        body['prompt'] = ' '.join(labels) + '\n\n' + writer_motion
     return {'endpoint': XAI_VIDEOS + 'generations', 'body': body, 'timeout': 140}
 
 
@@ -379,19 +404,26 @@ def submit_once(stage, request, packet, request_hash, api_key, pack, *, reserve,
     """
     if stage not in {'C1', 'G0', 'G1', 'E1', 'I-A', 'I-B', 'V1', 'V-B'}:
         raise ValueError('Unknown Graphics stage')
+    route = None
+    if stage == 'C1' and isinstance(request, dict) and request.get('writer_route') is not None:
+        route = copy_writer_route(request['writer_route'])
     if (not isinstance(request, dict) or not isinstance(request.get('endpoint'), str)
-            or type(request.get('timeout')) is not int or not 120 <= request['timeout'] <= 150
+            or type(request.get('timeout')) is not int
+            or not (request['timeout'] == route.timeout_seconds if route else 120 <= request['timeout'] <= 150)
             or not isinstance(api_key, str) or not api_key):
         raise ValueError('Invalid Graphics provider route')
     # Verify reference availability/hash and exact route before reserving budget.
     body = _wire_body(packet, request_hash, load_bytes)
-    if stage in {'C1', 'G0', 'G1', 'E1'}:
+    if route:
+        expected_url, expected_model = route.endpoint, route.model
+    elif stage in {'C1', 'G0', 'G1', 'E1'}:
         expected_url, expected_model = OPENROUTER_URL, TEXT_MODEL
     elif stage in {'I-A', 'I-B'}:
         expected_url = XAI_IMAGES + ('edits' if body.get('images') else 'generations')
         expected_model = IMAGE_MODEL
     else:
-        expected_url, expected_model = XAI_VIDEOS + 'generations', VIDEO_MODEL
+        expected_url = XAI_VIDEOS + 'generations'
+        expected_model = REFERENCE_VIDEO_MODEL if body.get('reference_images') else VIDEO_MODEL
     if request['endpoint'] != expected_url or body.get('model') != expected_model or request.get('body') != body:
         raise ValueError('Invalid Graphics provider route or request body')
     call, may_send = reserve(packet, request_hash)
@@ -426,7 +458,7 @@ def submit_once(stage, request, packet, request_hash, api_key, pack, *, reserve,
                  if stage in {'C1', 'G0', 'G1', 'E1'} else decoded.get('usage') or {})
         image_bytes = None
         if stage in {'C1', 'G0', 'G1', 'E1'}:
-            if decoded.get('model') != TEXT_MODEL:
+            if decoded.get('model') != expected_model:
                 raise ValueError('provider model mismatch')
             choices = decoded.get('choices')
             if not isinstance(choices, list) or len(choices) != 1 or choices[0].get('finish_reason') != 'stop':

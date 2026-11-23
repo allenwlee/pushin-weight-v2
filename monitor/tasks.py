@@ -323,6 +323,31 @@ def refresh_editorial(envelope):
     return run_editorial(envelope)
 
 
+@shared_task(name="monitor.tasks.chatter_stage", autoretry_for=(), max_retries=0,
+             ignore_result=True, acks_late=True, reject_on_worker_lost=True,
+             soft_time_limit=600, time_limit=660)
+def chatter_stage(stage, *args):
+    if stage == "gather":
+        from monitor.editorial.chatter_chain import enqueue
+        from monitor.editorial.chatter_gathering import gather_trends
+
+        return gather_trends(*args, enqueue=enqueue)
+
+    from monitor.editorial.chatter_chain import (
+        resume_chatter_discovery,
+        review_chatter,
+        run_chatter,
+        select_chatter,
+        write_chatter,
+    )
+
+    functions = {"discover": run_chatter, "resume-discovery": resume_chatter_discovery,
+                 "select": select_chatter, "write": write_chatter, "review": review_chatter}
+    if stage not in functions:
+        raise ValueError("unsupported Chatter stage")
+    return functions[stage](*args)
+
+
 @shared_task(name="monitor.tasks.poll_editorial_picture", autoretry_for=(), max_retries=0,
              ignore_result=True, acks_late=True, reject_on_worker_lost=True,
              soft_time_limit=170, time_limit=180)
@@ -449,6 +474,10 @@ def _start_graphics_reconciler(**kwargs):
     from monitor.editorial.graphics_dispatch import start_reconciler
 
     start_reconciler()
+    # A one-time wake-up reuses the existing worker and harvest clock, no beat.
+    from monitor.editorial.dispatch import recover_chatter_starts
+
+    recover_chatter_starts()
 
 
 @worker_shutdown.connect(weak=False)

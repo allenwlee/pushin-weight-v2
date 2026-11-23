@@ -19,7 +19,7 @@ from core.models import (
     OriginalContentSelection,
     OriginalContentText,
 )
-from monitor.original_content import WORKFLOWS, advisory_lock, digest
+from monitor.original_content import WORKFLOWS, advisory_lock, digest, publication_scope
 from monitor.trend_narrative_lifecycle import (
     fail_trend_narrative_provider_call,
     mark_trend_narrative_provider_call_ambiguous,
@@ -32,7 +32,9 @@ from .graphics_artifacts import (
     VIDEO_TERMINAL_FAILURES,
     validate_still,
 )
-from .graphics_contracts import load_pack, normalize_treatments
+from .graphics_cast import load_cast, recipe_refs
+from .graphics_chatter import accounting_config
+from .graphics_contracts import load_pack, normalize_treatments, writer_led
 from .graphics_generation import (
     MAX_INPUT_BYTES,
     build_video_request,
@@ -62,19 +64,36 @@ def _store(storage=None):
     return storage if storage is not None else storages['editorial_media']
 
 
+def _video_loader(storage, still, portraits):
+    names = {p['storage_name'] for p in portraits}
+    def load(alias, name):
+        if alias == 'editorial_media' and name == still.generated_storage_name:
+            store = storage
+        elif alias == 'staff_media' and name in names:
+            store = storages['staff_media']
+        else:
+            raise ValueError('invalid video input reference')
+        with store.open(name, 'rb') as stream:
+            return stream.read(MAX_INPUT_BYTES + 1)
+    return load
+
+
 def _current(text):
-    scope = f'featured:{text.narrative.workflow_key}:{text.locale}'
+    scope = publication_scope(text.narrative, text.locale)
     pointer = OriginalContentSelection.objects.filter(scope_key=scope).first()
     return pointer is None or pointer.text_id == text.pk
 
 
-def _selected(run_id, text_id, storage):
+def _selected(run_id, text_id, storage, *, existing_job=False):
     text = OriginalContentText.objects.select_related('narrative__run').get(pk=text_id)
     if text.narrative.run_id != run_id or text.narrative.status != 'approved' or not text.public_id:
         raise ValueError('video requires published text in the selected run')
     source, candidate = _source_content(text)
     track = next((name for name, workflow in WORKFLOWS.items() if workflow == source.workflow_key), None)
-    if not track or not _current(text):
+    package = text.narrative.run
+    single = writer_led(package.snapshot.get('request', {}).get('handoff', {}))
+    owns_saved_job = (single or existing_job) and accounting_config(package) is not None
+    if not track or (not owns_saved_job and not _current(text)):
         raise ValueError('video text is not the current selection')
     stills = []
     for picture in ContentPicture.objects.filter(run_id=run_id, text=text, content_kind=track,
@@ -154,7 +173,8 @@ def submit_video_job(run_id, text_id, *, owner, fence, pack=None, api_key=None,
     except (ValueError, TypeError, KeyError, OSError, OriginalContentText.DoesNotExist):
         run = OriginalContentRun.objects.get(pk=run_id)
         skipped_a = _skip_video(run, 'V1', owner, fence, 'selected_still_unavailable')
-        skipped_b = _skip_video(run, 'V-B', owner, fence, 'selected_still_unavailable')
+        single = writer_led(run.snapshot.get('request', {}).get('handoff', {}))
+        skipped_b = single or _skip_video(run, 'V-B', owner, fence, 'selected_still_unavailable')
         return {'state': 'unavailable' if skipped_a and skipped_b else 'stale',
                 'run_id': run_id, 'error': 'selected_still_unavailable'}
     run = text.narrative.run
@@ -178,14 +198,30 @@ def submit_video_job(run_id, text_id, *, owner, fence, pack=None, api_key=None,
     with storage.open(still.generated_storage_name, 'rb') as stream:
         data = stream.read(MAX_INPUT_BYTES + 1)
     asset = {'data': data, 'mime': still.provenance['mime'], 'sha256': still.generated_sha256}
-    request = build_video_request(pack, stage, treatment, asset)
+    single = writer_led(run.snapshot.get('request', {}).get('handoff', {}))
+    portraits, motion = [], None
+    if single:
+        writer = text.producing_call
+        if (writer is None or writer.run_id != run.pk or writer.state != 'completed'
+                or writer.request_identity != f'graphics:{run.pk}:C1' or digest(writer.response_payload) != writer.response_hash):
+            raise ValueError('video writer identity mismatch')
+        motion = writer.response_payload['candidates'][0]['motion_prompt']
+        try:
+            portraits = load_cast(run.decisions['writer_cast'])
+            still_call = OriginalContentCall.objects.get(pk=still.provenance['producer_call_id'])
+            for portrait in portraits:
+                for producer in (writer, still_call):
+                    if not any(ref['sha256'] == portrait['sha256'] and ref['storage_name'] == portrait['storage_name']
+                               for ref in producer.request_packet.get('assets', [])):
+                        raise ValueError('cast missing from edition inputs')
+        except (OSError, ValueError, KeyError):
+            _skip_video(run, stage, owner, fence, 'cast_asset_unavailable')
+            return {'state': 'unavailable', 'run_id': run.pk, 'error': 'cast_asset_unavailable'}
+    request = build_video_request(pack, stage, treatment, asset, writer_motion=motion, portraits=portraits)
     refs = [{'storage_alias': 'editorial_media', 'storage_name': still.generated_storage_name,
              'mime': asset['mime'], 'sha256': asset['sha256']}]
-    def loader(alias, name):
-        if alias != 'editorial_media' or name != still.generated_storage_name:
-            raise ValueError('invalid selected still reference')
-        with storage.open(name, 'rb') as stream:
-            return stream.read(MAX_INPUT_BYTES + 1)
+    refs.extend(recipe_refs(portraits))
+    loader = _video_loader(storage, still, portraits)
     packet, request_hash = create_request_recipe(request['body'], refs, load_bytes=loader)
     config = run.config_snapshot
     from .config import load_editorial_config
@@ -196,7 +232,7 @@ def submit_video_job(run_id, text_id, *, owner, fence, pack=None, api_key=None,
     saved = {}
     def reserve(packet_value, hash_value):
         return reserve_graphics_call(run=run, stage=stage, kind='media', request_hash=hash_value,
-            request_packet=packet_value, provider='xai', model=request['body']['model'], ceiling='0.20',
+            request_packet=packet_value, provider='xai', model=request['body']['model'], ceiling='1.00' if portraits else '0.20',
             owner=owner, lease_seconds=150, workflow_key=source.workflow_key,
             per_run_limit=config['per_story_usd'], daily_limit=config['daily_usd'],
             configured_daily_limit=configured_daily_limit, load_bytes=loader)
@@ -262,7 +298,7 @@ def poll_video_job(picture_id, *, api_key=None, transport=https_request, fetch=N
     if not preview.text_id:
         raise ValueError('invalid pending video job')
     try:
-        text, source, candidate, track, still = _selected(preview.run_id, preview.text_id, storage)
+        text, source, candidate, track, still = _selected(preview.run_id, preview.text_id, storage, existing_job=True)
     except (ValueError, TypeError, KeyError, OSError):
         # Missing/corrupt input cannot justify another submission. Stop boundedly;
         # retaining the published text/still is safer than an endless poison poll.
@@ -333,11 +369,8 @@ def poll_video_job(picture_id, *, api_key=None, transport=https_request, fetch=N
     if outcome.get('state') == 'completed':
         try:
             call = OriginalContentCall.objects.get(pk=call_id)
-            def loader(alias, name):
-                if alias != 'editorial_media' or name != still.generated_storage_name:
-                    raise ValueError('invalid video input reference')
-                with storage.open(name, 'rb') as stream:
-                    return stream.read(MAX_INPUT_BYTES + 1)
+            manifest = source.run.decisions.get('writer_cast', {'assets': []})
+            loader = _video_loader(storage, still, manifest['assets'])
             sent_request = reconstruct_request(call.request_packet, call.request_hash, load_bytes=loader)
             data = outcome['data']
             receipt = video_decode_receipt(data, run_id=job.run_id, producer_call_id=call_id,
@@ -350,11 +383,12 @@ def poll_video_job(picture_id, *, api_key=None, transport=https_request, fetch=N
         if current.state != 'pending' or current.poll_count != fence:
             return {'state': 'stale', 'job_id': str(current.pk), 'run_id': current.run_id, 'reschedule': False}
         current.poll_lease_until = None
-        scope = f'featured:{current.text.narrative.workflow_key}:{current.text.locale}'
+        scope = publication_scope(current.text.narrative, current.text.locale)
         advisory_lock('selection:' + scope)
         pointer = OriginalContentSelection.objects.select_for_update().filter(scope_key=scope).first()
         selected_still = ContentPicture.objects.select_for_update().get(pk=still.pk)
-        if ((pointer is not None and pointer.text_id != current.text_id)
+        owns_saved_job = accounting_config(source.run) is not None
+        if (current.text.narrative.status != 'approved' or (not owns_saved_job and pointer is not None and pointer.text_id != current.text_id)
                 or selected_still.state != 'complete' or selected_still.text_id != current.text_id
                 or (selected_still.generated_storage_name, selected_still.generated_sha256,
                     selected_still.provenance) != still_identity):

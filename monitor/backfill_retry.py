@@ -19,7 +19,7 @@ RETRY_FIELDS = (
 def transient(error, status, *, policy=POLICY):
     # Missing/malformed replies and unknown sends are not transport failures.
     require(policy in POLICIES.values(), "unknown staging retry policy")
-    return status in ({401, 403, 429, 500, 502, 503, 504} if policy == POLICIES[2]
+    return (status == 200 and error == "XClientServerError") or status in ({401, 403, 429, 500, 502, 503, 504} if policy == POLICIES[2]
                       else {429, 500, 502, 503, 504}) or (
         status is None and error in {"Timeout", "ConnectionError"}
     )

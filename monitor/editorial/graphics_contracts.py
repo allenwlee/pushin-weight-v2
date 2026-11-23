@@ -29,7 +29,88 @@ def build_task(instruction, data, schema):
     )
 
 
+def copy_writer_route(value):
+    """Only the configured native writer and existing Graphics transport are bound.
+
+    Other editorial roles may use other providers; that does not give Graphics
+    a C1 transport contract or authorize falling back to another writer.
+    """
+    from .config import Route
+
+    route = Route.model_validate(value)
+    if route.endpoint not in {
+        'https://api.openai.com/v1/chat/completions',
+        'https://openrouter.ai/api/v1/chat/completions',
+    }:
+        raise ValueError('unsupported Graphics C1 writer route')
+    return route
+
+
+WRITER_LED = 'chatter-writer-led/v1'
+
+
+def writer_led(handoff):
+    return handoff.get('copy_contract') == WRITER_LED
+
+
+def bind_copy_contract(pack, handoff):
+    """Bind the one C1/publication contract to this saved edition, without edits
+    to the literal shared pack or another Copy Editor request.
+    """
+    from .voices import Voice
+
+    locale = handoff.get('locale', 'en')
+    languages = {'en': 'English', 'ja': 'Japanese', 'zh-cn': 'Simplified Chinese'}
+    if locale not in languages:
+        raise ValueError('unsupported Copy Editor locale')
+    voice = None
+    if 'voice' in handoff:
+        voice = Voice.model_validate(handoff['voice'])
+        if (voice.locale != locale or voice.track != 'chatter' or not voice.available
+                or not voice.instructions.strip() or voice.digest != handoff.get('voice_hash')):
+            raise ValueError('invalid saved Copy Editor voice')
+    result = copy.deepcopy(pack)
+    if writer_led(handoff):
+        path = Path(__file__).resolve().parents[2] / 'config/editorial_prompts/chatter-writer-led-v1.json'
+        overrides = json.loads(path.read_text())
+        for item in result['model_call_plan']['calls']:
+            stage = item['id']
+            if stage not in overrides:
+                continue
+            item.update(overrides[stage])
+            props = item['response_schema']['properties']
+            entries = props['candidates' if stage == 'C1' else 'treatments']
+            entries.update(minItems=1, maxItems=1)
+            schema = entries['items']
+            schema['properties']['id' if stage == 'C1' else 'candidate_id'] = {'const': 'A'}
+            if stage == 'C1':
+                props['schema_version'] = {'const': WRITER_LED}
+                for field in ('still_pitch', 'motion_prompt'):
+                    schema['properties'][field] = {'type': 'string', 'minLength': 1}
+                    if field not in schema['required']:
+                        schema['required'].append(field)
+        result['copy_contract'] = WRITER_LED
+    call = next(item for item in result['model_call_plan']['calls'] if item['id'] == 'C1')
+    call['response_schema']['properties']['locale'] = {'const': locale}
+    result['publication_schema']['properties']['locale']['const'] = locale
+    call['system'] = call['system'].replace(
+        'Write the complete publication copy in English (en).',
+        f'Write the complete publication copy in {languages[locale]} ({locale}).',
+    )
+    if voice:
+        # Native saved instructions replace the English example's publication
+        # voice, while the accepted C1 evidence/task/creative boundary stays exact.
+        system = call['system']
+        role_start, role_end = system.index('# Newsroom role\n'), system.index('# Jurisdiction\n')
+        system = system[:role_start] + '# Newsroom role\nYou are the Copy Editor for the saved publication voice below.\n\n' + system[role_end:]
+        start, end = system.index('# Locked publication voice\n'), system.index('# Requested output language\n')
+        call['system'] = system[:start] + '# Locked publication voice\n' + voice.instructions + '\n\n' + system[end:]
+    return result
+
+
 def build_messages(pack, stage, data, *, instruction=None):
+    if stage == 'C1':
+        pack = bind_copy_contract(pack, data)
     call = next((item for item in pack['model_call_plan']['calls'] if item['id'] == stage), None)
     if call is None or 'response_schema' not in call:
         raise ValueError('Unknown Graphics language-model stage')
@@ -45,12 +126,13 @@ def validate_stage_output(pack, stage, response):
     if call is None or 'response_schema' not in call:
         raise ValueError('Unknown Graphics language-model stage')
     validate(response, call['response_schema'])
-    if stage == 'C1' and [item['id'] for item in response['candidates']] != ['A', 'B']:
-        raise ValueError('Expected one candidate A and one B')
+    expected = ['A'] if pack.get('copy_contract') == WRITER_LED else ['A', 'B']
+    if stage == 'C1' and [item['id'] for item in response['candidates']] != expected:
+        raise ValueError('Expected one candidate ' + ' and one '.join(expected))
     if stage == 'G0' and sorted(item['candidate_id'] for item in response['approaches']) != ['A', 'B']:
         raise ValueError('Expected one Graphics approach for A and one for B')
-    if stage == 'G1' and sorted(item['candidate_id'] for item in response['treatments']) != ['A', 'B']:
-        raise ValueError('Expected one Graphics treatment for A and one for B')
+    if stage == 'G1' and sorted(item['candidate_id'] for item in response['treatments']) != expected:
+        raise ValueError('Expected one Graphics treatment for ' + ' and one for '.join(expected))
     return response
 
 

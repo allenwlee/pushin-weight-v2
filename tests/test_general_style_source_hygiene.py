@@ -26,10 +26,12 @@ SOURCES = (
     "monitor/templates/monitor/_site_footer.html",
     "monitor/templates/monitor/_cyber_quan_sprite.html",
     "monitor/templates/monitor/general.html",
+    "monitor/templates/monitor/chatter.html",
     "monitor/templates/monitor/general/_navigation.html",
     "monitor/templates/monitor/general/_cards.html",
     "monitor/static/pro-general.css",
     "monitor/static/monitor/general.css",
+    "monitor/static/monitor/chatter.css",
     "monitor/static/fonts/pw-fonts.css",
     "monitor/static/favicon.svg",
     "monitor/static/pw-shell.js",
@@ -61,7 +63,7 @@ def test_shipped_sources_carry_no_prototype_scaffolding(relative: str) -> None:
 
 @pytest.mark.django_db
 @pytest.mark.requires_postgres
-@pytest.mark.parametrize("path", ["/?locale=en", "/dashboard/each?brand=deepseek&locale=ja", "/general/?lang=zh-cn"])
+@pytest.mark.parametrize("path", ["/?locale=en", "/dashboard/each?brand=deepseek&locale=ja", "/general/?lang=zh-cn", "/chatter/?lang=ja"])
 def test_rendered_pages_carry_no_prototype_scaffolding(client, settings, path: str) -> None:
     settings.SECURE_SSL_REDIRECT = False
     seed_real_home_orm(fixture_from_oracle())

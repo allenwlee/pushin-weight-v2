@@ -1,0 +1,27 @@
+.chatter-page #page-sections { max-width: 1000px; padding-top: 30px; padding-bottom: 64px; }
+.chatter-heading { margin: 0 0 20px; }
+.chatter-heading h1 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 26px; line-height: 1.2; }
+.chatter-heading .icon { color: var(--blue); width: 24px; height: 24px; }
+.chatter-archive { min-width: 0; }
+.chatter-archive .chatter-pools { margin-bottom: 24px; gap: 12px; }
+.chatter-archive .chatter-pools select { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
+.chatter-archive .archive-list { display: grid; gap: 24px; }
+.chatter-archive .editorial-story { padding: 28px 32px; border: 1px solid var(--panel-border); border-radius: 18px; background: var(--surface); }
+.chatter-archive .editorial-headline { font-size: 36px; line-height: 1.12; }
+.chatter-archive .editorial-byline { font-size: 16px; line-height: 1.5; }
+.chatter-archive .editorial-meta { flex-wrap: wrap; font-size: 12px; margin: 16px 0; }
+.chatter-archive .editorial-body { font-size: 16px; line-height: 1.7; }
+.chatter-archive .editorial-body p { margin-top: 16px; }
+.chatter-archive .editorial-asset { margin: 24px 0; }
+.chatter-archive .editorial-asset img, .chatter-archive .editorial-asset video { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; margin: auto; border-radius: 10px; }
+.chatter-archive .editorial-asset figcaption { margin-top: 8px; color: var(--muted); font-size: 12px; }
+.chatter-pagination { margin-top: 28px; text-align: center; }
+.chatter-pagination a { display: inline-block; padding: 9px 16px; border: 1px solid var(--panel-border); border-radius: 8px; background: var(--surface); color: var(--blue); }
+@media (max-width: 700px) {
+  .chatter-page #page-sections { padding-top: 22px; }
+  .chatter-archive .archive-list { gap: 16px; }
+  .chatter-archive .editorial-story { padding: 20px 18px; border-radius: 14px; }
+  .chatter-archive .editorial-headline { font-size: 29px; }
+  .chatter-archive .editorial-body, .chatter-archive .editorial-byline { font-size: 15px; }
+  .chatter-archive .editorial-meta time { flex-shrink: 1; }
+}

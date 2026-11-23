@@ -1500,3 +1500,15 @@ msgstr "一部の系譜の証拠が無効なため、調査が必要です。"
 #: monitor/pulse_views.py
 msgid "Some non-X lineage evidence is pending; automatic recovery is not available yet."
 msgstr "X 以外の一部の系譜の証拠は処理待ちです。自動復旧はまだ利用できません。"
+
+msgid "Source language"
+msgstr "情報源の言語"
+
+msgid "Rest"
+msgstr "その他"
+
+msgid "Giants"
+msgstr "大手"
+
+msgid "Chatter updates are delayed. The latest available story is shown."
+msgstr "Chatterの更新が遅れています。現在は最新の公開記事を表示しています。"

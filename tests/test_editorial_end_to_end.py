@@ -29,6 +29,69 @@ pytestmark = [
 
 
 @pytest.mark.parametrize("storage", ["legacy", "shared"])
+@pytest.mark.parametrize("defect", ["source_binding", "numeric_audit", "shape", "duplicate"])
+def test_chatter_keeps_valid_sibling_through_real_provider_chain(monkeypatch, storage, defect):
+    """A bad nomination formerly discarded the entire editor response."""
+    import copy
+
+    monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", storage)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only")
+    post = Post.objects.create(
+        tweet_id="777001", text="A company announced a model.",
+        created_at=timezone.now() - timedelta(minutes=2),
+    )
+    calls = []
+
+    def transport(endpoint, key, body, **kwargs):
+        calls.append(body)
+        if "editor-in-chief" in body["messages"][0]["content"]:
+            valid = {
+                "key": "valid-release", "summary": post.text,
+                "post_ids": [post.pk], "occurred_at": post.created_at.isoformat(),
+                "chatter": True, "pulse": True, "importance": 80,
+                "reason": "A substantive model announcement.",
+            }
+            data = grounded_reply(body, {"events": [valid, {**valid, "key": "bad-release"}]})
+            bad = data["events"][1]
+            if defect == "source_binding":
+                bad["source_check"][0]["support"]["post_id"] = "invented"
+            elif defect == "numeric_audit":
+                bad["summary"] = "The company announced 42 models."
+            elif defect == "shape":
+                data["events"][1] = None
+            else:
+                data["events"].append(copy.deepcopy(bad))
+        else:
+            data = grounded_reply(body, {
+                "headline": "A release", "byline": "A model announcement.",
+                "article": post.text, "locale": "en", "post_ids": [post.pk],
+            })
+        return 200, json.dumps({
+            "model": body["model"],
+            "choices": [{"finish_reason": "stop", "message": {"content": json.dumps(data)}}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 100},
+        }).encode()
+
+    monkeypatch.setattr(providers, "https_request", transport)
+    outcome = service.run_editorial({
+        "schema_version": 1, "completed_at": timezone.now().isoformat(),
+        "source_cycle_id": "mixed-repair", "outcome": "completed", "dry_run": False,
+    }, cfg=active_config(pictures={}))
+    assert outcome["published"] == 1, outcome
+    edition = EditorialEdition.objects.get()
+    assert edition.track == "chatter" and edition.story.development_key == "valid-release"
+    assert outcome["candidate_rejections"]
+    expected_reason = {
+        "source_binding": "unknown_source_support",
+        "numeric_audit": "numeric_copy_without_number_ownership",
+        "shape": "malformed_model_entries",
+        "duplicate": "duplicate_development",
+    }[defect]
+    assert {r["reason"] for r in outcome["candidate_rejections"]} == {expected_reason}
+    assert len(calls) == 3  # editor, valid writer, advisory review; no retry/bad writer
+
+
+@pytest.mark.parametrize("storage", ["legacy", "shared"])
 def test_source_to_paid_reservation_to_two_editions_picture_and_reader(
     monkeypatch, client, storage
 ):
@@ -212,6 +275,24 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
     monkeypatch.setenv("DEEPINFRA_API_KEY", "deepinfra-test-only")
     monkeypatch.setenv("EDITORIAL_CONFIG_PATH", "config/editorial-english-launch.yaml")
     cfg = load_editorial_config()
+    # Keep the legacy shared-editor Chatter path under regression coverage.
+    legacy_route = cfg.routes["chatter"].model_copy(update={
+        "model": "gpt-6-sol",
+        "endpoint": "https://api.openai.com/v1/chat/completions",
+        "key_env": "OPENAI_API_KEY",
+    })
+    cfg = cfg.model_copy(update={
+        "chatter": cfg.chatter.model_copy(update={"enabled": False}),
+        "routes": {**cfg.routes, "chatter": legacy_route},
+        "locale_routes": {
+            name: route.model_copy(update={
+                "model": "gpt-6.1-sol",
+                "endpoint": "https://api.openai.com/v1/chat/completions",
+                "key_env": "OPENAI_API_KEY",
+            })
+            for name, route in cfg.locale_routes.items()
+        },
+    })
     post = Post.objects.create(
         tweet_id="2106428676351090999",
         text="A major model release.",
@@ -304,7 +385,7 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
     assert [
         request.get("max_tokens", request.get("max_completion_tokens"))
         for request in requests
-    ] == [65536, 4096, 16384, 16384, 16384, 16384, 16384, 65536, 16384]
+    ] == [65536, 4096, 16384, 16384, 65536, 16384, 16384, 16384, 16384]
     from monitor.editorial.writing import HEADLINE_ATTRIBUTION_RULE
     from monitor.headline_grounding import SOURCE_READING_RULES
 

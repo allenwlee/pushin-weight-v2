@@ -12,6 +12,7 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from core.classification_contract import (
     AUDIENCE_TOPIC_KEYS,
@@ -27,6 +28,7 @@ from x_monitor import attribution as parser
 from x_monitor.compressed_classifier_prompts import (
     CHANNEL_MEANINGS,
     EXTRACTION,
+    META_IDENTITY_QUESTIONS,
     QUESTIONS,
     RELEASE_EXTRACTION,
     RULES,
@@ -249,7 +251,8 @@ def _umbrella(request, state, targets, question_map):
         for key, qid in question_map[brand].items():
             if key not in POST_QUESTIONS:
                 question = request["questions"][qid]
-                question["instructions"] = QUESTIONS[key].format(b=scope)
+                wording = META_IDENTITY_QUESTIONS.get(key, QUESTIONS[key]) if brand == "llama" else QUESTIONS[key]
+                question["instructions"] = wording.format(b=scope)
     request["state"]["umbrella_meaning"] = (
         "Each target ID is a database key for a tracked company and its product umbrella. "
         "The matched names are members of that target, not separate targets. Judge the relevant company or product mentioned in the source; "
@@ -486,7 +489,102 @@ def _and(values):
     return False if False in values else None if None in values else True
 
 
-def combine(decoded, state, rows, errors, fields=FIELDS):
+def _only_qualified_name_matches(state):
+    target = state.get("target_brand")
+    entry = next((item for item in state.get("tracked_brands", []) if item.get("brand_id") == target), {})
+    visible = _original_catalog_text(state)
+    qualified = False
+    domains = {domain.lower().rstrip(".") for domain in entry.get("domains", []) if domain}
+    terms = [entry.get("display_name") or "", *entry.get("aliases", []), *entry.get("products", []), *domains]
+    for url_match in re.finditer(r'https?://[^\s<>"\']+', visible, flags=re.IGNORECASE):
+        try:
+            hostname = (urlsplit(url_match.group()).hostname or "").lower().rstrip(".")
+        except ValueError:
+            hostname = ""
+        if any(hostname == domain or hostname.endswith("." + domain) for domain in domains):
+            return False
+        if any(term and _catalog_term_pattern(term.strip('"').strip()).search(url_match.group()) for term in terms):
+            qualified = True
+    visible = re.sub(r'https?://[^\s<>"\']+', ' ', visible, flags=re.IGNORECASE)
+    for raw in terms:
+        term = raw.strip('"').strip()
+        if not term or not _catalog_term_long_enough(term, 3) or "/" in term:
+            continue
+        if term.isalpha() and re.search(r"(?<!\w)" + re.escape(term) + r"\d", visible, re.IGNORECASE):
+            return False
+        for match in _catalog_term_pattern(term).finditer(visible):
+            if re.match(r"\.[A-Za-z][A-Za-z0-9_-]*", visible[match.end():]):
+                qualified = True
+            elif term.casefold() == "meta" and re.match(r"\s+Box\b", visible[match.end():], re.IGNORECASE):
+                # Meta Box is a separate named project. Capitalization alone is not identity evidence.
+                qualified = True
+            elif (term.isalpha() and match.group().islower()
+                  and re.match(r"\s+(?:analysis|comparison|discussion|commentary|study)\b", visible[match.end():], re.IGNORECASE)):
+                continue
+            else:
+                return False
+    official = any(item.get("reviewed") is True and item.get("brand_id") == target
+                   and item.get("role") in ("official", "staff")
+                   for item in state.get("author_affiliations", []) if isinstance(item, dict))
+    return qualified or not official
+
+
+def _identity_veto(decoded, *, state):
+    relevance = decoded.get("relevant", {})
+    identity_vote = _has_identity_vote(decoded)
+    return bool(identity_vote and (state.get("target_brand") == "_unattributed"
+                or (relevance.get("valid") and relevance.get("assigned") is False)
+                or (relevance.get("valid") and relevance.get("assigned") is True
+                    and _only_qualified_name_matches(state))))
+
+
+def _has_identity_vote(decoded):
+    return any(decoded.get(key, {}).get("valid") and decoded[key].get("p_yes", 0) >= .5
+               for key in ("identity_namesake_only", "identity_keyword_only", "identity_word_only"))
+
+
+_RELEASE_VERB = r"(?:announc(?:e[sd]?|ing)|releas(?:e[sd]?|ing)|launch(?:es|ed|ing)?|introduc(?:e[sd]?|ing)|unveil(?:s|ed|ing)?)"
+_RELEASE_PREDICATE = rf"(?:{_RELEASE_VERB}|(?:is|are|now|was|were)\s+(?:now\s+)?(?:available|out|live|released)|ships?\b)"
+_EVALUATION = r"(?:excellent|amazing|great|good|wonderful|terrible|awful|better|worse|faster|slower|impressive)"
+_TARGET_DESCRIPTION = r"(?:models?|weights?|files?|tools?|apps?|GPUs?|CPUs?|APUs?|research|service|update)"
+_TARGET_MODIFIERS = rf"(?:\s+(?:new|AI|developer|latest|{_TARGET_DESCRIPTION})){{0,4}}"
+
+
+def _target_claims(state):
+    """Find release and evaluation predicates attached to the target's mention."""
+    target = state.get("target_brand")
+    entry = next((item for item in state.get("tracked_brands", []) if item.get("brand_id") == target), {})
+    terms = {entry.get("display_name") or "", *entry.get("aliases", []), *entry.get("products", [])}
+    visible = re.sub(r'https?://[^\s<>]+', ' ', _original_catalog_text(state))
+    release = evaluation = False
+    for raw in terms:
+        term = raw.strip('"').strip()
+        if not _catalog_term_long_enough(term, 3) or "/" in term:
+            continue
+        pattern = _catalog_term_pattern(term)
+        matches = list(pattern.finditer(visible))
+        if term.isalpha():
+            # Catalog aliases can be prefixes of numbered product names, e.g. Qwen4.
+            matches.extend(re.finditer(r"(?<!\w)" + re.escape(term) + r"\d[\w.-]*", visible, re.IGNORECASE))
+        for match in matches:
+            before, after = visible[:match.start()], visible[match.end():]
+            # Releasing compatibility with a product is a release of the integrator's work.
+            compatibility = re.match(
+                rf"{_TARGET_MODIFIERS}\s+(?:support|compatibility|integration)\b", after, re.IGNORECASE,
+            )
+            release |= not compatibility and bool(
+                re.match(rf"{_TARGET_MODIFIERS}\s+{_RELEASE_PREDICATE}\b", after, re.IGNORECASE)
+                or re.search(rf"\b{_RELEASE_VERB}\s+(?:(?:the|new)\s+)*$", before, re.IGNORECASE)
+            )
+            evaluation |= bool(
+                re.match(rf"{_TARGET_MODIFIERS}(?:,\s+which)?\s+(?:(?:is|are|works?|runs?)\s+(?:really\s+|very\s+)?(?:{_EVALUATION}|well))\b",
+                         after, re.IGNORECASE)
+                or re.search(r"\b(?:love|hate|prefer)\s+$", before, re.IGNORECASE)
+            )
+    return release, evaluation
+
+
+def combine(decoded, state, rows, errors, fields=FIELDS, *, identity_veto=None):
     """Flattened selected Cycle 8 assembly; no earlier experiment overrides."""
     def v(key):
         answer = decoded.get(key, {})
@@ -521,14 +619,21 @@ def combine(decoded, state, rows, errors, fields=FIELDS):
             final[key] = None
     specifics = _or(final["promotion:" + key] for key in PROMOTION_KEYS[1:])
     final["promotion:general"] = False if specifics is True else None if specifics is None else v("untracked_pitch")
-    wrong = any(decoded.get(k, {}).get("valid") and decoded[k].get("p_yes", 0) >= .5
-                for k in ("identity_namesake_only", "identity_keyword_only", "identity_word_only"))
+    wrong = _identity_veto(decoded, state=state) if identity_veto is None else identity_veto
     if wrong:
         for key in final:
             if key.startswith(("type:", "topic:", "product:", "geo:")):
                 final[key] = False
         final["outcome"] = "context_missing"
         final["sentiment"] = final["china_national_stance"] = final["us_national_stance"] = "unknown"
+    elif v("relevant") is True and _has_identity_vote(decoded):
+        target_release, target_evaluation = _target_claims(state)
+        if not target_release:
+            final["type:releases_updates"] = False
+        if not any(final[key] is True for key in fields if key.startswith("type:") and key != "type:other"):
+            final["type:other"] = True
+        if not target_evaluation and not (target_release and final["sentiment"] == "positive"):
+            final["sentiment"] = "neutral"
     elsewhere = decoded.get("evaluation_elsewhere", {})
     if final["outcome"] == "classified" and elsewhere.get("valid") and elsewhere.get("p_yes", 0) >= .7:
         final["sentiment"] = "neutral"
@@ -570,6 +675,7 @@ def finish(case, prepared, raw_jev_document):
     decoded, extra = _decode(raw_jev_document, prepared["request"])
     rows, extraction_errors = meta["extraction_rows"], meta["extraction_errors"]
     by_brand = {}
+    identity_vetoes = {}
     errors = []
     invalid = [key for key, answer in decoded.items() if not answer["valid"]]
     if invalid:
@@ -580,7 +686,10 @@ def finish(case, prepared, raw_jev_document):
         errors.append("jev_context_overflow")
     for brand in targets:
         local = {key: decoded[actual] for key, actual in meta["question_map"][brand].items()}
-        by_brand[brand] = combine(local, {**state, "target_brand": brand}, rows, extraction_errors, FIELDS)
+        brand_state = {**state, "target_brand": brand}
+        identity_vetoes[brand] = _identity_veto(local, state=brand_state)
+        by_brand[brand] = combine(local, brand_state, rows, extraction_errors, FIELDS,
+                                  identity_veto=identity_vetoes[brand])
     findings = meta.get("release_findings")
     selected_findings = []
     if meta.get("release_error"):
@@ -626,8 +735,11 @@ def finish(case, prepared, raw_jev_document):
                 if brand != "_unattributed" and decoded[prefix + ":concerns:" + brand]["assigned"] is not True:
                     continue
                 fields = by_brand[brand]
+                if brand != "_unattributed" and identity_vetoes[brand]:
+                    continue
                 local = {key: decoded[actual] for key, actual in meta["question_map"][brand].items()}
-                if brand != "_unattributed" and any(local[key].get("p_yes", 0) >= .5 for key in ("identity_namesake_only", "identity_keyword_only", "identity_word_only")):
+                if (brand != "_unattributed" and brand not in publishers and _has_identity_vote(local)
+                        and not _target_claims({**state, "target_brand": brand})[0]):
                     continue
                 fields["type:releases_updates"] = True
                 fields["type:other"] = False
@@ -735,6 +847,12 @@ def finish(case, prepared, raw_jev_document):
     ) and all(key.startswith("release:") or (promotion_unresolved and key in promotion_question_ids) for key in invalid)
     publication = {"by_brand": canonical or {}, "untracked_brand_promotions": promotions,
                    "promoted_subjects": subjects, "valid": not errors or release_unresolved or promotion_unresolved}
+    identity_keys = ("relevant", "identity_namesake_only", "identity_keyword_only", "identity_word_only")
+    if all(decoded[meta["question_map"][brand][key]]["valid"] for brand in targets for key in identity_keys):
+        publication["identity_votes"] = {
+            brand: {key: decoded[meta["question_map"][brand][key]]["p_yes"] for key in identity_keys}
+            for brand in targets
+        }
     if release_unresolved:
         publication["release_unresolved"] = True
     if promotion_unresolved:

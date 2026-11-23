@@ -4448,7 +4448,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
-    def test_chart_initial_and_refresh_share_completed_harvest_tail(self) -> None:
+    def test_chart_initial_and_refresh_share_current_closed_boundary_tail(self) -> None:
         from django.utils import timezone
 
         from monitor.harvest_coverage import closed_five_minute_boundary
@@ -4456,7 +4456,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
 
         searched_through = timezone.now() - timedelta(minutes=10)
         run = record_harvest(searched_through)
-        last_start = closed_five_minute_boundary(searched_through) - timedelta(minutes=5)
+        stale_last = closed_five_minute_boundary(searched_through) - timedelta(minutes=5)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -4469,7 +4469,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     chart = page.locator("canvas.home-chart")
                     self.assertTrue(chart.is_visible())
                     initial = chart.evaluate("node => JSON.parse(node.dataset.home)")
+                    last_start = (
+                        closed_five_minute_boundary(timezone.now()) - timedelta(minutes=5)
+                    )
                     self.assertEqual(initial["days"][-1], last_start.isoformat())
+                    self.assertNotEqual(initial["days"][-1], stale_last.isoformat())
                     self.assertEqual(initial["harvest_coverage"]["run_id"], str(run.pk))
                     with page.expect_response(lambda response: "/chart.html?" in response.url and response.status == 200) as response:
                         page.evaluate("() => window.pwFilter.set('brands', ['moonshot_kimi'])")

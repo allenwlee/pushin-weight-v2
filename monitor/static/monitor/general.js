@@ -56,6 +56,9 @@
     const next = new URL(location.href);
     next.searchParams.delete('locale');
     next.searchParams.delete('notice');
+    for (const key of ['source_lang', 'edition_lang']) {
+      if (next.searchParams.get(key) === state.locale) next.searchParams.delete(key);
+    }
     next.searchParams.set('lang', state.locale);
     for (const key of ['weights', 'audience', 'timezone']) next.searchParams.set(key, state[key]);
     return next;
@@ -73,7 +76,22 @@
         if (value === 'closed') target.searchParams.set('notice', 'closed-weights');
         else target.searchParams.set(key, state.weights === 'open' ? 'none' : 'open');
       } else target.searchParams.set(key, value);
+      if (key === 'lang') target.searchParams.delete('cursor');
       link.href = target.pathname + target.search;
+    });
+    document.querySelectorAll('[data-chatter-next]').forEach(link => {
+      const target = new URL(link.href), preferences = pageUrl().searchParams;
+      for (const key of ['lang', 'weights', 'audience', 'timezone']) target.searchParams.set(key, preferences.get(key));
+      link.href = target.pathname + target.search;
+    });
+    document.querySelectorAll('.chatter-pools').forEach(form => {
+      form.querySelectorAll('input[type="hidden"]').forEach(input => input.remove());
+      pageUrl().searchParams.forEach((value, key) => {
+        if (['source_lang', 'group', 'edition_lang', 'cursor'].includes(key)) return;
+        const input = document.createElement('input');
+        input.type = 'hidden'; input.name = key; input.value = value;
+        form.append(input);
+      });
     });
   }
   function positionClosedNotice() {
@@ -224,12 +242,22 @@
     return `${Math.floor(seconds / 86400)} ${copy.days}`;
   }
   function updateTimes() {
+    const dateTime = new Intl.DateTimeFormat(state.locale, {
+      dateStyle: 'medium', timeStyle: 'short',
+      ...(state.timezone === 'ca' ? {timeZone: 'America/Los_Angeles'} : {}),
+    });
+    document.querySelectorAll('[data-published-at]').forEach(label => {
+      const at = Date.parse(label.dataset.publishedAt);
+      if (!Number.isFinite(at)) return;
+      const text = dateTime.format(at);
+      if (label.textContent !== text) label.textContent = text;
+    });
     for (const [section, panel] of panels) panel.node.querySelectorAll('[data-time-label]').forEach(label => {
       const target = Date.parse(label.dataset.target), remaining = (target - now()) / 1000;
       const stateName = label.dataset.state;
       let text;
       if (Number.isFinite(target)) {
-        label.title = new Intl.DateTimeFormat(state.locale, {dateStyle: 'medium', timeStyle: 'short', ...(state.timezone === 'ca' ? {timeZone: 'America/Los_Angeles'} : {})}).format(target);
+        label.title = dateTime.format(target);
         if (remaining <= 0) {
           text = copy.loading;
           label.classList.remove('is-live', 'is-upcoming');

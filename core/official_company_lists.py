@@ -28,6 +28,7 @@ _LOCAL_ERROR_CODES = frozenset({
     "invalid_members", "unconfirmed_add", "missing_owner_client_configuration",
     "invalid_credential_key", "credential_decryption", "credential_client_mismatch",
     "missing_owner_tokens", "credential_already_provisioned", "owner_credential_not_provisioned",
+    "invalid_owner_access_mode", "invalid_owner_snapshot", "owner_access_expired", "owner_refresh_disabled",
     "credential_blocked", "credential_revision_changed", "refresh_failed",
     "refresh_in_progress", "refresh_transport_uncertain", "refresh_response_uncertain",
     "refresh_save_uncertain", "recovery_validation_pending", "recovery_hold_changed",
@@ -61,7 +62,8 @@ class XListError(RuntimeError):
         write_refused=False, billing=False, error_origin="local_configuration",
         provider_request_made=False, credential_revision=None,
     ):
-        super().__init__(safe_error_code(code))
+        self.code = safe_error_code(code)
+        super().__init__(self.code)
         self.auth = auth
         self.unknown = unknown
         self.retry_at = retry_at

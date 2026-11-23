@@ -504,17 +504,15 @@ def _dashboard_now() -> datetime:
 
 
 def _one_day_chart_end(at: datetime, coverage: dict[str, str] | None) -> datetime:
-    """End the 1-day series at searched coverage, or at staging's review clock."""
+    """End the 1-day series at the latest closed five-minute boundary.
+
+    Harvest coverage is still attached to the payload for context, but a stale
+    or missing completed cycle must not freeze or empty the chart.
+    """
     from monitor.harvest_coverage import closed_five_minute_boundary
 
-    start = closed_five_minute_boundary(at) - timedelta(days=1)
-    if coverage:
-        return max(start, datetime.fromisoformat(coverage["chart_end_at"]))
-    if settings.OLLIJA_STAGING_MODE:
-        # Copied snapshots carry no scheduled-harvest records; the review
-        # clock already marks where the copied posts end.
-        return closed_five_minute_boundary(at)
-    return start
+    del coverage
+    return closed_five_minute_boundary(at)
 
 
 # ============================================================================
@@ -1243,7 +1241,11 @@ def _feed_axes_complete_post_ids(post_ids: list[str], *, brand_pairs=None, state
     """Identify posts whose selected judgments explicitly saved the feed axes."""
     if not post_ids:
         return set()
-    from core.classification_contract import COMPRESSED_CLASSIFIER_REVISIONS
+    from core.classification_contract import (
+        COMPRESSED_CLASSIFIER_PREVIOUS_REVISIONS,
+        COMPRESSED_CLASSIFIER_REVISIONS,
+        COMPRESSED_CLASSIFIER_IDENTITY_REVISIONS,
+    )
 
     expected: dict[str, set[str]] = defaultdict(set)
     actual: dict[str, set[str]] = defaultdict(set)
@@ -1269,7 +1271,10 @@ def _feed_axes_complete_post_ids(post_ids: list[str], *, brand_pairs=None, state
         if not isinstance(changes, dict):
             continue
         earlier_feed_only = (
-            row["selected_final_judgment__prompt_version"] == COMPRESSED_CLASSIFIER_REVISIONS[2]
+            row["selected_final_judgment__prompt_version"] in {
+                COMPRESSED_CLASSIFIER_PREVIOUS_REVISIONS[2], COMPRESSED_CLASSIFIER_IDENTITY_REVISIONS[2],
+                COMPRESSED_CLASSIFIER_REVISIONS[2],
+            }
             and row["selected_final_judgment__validation_state"] == "validated"
             and "release_output" not in changes
         )
@@ -3788,6 +3793,15 @@ def _build_home_chart_payload(
                     series[brand][day_index[day_str]] += row["count"]
                     totals[brand] += row["count"]
 
+    partial_buckets = []
+    if window_days == 1:
+        covered_until = datetime.fromisoformat(coverage["chart_end_at"]) if coverage else chart_start
+        partial_buckets = [datetime.fromisoformat(day) >= covered_until for day in days]
+        for values in series.values():
+            for index, partial in enumerate(partial_buckets):
+                if partial and values[index] == 0:
+                    values[index] = None
+
     computed_at = pulse["computed_at"]
     trend_narrative, top_voices = _home_chart_sidecars(
         window_days, normalized_filters, brand_nicknames, locale, requested_at, computed_at,
@@ -3804,6 +3818,7 @@ def _build_home_chart_payload(
         "computed_at": computed_at,
         "fetched_at": computed_at,
         "harvest_coverage": coverage,
+        "partial_buckets": partial_buckets,
         "pulse": pulse,
         "trend_narrative": trend_narrative,
         "top_voices": top_voices,

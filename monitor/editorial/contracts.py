@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import re
+from collections import Counter
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
@@ -61,6 +63,71 @@ class Event(ClosedModel):
 
 class Decisions(ClosedModel):
     events: list[Event] = Field(default_factory=list, max_length=20)
+
+
+def candidate_entries(raw):
+    """Keep the envelope strict while finding conflicts before filtering events."""
+    if (
+        not isinstance(raw, dict)
+        or set(raw) != {"events"}
+        or not isinstance(raw["events"], list)
+        or len(raw["events"]) > 20
+    ):
+        raise ValueError("malformed editor envelope")
+    entries = raw["events"]
+    counts = Counter(
+        entry["key"].strip() for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get("key"), str)
+    )
+    return entries, {key for key, count in counts.items() if count > 1}
+
+
+def candidate_rejection(entry, index, stage, reason):
+    """A small code-owned diagnostic; never persist exception text or raw payloads."""
+    key = entry.get("key") if isinstance(entry, dict) else None
+    if not isinstance(key, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,159}", key):
+        key = None
+    return {
+        "candidate_index": index, "candidate_key": key,
+        "candidate_hash": digest(entry), "stage": stage, "reason": reason,
+    }
+
+
+_CANDIDATE_FAILURES = {
+    message: re.sub(r"[^a-z0-9]+", "_", message.lower()).strip("_")
+    for message in (
+        "malformed model entries", "post IDs must come from source support",
+        "event brands must come from source support", "missing source check",
+        "invalid source support", "duplicate source support fields",
+        "unknown source support", "claim actor is code-owned",
+        "source support ownership mismatch", "missing supported copy",
+        "unknown source or no current evidence", "duplicate development",
+        "unknown person", "unknown story", "existing-story change without existing stories",
+        "unknown brand", "event brand/source support mismatch", "future development",
+        "unknown chart facts", "unsupported chart claim", "unknown source image",
+        "essential image unavailable", "source claim outside cited posts",
+        "source claim cites unowned brand", "source claim cites unowned passage",
+        "unverified source independence", "numeric copy without number ownership",
+    )
+}
+
+
+def filter_candidates(raw, validate, *, stage, invalid_reason):
+    """Share envelope/conflict handling across wire and evidence validation."""
+    entries, conflicts = candidate_entries(raw)
+    accepted, rejected = [], []
+    for index, entry in enumerate(entries):
+        key = entry.get("key") if isinstance(entry, dict) else None
+        if isinstance(key, str) and key.strip() in conflicts:
+            rejected.append(candidate_rejection(entry, index, stage, "duplicate_development"))
+            continue
+        try:
+            accepted.append(validate(entry))
+        except (ValueError, TypeError) as exc:
+            # Exact code-owned messages only: Pydantic/input/provider text stays private.
+            reason = _CANDIDATE_FAILURES.get(str(exc), invalid_reason)
+            rejected.append(candidate_rejection(entry, index, stage, reason))
+    return accepted, rejected
 
 
 class SupportedCopy(ClosedModel):

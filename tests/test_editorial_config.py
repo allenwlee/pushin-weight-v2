@@ -93,3 +93,23 @@ def test_profile_cannot_escape_config_and_invalid_switch_fails_closed(monkeypatc
     monkeypatch.setenv("EDITORIAL_ENABLED", "maybe")
     with pytest.raises(ValueError, match="true or false"):
         load_editorial_config()
+
+
+@pytest.mark.parametrize("changed_field,changed_value", [
+    ("max_output_tokens", 4096), ("timeout_seconds", 179),
+])
+def test_personalized_selector_can_reuse_only_its_accepted_ranking_route(
+    changed_field, changed_value,
+):
+    from tests.test_chatter_trends import trends_config
+
+    cfg = trends_config().model_dump(mode="json")
+    cfg["chatter"]["selector"] = dict(cfg["chatter"]["ranking"])
+    assert EditorialConfig.model_validate(cfg).chatter.selector.model == "openai/gpt-6-sol"
+    cfg["chatter"]["selector"][changed_field] = changed_value
+    with pytest.raises(ValueError, match="selection route"):
+        EditorialConfig.model_validate(cfg)
+    cfg["chatter"]["selector"] = dict(cfg["chatter"]["ranking"])
+    cfg["chatter"]["discovery_lane"] = "semantic-v1"
+    with pytest.raises(ValueError, match="selection route"):
+        EditorialConfig.model_validate(cfg)

@@ -326,7 +326,16 @@ def _publication_fact_values(observation, values, metadata, dimensions):
 
 def publication_coordinate_values(observation):
     """Project publication identity without loading resource bodies or timing history."""
-    _, dimensions, metadata = observation_object_documents(observation)
+    if (
+        observation.legacy_archive_id is None
+        and observation.projection_kind is None
+        and hasattr(type(observation), "dimensions")
+    ):
+        # During the historical copy these two columns contain the coordinates.
+        # The separately deferred listing can be a large provider response.
+        dimensions, metadata = observation.dimensions, observation.source_metadata
+    else:
+        _, dimensions, metadata = observation_object_documents(observation)
     values = {}
     for key, field in (("config", "config_key"), ("category", "category_key")):
         if key in dimensions:

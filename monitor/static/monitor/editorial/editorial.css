@@ -14,3 +14,6 @@
 .history-toggle { padding:.5rem .75rem; margin-bottom:.6rem; border:1px solid currentColor; border-radius:.2rem; background:transparent; color:inherit; cursor:pointer; }
 .archive-list article { padding:1.5rem 0; border-bottom:1px solid #cbc9c2; }.archive-list h2 { margin:.5rem 0; }
 .share-link { display:inline-block; margin-top:1rem; } :focus-visible { outline:3px solid #b33f1c; outline-offset:3px; }
+.chatter-pools { display:flex; flex-wrap:wrap; gap:.75rem; margin-bottom:1rem; align-items:end; font-size:.85rem; }
+.chatter-pools label { display:flex; flex-direction:column; gap:.2rem; min-width:0; }
+.chatter-pools select,.chatter-pools button { max-width:100%; font:inherit; padding:.35rem; }

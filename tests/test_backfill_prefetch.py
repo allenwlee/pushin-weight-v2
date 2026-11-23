@@ -33,11 +33,12 @@ from tests.test_backfill_pipeline import pipeline as captured_pipeline
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 pipeline = pytest.fixture(name="pipeline")(captured_pipeline.__wrapped__)
 REAL_GET = requests.get
-from datetime import UTC
+from datetime import UTC, datetime
 
 from x_monitor.x_client import XClient
 
 REAL_BOUNDED = XClient._get_bounded
+REAL_FROM_ENV = XClient.from_env.__func__
 
 
 def job_for_scopes(count, *, request_cap=100, maximum=200, byte_cap=32 * 1024 * 1024):
@@ -418,7 +419,9 @@ def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(http_page
     from tests.test_backfill_collection import policy_job
     from x_monitor.jev_decisions import QUESTION_SET, JevDecisionsClient, JevResponse
 
-    job = policy_job(monkeypatch, tmp_path, calls={"B1", "RARE_EXTRA"}, rare=True)
+    # Qwen's current planned ordinary route is B3; keep the rare/ordinary
+    # capture comparison anchored to an actually admitted search.
+    job = policy_job(monkeypatch, tmp_path, calls={"B3", "RARE_EXTRA"}, rare=True)
     rare_query = next(u["ownership"]["query"] for u in job.scope["units"]
                       if u["ownership"]["call_id"] == "RARE_EXTRA")
     monkeypatch.setenv("TYPESAFE_API_KEY", "fixture-only")
@@ -447,7 +450,7 @@ def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(http_page
     assert len(state["requests"]) == 2 and len(model_calls) == 1
     assert set(Post.objects.values_list("pk", flat=True)) == {"rare-kept", "ordinary-1", "ordinary-2"}
     scopes = CollectionScopeRun.objects.filter(run_id=report["run_id"])
-    for call, expected in (("RARE_EXTRA", 1), ("B1", 2)):
+    for call, expected in (("RARE_EXTRA", 1), ("B3", 2)):
         scope = scopes.get(scope_key=call)
         assert not hasattr(scope, "envelopes")
         pages = [entry for entry in page_receipts(scope) if entry.get("prefetch_request_id")]
@@ -571,3 +574,61 @@ def test_public_collection_phase_recovers_missing_summary_without_searching_agai
     assert (source.pk, bytes(source.body)) == original_source
     assert CollectionRun.objects.filter(job=job).count() == 1
     assert not OriginalContentCall.objects.exists()
+
+
+def test_prefetch_falls_back_with_one_accounted_receipt_per_attempt(pipeline, monkeypatch):
+    from monitor.backfill_prefetch import PrefetchRoute, TransportResult
+    monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "fixture-ondemand")
+    monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "fixture-scheduled")
+    monkeypatch.setenv("TWEXAPI_API_KEY", "fixture-twex")
+    monkeypatch.delenv("X_DATA_PROVIDER_ORDER", raising=False)
+    monkeypatch.setattr(XClient, "from_env", classmethod(REAL_FROM_ENV))
+    seen = []
+    def fetch(route, params, *, max_bytes, timeout):
+        assert isinstance(route, PrefetchRoute)
+        seen.append(route.name)
+        if route.name != "twexapi":
+            raw = b'{"error":"503"}'
+            return TransportResult(raw, {"status_code": 503, "raw_results": 0, "response_bytes": len(raw)}, "XClientServerError", datetime.now(UTC), 0.01)
+        raw = json.dumps({"code": 200, "data": [{"tweet_id": "909", "full_text": "Qwen release", "lang": "en", "created_at": "Sun Aug 09 00:10:00 +0000 2026", "user": {"screen_name": "tester"}}], "has_next_page": False, "next_cursor": None}).encode()
+        return TransportResult(raw, {"status_code": 200, "raw_results": 1, "response_bytes": len(raw)}, None, datetime.now(UTC), 0.01)
+    monkeypatch.setattr("monitor.backfill_prefetch.fetch_page", fetch)
+    job = job_for_scopes(1)
+    result = execute_job(job.pk, collection_options={"concurrency": 1})
+    assert result["collection_drained"]
+    assert seen == ["twitterapi:on_demand", "twitterapi:scheduled", "twexapi"]
+    requests = list(CollectionRequest.objects.filter(attempt__run__job=job).order_by("ordinal"))
+    assert [r.http_status for r in requests] == [503, 503, 200]
+    assert [r.http_method for r in requests] == ["GET", "GET", "POST"]
+    assert all(r.selection_accounted for r in requests)
+    assert Post.objects.filter(pk="909").exists()
+
+
+def test_twex_prefetch_pagination_keeps_provider_cursor(pipeline, monkeypatch):
+    from monitor.backfill_prefetch import PrefetchRoute, TransportResult
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "fixture-ondemand")
+    monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "fixture-scheduled")
+    monkeypatch.setenv("TWEXAPI_API_KEY", "fixture-twex")
+    monkeypatch.setenv("TWEXAPI_BREAKER_FAILURE_THRESHOLD", "1")
+    monkeypatch.setenv("TWEXAPI_INTERVAL_SECONDS", "0.1")
+    monkeypatch.delenv("X_DATA_PROVIDER_ORDER", raising=False)
+    monkeypatch.setattr(XClient, "from_env", classmethod(REAL_FROM_ENV))
+    router = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+    for circuit in router.provider_circuits.values(): circuit.record_failure(datetime.now(UTC))
+    seen = []
+    def fetch(route, params, *, max_bytes, timeout):
+        assert isinstance(route, PrefetchRoute) and route.name == "twexapi"
+        seen.append(params.get("cursor"))
+        first = len(seen) == 1
+        raw = json.dumps({"code": 200, "data": [{"tweet_id": "910" if first else "911", "full_text": "Qwen release", "lang": "en", "created_at": "Sun Aug 09 00:10:00 +0000 2026", "user": {"screen_name": "tester"}}], "has_next_page": first, "next_cursor": "cursor-twex" if first else None}).encode()
+        return TransportResult(raw, {"status_code": 200, "raw_results": 1, "response_bytes": len(raw)}, None, datetime.now(UTC), 0.01)
+    monkeypatch.setattr("monitor.backfill_prefetch.fetch_page", fetch)
+    job = job_for_scopes(1)
+    start = time.monotonic()
+    result = execute_job(job.pk, collection_options={"concurrency": 1})
+    assert result["collection_drained"] and seen == [None, "cursor-twex"]
+    assert time.monotonic() - start >= 0.09
+    requests = list(CollectionRequest.objects.filter(attempt__run__job=job).order_by("ordinal"))
+    assert requests[1].cursor_before == "twexapi:cursor-twex"
+    assert set(Post.objects.filter(pk__in=["910", "911"]).values_list("pk", flat=True)) == {"910", "911"}

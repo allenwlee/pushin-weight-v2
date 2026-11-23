@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from contextlib import contextmanager
@@ -19,6 +20,13 @@ CREDENTIAL_KEY = "x-owner-17456158-list-2067062923525275922"
 BLOCK_ORIGINS = frozenset({"provider", "refresh", "local_configuration", "operator", "legacy_unknown"})
 RECOVERY_VALIDATION_PENDING = "recovery_validation_pending"
 REQUIRED_SCOPES = {"tweet.read", "users.read", "list.read", "list.write", "offline.access"}
+
+
+def _finite_expiry(value):
+    try:
+        return type(value) in {int, float} and math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def credential_diagnostics(row=None):
@@ -69,8 +77,10 @@ def clear_credential_stop(row):
 
 
 class OwnerTokenStore:
-    def __init__(self, *, key, client_id, client_secret):
-        if not key or not client_id or not client_secret:
+    def __init__(self, *, key, client_id, client_secret, access_only=False):
+        if type(access_only) is not bool:
+            raise XListError("invalid_owner_access_mode", auth=True)
+        if not key or not client_id or (not access_only and not client_secret):
             raise XListError("missing_owner_client_configuration", auth=True)
         try:
             self._cipher = Fernet(key)
@@ -78,6 +88,8 @@ class OwnerTokenStore:
             raise XListError("invalid_credential_key", auth=True) from None
         self._client_id = client_id
         self._client_secret = client_secret
+        self._access_only = access_only
+        self._selected_access = None
         self.revision = None
         self.provider_request_made = False
         self.redactions = {client_secret}
@@ -87,13 +99,18 @@ class OwnerTokenStore:
 
     @classmethod
     def from_env(cls):
+        access_only = os.environ.get("PUSHINWEIGHT_X_LIST_ACCESS_ONLY", "false").lower()
+        if access_only not in {"true", "false"}:
+            raise XListError("invalid_owner_access_mode", auth=True)
         return cls(
             key=os.environ.get("PUSHINWEIGHT_X_LIST_ENCRYPTION_KEY"),
             client_id=os.environ.get("PUSHINWEIGHT_X_LIST_CLIENT_ID"),
             client_secret=os.environ.get("PUSHINWEIGHT_X_LIST_CLIENT_SECRET"),
+            access_only=access_only == "true",
         )
 
     def begin_invocation(self):
+        self._selected_access = None
         self.provider_request_made = False
         self.revision = None
         self.refresh_attempts = 0
@@ -152,27 +169,40 @@ class OwnerTokenStore:
     def _decode(self, row):
         try:
             value = json.loads(self._cipher.decrypt(bytes(row.encrypted_tokens)))
+            required = ("access_token", "client_id") if self._access_only else (
+                "access_token", "refresh_token", "client_id",
+            )
             if not isinstance(value, dict) or not all(
                 isinstance(value.get(key), str) and value[key]
-                for key in ("access_token", "refresh_token", "client_id")
+                for key in required
             ):
                 raise ValueError("Invalid token record")
+            if self._access_only and (
+                value.get("refresh_token") is not None
+                or not _finite_expiry(value.get("expires_at"))
+            ):
+                raise ValueError("Invalid access-only credential")
         except (InvalidToken, ValueError, TypeError):
             raise XListError("credential_decryption", auth=True).with_credential(row) from None
         if value["client_id"] != self._client_id:
             raise XListError("credential_client_mismatch", auth=True).with_credential(row)
-        self.redactions.update((value["access_token"], value["refresh_token"]))
+        self.redactions.update(value[key] for key in ("access_token", "refresh_token") if value.get(key))
         return value
 
     def _encode(self, value):
         return self._cipher.encrypt(json.dumps(value).encode())
 
-    def provision(self, *, access_token, refresh_token, replace=False):
-        if not access_token or not refresh_token:
+    def provision(self, *, access_token, refresh_token=None, replace=False, expires_at=None):
+        if not access_token or (not self._access_only and not refresh_token):
             raise XListError("missing_owner_tokens", auth=True)
+        if self._access_only and (
+            not isinstance(access_token, str) or refresh_token is not None
+            or not _finite_expiry(expires_at) or expires_at <= time.time()
+        ):
+            raise XListError("invalid_owner_snapshot", auth=True)
         value = {
             "access_token": access_token, "refresh_token": refresh_token,
-            "client_id": self._client_id, "expires_at": None, "scopes": [],
+            "client_id": self._client_id, "expires_at": expires_at, "scopes": [],
         }
         with transaction.atomic():
             row, created = OfficialCompanyOwnerCredential.objects.select_for_update().get_or_create(
@@ -188,16 +218,32 @@ class OwnerTokenStore:
                 row.save()
             self.revision = row.revision
 
-    def load(self):
+    def _load_ready(self):
         row = self._row()
         self._require_ready(row)
-        return self._decode(row)
+        return row, self._decode(row)
+
+    def load(self):
+        return self._load_ready()[1]
 
     def access_token(self):
-        value = self.load()
+        row, value = self._load_ready()
+        if self._access_only:
+            self._selected_access = (row, value["expires_at"])
+            self.check_access_expiry()
+            return value["access_token"]
         if value.get("expires_at") and value["expires_at"] <= time.time() + 300:
             return self.refresh()
         return value["access_token"]
+
+    def check_access_expiry(self):
+        """Recheck the selected snapshot without rereading or renewing it."""
+        if self._access_only:
+            if self._selected_access is None:
+                raise XListError("missing_owner_token", auth=True, error_origin="local_credential_gate")
+            row, expires_at = self._selected_access
+            if expires_at <= time.time():
+                raise XListError("owner_access_expired", auth=True, error_origin="local_credential_gate").with_credential(row)
 
     def annotate_error(self, error):
         # A late response retains its attempted revision, and cannot borrow a
@@ -229,6 +275,8 @@ class OwnerTokenStore:
         return bool(query.update(status="blocked", updated_at=timezone.now(), **fields))
 
     def refresh(self, *, request=requests.request):
+        if self._access_only:
+            raise XListError("owner_refresh_disabled", auth=True, error_origin="local_credential_gate")
         if self.recovery_active and self.refresh_attempts >= 1:
             raise XListError(
                 "recovery_refresh_limit", auth=True, error_origin="local_credential_gate",

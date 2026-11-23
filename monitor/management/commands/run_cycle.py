@@ -162,6 +162,11 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
+            "--staging-chatter-watch", nargs=5,
+            metavar=("START", "END", "TRIAL_SCOPE", "LIMIT_USD", "CARRY_USD"),
+            help="Run only Chatter on the staging harvest clock during this bounded trial.",
+        )
+        parser.add_argument(
             "--staging-acceptance",
             metavar="CALL_ID",
             default=None,
@@ -172,6 +177,17 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options) -> None:
+        if options.get("staging_chatter_watch"):
+            from monitor.editorial.chatter_staging_watch import scheduled_watch_tick
+
+            if not options["scheduled"] or any(options.get(key) for key in (
+                "call_ids", "enqueue", "dry_run", "staging_acceptance", "brands", "skip_fetch",
+                "limit_per_call", "max_pages_per_call",
+            )):
+                raise CommandError("The staging Chatter watch requires its own scheduled tick")
+            result = scheduled_watch_tick(*options["staging_chatter_watch"], now=datetime.now(UTC))
+            self.stdout.write(json.dumps(result, default=str))
+            return
         if options.get("call_ids") is not None:
             incompatible = []
             if options.get("staging_acceptance") is not None:
