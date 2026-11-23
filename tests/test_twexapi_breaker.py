@@ -311,3 +311,76 @@ def test_scheduled_failure_uses_on_demand_and_persists_independent_circuits(monk
     first = CircuitRow.objects.get(purpose=client.provider_circuits["twitterapi:scheduled"].purpose)
     second = CircuitRow.objects.get(purpose=client.provider_circuits["twitterapi:on_demand"].purpose)
     assert first.open_until is not None and second.open_until is None
+
+
+@pytest.mark.parametrize("route", ["twitterapi:scheduled", "twexapi"])
+@pytest.mark.parametrize(("tail", "incomplete"), [
+    ({"has_next_page": False}, False),
+    ({}, True),
+    ({"has_next_page": False, "next_cursor": "contradiction"}, True),
+    ({"has_next_page": True}, True),
+])
+def test_routed_continuation_requires_explicit_end(monkeypatch, route, tail, incomplete):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient
+
+    circuit = SearchProviderCircuit("terminal-fixture", threshold=1)
+    circuit.record_failure(timezone.now() - timedelta(minutes=10))
+    client = XClient(api_key="fixture", twexapi_key="fixture", circuit=circuit, twex_circuit=circuit,
+                     provider_order=(route,), provider_circuits={route: circuit})
+    bodies = iter([{"has_next_page": True, "next_cursor": "page-2"}, tail])
+    calls = []
+
+    def fetch(cursor):
+        calls.append(cursor)
+        items = [{"id": "123"}] if cursor is None else []
+        return {"tweets": items, "code": 200, "data": items, **next(bodies)}
+
+    monkeypatch.setattr(client, "_get", lambda path, params, **kw: fetch(params.get("cursor")))
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda query, cursor, **kw: fetch(cursor))
+    posts, truncated = client.run_search("Qwen")
+    assert ([p["id"] for p in posts], truncated, calls) == (["123"], incomplete, [None, "page-2"])
+    assert circuit.primary_permitted(timezone.now()) == (not incomplete)
+
+
+def test_twex_partial_recovery_holds_only_affected_query_until_independent_failure(monkeypatch):
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient, XClientServerError
+
+    def new_client():
+        route = SearchProviderCircuit("resume-fixture", provider="twexapi", endpoint_family="search", threshold=2)
+        return XClient(api_key="", twexapi_key="fixture", circuit=SearchProviderCircuit("history"),
+                       twex_circuit=route, provider_order=("twexapi",))
+
+    client = new_client()
+    for _ in range(2):
+        client.twex_circuit.record_failure(timezone.now() - timedelta(minutes=10))
+    calls = []
+
+    def fetch(self, query, cursor, **kwargs):
+        calls.append((query.split()[0], cursor))
+        return {"code": 200, "data": [] if cursor else [{"tweet_id": "1"}],
+                "has_next_page": True, "next_cursor": "tail" if cursor else "next"}
+
+    monkeypatch.setattr(XClient, "_twex_search_with_retry", fetch)
+    assert client.run_search("Qwen", since_time=10, until_time=20)[1]
+    other = new_client()
+    with pytest.raises(XClientServerError):
+        other.run_search("Qwen", since_time=20, until_time=30)
+    assert other.run_search("DeepSeek")[1]
+    with pytest.raises(XClientServerError):
+        new_client().run_search("Claude")
+    assert calls == [("Qwen", None), ("Qwen", "next"), ("DeepSeek", None), ("DeepSeek", "next")]
+
+
+def test_late_partial_response_cannot_cancel_provider_rate_limit():
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+
+    route = SearchProviderCircuit("late-partial", provider="twexapi", endpoint_family="search", threshold=2)
+    other = SearchProviderCircuit("late-partial", provider="twexapi", endpoint_family="search", threshold=2)
+    now = timezone.now()
+    assert route.primary_permitted(now, query="Qwen")
+    other.record_rate_limit(now, 45)
+    route.record_failure(now, partial_query="Qwen")
+    assert not route.primary_permitted(now + timedelta(seconds=44), query="DeepSeek")
+    assert route.primary_permitted(now + timedelta(seconds=46), query="DeepSeek")

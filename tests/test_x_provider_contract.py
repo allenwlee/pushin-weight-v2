@@ -24,7 +24,7 @@ def test_reversed_order_search_uses_twex_first_and_twitter_when_open(monkeypatch
 
     class Circuit:
         def __init__(self, permitted): self.permitted = permitted
-        def primary_permitted(self, now): return self.permitted
+        def primary_permitted(self, now, *, query=None): return self.permitted
         def observe_query(self, *a, **kw): return False
         def is_probe(self): return False
         def record_success(self, now): pass
@@ -46,7 +46,7 @@ def test_reversed_twex_failure_opens_only_its_circuit(monkeypatch):
     from x_monitor.x_client import XClient, XClientServerError
     class Circuit:
         def __init__(self): self.failures = 0
-        def primary_permitted(self, now): return self.failures == 0
+        def primary_permitted(self, now, *, query=None): return self.failures == 0
         def record_failure(self, now): self.failures += 1
         def record_success(self, now): pass
         def observe_query(self, *a, **kw): return False
@@ -116,7 +116,7 @@ def test_twex_only_order_does_not_require_twitter_credential(monkeypatch):
 def test_provider_cursor_is_held_while_its_circuit_is_open(monkeypatch, cursor):
     from x_monitor.x_client import XClient, XClientServerError
     class OpenCircuit:
-        def primary_permitted(self, now): return False
+        def primary_permitted(self, now, *, query=None): return False
     client = XClient(api_key="primary", twexapi_key="second", circuit=OpenCircuit(),
                      twex_circuit=OpenCircuit(), provider_order=("twexapi", "twitterapi"))
     monkeypatch.setattr(client, "_get", lambda *a, **kw: pytest.fail("unexpected TwitterAPI call"))
@@ -171,7 +171,7 @@ def _two_key_client(monkeypatch, *, duplicate=False):
     from x_monitor.x_client import XClient
     class Circuit:
         def __init__(self, purpose, **kwargs): self.failed = False; self.purpose = purpose
-        def primary_permitted(self, now): return not self.failed
+        def primary_permitted(self, now, *, query=None): return not self.failed
         def record_failure(self, now): self.failed = True
         def record_success(self, now): pass
         def observe_query(self, *args, **kwargs): return False
