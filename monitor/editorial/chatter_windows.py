@@ -7,6 +7,8 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from itertools import pairwise
 from pathlib import Path
+import re
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,11 +21,23 @@ PROMPT = (
 )
 
 
+def ranking_prompt(*, person_hints=True):
+    original = PROMPT.read_text()
+    if not person_hints:
+        return original
+    return original + (
+        "\nFor each episode include people, an array of up to three principal people's full "
+        "names copied exactly from its supplied headlines. Use [] when no person is named. "
+        "A news source or reporting account is not automatically a story subject.\n"
+    )
+
+
 class Episode(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     title: str = Field(min_length=1, max_length=6000)
     headline_ids: list[int] = Field(min_length=1)
     reason: str = Field(min_length=1, max_length=6000)
+    people: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(default_factory=list, max_length=3)
     qualifies: bool
     prior_episode_id: str | None
     material_change: str | None
@@ -119,7 +133,7 @@ def decision_packet(observations, cutoff, history):
     }
 
 
-def selection_request(packet):
+def selection_request(packet, *, person_hints=True):
     history = packet["history"]
     pending_ids = {e["episode_id"] for e in history.get("pending", [])}
     recent = [
@@ -145,7 +159,7 @@ def selection_request(packet):
     ]
     return {
         "packet_version": "chatter-trends-ranking-v2",
-        "system": PROMPT.read_text(),
+        "system": ranking_prompt(person_hints=person_hints),
         "user": json.dumps(
             {"headlines": rows, "prior_episodes": recent}, ensure_ascii=False
         ),
@@ -255,8 +269,14 @@ def apply_selection(packet, reply):
                 json.dumps([packet["cutoff"], keys], ensure_ascii=False).encode()
             ).hexdigest()[:24]
         )
+        people = list(dict.fromkeys(
+            name.strip() for name in g.people if name.strip() and any(
+                re.search(rf"(?<!\w){re.escape(wording(name))}(?!\w)", key) for key in keys
+            )
+        ))
         queued.append(
             {
+                **({"people": people} if people else {}),
                 "episode_id": identity,
                 "title": g.title,
                 "reason": g.reason,
@@ -291,6 +311,6 @@ def apply_selection(packet, reply):
             "admitted": archive,
         },
         "leads": leads,
-        "ranked_stories": [g.model_dump() for g in groups],
+        "ranked_stories": [g.model_dump(exclude_unset=True) for g in groups],
         "expired": expired,
     }

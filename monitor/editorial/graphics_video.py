@@ -33,7 +33,7 @@ from .graphics_artifacts import (
     validate_still,
 )
 from .graphics_cast import load_cast, recipe_refs
-from .graphics_chatter import accounting_config
+from .graphics_chatter import accounting_config, source_for_run
 from .graphics_contracts import load_pack, normalize_treatments, writer_led
 from .graphics_generation import (
     MAX_INPUT_BYTES,
@@ -92,7 +92,8 @@ def _selected(run_id, text_id, storage, *, existing_job=False):
     track = next((name for name, workflow in WORKFLOWS.items() if workflow == source.workflow_key), None)
     package = text.narrative.run
     single = writer_led(package.snapshot.get('request', {}).get('handoff', {}))
-    owns_saved_job = (single or existing_job) and accounting_config(package) is not None
+    owns_saved_job = (existing_job and source_for_run(package) is not None
+                      or single and accounting_config(package) is not None)
     if not track or (not owns_saved_job and not _current(text)):
         raise ValueError('video text is not the current selection')
     stills = []
@@ -387,7 +388,7 @@ def poll_video_job(picture_id, *, api_key=None, transport=https_request, fetch=N
         advisory_lock('selection:' + scope)
         pointer = OriginalContentSelection.objects.select_for_update().filter(scope_key=scope).first()
         selected_still = ContentPicture.objects.select_for_update().get(pk=still.pk)
-        owns_saved_job = accounting_config(source.run) is not None
+        owns_saved_job = source_for_run(source.run) is not None
         if (current.text.narrative.status != 'approved' or (not owns_saved_job and pointer is not None and pointer.text_id != current.text_id)
                 or selected_still.state != 'complete' or selected_still.text_id != current.text_id
                 or (selected_still.generated_storage_name, selected_still.generated_sha256,

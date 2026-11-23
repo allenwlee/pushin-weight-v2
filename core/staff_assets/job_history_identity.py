@@ -108,6 +108,14 @@ def _marker(person, native_id, observed, *, purpose, details=None):
     )
 
 
+def validate_x_identity(native, handle, *, partial=False):
+    """Use the same native-ID and handle grammar for live and saved person observations."""
+    if not (partial and native is None) and not (isinstance(native, str) and re.fullmatch(r"[1-9][0-9]*", native)):
+        raise IdentityHold("Stable native account identity is missing or invalid")
+    if not (partial and handle is None) and not (isinstance(handle, str) and re.fullmatch(r"[A-Za-z0-9_]{1,15}", handle)):
+        raise IdentityHold("Saved account handle is invalid")
+
+
 def apply_identity_records(item, actions, review_provenance):
     """Apply only non-held records for a single verified native account.
 
@@ -115,22 +123,7 @@ def apply_identity_records(item, actions, review_provenance):
     or ambiguous identity raises IdentityHold so the caller rolls all work back.
     """
     native, handle = item.get("native_id"), item.get("handle")
-    if (
-        not isinstance(native, str)
-        or not native.isascii()
-        or not native.isdigit()
-        or str(int(native)) != native
-        or int(native) <= 0
-    ):
-        raise IdentityHold("Stable native account identity is missing or invalid")
-    if (
-        not isinstance(handle, str)
-        or not handle
-        or not handle.isascii()
-        or len(handle) > 15
-        or not all(c.isalnum() or c == "_" for c in handle)
-    ):
-        raise IdentityHold("Saved account handle is invalid")
+    validate_x_identity(native, handle)
     identity = item.get("identity") or {}
     if identity.get("account_action") not in {"create", "reuse"} or identity.get(
         "person_action"

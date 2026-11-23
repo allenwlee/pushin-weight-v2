@@ -74,10 +74,11 @@ def _saved_config(run, cfg):
     if not current.chatter.enabled:
         return None
     saved = EditorialConfig.model_validate(run.config_snapshot["editorial"])
-    from .chatter_trends import RANKED_SCOPES, workflow_version
+    from .chatter_trends import RANKED_SCOPES, supported_version
 
-    expected = workflow_version(saved.chatter.discovery_lane) if run.scope_key in RANKED_SCOPES else digest(prompts())
-    if run.workflow_version != expected:
+    version_matches = (supported_version(run.workflow_version, saved.chatter.discovery_lane)
+                       if run.scope_key in RANKED_SCOPES else run.workflow_version == digest(prompts()))
+    if not version_matches:
         raise ValueError("Chatter prompt version changed during this run")
     return saved
 
