@@ -19,7 +19,7 @@ Use the one-time evaluator's saved positive results to record official accounts 
 
 The evaluator already saved the account, decision, evidence and organization name, so the proposed ingestion can run from the database without another model or provider call. Some names, ownership links, or evidence may conflict or have changed; those accounts must be reported for reconciliation rather than guessed or silently dropped.
 
-Freeze the accepted results available when the ingestion starts; do not wait for the one-time pass to finish. The frozen count, rather than a fixed target of 438, defines this run. The evaluator and scheduled production code continue independently. The current endpoint is an open pull request; do not merge, freeze the production list, or run production ingestion in this step.
+Freeze the accepted results available when the ingestion starts; do not wait for the one-time pass to finish. The frozen count, rather than a fixed target of 438, defines this run. The evaluator and scheduled production code continue independently. The current endpoint is merging the pull request after integration and verification; do not freeze the production list or run production ingestion in this step.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -47,6 +47,8 @@ Occupied staging: if a staged route finds `staging` in use by an unrelated relea
 <!-- END OLLIJA DELIVERY GUIDE -->
 
 ## Delivery Exceptions
+
+**Owner direction, 2026-11-23 JST:** Update the PR with current main, resolve conflicts, rerun ingestion tests and the local eight-account rehearsal, investigate failing checks, and merge when the results support it. This supersedes the earlier stop-before-merge instruction. The accepted-list freeze, production preview and production ingestion remain outside this task. Keep the existing worktree and preserve unrelated files and live harvesting.
 
 **Owner direction, 2026-11-21 21:23 JST:** The endpoint is a PR, stopping before merge. Test locally on PostgreSQL 17 or newer, including an eight-account synthetic rehearsal; no Render staging service is needed. Prepare production apply behind an explicit flag and frozen-list file, but do not freeze the actual list or run anything against production yet. The owner chose a same-name re-check for duplicate detection and no brand schema change or unique index. A later run is intended to freeze, preview, then apply in batches of 8, 50, and the remainder. A re-check does not exclude inserts after that check. This decision supersedes the earlier staging delivery and duplicate-protection instructions below.
 
