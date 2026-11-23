@@ -18,9 +18,11 @@ _active_identity = ContextVar("pulse_identity_application", default=None)
 def identity_control_selected():
     from pathlib import Path
 
+    from django.conf import settings
     from x_monitor.config import load_config
 
-    return load_config(Path("config.yaml")).llm.classifier_pipeline == "compressed8_pulse_v1"
+    return bool(settings.PULSE_CONTROL_DIRECTORY or settings.PULSE_CONTROL_R2_BUCKET
+                or load_config(Path("config.yaml")).llm.classifier_pipeline == "compressed8_pulse_v1")
 
 
 def identity_application_active():
@@ -117,6 +119,9 @@ def process_saved_findings(*, limit=50, max_seconds=20):
     means no other processor is still writing identities. Stops are observed
     between posts. Classification and evidence publication do not use this lock.
     """
+    if not identity_control_selected():
+        return {"status": "uncontrolled", "provider_calls": 0,
+                **drain_posts(limit=limit, max_seconds=max_seconds, classified_only=True)}
     result = {"status": "busy", "provider_calls": 0}
     started = monotonic()
     measurements = {"queries": 0, "database_ms": 0.0, "affected_rows": 0}

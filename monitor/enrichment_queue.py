@@ -15,10 +15,16 @@ from django.db import transaction
 from django.db.models import CharField, Exists, F, Func, OuterRef, Q
 from django.utils import timezone
 
-from core.models import OriginalContentCall, PostBrand, PostEnrichmentState
+from core.models import OriginalContentCall, PostBrand, PostEnrichmentState, TargetedExtractionState
 
 STAGES = ("translation", "classification")
 HISTORICAL_SCRIPT_DEMAND = "requested_historical_script_detection"
+
+
+def targeted_release_due_q(now):
+    return Q(status="pending", updated_at__lte=now - timedelta(minutes=1)) | Q(
+        status="failed", updated_at__lte=now - timedelta(minutes=5)
+    )
 
 
 def _outstanding_historical_translations(states) -> set[str]:
@@ -153,6 +159,7 @@ def claim_enrichment_states(
     defer_translation_attempts: bool = False,
     source_collection_job_id: Any | None = None,
     fair_queue: bool = False,
+    include_targeted_release: bool = False,
 ) -> EnrichmentClaimBatch:
     now = now or timezone.now()
     available = (
@@ -173,6 +180,12 @@ def claim_enrichment_states(
                | Q(classification_status="pending"))
     else:
         due = scheduled_due_q(now)
+        if include_targeted_release:
+            release_due = TargetedExtractionState.objects.filter(
+                post_id=OuterRef("post_id"), role="model_release_extraction",
+                prompt_version="model-release-extraction-v2", attempts__lt=cfg.max_attempts,
+            ).filter(targeted_release_due_q(now))
+            due |= Q(Exists(release_due), classification_status="succeeded", source_collection_job_id__isnull=True)
     quarantined = 0
     with transaction.atomic():
         # Historical batches retain their paid reply after a worker lease

@@ -120,6 +120,7 @@ from monitor.enrichment_queue import (
 from monitor.enrichment_queue import (
     release_enrichment_claim as _release_enrichment_claim,
 )
+from monitor.enrichment_queue import targeted_release_due_q
 from monitor.harvest_summary import summarize_latency
 from monitor.list_membership import (
     observe_call_a_authors,
@@ -523,6 +524,7 @@ def _persist_classification_trace(
     feed_input_fingerprints: dict[str, str] | None = None,
     feed_replacement_reasons: dict[str, str] | None = None,
     identity_votes: dict[str, dict[str, float]] | None = None,
+    source_tweet: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Persist primary → review → final history for every attributed brand.
 
@@ -550,6 +552,7 @@ def _persist_classification_trace(
             feed_input_fingerprints=feed_input_fingerprints,
             feed_replacement_reasons=feed_replacement_reasons,
             identity_votes=identity_votes,
+            source_tweet=source_tweet,
         )
     stages = {
         stage: _trace_stage_payload(trace, stage)
@@ -656,6 +659,7 @@ def _persist_two_role_classification_trace(
     feed_input_fingerprints: dict[str, str] | None = None,
     feed_replacement_reasons: dict[str, str] | None = None,
     identity_votes: dict[str, dict[str, float]] | None = None,
+    source_tweet: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Persist a matching content + brand-interpretation pair and final atomically."""
     stages = {stage: _trace_stage_payload(trace, stage) for stage in (
@@ -772,6 +776,16 @@ def _persist_two_role_classification_trace(
                 "china_national_stance": "unknown",
                 "us_national_stance": "unknown",
             }
+        from x_monitor.attribution import _TWO_ROLE_SELECTED_MERGE_REVISION
+
+        if (is_v4 and content.get("outcome") == "classified" and source_tweet
+                and observed_revisions[2] == _TWO_ROLE_SELECTED_MERGE_REVISION):
+            from x_monitor.attribution import _filter_passing_hardware_release
+
+            content, brand_for_merge = _filter_passing_hardware_release(
+                content, brand_for_merge, source_tweet,
+                {"brands": source_tweet.get("tracked_brand_catalog") or []}, brand_id,
+            )
         merged = {**content, **brand_for_merge}
         parsed = parse_stage1_classifications([{"brand_id": brand_id, **merged}], [brand_id])
         if parsed is None or parsed[brand_id] != final_rows[brand_id]:
@@ -1217,6 +1231,9 @@ def _publish_stage1_classification(
     run_id: str,
     cfg: Any | None = None,
     force_feed_reassessment: bool = False,
+    queue_release: bool = False,
+    queue_release_identity: str | None = None,
+    queue_release_model: str | None = None,
 ) -> Any:
     """Atomically publish one already-complete, per-brand Stage 1 result."""
     if isinstance(result, dict) and result.get("release_only") is True:
@@ -1404,13 +1421,13 @@ def _publish_stage1_classification(
 
             release_findings, release_manifest = prepare_publication_findings(post=post, tweet=tweet, result=result)
 
-        if promotion_retry and preserved_brands != expected:
+        if preserved_brands != expected and (promotion_retry or not is_combined):
             from core.classified_product_releases import (
                 persist_release_only,
                 read_publication_findings,
             )
 
-            prior_release = read_publication_findings(post_id)
+            prior_release = read_publication_findings(post_id, allow_pending=True)
             if prior_release is not None:
                 saved_release = {"valid": False, "release_only": True}
                 if not persist_release_only(
@@ -1440,6 +1457,7 @@ def _publish_stage1_classification(
                 feed_input_fingerprints=feed_input_fingerprints,
                 feed_replacement_reasons=feed_replacement_reasons,
                 identity_votes=identity_votes,
+                source_tweet=tweet,
             )
 
         content_provenance = _v4_stage_provenance(
@@ -1554,6 +1572,12 @@ def _publish_stage1_classification(
             from core.classified_product_releases import persist_publication_findings
 
             persist_publication_findings(post=post, findings=release_findings)
+            from core.models import TargetedExtractionState
+
+            TargetedExtractionState.objects.filter(
+                post_id=post_id, role="model_release_extraction", prompt_version="model-release-extraction-v2",
+                status__in=["pending", "failed"],
+            ).update(status="succeeded", completed_at=django_timezone.now(), result_hash=None)
         elif is_combined and not result.get("release_unresolved") and promotion_retry:
             from core.classified_product_releases import (
                 _selected_release_publication,
@@ -1566,6 +1590,11 @@ def _publish_stage1_classification(
                     post_id=post_id, tweet=tweet, result=release_only, model=model, run_id=run_id
                 ):
                     raise ValueError("classification_release_only_not_persisted")
+        if queue_release:
+            from core.targeted_extraction import request_targeted_release
+
+            request_targeted_release(post_id, model=queue_release_model or model,
+                                     content_identity=queue_release_identity)
         if cfg is not None and not result.get("release_unresolved") and not result.get("promotion_unresolved"):
             _finish_enrichment_stage(
                 post_ids=[post_id],
@@ -3878,9 +3907,18 @@ class CycleRunner:
             for attempt in range(2):
                 try:
                     with transaction.atomic():
-                        account = _upsert_account(it)
                         post_id = str(it.get("id") or it.get("tweet_id") or "")
-                        existed = bool(post_id and Post.objects.filter(pk=post_id).exists())
+                        capture_release_input = settings.PRODUCT_RELEASE_BACKGROUND_ENABLED and self.cfg.llm.classifier_pipeline == "two_role"
+                        previous = (Post.objects.select_related("author").filter(pk=post_id).only(
+                            "tweet_id", "text", "quoted_text", "author_handle", "tweet_url", "tweet_twitter_url",
+                            "entities", "extended_entities", "card", "article", "author_description", "author_profile_bio", "in_reply_to_id", "is_retweet",
+                            "author__display_name", "author__bio", "author__description", "author__profile_bio_text",
+                        ).first() if post_id and capture_release_input else None)
+                        old_profile = ((previous.author.display_name, previous.author.bio, previous.author.description,
+                                        previous.author.profile_bio_text) if previous and previous.author_id else None)
+                        account = _upsert_account(it)
+                        existed = (previous is not None if capture_release_input else
+                                   bool(post_id and Post.objects.filter(pk=post_id).exists()))
                         if existed:
                             PostEnrichmentState.objects.get_or_create(post_id=post_id)
                             PostEnrichmentState.objects.select_for_update().get(pk=post_id)
@@ -3905,9 +3943,48 @@ class CycleRunner:
                             from core.product_release_detection_queue import enqueue_saved_post
 
                             enqueue_saved_post(post.pk)
+                            if previous is not None and self.cfg.llm.classifier_pipeline == "two_role":
+                                from core.classified_product_releases import selected_release_revision
+                                from core.models import TargetedExtractionState
+                                from core.targeted_extraction import _source_urls, request_targeted_release
+
+                                before = (previous.text, previous.quoted_text, previous.author_handle, previous.in_reply_to_id, previous.is_retweet,
+                                          previous.author_description, previous.author_profile_bio, old_profile)
+                                new_profile = ((account.display_name, account.bio, account.description, account.profile_bio_text)
+                                               if account else old_profile)
+                                after = (post.text, post.quoted_text, post.author_handle, post.in_reply_to_id, post.is_retweet,
+                                         post.author_description, post.author_profile_bio, new_profile)
+                                url_fields = ("tweet_url", "tweet_twitter_url", "entities", "extended_entities", "card", "article")
+                                changed_urls = any(getattr(previous, key) != getattr(post, key) for key in url_fields)
+                                if before != after or (changed_urls and _source_urls(previous) != _source_urls(post)):
+                                    has_release_work = (selected_release_revision(post.pk) is not None
+                                                        or TargetedExtractionState.objects.filter(
+                                                            post_id=post.pk, role="model_release_extraction",
+                                                            prompt_version="model-release-extraction-v2",
+                                                        ).exists())
+                                    if has_release_work and self.cfg.targeted_extraction.enabled and not PostEnrichmentState.objects.filter(
+                                        post_id=post.pk, source_collection_job_id__isnull=False,
+                                    ).exists():
+                                        request_targeted_release(
+                                            post.pk, model=self.cfg.targeted_extraction.roles["model_release_extraction"].model,
+                                            reopen=True,
+                                        )
                         brand_ids: list[str] = list(it.get("brand_ids") or [])
                         mentions: list[MentionRow] = list(it.get("mentions") or [])
                         classifications: dict = it.get("classifications") or {}
+                        prior_brands = set(PostBrand.objects.filter(post=post).values_list("brand_id", flat=True)) if previous else set()
+                        if previous and capture_release_input:
+                            from core.classified_product_releases import selected_release_revision
+
+                            from core.models import TargetedExtractionState
+
+                            had_release = (selected_release_revision(post.pk) is not None
+                                           or TargetedExtractionState.objects.filter(
+                                               post_id=post.pk, role="model_release_extraction",
+                                               prompt_version="model-release-extraction-v2",
+                                           ).exists())
+                        else:
+                            had_release = False
                         n_attr = _persist_attribution(
                             post,
                             brand_ids,
@@ -3915,6 +3992,18 @@ class CycleRunner:
                             classifications,
                             allow_unattributed=bool(it.get("_discovery_lane")),
                         )
+                        if previous and set(PostBrand.objects.filter(post=post).values_list("brand_id", flat=True)) != prior_brands:
+                            from core.targeted_extraction import request_targeted_release
+
+                            changed = PostEnrichmentState.objects.filter(
+                                post_id=post.pk, source_collection_job_id__isnull=True,
+                            ).update(classification_status="pending", classification_attempts=0,
+                                     classification_next_attempt_at=None, classification_error_code="")
+                            if changed and had_release and self.cfg.targeted_extraction.enabled:
+                                request_targeted_release(
+                                    post.pk, model=self.cfg.targeted_extraction.roles["model_release_extraction"].model,
+                                    reopen=True,
+                                )
                     if created:
                         n_inserted += 1
                     else:
@@ -4020,49 +4109,41 @@ class CycleRunner:
             recovery.update(measurements, elapsed_ms=round((time.monotonic() - started) * 1000, 3), provider_calls=0)
             result["provider_admission_recovery"] = recovery
         if kwargs.get("repair_manifest") is None and settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
-            if self.cfg.llm.classifier_pipeline == "compressed8_pulse_v1":
-                from monitor.pulse_processing import process_saved_findings
+            from monitor.pulse_processing import process_saved_findings
 
-                try:
-                    result["product_release_recovery"] = process_saved_findings()
-                except Exception:  # Saved findings remain pending; collection continues.
-                    logger.exception("Classified Pulse recovery failed")
-                    result["product_release_recovery"] = {"status": "error"}
-                if self.cycle_kind == "scheduled":
+            source_ids = set()
+            if self.cfg.llm.classifier_pipeline != "compressed8_pulse_v1":
+                from core.product_release_detection_queue import enqueue_posts
+
+                source_ids = {
+                    str(item["_persisted_post_id"]) for item in kept_posts
+                    if item.get("_persisted_post_id")
+                }
+                source_ids.update(str(value) for value in (kwargs.get("post_ids") or ()))
+                source_ids.update(str(value) for value in result.get("enrichment_current_cycle_post_ids", ()))
+                source_ids.update(str(value) for value in result.get("enrichment_carryover_post_ids", ()))
+                if source_ids:
                     try:
-                        from core.product_release_acquisition import dispatch_due_recovery
-
-                        result["product_release_acquisition_dispatch"] = dispatch_due_recovery()
+                        result["product_release_intake"] = enqueue_posts(source_ids)
                     except Exception:
-                        logger.exception("Post-collection release recovery dispatch failed")
-                        result["product_release_acquisition_dispatch"] = {"status": "error"}
-                return result
-            from core.product_release_detection_queue import enqueue_posts
-
-            source_ids = {
-                str(item["_persisted_post_id"]) for item in kept_posts
-                if item.get("_persisted_post_id")
-            }
-            source_ids.update(str(value) for value in (kwargs.get("post_ids") or ()))
-            source_ids.update(str(value) for value in result.get("enrichment_current_cycle_post_ids", ()))
-            source_ids.update(str(value) for value in result.get("enrichment_carryover_post_ids", ()))
-            if source_ids:
-                try:
-                    result["product_release_intake"] = enqueue_posts(source_ids)
-                except Exception:  # Keep collection healthy; replay can recover saved posts.
-                    logger.exception("Post-collection release intake failed")
-                    result["product_release_intake"] = {
-                        "selected": len(source_ids), "queued": 0, "missing": 0,
-                        "failed": len(source_ids), "status": "error",
-                    }
+                        logger.exception("Post-collection release intake failed")
+                        result["product_release_intake"] = {
+                            "selected": len(source_ids), "queued": 0, "missing": 0,
+                            "failed": len(source_ids), "status": "error",
+                        }
+            try:
+                result["product_release_recovery"] = process_saved_findings()
+            except Exception:
+                logger.exception("Classified Pulse recovery failed")
+                result["product_release_recovery"] = {"status": "error"}
             if self.cycle_kind == "scheduled" or source_ids:
                 try:
                     from core.product_release_acquisition import dispatch_due_recovery
 
-                    result["product_release_recovery"] = dispatch_due_recovery()
-                except Exception:  # Recovery is optional and never interrupts harvesting.
+                    result["product_release_acquisition_dispatch"] = dispatch_due_recovery()
+                except Exception:
                     logger.exception("Post-collection release recovery dispatch failed")
-                    result["product_release_recovery"] = {"status": "error"}
+                    result["product_release_acquisition_dispatch"] = {"status": "error"}
         return result
 
     def _process_enrichment_claim_batch(
@@ -4150,6 +4231,12 @@ class CycleRunner:
             defer_translation_attempts=self.cfg.llm.literal_translation_v2_enabled,
             source_collection_job_id=source_collection_job_id,
             fair_queue=fair_queue,
+            include_targeted_release=(settings.PRODUCT_RELEASE_BACKGROUND_ENABLED
+                                      and self.cfg.llm.classifier_pipeline == "two_role"
+                                      and self.cfg.targeted_extraction.enabled
+                                      and source_collection_job_id is None and not pulse_backfill
+                                      and not translation_only and repair_manifest is None
+                                      and self.cycle_kind != "backfill"),
         )
         claimed_states = list(claim_batch.states)
         from monitor.post_artifacts import read_literal_english_many
@@ -4191,6 +4278,20 @@ class CycleRunner:
         # queue authority so retries survive later cycles and processes.
         translation_tweets: list[dict[str, Any]] = []
         classification_tweets: list[dict[str, Any]] = []
+        release_retry_tweets: list[dict[str, Any]] = []
+        from core.models import TargetedExtractionState
+
+        release_retry_ids = set(TargetedExtractionState.objects.filter(
+            post_id__in=[state.pk for state in claimed_states if state.classification_status == "succeeded"
+                         and state.source_collection_job_id is None],
+            role="model_release_extraction",
+            prompt_version="model-release-extraction-v2", attempts__lt=enrichment_cfg.max_attempts,
+        ).filter(targeted_release_due_q(django_timezone.now())).values_list("post_id", flat=True)) if (
+            settings.PRODUCT_RELEASE_BACKGROUND_ENABLED and self.cfg.targeted_extraction.enabled
+            and self.cfg.llm.classifier_pipeline == "two_role" and source_collection_job_id is None
+            and self.cycle_kind != "backfill" and not translation_only and not pulse_backfill
+            and repair_manifest is None
+        ) else set()
         local_parent_ids = {
             str(state.post.in_reply_to_id)
             for state in claimed_states
@@ -4213,7 +4314,7 @@ class CycleRunner:
         for affiliations in affiliations_by_author.values():
             affiliations.sort(key=lambda value: (str(value["brand_id"]), str(value["role"])))
         profile_accounts = {}
-        if self.cfg.llm.classifier_pipeline == "compressed8_pulse_v1":
+        if self.cfg.llm.classifier_pipeline == "compressed8_pulse_v1" or settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
             profile_accounts = {
                 str(account.pk): account
                 for account in Account.objects.filter(
@@ -4242,6 +4343,7 @@ class CycleRunner:
                 tweet = {
                     "tweet_id": tid,
                     "text": text,
+                    "is_retweet": post.is_retweet,
                     "author_handle": post.author_handle,
                     "brand_ids": list(brand_ids),
                     "context": context,
@@ -4260,6 +4362,8 @@ class CycleRunner:
                         if self.cfg.llm.classifier_pipeline == "compressed8_pulse_v1" or affiliation["brand_id"] in brand_ids
                     ],
                 }
+                if settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
+                    tweet["release_author_affiliations"] = affiliations_by_author.get(str(post.author_id), [])
                 classification_due = (
                     not translation_only
                     and state.source_collection_job_id == source_collection_job_id
@@ -4268,7 +4372,7 @@ class CycleRunner:
                 # The classifier dispatches first below. A requested translation
                 # can then use the same claim without delaying classification.
                 account = profile_accounts.get(str(post.author_id))
-                if account and classification_due:
+                if account and (classification_due or tid in release_retry_ids):
                     from core.official_company_accounts import build_evidence
 
                     evidence = build_evidence(account, [{
@@ -4293,8 +4397,10 @@ class CycleRunner:
                     translation_tweets.append(tweet)
                 if classification_due:
                     classification_tweets.append(tweet)
+                elif tid in release_retry_ids:
+                    release_retry_tweets.append(tweet)
 
-        if not translation_tweets and not classification_tweets:
+        if not translation_tweets and not classification_tweets and not release_retry_tweets:
             for stage in (("translation",) if translation_only else ("translation", "classification")):
                 _finish_enrichment_stage(
                     post_ids=[str(state.pk) for state in claimed_states if stage_is_due(state, stage, state.claimed_at) and (stage != "classification" or state.source_collection_job_id == source_collection_job_id)],
@@ -4323,7 +4429,7 @@ class CycleRunner:
         )
         classifier_client = (
             (self._post_fetch_clients["classification"] if self._post_fetch_clients is not None else build_classifier_client_from_env(self.cfg, **deepinfra_credentials))
-            if classification_tweets
+            if classification_tweets or release_retry_tweets
             else None
         )
 
@@ -4340,7 +4446,7 @@ class CycleRunner:
         brand_rows = BrandModel.objects.filter(is_sentinel=False)
         if any(
             UNATTRIBUTED_BRAND_ID in tweet.get("brand_ids", [])
-            for tweet in classification_tweets
+            for tweet in classification_tweets + release_retry_tweets
         ):
             brand_rows = BrandModel.objects.filter(
                 Q(is_sentinel=False) | Q(nickname=UNATTRIBUTED_BRAND_ID)
@@ -4417,7 +4523,7 @@ class CycleRunner:
                 if classification_input_snapshot is not None
                 else _classification_tracked_brand_catalog()
             )
-            for tweet in classification_tweets:
+            for tweet in classification_tweets + release_retry_tweets:
                 if classification_input_snapshot is not None:
                     saved = classification_input_snapshot["inputs"][str(tweet["tweet_id"])]
                     if saved["text"] != tweet["text"] or set(saved["brand_ids"]) != set(tweet["brand_ids"]):
@@ -4427,9 +4533,9 @@ class CycleRunner:
             classification_catalog = (
                 _validated_tracked_brand_catalog_snapshot(classification_input_snapshot["catalog"])
                 if classification_input_snapshot is not None
-                else _tracked_brand_catalog(brand_registry, classification_tweets)
+                else _tracked_brand_catalog(brand_registry, classification_tweets + release_retry_tweets)
             )
-            for tweet in classification_tweets:
+            for tweet in classification_tweets + release_retry_tweets:
                 tweet["tracked_brand_catalog"] = classification_catalog["brands"]
                 tweet["_classification_catalog_revision"] = classification_catalog[
                     "revision"
@@ -4505,6 +4611,33 @@ class CycleRunner:
                     from x_monitor.compressed_classifier import COMBINED_MODEL
 
                     publication_model = COMBINED_MODEL
+                queue_release = False
+                queue_release_identity = queue_release_model = None
+                if (isinstance(result, dict) and result.get("valid") is True
+                        and settings.PRODUCT_RELEASE_BACKGROUND_ENABLED
+                        and self.cfg.targeted_extraction.enabled
+                        and classifier_profile == "deepseek_0731" and self.cycle_kind != "backfill"
+                        and source_collection_job_id is None and repair_manifest is None and not pulse_backfill):
+                    from core.classified_product_releases import selected_release_matches, selected_release_revision
+
+                    previous_release = selected_release_revision(tid)
+                    queue_release = (
+                        (result.get("release_candidate") is True or previous_release is not None)
+                        and not selected_release_matches(tid, tweet)
+                    )
+                    result["_release_reassessment"] = queue_release
+                    if queue_release:
+                        from core.targeted_extraction import targeted_request_input
+
+                        role_config = self.cfg.targeted_extraction.roles["model_release_extraction"]
+                        queue_release_model = role_config.model
+                        try:
+                            _, _, _, queue_release_identity = targeted_request_input(
+                                "model_release_extraction", Post.objects.get(pk=tid), role_config,
+                                pulse_release=True, release_context=tweet.get("context"),
+                            )
+                        except (ValueError, TypeError):
+                            logger.warning("Release prompt inputs unresolved for saved post %s", tid)
                 flag_result = _publish_stage1_classification(
                     post_id=tid,
                     result=result if isinstance(result, dict) else {},
@@ -4513,6 +4646,9 @@ class CycleRunner:
                     run_id=run_id,
                     cfg=enrichment_cfg,
                     force_feed_reassessment=repair_manifest is not None,
+                    queue_release=queue_release,
+                    queue_release_identity=queue_release_identity,
+                    queue_release_model=queue_release_model,
                 )
             except (DatabaseError, ValueError, KeyError) as exc:
                 logger.warning("_run_post_fetch: Stage 1 publish failed for %s: %s", tid, exc)
@@ -4619,7 +4755,15 @@ class CycleRunner:
         counters["n_targeted_organization_candidates"] = 0
         counters["targeted_failed_roles"] = []
         counters["targeted_deferred_roles"] = []
-        for i, (tweet, result) in enumerate(zip(classification_tweets, results)):
+        actual_classification_ids = set(classification_publish_ids)
+        retry_pairs = []
+        for tweet in release_retry_tweets if classifier_profile == "deepseek_0731" else []:
+            tid = str(tweet["tweet_id"])
+            classification_publish_ids.add(tid)
+            result = {"valid": True, "by_brand": {}, "release_candidate": True}
+            retry_pairs.append((tweet, result))
+            published_results[tid] = (result, _ClassificationPublishOutcome(outcome="preserved"), 0)
+        for i, (tweet, result) in enumerate(retry_pairs + list(zip(classification_tweets, results))):
             tid = tweet["tweet_id"]
             if tid not in classification_publish_ids:
                 continue
@@ -4628,7 +4772,7 @@ class CycleRunner:
             result, flag_result, removed_subjects = published_results[tid]
             if flag_result is not None and flag_result.outcome in {"persisted", "cleared", "preserved"}:
                 counters["n_tracked_promotion_subjects_removed"] += removed_subjects
-                if not result.get("release_unresolved") and not result.get("promotion_unresolved"):
+                if tid in actual_classification_ids and not result.get("release_unresolved") and not result.get("promotion_unresolved"):
                     classification_succeeded.add(tid)
                 if flag_result.outcome != "preserved":
                     counters[
@@ -4655,6 +4799,47 @@ class CycleRunner:
                         "post_type_id", flat=True
                     )
                 )
+                if result.get("release_candidate") is True:
+                    post_types.add("releases_updates")
+                if result.get("_release_reassessment") is True:
+                    post_types.add("releases_updates")
+                if tid not in actual_classification_ids:
+                    post_types = {"releases_updates"}
+                release_persist = None
+                release_reusable = None
+                if (settings.PRODUCT_RELEASE_BACKGROUND_ENABLED and self.cfg.targeted_extraction.enabled
+                        and classifier_profile == "deepseek_0731"
+                        and self.cycle_kind != "backfill" and source_collection_job_id is None):
+                    from core.classified_product_releases import (
+                        persist_release_only,
+                        targeted_release_findings,
+                        selected_release_matches,
+                    )
+                    from core.product_release_findings import SCHEMA
+
+                    release_reusable = selected_release_matches(tid, tweet)
+
+                    def release_persist(post, records, version):
+                        from core.classified_product_releases import TARGETED_RELEASE_REVISION
+
+                        if version != TARGETED_RELEASE_REVISION:
+                            raise ValueError("targeted_release_revision_mismatch")
+                        findings = targeted_release_findings(post=post, tweet=tweet, records=records)
+                        saved = persist_release_only(
+                            post_id=tid, tweet=tweet,
+                            result={"valid": False, "release_only": True,
+                                    "release_findings_version": SCHEMA,
+                                    "release_findings": findings},
+                            model=self.cfg.targeted_extraction.roles["model_release_extraction"].model,
+                            run_id=run_id, targeted=True,
+                        )
+                        if not saved:
+                            raise ValueError("targeted_release_not_persisted")
+                        from core.targeted_extraction import persist_pulse_release_projections
+
+                        persist_pulse_release_projections(post, findings, version, reconcile=True)
+                        return len(findings), len(findings), 0
+
                 targeted = run_targeted_extractions(
                     post=Post.objects.get(pk=tid),
                     post_types=post_types,
@@ -4662,7 +4847,27 @@ class CycleRunner:
                     calls=getattr(self, "_targeted_extraction_calls", {}),
                     max_calls=targeted_calls_remaining,
                     deadline=deadline,
+                    release_persist=release_persist,
+                    release_context=tweet.get("context") if release_persist else None,
+                    release_source_text=tweet.get("text") if release_persist else None,
+                    release_source_retweet=tweet.get("is_retweet") if release_persist else None,
+                    release_reusable=release_reusable,
                 )
+                if release_persist and "releases_updates" in post_types:
+                    from core.classified_product_releases import selected_release_matches
+
+                    if not selected_release_matches(tid, tweet):
+                        from core.targeted_extraction import request_targeted_release
+
+                        pending = request_targeted_release(
+                            tid, model=self.cfg.targeted_extraction.roles["model_release_extraction"].model,
+                        )
+                        if pending.status in {"pending", "failed"}:
+                            pending.save(update_fields=["updated_at"])
+                    elif tid in release_retry_ids:
+                        TargetedExtractionState.objects.filter(
+                            post_id=tid, role="model_release_extraction", status__in=["pending", "failed"],
+                        ).update(status="succeeded", completed_at=django_timezone.now())
                 targeted_calls_remaining -= targeted.calls_made
                 if self.cfg.official_company.enabled:
                     self._optional_calls_remaining -= targeted.calls_made
@@ -4688,13 +4893,13 @@ class CycleRunner:
                 if flag_result.dead_letter is not None:
                     counters["flag_dead_letters"].append(flag_result.dead_letter)
 
-            if flag_result is not None:
+            if flag_result is not None and tid in actual_classification_ids:
                 counters["n_classifications_published"] = (
                     counters.get("n_classifications_published", 0) + 1
                 )
 
         newly_failed += _finish_enrichment_stage(
-            post_ids=[str(tweet["tweet_id"]) for tweet in classification_tweets],
+            post_ids=list(actual_classification_ids),
             run_id=run_id,
             stage="classification",
             succeeded_ids=classification_succeeded,

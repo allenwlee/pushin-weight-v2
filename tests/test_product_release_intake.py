@@ -37,6 +37,11 @@ class ProductReleaseIntakeTests(unittest.TestCase):
             )
         )
 
+    def test_out_of_memory_and_out_of_date_are_not_launches(self):
+        self.assertIsNone(detect(source("The GPU is out of memory.")))
+        self.assertIsNone(detect(source("The results are out of date.")))
+        self.assertIsNotNone(detect(source("Maya v1.1.64 is out.")))
+
     def test_open_weights_and_multilingual_announcements(self):
         for text in (
             "Open-Weights: Music 3.0",

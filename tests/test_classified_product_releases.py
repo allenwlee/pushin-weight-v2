@@ -45,6 +45,962 @@ class CombinedTransport:
         return response
 
 
+def test_switch_to_two_role_preserves_saved_release_findings(monkeypatch):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    state, runner, _ = setup_cycle(monkeypatch)
+    runner._run_post_fetch([], run_id="before-switch")
+    original = read_publication_findings(state.post_id)
+    assert original
+
+    state.refresh_from_db()
+    state.post.text += " Additional source context."
+    state.post.save(update_fields=["text"])
+    state.classification_status = "pending"
+    state.classification_next_attempt_at = None
+    state.save(update_fields=["classification_status", "classification_next_attempt_at"])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._run_post_fetch([], run_id="after-switch")
+
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    findings = read_publication_findings(state.post_id)
+    assert findings is not None
+    assert [row["finding"] for row in findings] == [row["finding"] for row in original]
+
+
+def test_switch_reuses_unchanged_combined_release_without_new_extraction(monkeypatch, settings):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch)
+    runner._run_post_fetch([], run_id="combined-before-switch")
+    original = read_publication_findings(state.pk)
+    assert original
+    state.refresh_from_db()
+    state.classification_status = "pending"
+    state.classification_next_attempt_at = None
+    state.save(update_fields=["classification_status", "classification_next_attempt_at"])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    calls = []
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: calls.append(True)
+    runner._run_post_fetch([], run_id="unchanged-after-switch")
+    assert calls == []
+    assert [row["finding"] for row in read_publication_findings(state.pk)] == [row["finding"] for row in original]
+
+
+def test_two_role_release_extraction_reaches_pulse(monkeypatch, tmp_path, settings):
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    class ReleaseTransport(FixedSlotTwoRoleTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            for decision in response["decisions"].values():
+                if "post_types" in decision:
+                    decision["post_types"] = ["releases_updates"]
+            return response
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    transport = ReleaseTransport()
+    runner._post_fetch_clients["classification"] = transport
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+        "records": [{
+            "model_name": "Qwen4",
+            "brand_id": "qwen",
+            "organization_name": "Qwen",
+            "publisher_relation": "source_author", "novelty": "new_release",
+            "source_excerpt": "We released Qwen4 weights today.",
+            "categories": ["model-llm"],
+        }]
+    }
+    runner._run_post_fetch([], run_id="two-role-release")
+
+    findings = read_publication_findings(state.post_id)
+    assert findings and findings[0]["finding"]["observed_name"] == "Qwen4"
+    assert models.RareTypeCategoryAssignment.objects.filter(post_id=state.pk, brand_id="qwen", category="model-llm").exists()
+    assert models.ProductVerificationProposal.objects.filter(source_post_id=state.pk, observed_name="Qwen4").exists()
+    models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction").update(
+        status="failed", updated_at=timezone.now() - timedelta(minutes=2),
+    )
+    assert read_publication_findings(state.pk)[0]["finding"]["observed_name"] == "Qwen4"
+    models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction").update(status="succeeded")
+    process_saved_findings()
+    assert models.Product.objects.filter(display_name="Qwen4", brand_id="qwen").exists()
+    claim_count = models.EventDossierClaim.objects.count()
+    state.refresh_from_db()
+    state.classification_status = "pending"
+    state.classification_next_attempt_at = None
+    state.save(update_fields=["classification_status", "classification_next_attempt_at"])
+    runner._run_post_fetch([], run_id="two-role-release-retry")
+    process_saved_findings()
+    assert models.Product.objects.filter(display_name="Qwen4", brand_id="qwen").count() == 1
+    assert models.EventDossierClaim.objects.count() == claim_count
+
+
+def test_feed_and_release_request_survive_interruption(monkeypatch, settings):
+    from core import targeted_extraction
+    from scripts.database_lock import DatabaseLockError
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    monkeypatch.setattr(targeted_extraction, "run_targeted_extractions", lambda **_: (_ for _ in ()).throw(RuntimeError("interrupted")))
+    with pytest.raises(DatabaseLockError) as error:
+        runner._run_post_fetch([], run_id="feed-then-interruption")
+    assert isinstance(error.value.__cause__, RuntimeError)
+    assert str(error.value.__cause__) == "interrupted"
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    assert models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction", status="pending").exists()
+
+
+def test_malformed_source_url_does_not_block_feed_or_release_queue(monkeypatch, settings):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    state.post.text = "We released Qwen4 today. https:///broken"
+    state.post.save(update_fields=["text"])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner.cfg.targeted_extraction.max_calls_per_cycle = 0
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._run_post_fetch([], run_id="release-malformed-source-url")
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    assert models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction", status="pending").exists()
+
+
+def test_unnamed_release_keeps_category_without_verification_proposal(monkeypatch, settings):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {"records": [{
+        "brand_id": "qwen", "publisher_relation": "source_author", "source_excerpt": "We released Qwen4 weights today.",
+        "categories": ["model-llm"], "novelty": "unresolved",
+    }]}
+    runner._run_post_fetch([], run_id="unnamed-release-signal")
+    assert models.RareTypeCategoryAssignment.objects.filter(post_id=state.pk, category="model-llm").exists()
+    assert not models.ProductVerificationProposal.objects.filter(source_post_id=state.pk).exists()
+
+
+def test_malformed_profile_url_does_not_abort_multi_post_feed_batch(monkeypatch, settings):
+    from tests.test_post_enrichment_queue import _state
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    state.post.author_profile_bio = {"description": "Qwen", "entities": {"url": {"urls": [
+        {"expanded_url": "https://[invalid"},
+    ]}}}
+    state.post.save(update_fields=["author_profile_bio"])
+    other = _state("unrelated-feed-post")
+    monkeypatch.setattr(cycle, "_classification_tracked_brand_catalog", lambda: [
+        {"brand_id": "qwen", "display_name": "Qwen", "aliases": ["Qwen"], "products": [], "accounts": []},
+        {"brand_id": "deepseek", "display_name": "DeepSeek", "aliases": ["DeepSeek"], "products": [], "accounts": []},
+    ])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner.cfg.targeted_extraction.max_calls_per_cycle = 0
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._run_post_fetch([], run_id="malformed-profile-batch")
+    state.refresh_from_db()
+    other.refresh_from_db()
+    assert state.classification_status == other.classification_status == "succeeded"
+
+
+def test_edited_post_without_release_supersedes_old_release(monkeypatch, settings):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+        "records": [{"model_name": "Qwen4", "brand_id": "qwen", "organization_name": "Qwen",
+                     "publisher_relation": "source_author", "novelty": "new_release",
+                     "source_excerpt": "We released Qwen4 weights today.", "categories": ["model-llm"]}]
+    }
+    runner._run_post_fetch([], run_id="before-release-edit")
+    original = read_publication_findings(state.pk)
+    assert original and original[0]["finding"]["observed_name"] == "Qwen4"
+    assert models.RareTypeCategoryAssignment.objects.filter(post_id=state.pk, category="model-llm").exists()
+    proposal = models.ProductVerificationProposal.objects.get(source_post_id=state.pk, observed_name="Qwen4")
+    old_claim = original[0]["anchor_claim_id"]
+    state.refresh_from_db()
+    state.post.text = "Qwen is a useful model."
+    state.post.save(update_fields=["text"])
+    state.classification_status = "pending"
+    state.classification_next_attempt_at = None
+    state.save(update_fields=["classification_status", "classification_next_attempt_at"])
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {"records": []}
+    runner.cfg.targeted_extraction.max_calls_per_cycle = 0
+    runner._run_post_fetch([], run_id="after-release-edit")
+    assert read_publication_findings(state.pk) is None
+    assert models.EventDossierClaim.objects.filter(pk=old_claim).exists()
+    models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction").update(
+        updated_at=timezone.now() - timedelta(minutes=2),
+    )
+    runner.cfg.targeted_extraction.max_calls_per_cycle = 1
+    runner._run_post_fetch([], run_id="release-edit-reassessment")
+    assert read_publication_findings(state.pk) == ()
+    assert models.EventDossierClaim.objects.filter(pk=old_claim).exists()
+    assert not models.RareTypeCategoryAssignment.objects.filter(post_id=state.pk, classification_version="model-release-extraction-v2").exists()
+    proposal.refresh_from_db()
+    assert "automatic_verification_stopped:release_superseded" in proposal.rule_trace
+    state.refresh_from_db()
+    state.post.text = "We released Qwen4 weights today."
+    state.post.save(update_fields=["text"])
+    state.classification_status = "pending"
+    state.classification_next_attempt_at = None
+    state.save(update_fields=["classification_status", "classification_next_attempt_at"])
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+        "records": [{"model_name": "Qwen4", "brand_id": "qwen", "organization_name": "Qwen",
+                     "publisher_relation": "source_author", "novelty": "new_release",
+                     "source_excerpt": "We released Qwen4 weights today.", "categories": ["model-llm"]}]
+    }
+    runner._run_post_fetch([], run_id="release-edit-reverted")
+    assert read_publication_findings(state.pk)[0]["finding"]["observed_name"] == "Qwen4"
+    proposal.refresh_from_db()
+    assert "automatic_verification_stopped:release_superseded" not in proposal.rule_trace
+
+
+def test_edit_during_release_request_cannot_publish_old_answer(monkeypatch, settings):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+
+    def respond(*_):
+        runner._persist_items([{"id": str(state.pk), "author_id": "123456789", "author_handle": "QwenOfficial",
+                                "text": "Qwen is a useful model.", "brand_ids": ["qwen"],
+                                "mentions": [], "classifications": {}}])
+        return {"records": [{"model_name": "Qwen4", "brand_id": "qwen",
+                              "source_excerpt": "We released Qwen4 weights today.", "categories": ["model-llm"]}]}
+
+    runner._targeted_extraction_calls["model_release_extraction"] = respond
+    runner._run_post_fetch([], run_id="edit-during-release-request")
+    release = models.TargetedExtractionState.objects.get(post_id=state.pk, role="model_release_extraction")
+    assert release.status == "pending"
+    assert read_publication_findings(state.pk) is None
+    assert models.TargetedExtractionAttempt.objects.filter(state=release, error_code="input_superseded").exists()
+
+
+@pytest.mark.parametrize("updated_parent", [
+    "The earlier announcement was incorrect.",
+    "We released Qwen4 weights today. Also, Qwen5 is now available.",
+])
+def test_parent_edit_requeues_reply_with_stale_release_evidence(monkeypatch, settings, updated_parent):
+    from core.product_release_detection_queue import drain_posts, enqueue_posts
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    parent = models.Post.objects.create(tweet_id="release-parent", text="We released Qwen4 weights today.")
+    models.PostEnrichmentState.objects.create(post=parent)
+    state.post.text = "Interesting announcement."
+    state.post.in_reply_to_id = parent.pk
+    state.post.save(update_fields=["text", "in_reply_to_id"])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    monkeypatch.setattr("x_monitor.config.load_config", lambda _path: runner.cfg)
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {"records": [{
+        "model_name": "Qwen4", "brand_id": "qwen", "publisher_relation": "attributed_party",
+        "organization_name": "Qwen4", "source_excerpt": "We released Qwen4 weights today.",
+        "categories": ["model-llm"],
+    }]}
+    runner._run_post_fetch([], run_id="reply-parent-before-edit")
+    original_claim = read_publication_findings(state.pk)[0]["anchor_claim_id"]
+    parent.text = updated_parent
+    parent.save(update_fields=["text"])
+    assert read_publication_findings(state.pk) is None
+    enqueue_posts([parent.pk])
+    drain_posts(post_ids=[parent.pk], classified_only=True)
+    drain_posts(post_ids=[state.pk], classified_only=True)
+    release = models.TargetedExtractionState.objects.get(post_id=state.pk, role="model_release_extraction")
+    assert release.status == "pending"
+    assert models.EventDossierClaim.objects.filter(pk=original_claim).exists()
+
+
+@pytest.mark.parametrize("change", ["text", "url", "profile", "retweet"])
+def test_harvested_edit_queues_release_reassessment_without_reclassifying(monkeypatch, settings, change):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    transport = FixedSlotTwoRoleTransport()
+    runner._post_fetch_clients["classification"] = transport
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+        "records": [{"model_name": "Qwen4", "brand_id": "qwen", "organization_name": "Qwen",
+                     "publisher_relation": "source_author", "novelty": "new_release",
+                     "source_excerpt": "We released Qwen4 weights today.", "categories": ["model-llm"]}]
+    }
+    runner._run_post_fetch([], run_id="before-harvested-edit")
+    assert read_publication_findings(state.pk)
+    proposal = models.ProductVerificationProposal.objects.get(source_post_id=state.pk, observed_name="Qwen4")
+    item = {"id": str(state.pk), "author_id": "123456789", "author_handle": "QwenOfficial",
+            "text": "Qwen is a useful model." if change == "text" else "We released Qwen4 weights today.",
+            "brand_ids": ["qwen"], "mentions": [], "classifications": {}}
+    if change == "url":
+        item["entities"] = {"urls": [{"expanded_url": "https://huggingface.co/qwen/qwen4"}]}
+    if change == "profile":
+        item["author_description"] = "Updated Qwen publisher profile"
+    if change == "retweet":
+        item["is_retweet"] = True
+    assert runner._persist_items([item])[1] == 1
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded" and len(transport.calls) == 2
+    assert read_publication_findings(state.pk) is None
+    proposal.refresh_from_db()
+    assert "automatic_verification_stopped:release_reassessment_pending" in proposal.rule_trace
+    assert models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction", status="pending").exists()
+
+
+def test_new_brand_reopens_classification_and_release(monkeypatch, settings):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {"records": [{
+        "model_name": "Qwen4", "brand_id": "qwen", "publisher_relation": "source_author",
+        "source_excerpt": "We released Qwen4 weights today.", "categories": ["model-llm"],
+    }]}
+    runner._run_post_fetch([], run_id="before-brand-added")
+    assert read_publication_findings(state.pk)
+    models.Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
+    runner._persist_items([{"id": str(state.pk), "author_id": "123456789", "author_handle": "QwenOfficial",
+                            "text": "We released Qwen4 weights today.", "brand_ids": ["qwen", "deepseek"],
+                            "mentions": [cycle.MentionRow(str(state.pk), "deepseek", "body_keyword", "DeepSeek", "2026-11-23T00:00:00Z")],
+                            "classifications": {}}])
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    assert models.TargetedExtractionState.objects.get(post_id=state.pk, role="model_release_extraction").status == "pending"
+
+
+def test_detection_queue_prioritizes_completed_two_role_classification(monkeypatch, settings):
+    from core.product_release_detection_queue import drain_posts, enqueue_posts
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    old = models.Post.objects.create(tweet_id="older-unclassified", text="A post")
+    models.PostEnrichmentState.objects.create(post=old)
+    enqueue_posts([old.pk])
+    state, runner, _ = setup_cycle(monkeypatch)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._run_post_fetch([], run_id="two-role-priority")
+    models.ProductReleaseDetectionState.objects.filter(post=old).update(
+        completed_at=None, retry_at=None, requested_at=timezone.now() - timedelta(hours=1),
+    )
+    enqueue_posts([state.pk])
+    drain_posts(limit=1, classified_only=True)
+    old_state = models.ProductReleaseDetectionState.objects.get(post=old)
+    assert old_state.completed_at is None and old_state.retry_at is None
+
+
+def test_disabled_targeted_extraction_does_not_queue_release_work(monkeypatch, settings):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = False
+    monkeypatch.setattr("x_monitor.config.load_config", lambda _path: runner.cfg)
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._run_post_fetch([], run_id="release-extraction-disabled")
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    assert not models.TargetedExtractionState.objects.filter(
+        post_id=state.pk, role="model_release_extraction", prompt_version="model-release-extraction-v2",
+    ).exists()
+
+
+def test_deferred_release_retries_without_reclassifying_feed(monkeypatch, settings):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    class ReleaseTransport(FixedSlotTwoRoleTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            for decision in response["decisions"].values():
+                if "post_types" in decision:
+                    decision["post_types"] = ["releases_updates"]
+            return response
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner.cfg.targeted_extraction.max_calls_per_cycle = 0
+    transport = ReleaseTransport()
+    runner._post_fetch_clients["classification"] = transport
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+        "records": [{"model_name": "Qwen4", "brand_id": "qwen", "organization_name": "Qwen",
+                     "publisher_relation": "source_author", "novelty": "new_release",
+                     "source_excerpt": "We released Qwen4 weights today.", "categories": ["model-llm"]}]
+    }
+    runner._run_post_fetch([], run_id="feed-with-deferred-release")
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    assert len(transport.calls) == 2
+    assert read_publication_findings(state.pk) is None
+
+    runner.cfg.targeted_extraction.max_calls_per_cycle = 1
+    models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction").update(
+        updated_at=timezone.now() - timedelta(minutes=2),
+    )
+    runner._run_post_fetch([], run_id="release-only-retry")
+    assert len(transport.calls) == 2
+    assert read_publication_findings(state.pk)[0]["finding"]["observed_name"] == "Qwen4"
+
+
+def test_two_role_nonrelease_does_not_stall_pulse_queue(monkeypatch, tmp_path, settings):
+    from core.product_release_detection_queue import enqueue_posts
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, runner, _ = setup_cycle(monkeypatch)
+    state.post.text = "Qwen is a useful model."
+    state.post.save(update_fields=["text"])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    enqueue_posts([state.post_id])
+    runner._run_post_fetch([], run_id="two-role-nonrelease")
+    process_saved_findings()
+    queued = models.ProductReleaseDetectionState.objects.get(post_id=state.post_id)
+    assert queued.completed_at >= queued.requested_at
+    assert read_publication_findings(state.post_id) == ()
+
+
+def test_saved_classification_schedules_missing_release_extraction(monkeypatch, tmp_path, settings):
+    from core.product_release_detection_queue import enqueue_posts
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._run_post_fetch([], run_id="saved-classification-only")
+    assert not models.TargetedExtractionState.objects.filter(post_id=state.pk).exists()
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    enqueue_posts([state.pk])
+    process_saved_findings()
+    assert models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction", status="pending").exists()
+
+
+def test_exhausted_release_retry_stops_polling_until_new_evidence(monkeypatch, tmp_path, settings):
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {"records": [{"source_excerpt": "invented"}]}
+    runner._run_post_fetch([], run_id="release-before-exhaustion")
+    limit = runner.cfg.harvest.enrichment.max_attempts
+    models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction").update(
+        attempts=limit, status="failed", updated_at=timezone.now() - timedelta(minutes=6),
+    )
+    models.ProductReleaseDetectionState.objects.filter(post_id=state.pk).update(retry_at=None)
+    process_saved_findings()
+    queued = models.ProductReleaseDetectionState.objects.get(post_id=state.pk)
+    assert queued.error_code == "release_extraction_exhausted" and queued.attempts == 3
+    item = {"id": str(state.pk), "author_id": "123456789", "author_handle": "QwenOfficial",
+            "text": "We released Qwen5 weights today.", "brand_ids": ["qwen"], "mentions": [], "classifications": {}}
+    assert runner._persist_items([item])[1] == 1
+    queued.refresh_from_db()
+    assert queued.error_code == "" and queued.attempts == 0 and queued.retry_at is None
+
+
+def test_terminal_context_missing_without_release_does_not_stall_queue(monkeypatch, tmp_path, settings):
+    from core.product_release_detection_queue import enqueue_posts
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, runner, _ = setup_cycle(monkeypatch)
+    state.post.text = "A quiet discussion of Qwen."
+    state.post.save(update_fields=["text"])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    runner._run_post_fetch([], run_id="two-role-missing-nonrelease")
+    models.PostBrandClassificationState.objects.filter(post_id=state.pk).update(outcome="context_missing")
+    enqueue_posts([state.pk])
+    process_saved_findings()
+    queued = models.ProductReleaseDetectionState.objects.get(post_id=state.pk)
+    assert queued.completed_at >= queued.requested_at
+
+
+def test_historical_legacy_release_report_is_reused_without_provider_calls(monkeypatch, tmp_path, settings):
+    from core.product_release_detection_queue import enqueue_posts
+    from core.targeted_extraction import _persist_product_release_reports
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+    from tests.test_backfill_collection import ready_job
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, _runner, _ = setup_cycle(monkeypatch, official=True)
+    state.source_collection_job = ready_job()
+    state.classification_status = "succeeded"
+    state.save(update_fields=["source_collection_job", "classification_status"])
+    _persist_product_release_reports(state.post, [{
+        "brand_id": "qwen", "model_name": "Qwen4", "categories": ["model-llm"],
+    }], "model-release-extraction-v1")
+    enqueue_posts([state.pk])
+    result = process_saved_findings()
+    queued = models.ProductReleaseDetectionState.objects.get(post_id=state.pk)
+    assert result["processed"] == 1 and result["provider_calls"] == 0
+    assert queued.completed_at >= queued.requested_at
+    assert models.EventDossierClaim.objects.filter(event_dossier_source__post_id=state.pk,
+                                                    claim_kind_reference__code="release_report").exists()
+
+
+def test_historical_empty_release_answer_stays_with_its_job(monkeypatch, tmp_path, settings):
+    from core.product_release_detection_queue import enqueue_posts
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+    from tests.test_backfill_collection import ready_job
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, _runner, _ = setup_cycle(monkeypatch, official=True)
+    state.source_collection_job = ready_job()
+    state.classification_status = "succeeded"
+    state.save(update_fields=["source_collection_job", "classification_status"])
+    models.TargetedExtractionState.objects.create(
+        post_id=state.pk, role="model_release_extraction", status="succeeded", attempts=1,
+        model="test", prompt_version="model-release-extraction-v1", content_identity="a" * 64,
+        result_hash="b" * 64,
+    )
+    enqueue_posts([state.pk])
+    result = process_saved_findings()
+    assert result["processed"] == 1 and result["provider_calls"] == 0
+    extraction = models.TargetedExtractionState.objects.get(post_id=state.pk, role="model_release_extraction")
+    assert extraction.status == "succeeded" and extraction.prompt_version == "model-release-extraction-v1"
+
+
+def test_two_role_third_party_release_keeps_publisher_and_named_family(monkeypatch, tmp_path, settings):
+    from core.pulse_readers import release_page
+    from monitor import pulse_control
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    class ReleaseTransport(FixedSlotTwoRoleTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            for decision in response["decisions"].values():
+                if "post_types" in decision:
+                    decision["post_types"] = ["releases_updates"]
+            return response
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    text = "DeepSeek released DeepSeek-X in the DeepSeek Nova family."
+    state.post.text = text
+    state.post.save(update_fields=["text"])
+    deepseek = models.Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
+    models.PostBrand.objects.create(post=state.post, brand=deepseek)
+    monkeypatch.setattr(cycle, "_classification_tracked_brand_catalog", lambda: [
+        {"brand_id": "qwen", "display_name": "Qwen", "aliases": ["Qwen"], "products": [], "accounts": []},
+        {"brand_id": "deepseek", "display_name": "DeepSeek", "aliases": ["DeepSeek"], "products": [], "accounts": []},
+    ])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = ReleaseTransport()
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+        "records": [{
+            "model_name": "DeepSeek-X", "brand_id": "deepseek",
+            "organization_name": "DeepSeek", "publisher_relation": "attributed_party", "novelty": "new_release",
+            "source_excerpt": text, "categories": ["model-llm"],
+            "family_name": "DeepSeek Nova", "family_excerpt": text,
+        }]
+    }
+    runner._run_post_fetch([], run_id="two-role-third-party")
+    finding = read_publication_findings(state.post_id)[0]["finding"]
+    assert finding["brand_id"] == "deepseek"
+    assert finding["family_evidence"]["name"] == "DeepSeek Nova"
+    assert models.Product.objects.filter(display_name="DeepSeek-X", brand_id="deepseek").exists()
+    entry = release_page()["entries"][0]
+    assert entry["brand"]["name"] == "DeepSeek"
+    assert entry["family"]["name"] == "DeepSeek Nova"
+
+
+def test_two_role_invalid_release_quote_keeps_feed_and_retries(monkeypatch, tmp_path, settings):
+    from monitor import pulse_control
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    class ReleaseTransport(FixedSlotTwoRoleTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            for decision in response["decisions"].values():
+                if "post_types" in decision:
+                    decision["post_types"] = ["releases_updates"]
+            return response
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    transport = ReleaseTransport()
+    runner._post_fetch_clients["classification"] = transport
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+        "records": [{"model_name": "Qwen4", "source_excerpt": "fabricated quote"}]
+    }
+    runner._run_post_fetch([], run_id="invalid-release-quote")
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    assert models.PostBrandClassificationState.objects.filter(
+        post_id=state.post_id, brand_id="qwen", outcome="classified",
+    ).exists()
+    assert read_publication_findings(state.post_id) is None
+    previous = models.PostBrandClassificationState.objects.get(post_id=state.post_id, brand_id="qwen")
+    previous_final = previous.selected_final_judgment_id
+    release_state = models.TargetedExtractionState.objects.get(post_id=state.pk, role="model_release_extraction")
+    assert release_state.status == "failed"
+    models.TargetedExtractionState.objects.filter(pk=release_state.pk).update(updated_at=timezone.now() - timedelta(minutes=6))
+    runner._targeted_extraction_calls.clear()
+    runner._run_post_fetch([], run_id="release-provider-unavailable")
+    release_state.refresh_from_db()
+    assert release_state.status == "failed" and release_state.updated_at > timezone.now() - timedelta(minutes=1)
+    assert len(transport.calls) == 2
+    models.TargetedExtractionState.objects.filter(pk=release_state.pk).update(updated_at=timezone.now() - timedelta(minutes=6))
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+        "records": [{
+            "model_name": "Qwen4", "brand_id": "qwen", "organization_name": "Qwen",
+            "publisher_relation": "source_author", "novelty": "new_release",
+            "source_excerpt": "We released Qwen4 weights today.", "categories": ["model-llm"],
+        }]
+    }
+    runner._run_post_fetch([], run_id="corrected-release-quote")
+    state.refresh_from_db()
+    previous.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    assert previous.selected_final_judgment_id == previous_final
+    assert len(transport.calls) == 2
+    assert read_publication_findings(state.post_id)[0]["finding"]["observed_name"] == "Qwen4"
+
+
+def test_two_role_publishes_maya_hardware_mention_as_other_neutral(monkeypatch):
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    class IncorrectLaunchTransport(FixedSlotTwoRoleTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            for decision in response["decisions"].values():
+                if "post_types" in decision:
+                    decision["post_types"] = ["releases_updates"]
+                if "sentiment" in decision:
+                    decision["sentiment"] = "positive"
+            return response
+
+    state, runner, _ = setup_cycle(monkeypatch)
+    state.post.text = "Maya v1.1.64 is out 💫\n\nEXL3 now works on AMD APUs paired with NVIDIA GPUs."
+    state.post.save(update_fields=["text"])
+    models.PostBrand.objects.filter(post=state.post).delete()
+    nvidia = models.Brand.objects.create(nickname="nemo_megatron", display_name="NVIDIA")
+    models.PostBrand.objects.create(post=state.post, brand=nvidia)
+    monkeypatch.setattr(cycle, "_classification_tracked_brand_catalog", lambda: [
+        {"brand_id": "nemo_megatron", "display_name": "NVIDIA", "aliases": ["NVIDIA"],
+         "products": [], "accounts": []},
+    ])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner._post_fetch_clients["classification"] = IncorrectLaunchTransport()
+    runner._run_post_fetch([], run_id="maya-passing-hardware")
+    selected = models.PostBrandClassificationState.objects.get(post_id=state.post_id, brand=nvidia)
+    assert selected.outcome == "classified"
+    assert selected.sentiment_id == "neutral"
+    assert list(models.PostBrandSignal.objects.filter(
+        post_id=state.post_id, brand=nvidia,
+    ).values_list("post_type_id", flat=True)) == ["other"]
+
+
+def test_two_role_third_party_can_create_unknown_publisher(monkeypatch, tmp_path, settings):
+    from monitor import pulse_control
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    class ReleaseTransport(FixedSlotTwoRoleTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            for decision in response["decisions"].values():
+                if "post_types" in decision:
+                    decision["post_types"] = ["releases_updates"]
+            return response
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, runner, _ = setup_cycle(monkeypatch, sentinel=True)
+    statement = "NewLab released NewLab-Z today."
+    state.post.text = statement
+    state.post.save(update_fields=["text"])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = ReleaseTransport()
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+        "records": [{
+            "model_name": "NewLab-Z", "organization_name": "NewLab",
+            "publisher_relation": "attributed_party", "source_excerpt": statement, "novelty": "new_release",
+            "categories": ["model-llm"],
+        }]
+    }
+    runner._run_post_fetch([], run_id="two-role-new-publisher")
+    assert models.Product.objects.filter(display_name="NewLab-Z", brand__display_name="NewLab").exists()
+    assert models.RareTypeCategoryAssignment.objects.filter(post_id=state.pk, brand__display_name="NewLab", category="model-llm").exists()
+
+
+def test_two_role_uses_saved_profile_for_new_first_person_publisher(monkeypatch, tmp_path, settings):
+    from monitor import pulse_control
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    class ReleaseTransport(FixedSlotTwoRoleTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            for decision in response["decisions"].values():
+                if "post_types" in decision:
+                    decision["post_types"] = ["releases_updates"]
+            return response
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, runner, _ = setup_cycle(monkeypatch, sentinel=True)
+    author = models.Account.objects.create(
+        author_id="new-lab-account", handle="newlab", display_name="NewLab",
+        bio="NewLab builds AI models.",
+    )
+    statement = "We released NewLab-Z today."
+    state.post.author = author
+    state.post.author_handle = author.handle
+    state.post.text = statement
+    state.post.save(update_fields=["author", "author_handle", "text"])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = True
+    runner._post_fetch_clients["classification"] = ReleaseTransport()
+    runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+        "records": [{
+            "model_name": "NewLab-Z", "organization_name": "NewLab",
+            "publisher_relation": "source_author", "source_excerpt": statement, "novelty": "new_release",
+            "categories": ["model-llm"],
+        }]
+    }
+    runner._run_post_fetch([], run_id="two-role-saved-profile")
+    finding = read_publication_findings(state.post_id)[0]["finding"]
+    assert finding["publisher_profile"]["display_name"] == "NewLab"
+    assert models.Product.objects.filter(display_name="NewLab-Z", brand__display_name="NewLab").exists()
+
+
+@pytest.mark.parametrize("excerpt", ["", "We released another model.", "Qwen4"])
+def test_targeted_release_rejects_missing_or_ambiguous_source_quotes(excerpt):
+    from core.classified_product_releases import targeted_release_findings
+
+    post = models.Post.objects.create(tweet_id="quote-check", text="We released Qwen4.")
+    tweet = {"text": post.text, "context": [{"text": "Qwen4"}]}
+    with pytest.raises(ValueError):
+        targeted_release_findings(post=post, tweet=tweet, records=[{
+            "model_name": "Qwen4", "source_excerpt": excerpt, "categories": ["model-llm"],
+        }])
+
+
+def test_targeted_release_retains_only_source_backed_lineage():
+    from core.classified_product_releases import targeted_release_findings
+
+    statement = "Qwen4 is a fine-tune of Qwen3."
+    post = models.Post.objects.create(tweet_id="lineage-check", text=statement)
+    tweet = {"text": statement, "context": []}
+    record = {
+        "model_name": "Qwen4", "source_excerpt": statement, "categories": ["model-llm"],
+        "lineage_evidence": [{
+            "relationship_kind": "finetune", "parent_observed_name": "Qwen3",
+            "source_excerpt": statement,
+        }],
+    }
+    findings = targeted_release_findings(post=post, tweet=tweet, records=[record])
+    assert findings[0]["lineage_evidence"][0]["parent_observed_name"] == "Qwen3"
+    record["lineage_evidence"][0]["parent_observed_name"] = "Qwen2"
+    with pytest.raises(ValueError):
+        targeted_release_findings(post=post, tweet=tweet, records=[record])
+
+
+def test_targeted_release_does_not_bind_a_different_offering_from_the_post():
+    from core.classified_product_releases import targeted_release_findings
+
+    statement = "We released Maya. It also runs on NVIDIA GPUs."
+    post = models.Post.objects.create(tweet_id="wrong-release-subject", text=statement)
+    with pytest.raises(ValueError, match="targeted_release_name_not_in_excerpt"):
+        targeted_release_findings(post=post, tweet={"text": statement}, records=[{
+            "model_name": "NVIDIA GPUs", "source_excerpt": "We released Maya.",
+            "novelty": "new_release", "categories": ["model-other"],
+        }])
+
+
+def test_targeted_release_does_not_invent_novelty_or_pick_multiple_categories():
+    from core.classified_product_releases import targeted_release_findings
+
+    statement = "Qwen4 was released on 2026-11-23."
+    post = models.Post.objects.create(tweet_id="release-unknown-fields", text=statement)
+    findings = targeted_release_findings(post=post, tweet={"text": statement}, records=[{
+        "model_name": "Qwen4", "source_excerpt": statement,
+        "categories": ["model-llm", "model-other"],
+        "release_precision": "day", "release_value": "2026-11-23",
+    }])
+    assert findings[0]["novelty"] == "unresolved"
+    assert findings[0]["category"] is None
+    assert findings[0]["assertions"][0]["effective_date"] == "2026-11-23"
+
+
+def test_targeted_release_retains_source_backed_availability():
+    from core.classified_product_releases import targeted_release_findings
+
+    statement = "Qwen4 weights are available today."
+    post = models.Post.objects.create(tweet_id="release-availability", text=statement)
+    finding = targeted_release_findings(post=post, tweet={"text": statement}, records=[{
+        "model_name": "Qwen4", "source_excerpt": statement, "categories": ["model-llm"],
+        "claim_kind": "availability", "access_channel": "weights",
+    }])[0]
+    assert finding["assertions"][0]["claim_kind"] == "availability"
+    assert finding["assertions"][0]["access_channel"] == "weights"
+
+
+def test_targeted_release_accepts_complete_empty_answer():
+    from core.classified_product_releases import targeted_release_findings
+
+    post = models.Post.objects.create(tweet_id="release-empty", text="A quiet post.")
+    assert targeted_release_findings(post=post, tweet={"text": post.text}, records=[]) == ()
+
+
+def test_targeted_release_preserves_normalized_source_date():
+    from core.classified_product_releases import targeted_release_findings
+
+    text = "Alpha launches November 23, 2026."
+    post = models.Post.objects.create(tweet_id="release-spelled-date", text=text)
+    finding = targeted_release_findings(post=post, tweet={"text": text}, records=[{
+        "model_name": "Alpha", "source_excerpt": text, "categories": ["model-llm"],
+        "release_precision": "day", "release_value": "2026-11-23",
+    }])[0]
+    assert finding["assertions"][0]["effective_date"] == "2026-11-23"
+
+
+@pytest.mark.parametrize("name", ["Model2026", "Model 2026"])
+def test_model_name_digits_are_not_release_date_evidence(name):
+    from core.classified_product_releases import targeted_release_findings
+
+    text = f"We released {name} today."
+    post = models.Post.objects.create(tweet_id="release-name-not-date", text=text)
+    finding = targeted_release_findings(post=post, tweet={"text": text}, records=[{
+        "model_name": name, "source_excerpt": text, "categories": ["model-llm"],
+        "release_precision": "year", "release_value": "2026",
+    }])[0]
+    assert finding["assertions"][0]["effective_precision"] == "unknown"
+
+
+def test_release_fingerprint_ignores_unrelated_real_catalog_growth(monkeypatch):
+    from core.classified_product_releases import _targeted_release_fingerprint
+
+    build_catalog = cycle._classification_tracked_brand_catalog
+    state, _runner, _ = setup_cycle(monkeypatch)
+    before = build_catalog()
+    tweet = {"tweet_id": str(state.pk), "text": state.post.text, "brand_ids": ["qwen"]}
+    original = _targeted_release_fingerprint(state.post, tweet, {"revision": "before", "brands": before})
+    models.Product.objects.create(brand_id="qwen", display_name="Unrelated New Product")
+    after = build_catalog()
+    assert before != after
+    assert _targeted_release_fingerprint(state.post, tweet, {"revision": "after", "brands": after}) == original
+
+
+def test_targeted_release_preserves_separate_access_milestones():
+    from core.classified_product_releases import targeted_release_findings
+
+    text = "Qwen4 weights are available on 2026-11-23. API access starts on 2026-12-01."
+    post = models.Post.objects.create(tweet_id="release-milestones", text=text)
+    finding = targeted_release_findings(post=post, tweet={"text": text}, records=[{
+        "model_name": "Qwen4", "source_excerpt": "Qwen4 weights are available on 2026-11-23.",
+        "categories": ["model-llm"], "claim_kind": "availability", "access_channel": "weights",
+        "release_precision": "day", "release_value": "2026-11-23",
+        "milestones": [{"claim_kind": "availability", "access_channel": "api",
+                        "source_excerpt": "API access starts on 2026-12-01.",
+                        "release_precision": "day", "release_value": "2026-12-01"}],
+    }])[0]
+    assert {(item["access_channel"], item["effective_date"]) for item in finding["assertions"]} == {
+        ("weights", "2026-11-23"), ("api", "2026-12-01"),
+    }
+
+
+def test_milestone_for_another_product_is_not_attached():
+    from core.classified_product_releases import targeted_release_findings
+
+    text = "Alpha is out. Beta's API opens on 2026-12-01."
+    post = models.Post.objects.create(tweet_id="release-other-milestone", text=text)
+    finding = targeted_release_findings(post=post, tweet={"text": text}, records=[{
+        "model_name": "Alpha", "source_excerpt": "Alpha is out.", "categories": ["model-llm"],
+        "milestones": [{"claim_kind": "availability", "access_channel": "api",
+                        "source_excerpt": "Beta's API opens on 2026-12-01.",
+                        "release_precision": "day", "release_value": "2026-12-01"}],
+    }])[0]
+    assert len(finding["assertions"]) == 1
+
+
+def test_retweeter_affiliation_does_not_identify_original_publisher():
+    from core.classified_product_releases import targeted_release_findings
+
+    text = "We released Alpha today."
+    post = models.Post.objects.create(tweet_id="retweeted-release", text=text, is_retweet=True)
+    finding = targeted_release_findings(post=post, tweet={
+        "text": text, "affiliations": [{"brand_id": "qwen", "role": "official", "reviewed": True}],
+    }, records=[{"model_name": "Alpha", "source_excerpt": text, "brand_id": "qwen",
+                 "publisher_relation": "source_author", "categories": ["model-llm"]}])[0]
+    assert not finding.get("brand_id")
+    assert finding.get("issuer_evidence") is None
+
+
 def setup_cycle(monkeypatch, *, empty=False, sentinel=False, official=False):
     call_command("seed_i18n_labels", verbosity=0)
     sample = case()
@@ -152,7 +1108,7 @@ def test_failed_release_enqueue_rolls_back_real_saved_evidence(monkeypatch):
 
     state, runner, transport = setup_cycle(monkeypatch)
 
-    def fail(post_id):
+    def fail(post_id, **kwargs):
         assert connection.in_atomic_block
         assert models.EventDossierClaim.objects.filter(
             scope_key__startswith="pulse-finding-v1:",
@@ -231,6 +1187,7 @@ def test_missing_classifier_does_not_complete_or_consume_identity_retry(monkeypa
     assert result["processed"] == result["failed"] == 0
     work = models.ProductReleaseDetectionState.objects.get(post_id=state.pk)
     assert work.attempts == 0 and work.completed_at is None
+    assert work.retry_at > timezone.now()
 
 
 @pytest.mark.parametrize("request_limit,expected_calls", [(1, 0), (20, 2)])

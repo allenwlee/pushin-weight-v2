@@ -54,10 +54,10 @@ def test_child_publication_uncommitted_during_parent_review_then_recovers(monkey
     entered, release = Event(), Event()
     original_enqueue = product_release_detection_queue.enqueue_saved_post
 
-    def pause_enqueue(post_id):
+    def pause_enqueue(post_id, **kwargs):
         entered.set()
         assert release.wait(20)
-        return original_enqueue(post_id)
+        return original_enqueue(post_id, **kwargs)
 
     monkeypatch.setattr(product_release_detection_queue, "enqueue_saved_post", pause_enqueue)
 

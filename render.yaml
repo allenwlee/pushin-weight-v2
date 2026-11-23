@@ -26,7 +26,7 @@ services:
       - key: PULSE_CONTROL_R2_BUCKET
         value: pushinweight-media-production
       - key: X_MONITOR_CLASSIFIER_PIPELINE
-        value: compressed8_pulse_v1
+        value: two_role
       - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
         value: "True"
       - key: PYTHON_VERSION
@@ -135,7 +135,7 @@ services:
       - key: PULSE_CONTROL_R2_BUCKET
         value: pushinweight-media-production
       - key: X_MONITOR_CLASSIFIER_PIPELINE
-        value: compressed8_pulse_v1
+        value: two_role
       - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
         value: "True"
       - key: PYTHON_VERSION
@@ -492,7 +492,7 @@ services:
       - key: PULSE_CONTROL_R2_BUCKET
         value: pushinweight-media-production
       - key: X_MONITOR_CLASSIFIER_PIPELINE
-        value: compressed8_pulse_v1
+        value: two_role
       - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
         value: "True"
       - key: R2_ACCOUNT_ID
@@ -570,7 +570,7 @@ services:
       - key: PULSE_CONTROL_R2_BUCKET
         value: pushinweight-media-production
       - key: X_MONITOR_CLASSIFIER_PIPELINE
-        value: compressed8_pulse_v1
+        value: two_role
       - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
         value: "True"
       - key: R2_ACCOUNT_ID

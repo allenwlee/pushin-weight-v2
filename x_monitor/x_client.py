@@ -34,6 +34,11 @@ from x_monitor.twitterapi_credentials import (
 log = logging.getLogger(__name__)
 
 
+def unexpected_empty_search_page(items, expected):
+    """A quiet first page is healthy unless recent query history predicts results."""
+    return not items and expected
+
+
 TWITTERAPI_BASE = "https://api.twitterapi.io"
 SEARCH_PATH = "/twitter/tweet/advanced_search"
 FOLLOWERS_PATH = "/twitter/user/followers"
@@ -826,13 +831,13 @@ class XClient:
                     if self.twex_circuit:
                         self.twex_circuit.record_failure(datetime.now(timezone.utc))
                     raise XClientServerError("TwexAPI search response invalid") from exc
-                if not page.items and (cursor or page.has_more or page.continuation_invalid):
+                if not page.items and (cursor or page.has_more or page.continuation_invalid or page.next_cursor):
                     if self.twex_circuit:
                         self.twex_circuit.record_failure(datetime.now(timezone.utc))
                     raise XClientServerError("TwexAPI empty page when continuation expected")
                 if page_number == 1 and not cursor:
                     expected = self.circuit.observe_query(query, nonempty=bool(page.items), now=datetime.now(timezone.utc))
-                    if not page.items and (expected or (self.twex_circuit and self.twex_circuit.is_probe())):
+                    if unexpected_empty_search_page(page.items, expected):
                         if self.twex_circuit:
                             self.twex_circuit.record_failure(datetime.now(timezone.utc))
                         raise XClientServerError("TwexAPI empty page on expected nonempty search")
@@ -851,11 +856,11 @@ class XClient:
                         page = adapter.normalize_page(data, page_number=page_number, max_results=remaining)
                     except (TypeError, ValueError, KeyError) as exc:
                         raise XClientServerError("TwitterAPI.io search response invalid") from exc
-                    if not page.items and (page.has_more or page.continuation_invalid or cursor):
+                    if not page.items and (page.has_more or page.continuation_invalid or cursor or page.next_cursor):
                         raise XClientServerError("primary empty page when continuation expected")
                     if page_number == 1 and not cursor:
                         expected = active_circuit.observe_query(query, nonempty=bool(page.items), now=datetime.now(timezone.utc))
-                        if not page.items and (expected or active_circuit.is_probe()):
+                        if unexpected_empty_search_page(page.items, expected):
                             raise XClientServerError("primary empty page on expected nonempty search")
                 except XClientRateLimitError as exc:
                     active_circuit.record_rate_limit(datetime.now(timezone.utc), exc.retry_after_seconds)
@@ -1023,8 +1028,7 @@ class XClient:
             raw_body, data = TwexAPIProvider(self).search_page(effective_query, None, capture_raw=True, raw_sink=receipt_sink)
             raw_items = data["data"]
             expected = self.circuit.observe_query(effective_query, nonempty=bool(raw_items), now=datetime.now(timezone.utc))
-            if not raw_items and (data.get("has_next_page") or data.get("next_cursor") or expected
-                                  or (self.twex_circuit and self.twex_circuit.is_probe())):
+            if not raw_items and (data.get("has_next_page") or data.get("next_cursor") or expected):
                 if self.twex_circuit:
                     self.twex_circuit.record_failure(datetime.now(timezone.utc))
                 raise XClientServerError("TwexAPI empty page on expected nonempty search")
@@ -1061,7 +1065,7 @@ class XClient:
                 active_circuit.record_failure(datetime.now(timezone.utc))
                 raise XClientServerError("primary empty page when continuation expected")
             expected = active_circuit.observe_query(effective_query, nonempty=bool(raw_items), now=datetime.now(timezone.utc))
-            if not raw_items and (expected or active_circuit.is_probe()):
+            if unexpected_empty_search_page(raw_items, expected):
                 active_circuit.record_failure(datetime.now(timezone.utc))
                 raise XClientServerError("primary empty page on expected nonempty search")
             active_circuit.record_success(datetime.now(timezone.utc))

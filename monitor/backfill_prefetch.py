@@ -40,6 +40,7 @@ from x_monitor.x_client import (
     _search_results,
     search_page_from_response,
     twexapi_search_page,
+    unexpected_empty_search_page,
 )
 
 
@@ -272,8 +273,15 @@ class Prefetcher:
             return result
         circuit = self.router.twex_circuit if route.name == "twexapi" else self.router.provider_circuits[route.name]
         count = result.response.get("raw_results", 0)
+        if not count and circuit.is_probe() and result.body:
+            try:
+                body = json.loads(result.body)
+            except (TypeError, ValueError):
+                return replace(result, error="XClientServerError")
+            if isinstance(body, dict) and (body.get("has_next_page") or body.get("next_cursor")):
+                return replace(result, error="XClientServerError")
         expected = circuit.observe_query(_params(request.scope_run)["query"], nonempty=bool(count), now=datetime.now(UTC))
-        if not count and (expected or circuit.is_probe()):
+        if unexpected_empty_search_page(count, expected):
             return replace(result, error="XClientServerError")
         return result
 

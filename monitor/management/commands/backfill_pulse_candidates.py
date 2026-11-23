@@ -75,8 +75,6 @@ class Command(BaseCommand):
                 )
             return
         cfg = load_config(Path("config.yaml"))
-        if cfg.llm.classifier_pipeline != "compressed8_pulse_v1":
-            raise CommandError("Pulse classifier required")
         with harvest_writer_lock(
             execution_mode="repair",
             entrypoint="management.backfill_pulse_candidates",
@@ -89,6 +87,8 @@ class Command(BaseCommand):
                 source, findings = saved_result(post_id)
                 calls = 0
                 if source == "missing":
+                    if cfg.llm.classifier_pipeline != "compressed8_pulse_v1":
+                        raise CommandError("Pulse classifier required to classify missing findings")
                     client = build_classifier_client_from_env(
                         cfg, deepinfra_key_env="DEEPINFRA_ON_DEMAND"
                     )

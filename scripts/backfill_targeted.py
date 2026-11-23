@@ -7,6 +7,7 @@ extraction prompts, response parsers or domain-record writers of its own.
 from __future__ import annotations
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from core.models import (
@@ -26,6 +27,7 @@ from core.provider_batches import (
 )
 from core.targeted_extraction import (
     TYPE_TO_ROLE,
+    _effective_prompt_version,
     _hash,
     _prompts,
     build_targeted_extraction_calls,
@@ -43,18 +45,38 @@ from x_monitor.reattribute import build_relevancy_client_from_env
 OPERATION = "post_targeted_extraction"
 
 
+def _historical_post_types(post):
+    from core.product_release_intake import SourceRecord, TextEvidence, detect
+
+    types = set(post.signals.values_list("post_type_id", flat=True))
+    texts = [TextEvidence(locator="post", kind="raw", text=post.text or "")]
+    if post.quoted_text:
+        texts.append(TextEvidence(locator="quote", kind="quote", text=post.quoted_text))
+    parent = Post.objects.filter(pk=post.in_reply_to_id).values_list("text", flat=True).first()
+    if parent:
+        texts.append(TextEvidence(locator="parent", kind="quote", text=parent))
+    if detect(SourceRecord(namespace="x", source_id=str(post.pk), texts=tuple(texts))) is not None:
+        types.add("releases_updates")
+    return types
+
+
 def requirements(post, cfg):
     """Read exact shared prompt identities; use the harvester's role mapping."""
     from core.geolocation_evidence import AffiliationClaimEvidence
 
     if not cfg.targeted_extraction.enabled:
         return {}
-    types = set(post.signals.values_list("post_type_id", flat=True))
+    types = _historical_post_types(post)
     roles = {
         TYPE_TO_ROLE[t]
         for t in types
         if t in TYPE_TO_ROLE
     }
+    if "model_release_extraction" in roles:
+        from core.classified_product_releases import classifier_owns_release_extraction
+
+        if classifier_owns_release_extraction(post.pk):
+            roles.remove("model_release_extraction")
     if (
         AffiliationClaimEvidence.objects.filter(
             pk__in=PersonBrandAffiliationEvidence.objects.filter(
@@ -71,6 +93,7 @@ def requirements(post, cfg):
     for role in sorted(roles):
         spec = cfg.targeted_extraction.roles[role]
         system, user = _prompts(role, post)
+        prompt_version = _effective_prompt_version(role, spec.prompt_version)
         output[role] = _hash(
             {
                 "post": str(post.pk),
@@ -78,7 +101,7 @@ def requirements(post, cfg):
                 "system": system,
                 "user": user,
                 "model": spec.model,
-                "prompt_version": spec.prompt_version,
+                "prompt_version": prompt_version,
             }
         )
     return output
@@ -161,7 +184,7 @@ def _prepare(job, post, cfg, delegate):
         )[role]
         for role, spec in cfg.targeted_extraction.roles.items()
     }
-    types = set(post.signals.values_list("post_type_id", flat=True))
+    types = _historical_post_types(post)
     with transaction.atomic():
         CollectionJob.objects.select_for_update().get(pk=job.pk)
         assert_enrichment_admission(job.pk)
@@ -239,7 +262,8 @@ def advance_targeted(
             operation_scope="targeted",
         )
         observations = observations.exclude(post_id__in=deferred).filter(
-            post__enrichment_state__translation_status="succeeded",
+            Q(post__enrichment_state__translation_requested=False)
+            | Q(post__enrichment_state__translation_status="succeeded"),
             post__enrichment_state__classification_status="succeeded",
         )
     while True:
