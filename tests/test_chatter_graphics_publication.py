@@ -432,7 +432,8 @@ def test_c1_copy_reaches_real_anonymous_general_and_pinned_story_before_media(fr
     assert OriginalContentCall.objects.filter(run=run).count() == 1
 
 
-def test_late_decoded_video_attaches_to_its_older_pinned_edition_without_moving_pool_pointer(frozen_chatter, monkeypatch, editorial_storage, tmp_path):
+@pytest.mark.parametrize("manual_scope", [False, True])
+def test_late_decoded_video_attaches_to_its_older_pinned_edition_without_moving_pool_pointer(frozen_chatter, monkeypatch, editorial_storage, tmp_path, manual_scope):
     import subprocess
 
     import imageio_ffmpeg
@@ -450,6 +451,9 @@ def test_late_decoded_video_attaches_to_its_older_pinned_edition_without_moving_
 
     row, _, _ = frozen_chatter
     personalized(row)
+    if manual_scope:
+        row.run.scope_key = "chatter-retroactive-example"
+        row.run.save(update_fields=["scope_key"])
     monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", "shared")
     run, output = materialize_package(prepared(row))
     transport, _ = media_transport(copy_result())
@@ -511,7 +515,7 @@ def test_rolling_edition_owns_one_writer_pitch_and_its_video_inputs(
 
         link(person, Account.objects.create(author_id="97222", handle="sourcemaker", normalized_handle="sourcemaker"), "confirmed")
         subject = "@sourcemaker announces a preview"
-    row.selection.update(subject=subject, source_identities=[{
+    row.selection.update(subject=subject, person_ids=[str(person.pk)], source_identities=[{
         "post_id": "98001", "person_links": [{"person_id": str(person.pk), "role": "mentioned",
                                              "resolution_status": "confirmed"}]}])
     row.save(update_fields=["selection"])
@@ -541,6 +545,12 @@ def test_rolling_edition_owns_one_writer_pitch_and_its_video_inputs(
             return status, json.dumps(result).encode()
         return fake(endpoint, key, body, **kwargs)
 
+    if not with_cast:
+        first = advance_step(run.pk, keys=keys, transport=transport)
+        assert first["state"] == "awaiting_portrait" and not sent
+        # The missing portrait cannot block publication once its first deadline passes.
+        later = timezone.now() + timedelta(seconds=21)
+        monkeypatch.setattr(timezone, "now", lambda: later)
     assert advance_step(run.pk, keys=keys, transport=transport)["stage"] == "C1"
     text = output.localized_texts.get()
     assert text.headline == copy["candidates"][0]["headline"]

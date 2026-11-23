@@ -16,6 +16,7 @@ from core.models import (
     Person,
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
+    StaffIntake,
 )
 from core.person_affiliations import active_claims, matching_moved_claim
 from core.person_identity import account_person, canonical_person
@@ -23,7 +24,7 @@ from core.person_names import digest, record_name, selected_name_for
 from core.staff_assets.intake import ingest_record, validate_record
 from core.staff_assets.media import record_media
 from core.staff_assets.population import is_official, staff_population
-from core.staff_assets.queue import enqueue
+from core.staff_assets.queue import POLICY, enqueue
 
 _registration_suppressed = ContextVar("staff_registration_suppressed", default=False)
 
@@ -132,7 +133,7 @@ def register_person(person_id):
         row.eligibility in {"db_staff", "call_a_person"} for row in normal_intakes
     )
     if not operational and not any(role["status"] == "current" for role in roles):
-        person.collection_work.filter(state__in=["queued", "retry_due"]).update(
+        person.collection_work.filter(policy_version=POLICY, state__in=["queued", "retry_due"]).update(
             state="needs_review", error_category="no_current_staff_claim"
         )
         return
@@ -302,10 +303,39 @@ def register_account(account_id, *, eligibility="db_staff"):
     return intake
 
 
+def _data_only_accounts():
+    """Find accounts whose only staff memberships were created as sourced data."""
+    from collections import defaultdict
+
+    marked = defaultdict(set)
+    for account, links in StaffIntake.objects.filter(source_key__startswith="person-intake-links:").values_list(
+        "payload__account_key", "payload__staff_links"
+    ):
+        marked[account].update(tuple(link) for link in links)
+    if not marked:
+        return set()
+    independent = set()
+    for model, target in ((BrandAccount, "brand_id"), (CompanyAccount, "company_id")):
+        rows = model.objects.filter(account_id__in=marked, role_id="staff").values_list("account_id", target, "added_at")
+        for account, organization, added in rows:
+            key = str(account)
+            if (model._meta.db_table, organization, added.isoformat()) not in marked[key]:
+                independent.add(key)
+    # An independent list/staff enrollment remains authoritative.
+    enrollments = StaffIntake.objects.filter(
+        eligibility__in=("db_staff", "call_a_person"), payload__account_key__in=list(marked)
+    ).values_list("payload__account_key", "payload__collection_mode")
+    independent.update(account for account, mode in enrollments if mode != "evidence_only")
+    return set(marked) - independent
+
+
 def catch_up(*, list_id):
     roster = staff_population(list_id=list_id)
     errors = []
+    data_only = _data_only_accounts()
     for entry in roster["accounts"]:
+        if entry["account_key"] in data_only and "call_a" not in entry["reasons"]:
+            continue
         try:
             register_account(
                 entry["account_key"],

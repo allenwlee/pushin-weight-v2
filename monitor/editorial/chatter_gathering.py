@@ -898,6 +898,8 @@ def gather_trends(run_id, resume=False, *, cfg=None, x_client=None, enqueue=None
                 "original_headlines": entry["recipe"]["original_headlines"], "headline_ids": lead["headline_ids"],
                 "gathered_identity": identity, "query_sha256": entry["recipe"]["query_sha256"],
                 "source_identities": [_source_identity(post) for post in posts]}
+            if lead.get("people"):
+                pitch["people"] = lead["people"]
             if "episode_id" in lead:
                 pitch["episode_id"] = lead["episode_id"]
             origin = OriginalContentCall.objects.get(pk=lead["rank_call_id"]) if "rank_call_id" in lead else producing

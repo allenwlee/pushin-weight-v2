@@ -1,15 +1,53 @@
 """Read reviewed person references from the configured production storage."""
 
 import hashlib
+import json
+import os
 import re
+import subprocess
+import sys
+import time
 from dataclasses import dataclass
 
 from botocore.exceptions import BotoCoreError, ClientError
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.storage import storages
 
 from core.models import Person, PersonMedia
 from core.staff_assets.media import MAX_BYTES
+
+# Start a clean interpreter so Celery prefork workers can cancel an S3 download
+# (including boto's transfer threads) without touching a database connection.
+# The backend configuration and object name travel only through the private pipe.
+_READ_OBJECT = """
+import json, signal, sys
+from django.core.files.storage import storages
+config, name, byte_limit, seconds = json.load(sys.stdin)
+signal.setitimer(signal.ITIMER_REAL, seconds)
+with storages.create_storage(config).open(name, 'rb') as stream:
+    sys.stdout.buffer.write(stream.read(byte_limit + 1))
+"""
+
+
+def read_staff_object_before(name, deadline):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("Portrait retrieval deadline elapsed")
+    payload = json.dumps([settings.STORAGES["staff_media"], name, MAX_BYTES, remaining],
+                         default=os.fspath).encode()
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", _READ_OBJECT], input=payload, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, timeout=remaining, check=True,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError("Portrait retrieval deadline elapsed") from exc
+    except subprocess.CalledProcessError as exc:
+        raise OSError("Portrait storage unavailable") from exc
+    if time.monotonic() > deadline:
+        raise TimeoutError("Portrait retrieval deadline elapsed")
+    return result.stdout
 
 
 @dataclass(frozen=True)
@@ -61,7 +99,15 @@ def _media_kind(row):
 
 
 def read_graphics_references(
-    person_id, *, permitted_reuse, max_images=3, include_video=False, storage=None
+    person_id,
+    *,
+    permitted_reuse,
+    max_images=3,
+    include_video=False,
+    storage=None,
+    media_ids=None,
+    portrait_mimes=None,
+    read_bytes=None,
 ):
     """Return original bytes, recorded evidence and gaps for one existing person.
 
@@ -89,10 +135,16 @@ def read_graphics_references(
         return ReferencePack(
             str(person.pk), (), (ReferenceGap(None, ("person_was_merged",)),)
         )
-    storage = storage if storage is not None else storages["staff_media"]
-    rows = list(
-        PersonMedia.objects.filter(person=person).select_related("media").order_by("id")
-    )
+    if read_bytes is None:
+        storage = storage if storage is not None else storages["staff_media"]
+    attributed = PersonMedia.objects.filter(person=person).select_related("media")
+    if media_ids is not None:
+        attributed = attributed.filter(pk__in=media_ids)
+    if portrait_mimes is not None:
+        attributed = attributed.filter(media__media_type__in=portrait_mimes).exclude(
+            suitability="rejected"
+        )
+    rows = list(attributed.order_by("id"))
     role_rank = {
         "identity-still": 0,
         "prepared-identity-crop": 0,
@@ -135,6 +187,16 @@ def read_graphics_references(
             )
             else None
         )
+        if portrait_mimes is not None:
+            identity = evidence.get("identity_resolution")
+            verified = (
+                isinstance(identity, dict)
+                and identity.get("state") == "verified"
+                and identity.get("person_id") == str(person.pk)
+                and role_order(row) < 3
+            )
+            if not (row.individual_portrait or owner_confirmed or verified):
+                continue
         credit = evidence.get("credit")
         reasons = []
         if not row.media_id or row.availability != "available":
@@ -163,8 +225,11 @@ def read_graphics_references(
             gaps.append(ReferenceGap(row.pk, ("unsupported_media_type",)))
             continue
         try:
-            with storage.open(obj.storage_name, "rb") as stream:
-                data = stream.read(MAX_BYTES + 1)
+            if read_bytes is None:
+                with storage.open(obj.storage_name, "rb") as stream:
+                    data = stream.read(MAX_BYTES + 1)
+            else:
+                data = read_bytes(obj.storage_name)
         except (OSError, BotoCoreError, ClientError, ValueError):
             gaps.append(ReferenceGap(row.pk, ("storage_unreadable",)))
             continue

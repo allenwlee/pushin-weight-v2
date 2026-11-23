@@ -2,6 +2,8 @@
 
 import hashlib
 import os
+import time
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,7 +35,13 @@ from monitor.trend_narrative_lifecycle import (
 )
 
 from .config import load_editorial_config
-from .graphics_cast import cast_manifest, load_cast, recipe_refs
+from .graphics_cast import (
+    ForegroundPortraits,
+    load_cast,
+    prepare_person_cast,
+    read_person_cast,
+    recipe_refs,
+)
 from .graphics_chatter import (
     accounting_config,
     published_text,
@@ -83,12 +91,13 @@ def _stage_call(run_id, stage):
 
 
 def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport=None,
-                    configured_daily_limit=None, references=(), expected_review=None):
+                    configured_daily_limit=None, references=(), expected_review=None,
+                    load_bytes=None, writer_cast=None):
     encoded, request_hash = request_fingerprint(request['body'])
     body = encoded.decode()
     packet = {'schema_version': 'graphics-request/v1', 'request_json': body}
     if references:
-        packet, request_hash = create_request_recipe(request['body'], references)
+        packet, request_hash = create_request_recipe(request['body'], references, load_bytes=load_bytes)
     is_image = stage in {'I-A', 'I-B'}
     per_run = run.config_snapshot['per_story_usd']
     daily = run.config_snapshot['daily_usd']
@@ -102,14 +111,29 @@ def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport
         text_bytes = packet["request_template"].encode() if references else encoded
         ceiling = text_reservation(copy_writer_route(route), text_bytes, image_count=len(references))
 
-    def reserve(saved_packet, saved_hash):
+    def reserve_call(saved_packet, saved_hash):
         return reserve_graphics_call(
             run=run, stage=stage, kind='media' if is_image else 'text', request_hash=saved_hash,
             request_packet=saved_packet, provider=provider, model=request['body']['model'],
             ceiling=ceiling, owner=claim.owner, lease_seconds=max(160, request['timeout'] + 20),
             workflow_key=content.workflow_key, per_run_limit=per_run, daily_limit=daily,
-            configured_daily_limit=configured_daily_limit, review=stage == 'E1',
+            configured_daily_limit=configured_daily_limit, review=stage == 'E1', load_bytes=load_bytes,
         )
+
+    def reserve(saved_packet, saved_hash):
+        if writer_cast is None:
+            return reserve_call(saved_packet, saved_hash)
+        # Pin the manifest and C1 request together. A restart before reservation
+        # can still freeze a gap if the original portrait deadline has expired.
+        with transaction.atomic():
+            call, may_send = reserve_call(saved_packet, saved_hash)
+            if may_send:
+                current = OriginalContentRun.objects.select_for_update().get(pk=run.pk)
+                if not _owned(current, claim.owner, claim.fence):
+                    raise CapacityHeld("Graphics claim expired during cast preparation")
+                current.decisions = {**current.decisions, 'writer_cast': writer_cast}
+                current.save(update_fields=['decisions'])
+            return call, may_send
 
     def mark_sent(call):
         with transaction.atomic():
@@ -163,7 +187,7 @@ def _run_text_stage(run, content, claim, stage, request, key, pack, *, transport
             call.pk, owner=claim.owner, fence=call.claim_fence, error_code=code, now=timezone.now())
 
     kwargs = {'reserve': reserve, 'mark_sent': mark_sent, 'complete': complete,
-              'ambiguous': ambiguous, 'fail': fail}
+              'ambiguous': ambiguous, 'fail': fail, 'load_bytes': load_bytes}
     if transport is not None:
         kwargs['transport'] = transport
     return submit_once(stage, request, packet, request_hash, key, pack, **kwargs)
@@ -331,6 +355,16 @@ def _skip_stage(run, claim, stage, reason):
         return True
 
 
+def _save_person_intake(run_id, claim, intake):
+    with transaction.atomic():
+        current = OriginalContentRun.objects.select_for_update().get(pk=run_id)
+        if not _owned(current, claim.owner, claim.fence):
+            return False
+        current.decisions = {**current.decisions, 'writer_person_intake': intake}
+        current.save(update_fields=['decisions'])
+        return True
+
+
 def _invalid_saved(run, claim, stage, reason):
     _skip_stage(run, claim, 'attention', f'{stage}:{reason}')
     return {'state': reason, 'stage': stage, 'next_action': None}
@@ -370,27 +404,50 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                 return {'state': 'credential_unavailable', 'stage': 'C1', 'next_action': None}
             handoff = saved['handoff']
             assets = []
+            new_cast = load_bytes = None
             if single:
                 if cast is None:
-                    selection = OriginalContent.objects.get(pk=saved['content_id']).selection
-                    cast = cast_manifest(saved, selection)
-                    with transaction.atomic():
-                        current = OriginalContentRun.objects.select_for_update().get(pk=run_id)
-                        if not _owned(current, owner, claim.fence):
+                    intake = run.decisions.get('writer_person_intake')
+                    if intake is None:
+                        intake = {'started_at': timezone.now().isoformat()}
+                        if not _save_person_intake(run_id, claim, intake):
                             return {'state': 'claim_lost', 'stage': 'C1', 'next_action': None}
-                        current.decisions = {**current.decisions, 'writer_cast': cast}
-                        current.save(update_fields=['decisions'])
-                try:
-                    assets = load_cast(cast)
-                except (ValueError, OSError):
-                    _skip_stage(run, claim, 'C1', 'cast_input_unavailable')
-                    return {'state': 'unavailable', 'stage': 'C1', 'next_action': None}
+                    started = datetime.fromisoformat(intake['started_at'])
+                    foreground = ForegroundPortraits(started)
+                    if 'subjects' not in intake:
+                        selection = OriginalContent.objects.get(pk=saved['content_id']).selection
+                        intake = prepare_person_cast(saved, selection, started, foreground=foreground)
+                        if not _save_person_intake(run_id, claim, intake):
+                            return {'state': 'claim_lost', 'stage': 'C1', 'next_action': None}
+                    cast = read_person_cast(intake, timezone.now(), foreground=foreground)
+                    # A second worker cannot inherit verified bytes. Keep them
+                    # for the remaining short wait if another subject is pending.
+                    while cast is None and foreground.verified:
+                        time.sleep(min(1, foreground.remaining()))
+                        cast = read_person_cast(intake, timezone.now(), foreground=foreground)
+                    if cast is None:
+                        return {'state': 'awaiting_portrait', 'stage': 'C1', 'next_action': 'advance',
+                                'countdown': min(2, foreground.remaining())}
+                    new_cast = cast
+                    assets = [{**ref, 'data': foreground.verified[ref['storage_name']]} for ref in cast['assets']]
+                else:
+                    # A historical frozen manifest must still match its original
+                    # identity and bytes. It cannot silently become an empty cast.
+                    try:
+                        assets = load_cast(cast, foreground=ForegroundPortraits(timezone.now()))
+                    except (ValueError, OSError):
+                        _skip_stage(run, claim, 'C1', 'cast_input_unavailable')
+                        return {'state': 'unavailable', 'stage': 'C1', 'next_action': None}
+                verified = {(asset['storage_alias'], asset['storage_name']): asset['data'] for asset in assets}
+                def load_bytes(alias, name):
+                    return verified[(alias, name)]
                 handoff = {**handoff, 'cast_gaps': cast['gaps'], 'cast_manifest': [
                     {k: v for k, v in ref.items() if k not in {'storage_alias', 'storage_name'}} for ref in cast['assets']]}
             request = build_text_request(pack, 'C1', handoff, writer_route=route, attachments=assets)
             try:
                 outcome = _run_text_stage(run, content, claim, 'C1', request, key, pack,
-                                          transport=transport, configured_daily_limit=configured_daily_limit, references=recipe_refs(assets))
+                                          transport=transport, configured_daily_limit=configured_daily_limit, references=recipe_refs(assets),
+                                          load_bytes=load_bytes, writer_cast=new_cast)
             except CapacityHeld:
                 return {'state': 'capacity_unavailable', 'stage': 'C1', 'next_action': None}
             except BudgetHeld:

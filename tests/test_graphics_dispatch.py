@@ -125,7 +125,10 @@ def test_staging_workers_are_isolated_from_existing_queues():
         assert {'key': 'EXA_API_KEY', 'sync': False} in service['envVars']
     review = services['pushinweight-staging-graphics-review']
     assert '-Q graphics-review --concurrency=1' in review['startCommand']
-    assert not any(item['key'] == 'EXA_API_KEY' for item in review['envVars'])
+    # Portrait research shares this worker so a slow search cannot occupy the writer.
+    assert {'key': 'EXA_API_KEY', 'sync': False} in review['envVars']
+    from project.settings import CELERY_TASK_ROUTES
+    assert CELERY_TASK_ROUTES['monitor.tasks.research_chatter_person']['queue'] == 'graphics-review'
     assert not any(item['key'] == 'XAI_API_KEY_PW' for item in review['envVars'])
     assert {'key': 'GRAPHICS_RECONCILER_ENABLED', 'value': 'False'} in review['envVars']
     assert '-Q trend-narratives --concurrency=1' in services['pushinweight-staging-headlines']['startCommand']

@@ -33,7 +33,7 @@ def claim(*, lease_seconds=180, max_attempts=3):
     _lock()
     now = timezone.now()
     for work in StaffCollectionWork.objects.select_for_update().filter(
-        state="running", lease_expires_at__lte=now
+        policy_version=POLICY, state="running", lease_expires_at__lte=now
     ):
         ambiguous = StaffProviderRequest.objects.filter(
             work=work, state="reserved"
@@ -47,12 +47,12 @@ def claim(*, lease_seconds=180, max_attempts=3):
         work.lease_token = work.lease_expires_at = None
         work.save()
     # Shared concurrency cap = one, including other processes and runs.
-    if StaffCollectionWork.objects.filter(state="running").exists():
+    if StaffCollectionWork.objects.filter(policy_version=POLICY, state="running").exists():
         return None
     work = (
         StaffCollectionWork.objects.select_for_update(skip_locked=True)
         .filter(
-            state__in=["queued", "retry_due"],
+            policy_version=POLICY, state__in=["queued", "retry_due"],
             person__merged_into__isnull=True,
             next_attempt_at__lte=now,
         )
@@ -100,7 +100,7 @@ class AmbiguousRequest(Exception):
 def reserve_request(
     work, *, run_id, provider, parameters, per_person, per_run, per_day
 ):
-    if min(per_person, per_run, per_day) < 1:
+    if any(limit is not None and limit < 1 for limit in (per_person, per_day)) or per_run < 1:
         raise BudgetExhausted("Paid request budgets are disabled")
     _lock()
     if not StaffCollectionWork.objects.filter(
@@ -135,9 +135,9 @@ def reserve_request(
     day_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     requests = StaffProviderRequest.objects.filter(provider=provider)
     if (
-        requests.filter(person_id__in=related_ids).count() >= per_person
+        (per_person is not None and requests.filter(person_id__in=related_ids).count() >= per_person)
         or requests.filter(run_id=run_id).count() >= per_run
-        or requests.filter(created_at__gte=day_start).count() >= per_day
+        or (per_day is not None and requests.filter(created_at__gte=day_start).count() >= per_day)
     ):
         raise BudgetExhausted("Staff search request cap reached")
     return StaffProviderRequest.objects.create(

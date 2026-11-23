@@ -25,6 +25,10 @@ def _validated_image(filename, expected_sha256, roots):
         raise ValueError("image_outside_source_roots")
     with path.open("rb") as stream:
         data = stream.read(MAX_BYTES + 1)
+    return _validated_image_bytes(data, expected_sha256)
+
+
+def _validated_image_bytes(data, expected_sha256):
     if not data or len(data) > MAX_BYTES:
         raise ValueError("invalid_image_size")
     if hashlib.sha256(data).hexdigest() != expected_sha256:
@@ -112,6 +116,23 @@ def ingest_image(*, person, entry, source_roots, storage, observed_at, preview=F
     )
 
 
+def ingest_portrait_bytes(*, person, entry, data, storage, observed_at, provider):
+    """Import a fetched original through the same integrity and attribution checks."""
+    validate_entry(person, entry)
+    validated = _validated_image_bytes(data, entry["expected_sha256"])
+    return _save_asset(
+        person,
+        entry,
+        validated,
+        storage,
+        observed_at,
+        kind="image",
+        preview=False,
+        source_kind="general_portrait",
+        discovery_provider=provider,
+    )
+
+
 def ingest_video(*, person, entry, source_roots, storage, observed_at, preview=False):
     """Store an original MP4 and its pending source attribution."""
     return _ingest_asset(
@@ -131,12 +152,37 @@ def _ingest_asset(*, person, entry, source_roots, storage, observed_at, kind, pr
         raise ValueError("source_roots_required")
     validate_entry(person, entry)
     expected = entry["expected_sha256"]
+    validate_media = _validated_image if kind == "image" else _validated_video
+    validated = validate_media(entry["file"], expected, roots)
+    return _save_asset(
+        person,
+        entry,
+        validated,
+        storage,
+        observed_at,
+        kind=kind,
+        preview=preview,
+        source_kind="saved_g2_cast",
+        discovery_provider="g2_cast",
+    )
+
+
+def _save_asset(
+    person,
+    entry,
+    validated,
+    storage,
+    observed_at,
+    *,
+    kind,
+    preview,
+    source_kind,
+    discovery_provider,
+):
+    expected = entry["expected_sha256"]
     source_url = entry.get("source_url", "")
     identity = entry["identity_resolution"]
-    validate_media = _validated_image if kind == "image" else _validated_video
-    data, width, height, extension, content_type = validate_media(
-        entry["file"], expected, roots
-    )
+    data, width, height, extension, content_type = validated
     evidence = {
         "schema": f"g2-cast-{kind}/v1",
         "source_person_key": entry["person_key"],
@@ -175,8 +221,8 @@ def _ingest_asset(*, person, entry, source_roots, storage, observed_at, kind, pr
     values = {
         "source_url": source_url,
         "original_url": entry.get("original_url") or "",
-        "source_kind": "saved_g2_cast",
-        "discovery_provider": "g2_cast",
+        "source_kind": source_kind,
+        "discovery_provider": discovery_provider,
         "kind": kind,
         "evidence": evidence,
     }
