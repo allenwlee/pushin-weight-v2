@@ -235,7 +235,7 @@ class ScheduledCycleLineage:
         return cls(claim_job(job.pk, invocation_id=invocation_id, manual_authorized=True,
                             typed=True, now=now))
 
-    def begin_call(self, call, *, since_epoch, until_epoch):
+    def begin_call(self, call, *, since_epoch, until_epoch, replay_window_id=None):
         from datetime import UTC, datetime
 
         lower = datetime.fromtimestamp(since_epoch, UTC)
@@ -252,7 +252,9 @@ class ScheduledCycleLineage:
                 "scheduled query differs from frozen target",
             )
             scope, created = CollectionScopeRun.objects.get_or_create(
-                run=run, scope_kind="x_query", scope_key=call.call_id,
+                run=run,
+                scope_kind="x_query" if replay_window_id is None else "x_query_replay",
+                scope_key=call.call_id if replay_window_id is None else str(replay_window_id),
                 defaults={
                     "job_target": target, **_scope_compatibility(), "phase": EXECUTION_PHASE,
                     "requested_start_at": lower, "requested_end_at": upper,
@@ -279,6 +281,8 @@ class ScheduledCycleLineage:
                 method="POST" if endpoint_url.startswith("https://api.twexapi.io/") else "GET",
                 cursor=params.get("cursor") or params.get("next_cursor"),
                 request_config=params.get("_credential_purpose"),
+                provider_source_id=params.get("_provider_source"),
+                credential_purpose=(params.get("_credential_purpose") or "").partition(":")[2] or None,
                 requested_start_at=scope.requested_start_at,
                 requested_end_at=scope.requested_end_at,
             )
@@ -289,21 +293,26 @@ class ScheduledCycleLineage:
             receipt.get("outcome") in {"received", "transport_error"},
             "scheduled exchange outcome is invalid",
         )
-        cursor_after = None
+        cursor_after = raw_count = None
         body = receipt.get("body")
         if isinstance(body, bytes) and receipt.get("status_code") == 200:
             try:
                 parsed = json.loads(body)
             except (ValueError, UnicodeDecodeError):
                 parsed = None
-            if isinstance(parsed, dict) and isinstance(parsed.get("next_cursor"), str):
-                cursor_after = parsed["next_cursor"] or None
+            if isinstance(parsed, dict):
+                if isinstance(parsed.get("next_cursor"), str):
+                    cursor_after = parsed["next_cursor"] or None
+                items = parsed.get("data" if request.provider_source_id == "twexapi" else "tweets")
+                if isinstance(items, list):
+                    raw_count = len(items)
         return finish_request(
             request,
-            outcome=receipt["outcome"],
+            outcome="timeout" if receipt.get("error_type") in {"Timeout", "ReadTimeout", "ConnectTimeout", "TimeoutError"} else receipt["outcome"],
             body=body,
             http_status=receipt.get("status_code"),
             cursor=cursor_after,
+            returned_count=raw_count,
             error_code=receipt.get("error_type"),
             response_bytes=(
                 len(body) if body is not None else None

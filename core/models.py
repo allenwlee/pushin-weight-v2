@@ -9720,6 +9720,12 @@ class CollectionRequest(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     attempt = models.ForeignKey(CollectionAttempt, on_delete=models.PROTECT, related_name="requests")
     scope_run = models.ForeignKey(CollectionScopeRun, on_delete=models.PROTECT, related_name="requests")
+    provider_source = models.ForeignKey(
+        DataSource, on_delete=models.PROTECT, null=True, db_index=False,
+        related_name="provider_requests",
+    )
+    credential_purpose = models.CharField(max_length=16, null=True)
+    returned_count = models.PositiveIntegerField(null=True)
     ordinal = models.PositiveIntegerField()
     reserved_usd = models.DecimalField(max_digits=12, decimal_places=6, null=True)
     estimated_usd = models.DecimalField(max_digits=12, decimal_places=6, null=True)

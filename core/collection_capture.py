@@ -472,6 +472,8 @@ def begin_request(
         "request_group",
         "request_config",
         "request_category",
+        "provider_source_id",
+        "credential_purpose",
         "etag",
     }
     require(set(options) <= allowed, "unsupported request option")
@@ -499,6 +501,7 @@ def finish_request(
     error_code=None,
     retry_after_at=None,
     response_bytes=None,
+    returned_count=None,
     body_encoding="wire-bytes-v1",
     body_media_type="application/json",
     now=None,
@@ -533,6 +536,8 @@ def finish_request(
         if body is not None
         else None
     )
+    require(returned_count is None or type(returned_count) is int and returned_count >= 0, "invalid returned item count")
+    stored.returned_count = returned_count
     stored.accounting_complete = outcome == "received"
     stored.save()
     attempt.actual_requests += 1

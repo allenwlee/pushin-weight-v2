@@ -5245,12 +5245,24 @@ class CycleRunner:
                     int(claim.remaining_since.timestamp()),
                     int(claim.remaining_until.timestamp()),
                 )
-                items, outcome = self._fetch_tweets(
-                    call,
-                    api,
-                    window=discovery_window,
-                    deadline=deadline,
-                )
+                lineage = self._scheduled_lineage
+                scope_id = None
+                if lineage is not None:
+                    scope_id = lineage.begin_call(
+                        call, since_epoch=discovery_window[0], until_epoch=discovery_window[1],
+                        replay_window_id=f"{claim.pk}:{claim.attempts}",
+                    )
+                    lineage.bind_api(api, scope_id)
+                try:
+                    items, outcome = self._fetch_tweets(call, api, window=discovery_window, deadline=deadline)
+                finally:
+                    if scope_id is not None:
+                        lineage.unbind_api(api)
+                if scope_id is not None:
+                    lineage.finish_call(
+                        scope_id, post_ids=[], raw_count=len(items),
+                        outcome=outcome, complete=False,
+                    )
                 self._record_discovery_run_safe(
                     call=call,
                     run_id=run_id,
@@ -5363,8 +5375,15 @@ class CycleRunner:
                         ),
                         max_attempts=backlog_cfg.max_attempts,
                         max_age_hours=backlog_cfg.max_age_hours,
+                        retry_at=self._wall_now() + timedelta(minutes=15),
                     )
                 elif outcome == "ok":
+                    if scope_id is not None:
+                        lineage.finish_call(
+                            scope_id,
+                            post_ids=[item["_persisted_post_id"] for item in kept if "_persisted_post_id" in item],
+                            raw_count=len(items), outcome=outcome, complete=True,
+                        )
                     report["status"] = (
                         "completed" if finish_claim(claim.pk) else "ownership_changed"
                     )
@@ -5844,6 +5863,24 @@ class CycleRunner:
                     call.call_id,
                     outcome,
                 )
+                if outcome == "error" and cursor_owned and self.cycle_kind == "scheduled":
+                    # A held cursor can age beyond the live lookback before the next run.
+                    # Give this exact failed window a durable replay record.
+                    transfer = transfer_truncated_coverage(
+                        call_identity=_cursor_key(call),
+                        original_since=since_epoch,
+                        original_until=until_epoch,
+                        oldest_seen_at=None,
+                        reason_code="search_failed",
+                        pending_limit=self.cfg.harvest.backlog.pending_per_call,
+                        quarantined_limit=self.cfg.harvest.backlog.quarantined_per_call,
+                        advance_cursor=False,
+                        retry_at=call_now + timedelta(minutes=15),
+                    )
+                    call_entry["coverage_transfer"] = transfer.outcome
+                    call_entry["backlog_window_id"] = transfer.backlog_window_id
+                    if transfer.outcome != "transferred":
+                        self._errors.append(f"coverage.{call.call_id}: {transfer.outcome}")
                 call_entry["status"] = outcome
                 call_entry["cursor_advanced"] = False
                 call_entry["fetch_n"] = call_entry.get("n_results", 0)

@@ -76,6 +76,18 @@ class SearchProviderCircuit:
             self.probe_claimed = False
             self._probe_local.owner = None
 
+    def record_rate_limit(self, now, retry_after_seconds):
+        """Make a throttled route ineligible until the provider's reset time."""
+        until = now + timedelta(seconds=max(1, retry_after_seconds))
+        with transaction.atomic():
+            row = self._locked_row()
+            row.open_until = max(row.open_until or until, until)
+            row.probe_lease_until = None
+            row.probe_owner = None
+            row.save(update_fields=["open_until", "probe_lease_until", "probe_owner", "updated_at"])
+        self.probe_claimed = False
+        self._probe_local.owner = None
+
     def record_success(self, now):
         with transaction.atomic():
             row = self._locked_row()

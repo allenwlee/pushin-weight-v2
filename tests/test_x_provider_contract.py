@@ -57,9 +57,8 @@ def test_reversed_twex_failure_opens_only_its_circuit(monkeypatch):
     def fail(*a, **kw): raise XClientServerError("outage")
     monkeypatch.setattr(client, "_twex_search_with_retry", fail)
     monkeypatch.setattr(client, "_get", lambda *a, **kw: {"tweets": [], "has_next_page": False})
-    with pytest.raises(XClientServerError): client.run_search("query")
+    assert client.run_search("query") == ([], False)
     assert twex.failures == 1 and primary.failures == 0
-    assert client.run_search("query")[0] == []
 
 
 def test_environment_order_and_missing_key_validation(monkeypatch):
@@ -333,3 +332,67 @@ def test_fallback_does_not_start_after_search_deadline(monkeypatch):
     with pytest.raises(TimeoutError, match="deadline"):
         next(client._iter_search_pages("Qwen", 20, can_start_page=lambda: next(admissions)))
     assert calls == ["fixture-scheduled"]
+
+
+@pytest.mark.parametrize("first", ["twitterapi:scheduled", "twexapi"])
+def test_rate_limit_falls_through_in_both_orders(monkeypatch, first):
+    from x_monitor.x_client import XClientRateLimitError
+
+    client = _two_key_client(monkeypatch)
+    other = "twexapi" if first.startswith("twitterapi:") else "twitterapi:scheduled"
+    client.provider_order = (first, other)
+    calls, cooldowns = [], []
+
+    def send(route, body):
+        calls.append(route)
+        if route == first:
+            error = XClientRateLimitError("fixture")
+            error.retry_after_seconds = 42
+            raise error
+        return body
+
+    for route, circuit in (("twexapi", client.twex_circuit),
+                           ("twitterapi:scheduled", client.provider_circuits["twitterapi:scheduled"])):
+        monkeypatch.setattr(circuit, "record_rate_limit", lambda _, seconds, route=route: cooldowns.append((route, seconds)), raising=False)
+    monkeypatch.setattr(client, "_get", lambda *a, **kw: send("twitterapi:scheduled", {"tweets": []}))
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: send("twexapi", {"code": 200, "data": []}))
+
+    assert client.run_search("Qwen") == ([], False)
+    assert calls == [first, other]
+    assert cooldowns == [(first, 42)]
+
+
+@pytest.mark.parametrize("first", ["twitterapi:scheduled", "twexapi"])
+def test_malformed_page_falls_through_in_both_orders(monkeypatch, first):
+    client = _two_key_client(monkeypatch)
+    other = "twexapi" if first.startswith("twitterapi:") else "twitterapi:scheduled"
+    client.provider_order = (first, other)
+    calls = []
+
+    def send(route, body):
+        calls.append(route)
+        return {"error": "fixture"} if route == first else body
+
+    monkeypatch.setattr(client, "_get", lambda *a, **kw: send("twitterapi:scheduled", {"tweets": []}))
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: send("twexapi", {"code": 200, "data": []}))
+
+    assert client.run_search("Qwen") == ([], False)
+    assert calls == [first, other]
+
+
+def test_twex_pacing_unavailable_tries_twitter_without_counting_a_provider_failure(monkeypatch):
+    from x_monitor.x_client import XClientRouteUnavailable
+
+    client = _two_key_client(monkeypatch)
+    client.provider_order = ("twexapi", "twitterapi:scheduled")
+    abandoned = []
+    monkeypatch.setattr(client.twex_circuit, "abandon_probe", lambda: abandoned.append(True), raising=False)
+
+    def unavailable(*args, **kwargs):
+        raise XClientRouteUnavailable("shared pacing slot still busy")
+
+    monkeypatch.setattr(client, "_twex_search_with_retry", unavailable)
+    monkeypatch.setattr(client, "_get", lambda *a, **kw: {"tweets": []})
+    assert client.run_search("Qwen", can_start_page=lambda: True) == ([], False)
+    assert abandoned == [True]
+    assert client.twex_circuit.failed is False

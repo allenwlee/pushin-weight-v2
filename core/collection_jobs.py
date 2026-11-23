@@ -13,6 +13,7 @@ from core.measurement_taxonomy import digest, require
 from core.models import CollectionAttempt, CollectionJob, CollectionRun
 
 OPERATIONS = {
+    "provider_announcements": ("content", {"twitterapi"}),
     "lineage_wakeup": ("content", None),
     "chatter_search": ("content", {"x"}),
     "release_acquisition": ("content", {"hf", "github"}),
