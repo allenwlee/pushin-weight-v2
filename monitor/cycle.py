@@ -523,6 +523,7 @@ def _persist_classification_trace(
     promotion_retry_reason: str | None = None,
     feed_input_fingerprints: dict[str, str] | None = None,
     feed_replacement_reasons: dict[str, str] | None = None,
+    identity_votes: dict[str, dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     """Persist primary → review → final history for every attributed brand.
 
@@ -549,6 +550,7 @@ def _persist_classification_trace(
             promotion_retry_reason=promotion_retry_reason,
             feed_input_fingerprints=feed_input_fingerprints,
             feed_replacement_reasons=feed_replacement_reasons,
+            identity_votes=identity_votes,
         )
     stages = {
         stage: _trace_stage_payload(trace, stage)
@@ -654,6 +656,7 @@ def _persist_two_role_classification_trace(
     promotion_retry_reason: str | None = None,
     feed_input_fingerprints: dict[str, str] | None = None,
     feed_replacement_reasons: dict[str, str] | None = None,
+    identity_votes: dict[str, dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     """Persist a matching content + brand-interpretation pair and final atomically."""
     stages = {stage: _trace_stage_payload(trace, stage) for stage in (
@@ -805,6 +808,8 @@ def _persist_two_role_classification_trace(
             final_metadata["changes_json"]["feed_input_fingerprint"] = feed_input_fingerprints[brand_id]
         if feed_replacement_reasons and brand_id in feed_replacement_reasons:
             final_metadata["changes_json"]["feed_replacement_reason"] = feed_replacement_reasons[brand_id]
+        if identity_votes and brand_id in identity_votes:
+            final_metadata["changes_json"]["identity_votes"] = identity_votes[brand_id]
         final, created = PostBrandClassificationJudgment.objects.get_or_create(
             post_id=post_id, brand_id=brand_id, revision_id=revision_id, stage="final",
             defaults={
@@ -823,6 +828,10 @@ def _persist_two_role_classification_trace(
         if not created and isinstance(final.changes_json, dict) and "feed_input_fingerprint" not in final.changes_json:
             expected_changes = dict(expected_final["changes_json"])
             expected_changes.pop("feed_input_fingerprint", None)
+            expected_final["changes_json"] = expected_changes
+        if not created and isinstance(final.changes_json, dict) and "identity_votes" not in final.changes_json:
+            expected_changes = dict(expected_final["changes_json"])
+            expected_changes.pop("identity_votes", None)
             expected_final["changes_json"] = expected_changes
         if not created and any(getattr(final, field) != value for field, value in expected_final.items()):
             raise ValueError("classification_trace_revision_conflict")
@@ -1344,6 +1353,15 @@ def _publish_stage1_classification(
         canonical = _parse_published_classifications(by_brand, expected)
         if canonical is None:
             return None
+        identity_votes = result.get("identity_votes")
+        identity_keys = {"relevant", "identity_namesake_only", "identity_keyword_only", "identity_word_only"}
+        if identity_votes is not None and (
+            not isinstance(identity_votes, dict) or set(identity_votes) != expected
+            or any(not isinstance(votes, dict) or set(votes) != identity_keys
+                   or any(type(value) not in (int, float) or not 0 <= value <= 1 for value in votes.values())
+                   for votes in identity_votes.values())
+        ):
+            return None
         if result.get("release_unresolved") is True and not promotion_retry:
             from core.classified_product_releases import (
                 _complete_release_publication,
@@ -1422,6 +1440,7 @@ def _publish_stage1_classification(
                 ),
                 feed_input_fingerprints=feed_input_fingerprints,
                 feed_replacement_reasons=feed_replacement_reasons,
+                identity_votes=identity_votes,
             )
 
         content_provenance = _v4_stage_provenance(

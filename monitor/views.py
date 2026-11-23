@@ -1241,7 +1241,10 @@ def _feed_axes_complete_post_ids(post_ids: list[str], *, brand_pairs=None, state
     """Identify posts whose selected judgments explicitly saved the feed axes."""
     if not post_ids:
         return set()
-    from core.classification_contract import COMPRESSED_CLASSIFIER_REVISIONS
+    from core.classification_contract import (
+        COMPRESSED_CLASSIFIER_PREVIOUS_REVISIONS,
+        COMPRESSED_CLASSIFIER_REVISIONS,
+    )
 
     expected: dict[str, set[str]] = defaultdict(set)
     actual: dict[str, set[str]] = defaultdict(set)
@@ -1267,7 +1270,9 @@ def _feed_axes_complete_post_ids(post_ids: list[str], *, brand_pairs=None, state
         if not isinstance(changes, dict):
             continue
         earlier_feed_only = (
-            row["selected_final_judgment__prompt_version"] == COMPRESSED_CLASSIFIER_REVISIONS[2]
+            row["selected_final_judgment__prompt_version"] in {
+                COMPRESSED_CLASSIFIER_PREVIOUS_REVISIONS[2], COMPRESSED_CLASSIFIER_REVISIONS[2],
+            }
             and row["selected_final_judgment__validation_state"] == "validated"
             and "release_output" not in changes
         )
