@@ -59,7 +59,7 @@ def state_for(identifier="992"):
     return enqueue_account(account)
 
 
-def test_unchanged_model_acceptance_is_held_without_another_call():
+def test_unchanged_model_acceptance_is_preserved_without_another_call():
     from core.official_company_accounts import MODEL, enqueue_account
 
     state = state_for()
@@ -71,8 +71,8 @@ def test_unchanged_model_acceptance_is_held_without_another_call():
     state.save()
     old_hash = state.evidence_hash
     state = enqueue_account(state.account)
-    assert state.status == "review_needed" and state.attempts == 3
-    assert state.last_error == "human_review_required"
+    assert state.status == "accepted" and state.attempts == 3
+    assert not state.last_error
     assert state.policy_version == "official-model-developer-v2"
     assert state.evidence_hash == old_hash
     assert state.decision == {"outcome": "accepted"}

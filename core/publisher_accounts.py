@@ -1,9 +1,19 @@
 """Publisher identity and ownership use the shared account/company relationship."""
 
 from django.db import transaction
+from django.db.models import Q
 
 from core.account_identity import upsert_account
-from core.models import Account, BrandCompany, CompanyAccount, Role
+from core.models import Account, Brand, BrandCompany, CompanyAccount, Role
+
+
+def brand_name_candidates(name, *, nickname=None, include_sentinel=True):
+    """Find candidate brands; callers decide whether their evidence supports reuse."""
+    query = Q(display_name__iexact=name)
+    if nickname is not None:
+        query |= Q(nickname=nickname)
+    candidates = Brand.objects.filter(query)
+    return candidates if include_sentinel else candidates.filter(is_sentinel=False)
 
 
 def publisher_links(

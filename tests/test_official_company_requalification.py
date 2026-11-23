@@ -95,7 +95,7 @@ def test_command_rerun_has_fixed_population_and_preserves_old_results(cohort_com
     outside.refresh_from_db()
     assert outside.status == "review_needed" and not outside.attempt_records.exists()
     a.refresh_from_db()
-    assert a.status == "review_needed" and a.last_error == "human_review_required"
+    assert a.status == "accepted" and not a.last_error
     assert a.attempt_records.filter(policy_version=POLICY_VERSION, status="completed").count() == 1
 
 

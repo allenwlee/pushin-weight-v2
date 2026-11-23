@@ -232,3 +232,34 @@ def test_register_ready_recovers_only_valid_previously_held_acceptances():
     assert held.status == "registered"
     assert failed.status == "review_needed" and failed.last_error == "provider_failure"
     assert not OfficialCompanyListIntent.objects.exists()
+
+
+def test_registration_can_preserve_existing_list_intent():
+    state = accepted()
+    cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True)
+    register_account(state.pk, cfg=cfg, select_for_list=True)
+    intent = OfficialCompanyListIntent.objects.get(state=state)
+    intent.status = "claimed"
+    intent.claim_token = "active-claim"
+    intent.attempts = 4
+    intent.save()
+    before = dict(OfficialCompanyListIntent.objects.filter(pk=intent.pk).values().get())
+    state.status = "accepted"
+    state.evidence_hash = "b" * 64
+    state.save()
+    assert register_account(state.pk, cfg=cfg, preserve_list_intents=True) == state.pk
+    assert OfficialCompanyListIntent.objects.filter(pk=intent.pk).values().get() == before
+
+
+def test_opt_in_conflicts_leave_state_and_candidates_unchanged():
+    from core.models import BrandDiscoveryCandidate
+    from core.official_company_accounts import RegistrationIdentityConflict
+
+    Brand.objects.create(nickname="new-speech-lab", display_name="New Speech Lab")
+    state = accepted()
+    cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True)
+    with pytest.raises(RegistrationIdentityConflict, match="existing_brand_identity_collision"):
+        register_account(state.pk, cfg=cfg, preserve_list_intents=True, propagate_conflicts=True)
+    state.refresh_from_db()
+    assert state.status == "accepted"
+    assert not BrandDiscoveryCandidate.objects.exists()

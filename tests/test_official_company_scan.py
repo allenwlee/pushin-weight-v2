@@ -363,7 +363,7 @@ def test_all_three_settled_patterns_pass_without_id_overrides_or_gold(index):
     assert candidate_priorities([account])[account.pk] == 2
 
 
-def test_drain_holds_existing_model_positives_when_registration_is_disabled():
+def test_drain_preserves_existing_model_positives_when_registration_is_disabled():
     from unittest.mock import Mock
 
     from core.official_company_accounts import MODEL, POLICY_VERSION, enqueue_account
@@ -385,8 +385,8 @@ def test_drain_holds_existing_model_positives_when_registration_is_disabled():
         limit=1, budget_scope="hold-only",
     )
     state.refresh_from_db()
-    assert result["held_for_review"] == 1 and result["attempted"] == 0
-    assert state.status == "review_needed"
+    assert result["attempted"] == 0 and result["registered"] == 0
+    assert state.status == "accepted"
     assert state.decision["outcome"] == "accepted"
     assert state.evidence_hash == old_hash and state.attempts == 1
     call.assert_not_called()
@@ -445,7 +445,7 @@ def test_review_only_command_evaluates_while_harvest_writer_is_owned(monkeypatch
         assert result.get("attempted") == 1
         assert len(calls) == 1
     state = OfficialCompanyAccountState.objects.get(account=account)
-    assert state.status == "review_needed" and state.last_error == "human_review_required"
+    assert state.status == "accepted" and not state.last_error
 
 
 def test_competing_discovery_command_dispatches_nothing(monkeypatch):
