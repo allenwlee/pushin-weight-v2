@@ -83,7 +83,7 @@ def recurring_cycle(monkeypatch, seeded_policy_keywords):
     )
     monkeypatch.setattr(cost_emit, "finalize_and_persist", lambda *args, **kwargs: None)
 
-    def run(call, *, limit=2, hf_client=None, allow_list_add=False):
+    def run(call, *, limit=2, hf_client=None):
         cfg = load_config(Path("config.yaml"))
         cfg.official_company = OfficialCompanyConfig(
             enabled=True, registration_enabled=True, list_sync_enabled=True,
@@ -93,8 +93,7 @@ def recurring_cycle(monkeypatch, seeded_policy_keywords):
         )
         lists = Mock()
         lists.members.return_value = (set(), True)
-        if not allow_list_add:
-            lists.add.side_effect = AssertionError("Unsettled nominations cannot join Call A")
+        lists.add.side_effect = AssertionError("Registration must not select Call A")
         if hf_client is not None:
             from core import official_company_hf
 
@@ -114,9 +113,9 @@ def recurring_cycle(monkeypatch, seeded_policy_keywords):
             ).run()
         assert result["status"] != "aborted"
         assert [planned["call_id"] for planned in result["planned_calls"]] == [
-            "A", "B1", "C1", "C2", "C3", "C4", "B2", "B3",
+            "A", "B1", "C1", "C2", "C3", "C4", "B2", "B3", "B4", "C5", "B5", "B6", "C6", "B7", "B8", "B9",
         ]
-        assert lists.add.called == allow_list_add
+        assert not lists.add.called
         return result["official_company_discovery"]
 
     return run
@@ -150,7 +149,8 @@ def test_recurring_discovery_admits_each_settled_pattern_from_one_post(
     assert result["attempted"] == 1 and call.call_count == 1
     assert state.candidate_priority == 2 and state.initial_scan_id is None
     assert state.model != "owner-attestation"
-    assert state.status == "review_needed"
+    assert state.status == "registered"
+    assert BrandAccount.objects.filter(account=account, role_id="official").exists()
     assert not OfficialCompanyListIntent.objects.exists()
 
 
@@ -178,7 +178,7 @@ def test_recurring_caller_uses_amended_product_rule_without_hf(recurring_cycle, 
     result = recurring_cycle(accepted)
     state = OfficialCompanyAccountState.objects.get(account=a)
     assert result["attempted"] == 1 and state.decision["development_type"] == kind
-    assert state.status == "review_needed" and not OfficialCompanyListIntent.objects.exists()
+    assert state.status == "registered" and not OfficialCompanyListIntent.objects.exists()
     assert state.attempt_records.get().policy_version == POLICY_VERSION
 
 
@@ -241,7 +241,7 @@ def test_recurring_known_multibrand_account_avoids_paid_rediscovery(recurring_cy
         ("We develop AI models for blockchain and web3.", BLOCKCHAIN_POLICY_VERSION),
     ],
 )
-def test_recurring_evaluation_uses_conditional_hurdle_and_keeps_unverified_positives_held(
+def test_recurring_evaluation_uses_conditional_hurdle_and_registers_positives(
     recurring_cycle, bio, policy,
 ):
     account = Account.objects.create(author_id="97530", bio=bio, verified_type_id=x_verification_id("Business"))
@@ -249,12 +249,12 @@ def test_recurring_evaluation_uses_conditional_hurdle_and_keeps_unverified_posit
     result = recurring_cycle(call)
     state = OfficialCompanyAccountState.objects.get(account=account)
     attempt = state.attempt_records.get()
-    assert result["attempted"] == 1 and result["registered"] == 0
+    assert result["attempted"] == 1 and result["registered"] == 1
     assert state.policy_version == attempt.policy_version == policy
     assert ("higher technical-evidence hurdle" in call.call_args.args[0]) == (policy == BLOCKCHAIN_POLICY_VERSION)
-    assert state.status == "review_needed" and state.last_error == "human_review_required"
+    assert state.status == "registered"
     assert attempt.decision["outcome"] == "accepted"
-    assert not BrandAccount.objects.filter(account=account).exists()
+    assert BrandAccount.objects.filter(account=account, role_id="official").exists()
     assert not OfficialCompanyListIntent.objects.exists()
 
 
@@ -277,8 +277,9 @@ def test_unchanged_recurring_evidence_does_not_repeat_paid_evaluation(recurring_
 @pytest.mark.parametrize(
     "case", ["passed", "mirror", "unverified", "wrong_account", "unavailable", "empty"],
 )
-def test_recurring_hf_proof_controls_automatic_registration_and_call_a_list_intent(
-    recurring_cycle, case,
+@pytest.mark.parametrize("model_outcome", ["accepted", "review_needed"])
+def test_recurring_registration_does_not_require_hf_or_select_call_a(
+    recurring_cycle, case, model_outcome,
 ):
     from core.models import CompanyAccount
     from core.official_company_hf import approved
@@ -321,24 +322,24 @@ def test_recurring_hf_proof_controls_automatic_registration_and_call_a_list_inte
         raise AssertionError(f"Unexpected fixture endpoint: {path}")
 
     def call(*args):
+        if model_outcome == "review_needed":
+            return {"invalid": True, "usage": {"input_tokens": 10, "output_tokens": 10}}
         response = nomination(*args)
         response["organization_name"] = "Example Lab"
         return response
 
-    passed = case == "passed"
     with httpx.Client(transport=httpx.MockTransport(transport)) as client:
-        result = recurring_cycle(call, hf_client=client, allow_list_add=passed)
+        result = recurring_cycle(call, hf_client=client)
     state = OfficialCompanyAccountState.objects.get(account=account)
-    assert result["hf_verification"] == {"checked": 1, "approved": int(passed)}
-    assert result["registered"] == int(passed)
-    assert approved(state) == passed
-    assert state.attempt_records.get().decision["outcome"] == "accepted"
-    assert CompanyAccount.objects.filter(account=account).exists() == passed
-    assert BrandAccount.objects.filter(account=account).exists() == passed
-    assert OfficialCompanyListIntent.objects.filter(account=account).exists() == passed
-    assert state.status == ("registered" if passed else "review_needed")
-    assert len(requests) <= 12
-    if passed:
-        intent = OfficialCompanyListIntent.objects.get(account=account)
-        assert intent.status == "confirmed"
-        assert state.decision["hf_verification"]["sha"] == sha
+    hf_fallback = model_outcome == "review_needed"
+    proof_passed = hf_fallback and case == "passed"
+    registered = model_outcome == "accepted" or proof_passed
+    assert result["hf_verification"] == {"checked": int(hf_fallback), "approved": int(proof_passed)}
+    assert result["registered"] == int(registered)
+    assert approved(state) == proof_passed
+    assert state.attempt_records.count() == 1
+    assert CompanyAccount.objects.filter(account=account, role_id="official").exists() == registered
+    assert BrandAccount.objects.filter(account=account, role_id="official").exists() == registered
+    assert not OfficialCompanyListIntent.objects.filter(account=account).exists()
+    assert state.status == ("registered" if registered else "review_needed")
+    assert (0 < len(requests) <= 12) if hf_fallback else requests == []

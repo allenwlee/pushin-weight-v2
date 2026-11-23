@@ -63,7 +63,7 @@ def test_registration_sync_and_admin_display_share_real_data(owner_client):
     cfg = OfficialCompanyConfig(
         enabled=True, registration_enabled=True, list_sync_enabled=True
     )
-    assert register_account(state.pk, cfg=cfg)
+    assert register_account(state.pk, cfg=cfg, select_for_list=True)
     provider = Mock()
     provider.members.return_value = (set(), True)
     sync_intents(cfg=cfg, client=provider)
