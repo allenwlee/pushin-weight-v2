@@ -1548,6 +1548,7 @@ def test_promotion_retry_preserves_completed_feed_when_later_vote_loses_context(
             result['answers']['binding:missing_subject']['noul'] = 0.9
             if retry:
                 result['answers']['identity_namesake_only']['noul'] = 0.9
+                result['answers']['relevant']['noul'] = 0.1
         return result
 
     transport.messages_create = responses
@@ -1578,6 +1579,7 @@ def test_completed_promotion_retry_keeps_prior_feed_and_records_reason(monkeypat
             result['answers']['binding:missing_subject']['noul'] = 0.1 if retry else 0.9
             if retry:
                 result['answers']['identity_namesake_only']['noul'] = 0.9
+                result['answers']['relevant']['noul'] = 0.1
         return result
 
     transport.messages_create = responses
@@ -1611,6 +1613,7 @@ def test_promotion_retry_reassesses_when_source_text_materially_changes(monkeypa
             result['answers']['binding:missing_subject']['noul'] = 0.9
             if retry:
                 result['answers']['identity_namesake_only']['noul'] = 0.9
+                result['answers']['relevant']['noul'] = 0.1
         return result
 
     transport.messages_create = responses
@@ -1642,6 +1645,7 @@ def test_ambiguous_legacy_promotion_retry_keeps_feed_and_fills_release(monkeypat
             result['answers']['binding:missing_subject']['noul'] = 0.1 if retry else 0.9
             if retry:
                 result['answers']['identity_namesake_only']['noul'] = 0.9
+                result['answers']['relevant']['noul'] = 0.1
         return result
 
     transport.messages_create = responses
@@ -1687,6 +1691,7 @@ def test_promotion_retry_keeps_completed_brand_while_other_brand_improves(monkey
             result['answers'][f'b{qwen}:relevant']['noul'] = 0.9
             result['answers'][f'b{other}:relevant']['noul'] = 0.9
             result['answers'][f'b{qwen if retry else other}:identity_namesake_only']['noul'] = 0.9
+            result['answers'][f'b{qwen if retry else other}:relevant']['noul'] = 0.1
         return result
 
     transport.messages_create = responses
@@ -1747,6 +1752,7 @@ def test_promotion_retry_preserves_legacy_completed_feed_without_partial_marker(
             result['answers']['binding:missing_subject']['noul'] = 0.9
             if retry:
                 result['answers']['identity_namesake_only']['noul'] = 0.9
+                result['answers']['relevant']['noul'] = 0.1
         return result
 
     transport.messages_create = responses
@@ -1780,6 +1786,7 @@ def test_promotion_retry_new_brand_does_not_replace_completed_brand(monkeypatch)
                 qwen = brands.index('qwen')
                 other = brands.index('deepseek')
                 result['answers'][f'b{qwen}:identity_namesake_only']['noul'] = 0.9
+                result['answers'][f'b{qwen}:relevant']['noul'] = 0.1
                 result['answers'][f'b{other}:relevant']['noul'] = 0.9
         return result
 
@@ -1858,6 +1865,7 @@ def test_retry_does_not_replace_an_unimproved_context_missing_judgment(monkeypat
         if not kwargs['model'].startswith('deepseek'):
             result['answers']['binding:missing_subject']['noul'] = 0.9
             result['answers']['identity_namesake_only']['noul'] = 0.9
+            result['answers']['relevant']['noul'] = 0.1
         return result
 
     transport.messages_create = responses
@@ -2053,3 +2061,80 @@ def test_changed_source_overflow_publishes_new_feed_and_preserves_prior_release(
     assert read_publication_findings(state.pk)[0]["finding"] == saved[0]["finding"]
     assert selected_release_revision(state.pk)["content_fingerprint"] == saved_fingerprint
     assert len(transport.calls) == 4
+
+
+def test_worker_keeps_and_records_conflicting_identity_votes(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+
+    def response(**kwargs):
+        result = original(**kwargs)
+        if not kwargs["model"].startswith("deepseek"):
+            result["answers"]["relevant"]["noul"] = 0.70
+            result["answers"]["identity_namesake_only"]["noul"] = 0.71
+        return result
+
+    transport.messages_create = response
+    runner._run_post_fetch([], run_id="identity-conflict")
+    selected = models.PostBrandClassificationState.objects.get(post_id=state.pk)
+    assert selected.outcome == "classified"
+    votes = selected.selected_final_judgment.changes_json["identity_votes"]
+    assert votes["relevant"] == 0.70
+    assert votes["identity_namesake_only"] == 0.71
+    from monitor.views import _enrich_posts_with_classifications
+
+    rows = _enrich_posts_with_classifications(models.Post.objects.filter(pk=state.pk))
+    assert rows[0]["classifications_by_brand"]["qwen"]["post_types"] == ["releases_updates"]
+
+
+def test_v3_retry_preserves_v2_brand_and_release_while_sibling_improves(monkeypatch):
+    from core import classification_contract
+    from monitor import classification_persistence
+    from x_monitor import attribution, compressed_classifier
+
+    old = classification_contract.COMPRESSED_CLASSIFIER_PREVIOUS_REVISIONS
+    with monkeypatch.context() as legacy:
+        legacy.setattr(classification_contract, "COMPRESSED_CLASSIFIER_REVISIONS", old)
+        legacy.setattr(classification_persistence, "COMPRESSED_CLASSIFIER_REVISIONS", old)
+        legacy.setattr(attribution, "COMPRESSED_CLASSIFIER_REVISIONS", old)
+        legacy.setattr(compressed_classifier, "REVISIONS", old)
+        legacy.setattr(cycle, "_TWO_ROLE_ALLOWED_REVISION_TRIPLETS", cycle._TWO_ROLE_ALLOWED_REVISION_TRIPLETS | {old})
+        state, runner, transport = setup_cycle(legacy)
+        deepseek = models.Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
+        models.PostBrand.objects.create(post=state.post, brand=deepseek)
+        catalog = [{"brand_id": b, "aliases": [b], "products": [], "accounts": []} for b in ("qwen", "deepseek")]
+        legacy.setattr(cycle, "_classification_tracked_brand_catalog", lambda: catalog)
+        original = transport.messages_create
+        retry = False
+
+        def response(**kwargs):
+            result = original(**kwargs)
+            if not kwargs["model"].startswith("deepseek"):
+                request = json.loads(kwargs["messages"][0]["content"])
+                brands = request["state"]["target_brands"]
+                qwen, other = brands.index("qwen"), brands.index("deepseek")
+                result["answers"]["binding:missing_subject"]["noul"] = 0.9
+                result["answers"][f"b{qwen}:relevant"]["noul"] = 0.9 if not retry else 0.1
+                result["answers"][f"b{other}:relevant"]["noul"] = 0.1 if not retry else 0.9
+                result["answers"][f"b{qwen if retry else other}:identity_namesake_only"]["noul"] = 0.9
+            return result
+
+        transport.messages_create = response
+        runner._run_post_fetch([], run_id="v2-mixed-first")
+        first = models.PostBrandClassificationState.objects.get(post_id=state.pk, brand_id="qwen")
+        sibling = models.PostBrandClassificationState.objects.get(post_id=state.pk, brand_id="deepseek")
+        assert first.outcome == "classified" and sibling.outcome == "context_missing"
+        selected_id = first.selected_final_judgment_id
+        old_release = read_publication_findings(state.pk)
+        old_fingerprint = selected_release_revision(state.pk)["content_fingerprint"]
+        models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+        retry = True
+    monkeypatch.setattr(cycle, "_classification_tracked_brand_catalog", lambda: catalog)
+    runner._run_post_fetch([], run_id="v3-mixed-retry")
+    first.refresh_from_db()
+    sibling.refresh_from_db()
+    assert first.selected_final_judgment_id == selected_id
+    assert sibling.outcome == "classified"
+    assert sibling.selected_final_judgment.prompt_version == "compressed8-pulse-merge-v3"
+    assert read_publication_findings(state.pk)[0]["finding"] == old_release[0]["finding"]
+    assert selected_release_revision(state.pk)["content_fingerprint"] == old_fingerprint

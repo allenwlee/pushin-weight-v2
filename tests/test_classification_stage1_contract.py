@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from django.utils import timezone
 
 from core.classification_contract import (
     CANONICAL_POST_TYPE_KEYS,
@@ -349,7 +351,7 @@ def test_writer_replaces_one_brand_exactly_without_touching_another():
     PostBrand.objects.bulk_create(
         [PostBrand(post=post, brand=alpha), PostBrand(post=post, brand=beta)]
     )
-    PostEnrichmentState.objects.create(post=post, claim_run_id="replace")
+    PostEnrichmentState.objects.create(post=post, claim_run_id="replace", claim_expires_at=timezone.now() + timedelta(minutes=10))
     tweet = {"text": "text", "context": []}
     old = {
         "valid": True,
@@ -435,7 +437,7 @@ def test_writer_database_failure_rolls_back_stage1_rows(monkeypatch):
     post = Post.objects.create(tweet_id="stage1-atomic", text="text")
     brand = Brand.objects.create(nickname="stage1-atomic-brand", display_name="Atomic")
     PostBrand.objects.create(post=post, brand=brand)
-    PostEnrichmentState.objects.create(post=post, claim_run_id="atomic")
+    PostEnrichmentState.objects.create(post=post, claim_run_id="atomic", claim_expires_at=timezone.now() + timedelta(minutes=10))
     monkeypatch.setattr(
         unsanctioned_flags,
         "persist_classifier_flags",
@@ -638,6 +640,7 @@ def test_context_missing_publishes_state_without_edges_or_discourse():
     PostEnrichmentState.objects.create(
         post=post,
         claim_run_id="context-run",
+        claim_expires_at=timezone.now() + timedelta(minutes=10),
         classification_attempts=1,
     )
     result = {
@@ -717,7 +720,7 @@ def test_missing_one_of_two_attributed_brands_publishes_nothing_partial():
             PostBrand(post=post, brand=beta),
         ]
     )
-    PostEnrichmentState.objects.create(post=post, claim_run_id="two-brands")
+    PostEnrichmentState.objects.create(post=post, claim_run_id="two-brands", claim_expires_at=timezone.now() + timedelta(minutes=10))
     complete = {
         "valid": True,
         "unsanctioned_flags": [],
@@ -969,7 +972,7 @@ def test_malformed_flags_roll_back_all_stage1_publication(bad_flags):
         display_name="Bad flags",
     )
     PostBrand.objects.create(post=post, brand=brand)
-    PostEnrichmentState.objects.create(post=post, claim_run_id="bad-flags")
+    PostEnrichmentState.objects.create(post=post, claim_run_id="bad-flags", claim_expires_at=timezone.now() + timedelta(minutes=10))
     result = {
         "valid": True,
         "unsanctioned_flags": bad_flags,
