@@ -100,6 +100,26 @@ services:
       - key: PW_SERVING_DATABASE_ROLE
         value: pushinweight_web_serving
 
+  # Public provider notices have their own cadence and do not use harvest capacity.
+  - type: cron
+    name: pushinweight-provider-announcements
+    runtime: python
+    plan: starter
+    schedule: "*/15 * * * *"
+    buildCommand: ./build.sh
+    startCommand: python manage.py poll_x_provider_announcements --interval-minutes 15
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
+
   # --------------------------------------------------------------------------
   # Queue-isolated trend-narrative worker. Render cron remains the scheduler.
   # --------------------------------------------------------------------------

@@ -9,6 +9,7 @@ its one-time copier in an isolated pre-DROP schema.
 """
 
 import hashlib
+import json
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
@@ -459,3 +460,90 @@ def test_typed_provenance_distinguishes_absent_evidence_from_explicit_unknown():
         original_archive.refresh_from_db()
         assert read_document(original_archive) == document
         assert read_document(observation.legacy_archive) == explicit_unknown
+
+
+def test_scheduled_fallback_has_two_physical_receipts_in_one_run():
+    from datetime import timedelta
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from core.models import DataSource
+    from core.x_cycle_lineage import ScheduledCycleLineage
+
+    for provider in ("twitterapi", "twexapi"):
+        DataSource.objects.get_or_create(pk=provider, defaults={"name": provider, "source_type": "social"})
+
+    call = SimpleNamespace(call_id="B1", query_string="provider accounting test")
+    lineage = ScheduledCycleLineage.start(
+        [call], limits={"requests": 3, "bytes": 10000, "seconds": 30, "items": 100},
+        invocation_id="provider-accounting",
+    )
+    scope = lineage.begin_call(call, since_epoch=1783809000, until_epoch=1783809300)
+    primary = lineage.begin_exchange(
+        scope, endpoint_url="https://api.twitterapi.io/twitter/tweet/advanced_search",
+        params={"_provider_source": "twitterapi", "_credential_purpose": "twitterapi:scheduled"},
+    )
+    lineage.finish_exchange(primary, {"outcome": "received", "status_code": 503, "body": b"unavailable"})
+    fallback = lineage.begin_exchange(
+        scope, endpoint_url="https://api.twexapi.io/twitter/advanced_search/page",
+        params={"_provider_source": "twexapi"},
+    )
+    lineage.finish_exchange(fallback, {"outcome": "received", "status_code": 200, "body": b'{"data":[]}'})
+    lineage.finish_call(scope, post_ids=[], page_by_post={}, raw_count=0, outcome="ok", complete=True)
+    run = lineage.finish(success=True)
+    assert run.job.source_id == "x"
+    assert run.request_count == 2
+    assert list(run.attempts.get().requests.order_by("ordinal").values_list(
+        "provider_source_id", "credential_purpose", "http_status", "returned_count",
+    )) == [("twitterapi", "scheduled", 503, None), ("twexapi", None, 200, 0)]
+
+    output = StringIO()
+    call_command(
+        "report_x_provider_usage",
+        since=(primary.started_at - timedelta(seconds=1)).isoformat(),
+        until=(fallback.started_at + timedelta(seconds=1)).isoformat(),
+        stdout=output,
+    )
+    rows = {row["provider_source_id"]: row for row in map(json.loads, output.getvalue().splitlines())}
+    assert rows["twitterapi"]["sends"] == rows["twexapi"]["sends"] == 1
+    assert rows["twitterapi"]["unavailable"] == 1
+    assert rows["twexapi"]["successful_http"] == 1
+    assert rows["twexapi"]["returned"] == 0
+
+
+def test_provider_usage_does_not_count_a_lost_dispatch_lease_as_a_send():
+    from datetime import timedelta
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from core.models import DataSource
+    from core.x_cycle_lineage import ScheduledCycleLineage
+
+    DataSource.objects.get_or_create(
+        pk="twexapi", defaults={"name": "TwexAPI", "source_type": "social"},
+    )
+    call = SimpleNamespace(call_id="B1", query_string="lost dispatch lease")
+    lineage = ScheduledCycleLineage.start(
+        [call], limits={"requests": 3, "bytes": 10000, "seconds": 30, "items": 100},
+        invocation_id="lost-dispatch-lease",
+    )
+    scope = lineage.begin_call(call, since_epoch=1783809000, until_epoch=1783809300)
+    receipt = lineage.begin_exchange(
+        scope, endpoint_url="https://api.twexapi.io/twitter/advanced_search/page",
+        params={"_provider_source": "twexapi"},
+    )
+    lineage.finish_exchange(receipt, {"outcome": "transport_error", "error_type": "XClientRouteUnavailable"})
+
+    output = StringIO()
+    call_command(
+        "report_x_provider_usage",
+        since=(receipt.started_at - timedelta(seconds=1)).isoformat(),
+        until=(receipt.started_at + timedelta(seconds=1)).isoformat(),
+        stdout=output,
+    )
+    row = json.loads(output.getvalue())
+    assert row["sends"] == row["unconfirmed"] == 0
+    assert row["canceled_before_send"] == 1
+    assert row["mean_response_time"] is None

@@ -58,8 +58,10 @@ def transfer_truncated_coverage(
     reason_code: str,
     pending_limit: int,
     quarantined_limit: int,
+    advance_cursor: bool = True,
+    retry_at: datetime | None = None,
 ) -> CoverageTransferResult:
-    """Atomically move unfinished coverage to the ledger and advance its cursor.
+    """Record unfinished coverage, optionally transferring live cursor ownership.
 
     A capacity refusal or cursor-write exception leaves ``CallState`` as the
     sole owner of the original interval.  The tweet upserts happen before this
@@ -108,11 +110,16 @@ def transfer_truncated_coverage(
                     residual_until=remaining_until,
                 )
 
-            state.last_completed_at = until
-            state.save(update_fields=["last_completed_at", "updated_at"])
+            if retry_at is not None and normalized.window_id is not None:
+                HarvestBacklogWindow.objects.filter(
+                    pk=normalized.window_id, state=HarvestBacklogWindow.State.PENDING,
+                ).update(next_attempt_at=retry_at)
+            if advance_cursor:
+                state.last_completed_at = until
+                state.save(update_fields=["last_completed_at", "updated_at"])
             return CoverageTransferResult(
                 outcome="transferred",
-                cursor_advanced=True,
+                cursor_advanced=advance_cursor,
                 backlog_window_id=normalized.window_id,
                 residual_since=since,
                 residual_until=remaining_until,
@@ -143,6 +150,7 @@ def return_claim(
     max_age_hours: int,
     remaining_until: datetime | None = None,
     now: datetime | None = None,
+    retry_at: datetime | None = None,
 ) -> str:
     """Return an interrupted claim to pending or quarantine it at a ceiling."""
 
@@ -165,6 +173,7 @@ def return_claim(
             outcome = "quarantined"
         else:
             window.state = HarvestBacklogWindow.State.PENDING
+            window.next_attempt_at = retry_at
             outcome = "pending"
         window.claim_owner = ""
         window.claim_run_id = ""

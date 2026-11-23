@@ -323,6 +323,9 @@ def claim_job(
                 or job.source_id in {"hf", "github"} and job.purpose == "content"
                 and job.operation == "release_acquisition" and job.mode == "manual"
                 and manual_authorized
+                or job.source_id == "twitterapi" and job.purpose == "content"
+                and job.operation == "provider_announcements" and job.mode == "recurring"
+                and manual_authorized
                 or job.purpose == "content" and job.operation == "lineage_wakeup"
                 and job.mode == "manual" and manual_authorized
                 or job.source_id == "x" and job.purpose == "content"
@@ -482,6 +485,8 @@ def claim_job(
             marker_kind, marker_phase = "match_execution", "typed-product-match-v1"
         elif job.source_id in {"hf", "github"} and job.operation == "release_acquisition":
             marker_kind, marker_phase = "release_acquisition", "typed-release-acquisition-v1"
+        elif job.operation == "provider_announcements":
+            marker_kind, marker_phase = "provider_announcements", "telegram-preview-v1"
         elif job.operation == "lineage_wakeup":
             marker_kind, marker_phase = "lineage_wakeup", "typed-lineage-wakeup-v1"
         elif job.source_id == "x" and job.operation == "x_backfill":
@@ -1473,7 +1478,9 @@ def finish_run(
                 ))
                 or metric_collection or model_history or github_catalog or x_backfill
                 or x_cycle or chatter
-                or product_match or release_acquisition or lineage_wakeup,
+                or product_match or release_acquisition or lineage_wakeup
+                or (job.source_id == "twitterapi" and job.operation == "provider_announcements"
+                    and request_count is not None),
                 "typed completion needs a supported collection operation",
             )
         now = now or timezone.now()

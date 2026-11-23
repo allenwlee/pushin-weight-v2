@@ -23,6 +23,7 @@ def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
         "pushinweight-harvest",
         "pushinweight-jobs",
         "pushinweight-home-counts",
+        "pushinweight-provider-announcements",
     }
     assert [database["name"] for database in blueprint["databases"]] == [
         "pushinweight-db-shadow"
@@ -111,6 +112,10 @@ def test_render_crons_keep_harvest_as_the_only_cycle_scheduler():
             "7,22,37,52 * * * *",
             "python manage.py refresh_home_counts",
         ),
+        "pushinweight-provider-announcements": (
+            "*/15 * * * *",
+            "python manage.py poll_x_provider_announcements --interval-minutes 15",
+        ),
         "pushinweight-jobs": (
             "17 */6 * * *",
             "python manage.py sync_job_sources",
@@ -124,6 +129,23 @@ def test_render_crons_keep_harvest_as_the_only_cycle_scheduler():
         "beat" not in service.get("startCommand", "")
         for service in blueprint["services"]
     )
+
+
+def test_provider_announcement_cron_only_uses_the_collection_database():
+    blueprint = yaml.safe_load(Path("render.yaml").read_text(encoding="utf-8"))
+    poller = next(
+        service for service in blueprint["services"]
+        if service["name"] == "pushinweight-provider-announcements"
+    )
+    environment = {entry["key"]: entry for entry in poller["envVars"]}
+
+    assert set(environment) == {
+        "DATABASE_URL", "DEBUG", "PYTHON_VERSION", "X_MONITOR_DEPLOYMENT_ENVIRONMENT",
+    }
+    assert environment["DATABASE_URL"]["fromDatabase"] == {
+        "name": "pushinweight-db-shadow",
+        "property": "connectionString",
+    }
 
 
 def test_enrichment_worker_has_one_process_and_no_collection_credentials():

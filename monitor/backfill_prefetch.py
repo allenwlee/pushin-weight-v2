@@ -16,7 +16,12 @@ from urllib.parse import urlencode
 
 from django.db.models import Sum
 
-from core.collection_capture import begin_request, finish_request, read_document
+from core.collection_capture import (
+    begin_request,
+    ensure_x_provider_catalog,
+    finish_request,
+    read_document,
+)
 from core.collection_state import fenced_run, x_scope_ownership
 from core.measurement_taxonomy import require
 from core.models import (
@@ -108,6 +113,11 @@ def _route_config(scope, provider=None):
             "unknown recorded search provider")
     identity = _request_identity(scope)
     return identity + ":" + provider if provider else identity
+
+
+def _request_provider_fields(route):
+    provider, _, purpose = (route or "twitterapi:on_demand").partition(":")
+    return {"provider_source_id": provider, "credential_purpose": purpose or None}
 
 
 def _recorded_provider(request):
@@ -248,7 +258,9 @@ class Prefetcher:
             circuit = self.router.twex_circuit
         else:
             circuit = self.router.provider_circuits[route.name]
-        if status == 401 or (status is not None and status >= 500) or (result.error and status in (None, 200)):
+        if status == 429:
+            circuit.record_rate_limit(datetime.now(UTC), result.retry_after_seconds or 30)
+        elif status == 401 or (status is not None and status >= 500) or (result.error and status in (None, 200)):
             circuit.record_failure(datetime.now(UTC))
         elif not result.error and status == 200:
             circuit.record_success(datetime.now(UTC))
@@ -322,7 +334,8 @@ class Prefetcher:
         # Paid responses remain evidence even if ownership expired during HTTP.
         request = finish_request(request, outcome=outcome, body=result.body,
                                  http_status=result.response.get("status_code"), cursor=cursor,
-                                 error_code=result.error, now=result.received_at)
+                                 error_code=result.error, now=result.received_at,
+                                 returned_count=result.response.get("raw_results") if not result.error else None)
         if result.response:
             self.budget.record_captured_response(request, result.response)
         self.metrics["captured_pages"] += int(result.body is not None)
@@ -331,6 +344,7 @@ class Prefetcher:
 
     def pages(self, deferred_scopes):
         self.router = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+        ensure_x_provider_catalog()
         key = self.router.api_key
         with ThreadPoolExecutor(max_workers=self.options.concurrency,
                                 thread_name_prefix="x-backfill-http") as pool:
@@ -396,7 +410,8 @@ class Prefetcher:
                                     request = begin_request(attempt, scope, endpoint_url=_endpoint(scope, provider),
                                         method="POST" if provider == "twexapi" else "GET",
                                         cursor=scope.cursor, request_config=_route_config(scope, provider),
-                                        request_category="x_backfill_prefetch")
+                                        request_category="x_backfill_prefetch",
+                                        **_request_provider_fields(provider or getattr(self.router, "default_credential_route", None)))
                                     request.body_lost = False
                                     request.selection_accounted = False
                                     request.save(update_fields=["body_lost", "selection_accounted"])
@@ -437,7 +452,7 @@ class Prefetcher:
                     if result.error:
                         status = result.response.get("status_code")
                         if (self.router and not self.router.force_twexapi and _recorded_provider(request) and not scope.cursor
-                                and (status in (200, 401) or (status is not None and status >= 500))):
+                                and (status in (200, 401, 429) or (status is not None and status >= 500))):
                             retry_first_page = True
                             continue
                         if status in {401, 402, 403, 429}:

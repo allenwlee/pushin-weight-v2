@@ -199,28 +199,35 @@ def test_failed_cycle_does_not_advance_the_cursor(harvest):
     )
 
 
-def test_cycle_after_a_failure_recovers_the_missed_span(harvest):
-    """THE KEY LIFECYCLE PROPERTY.
+def test_cycle_after_a_failure_recovers_the_missed_span(harvest, monkeypatch):
+    """A failed search keeps its window covered even after the live lookback moves."""
+    from django.utils import timezone as django_timezone
 
-    Cycle 2 fails, so cycle 3's window must still reach back far enough to
-    cover what cycle 2 was supposed to sweep. Without the hold, a transient
-    429 would permanently lose a window.
-    """
+    from core.models import CallState, HarvestBacklogWindow
+
+    slot = [(datetime.now(timezone.utc) - timedelta(hours=1)).replace(second=0, microsecond=0)]
+    monkeypatch.setattr(django_timezone, "now", lambda: slot[0])
+    monkeypatch.setattr(CycleRunner, "_wall_now", lambda self: slot[0])
     call = [_call()]
     a1, _ = harvest(call, [[_tweet("1")]])
-    a2, _ = harvest(call, [XClientRateLimitError("429")])
-    a3, _ = harvest(call, [[_tweet("3")]])
+    slot[0] += timedelta(minutes=15)
+    a2, failure = harvest(call, [XClientRateLimitError("429")])
+    assert int(CallState.objects.get().last_completed_at.timestamp()) == _window(a1)[1]
+    assert failure["calls"][0]["cursor_advanced"] is False
+    window = HarvestBacklogWindow.objects.get(pk=failure["calls"][0]["backlog_window_id"])
+    assert (int(window.remaining_since.timestamp()), int(window.remaining_until.timestamp())) == _window(a2)
+    assert window.remaining_since.timestamp() <= _window(a1)[1]
 
-    cycle1_until = _window(a1)[1]
-    cycle2_until = _window(a2)[1]
-    cycle3_since = _window(a3)[0]
-
-    assert cycle3_since <= cycle1_until, (
-        "cycle 3 did not reach back to cycle 1's end; the failed cycle's "
-        "window was skipped"
-    )
-    assert cycle3_since <= cycle2_until, (
-        "cycle 3 does not cover the span cycle 2 failed to fetch"
+    slot[0] += timedelta(minutes=15)
+    a3, recovered = harvest(call, [[_tweet("3")]])
+    assert _window(a3)[1] > _window(a2)[1]
+    # It is safe for the live search to move forward if the missed interval
+    # is still durably pending or the replay actually searched it.
+    assert (
+        _window(a3)[0] <= _window(a1)[1]
+        or HarvestBacklogWindow.objects.filter(pk=window.pk).exists()
+        or any(item.get("window_id") == window.pk and item.get("status") == "completed"
+               for item in recovered.get("backlog_replays", []))
     )
 
 
@@ -315,7 +322,7 @@ def test_one_failing_call_does_not_stall_the_others_cursors(harvest):
     # B1 fails, B2 succeeds (script is consumed in call order).
     harvest(calls, [XClientRateLimitError("429"), [_tweet("1")]])
 
-    assert not CallState.objects.filter(call_id="B1").exists()
+    assert CallState.objects.get(call_id="B1").last_completed_at is None
     assert CallState.objects.filter(call_id="B2").exists(), (
         "a failure on an earlier call blocked a later call's cursor"
     )
