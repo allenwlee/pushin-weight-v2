@@ -28,6 +28,7 @@ RELEASE_LABELS = frozenset(
 _RELEASE = re.compile(
     r"\b(?:releas(?:e[ds]?|ing)|launch(?:ed|es|ing)?|introduc(?:e[ds]?|ing)|"
     r"unveil(?:ed|s|ing)?|announc(?:e[ds]?|ing)|now available|available now|"
+    r"(?:is|are) (?:now )?out(?!\s+of\b)|"
     r"open[- ]sourc(?:e[ds]?|ing)|open[- ]weights?|new (?:model|checkpoint|agent|harness))\b|"
     r"发布|發布|推出|上线|上線|开源|開源|正式开放|正式開放|新模型|リリース|公開",
     re.IGNORECASE,

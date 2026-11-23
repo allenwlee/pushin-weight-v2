@@ -125,14 +125,43 @@ def test_twex_first_falls_back_and_then_probes_recovery(monkeypatch):
         return {"code": 200, "data": [{"tweet_id": "1", "user": {}}], "has_next_page": False}
     monkeypatch.setattr(client, "_twex_search_with_retry", twex_response)
     monkeypatch.setattr(client, "_get", lambda *a, **kw: calls.append("twitterapi") or {"tweets": [], "has_next_page": False})
-    with pytest.raises(XClientServerError):
-        client.run_search("example")
-    client.run_search("example")
+    assert client.run_search("example") == ([], False)
+    assert calls == ["twexapi", "twitterapi"]
+    assert client.run_search("example") == ([], False)
     from core.models import SearchProviderCircuit as CircuitRow
     CircuitRow.objects.filter(purpose=twex.purpose).update(open_until=timezone.now() - timedelta(seconds=1))
     client.run_search("example")
-    assert calls == ["twexapi", "twitterapi", "twexapi"]
+    assert calls == ["twexapi", "twitterapi", "twitterapi", "twexapi"]
     assert CircuitRow.objects.get(purpose=twex.purpose).open_until is None
+
+
+@pytest.mark.parametrize("provider", ["twitterapi", "twexapi"])
+def test_quiet_query_closes_recovery_probe_and_allows_next_search(monkeypatch, provider):
+    from core.models import SearchProviderCircuit as CircuitRow
+    from x_monitor.search_provider_circuit import SearchProviderCircuit
+    from x_monitor.x_client import XClient
+
+    now = timezone.now()
+    primary = SearchProviderCircuit("scheduled", provider="twitterapi", endpoint_family="search", threshold=1)
+    twex = SearchProviderCircuit("scheduled", provider="twexapi", endpoint_family="search", threshold=1)
+    selected = primary if provider == "twitterapi" else twex
+    selected.record_failure(now - timedelta(minutes=4))
+    client = XClient(
+        api_key="primary", twexapi_key="secondary", circuit=primary,
+        twex_circuit=twex, provider_order=(provider,),
+    )
+    calls = []
+    monkeypatch.setattr(client, "_get", lambda *a, **kw: calls.append("twitterapi") or {
+        "tweets": [], "has_next_page": False,
+    })
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: calls.append("twexapi") or {
+        "code": 200, "data": [], "has_next_page": False,
+    })
+
+    assert client.run_search("quiet search") == ([], False)
+    assert CircuitRow.objects.get(purpose=selected.purpose).open_until is None
+    assert client.run_search("another quiet search") == ([], False)
+    assert calls == [provider, provider]
 
 
 def test_scheduled_failure_uses_on_demand_and_persists_independent_circuits(monkeypatch):

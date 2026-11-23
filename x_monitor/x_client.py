@@ -34,6 +34,11 @@ from x_monitor.twitterapi_credentials import (
 log = logging.getLogger(__name__)
 
 
+def unexpected_empty_search_page(items, expected):
+    """A quiet first page is healthy unless recent query history predicts results."""
+    return not items and expected
+
+
 TWITTERAPI_BASE = "https://api.twitterapi.io"
 SEARCH_PATH = "/twitter/tweet/advanced_search"
 FOLLOWERS_PATH = "/twitter/user/followers"
@@ -73,7 +78,11 @@ class XClientRateLimitError(RuntimeError):
 
 
 class XClientServerError(RuntimeError):
-    """Raised on HTTP 5xx."""
+    """Raised when a provider cannot serve a usable search response."""
+
+
+class XClientRouteUnavailable(XClientServerError):
+    """Local pacing prevented this route from reaching transport."""
 
 
 def _search_results(data: Any) -> list[dict[str, Any]]:
@@ -233,6 +242,7 @@ class XClient:
     search_timeout_s: int = field(default=15, kw_only=True)
     search_max_retries: int = field(default=0, kw_only=True)
     force_twexapi: bool = field(default=False, kw_only=True)
+    default_credential_route: str | None = field(default=None, repr=False, kw_only=True)
     before_request: Callable[[float], None] | None = None
     after_response: Callable[[dict[str, Any]], None] | None = None
     on_exchange_start: Callable[[str, dict[str, Any]], Any] | None = None
@@ -284,7 +294,7 @@ class XClient:
         if not available:
             raise RuntimeError("No configured X data provider credential is available")
         if len(available) == 1 and available[0].startswith("twitterapi:") and not key:
-            return cls(api_key=credentials[available[0]])
+            return cls(api_key=credentials[available[0]], default_credential_route=available[0])
         from x_monitor.search_provider_circuit import SearchProviderCircuit
 
         interval = float(os.getenv("TWEXAPI_INTERVAL_SECONDS", "6"))
@@ -304,7 +314,8 @@ class XClient:
         return cls(api_key=primary_key or (credentials.get(primary_name) if primary_name else ""), twexapi_key=key, circuit=circuit,
                    twex_circuit=twex_circuit, provider_order=tuple(available), provider_credentials=credentials, provider_circuits=circuits,
                    twexapi_interval_s=interval, search_timeout_s=timeout,
-                   search_max_retries=retries, force_twexapi=force)
+                   search_max_retries=retries, force_twexapi=force,
+                   default_credential_route="twitterapi:" + purpose.value.replace("-", "_") if primary_key else primary_name)
 
     # --- low-level HTTP --------------------------------------------------
 
@@ -338,9 +349,10 @@ class XClient:
             n_attempts = attempt + 1
             if self.before_request is not None:
                 self.before_request(timeout_s or self.timeout_s)
-            trace_params = dict(params)
-            if credential_name:
-                trace_params["_credential_purpose"] = credential_name
+            trace_params = {**params, "_provider_source": "twitterapi"}
+            route = credential_name or self.default_credential_route
+            if route:
+                trace_params["_credential_purpose"] = route
             exchange = (
                 self.on_exchange_start(path, trace_params)
                 if self.on_exchange_start is not None else None
@@ -433,7 +445,12 @@ class XClient:
                 raise exc
             # Success — record into the per-instance log before returning.
             self._record_request(path, params, r, t0, n_attempts, credential_name=credential_name)
-            parsed = r.json()
+            try:
+                parsed = r.json()
+            except ValueError as exc:
+                if path == SEARCH_PATH and not capture_raw:
+                    raise XClientServerError("TwitterAPI.io returned invalid search JSON") from exc
+                raise
             return (r.content, parsed) if capture_raw else parsed
         if last_exc:
             raise last_exc
@@ -589,6 +606,10 @@ class XClient:
     def _twex_guarded_search(self, *args, **kwargs):
         try:
             result = self._twex_search_with_retry(*args, **kwargs)
+        except XClientRouteUnavailable:
+            if self.twex_circuit:
+                self.twex_circuit.abandon_probe()
+            raise
         except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError, ValueError):
             if self.twex_circuit:
                 self.twex_circuit.record_failure(datetime.now(timezone.utc))
@@ -610,7 +631,7 @@ class XClient:
             if not wait:
                 break
             if time.monotonic() - wait_started > 30:
-                raise TimeoutError("TwexAPI request slot unavailable before deadline")
+                raise XClientRouteUnavailable("TwexAPI request slot unavailable before deadline")
             time.sleep(min(wait, 1))
         params = {"searchTerms": [query], "sortBy": "Latest"}
         if cursor:
@@ -622,16 +643,16 @@ class XClient:
         release_interval = self.twexapi_interval_s
         try:
             if not self.circuit.fallback_owned(datetime.now(timezone.utc)):
-                raise TimeoutError("TwexAPI request lease expired before dispatch")
+                raise XClientRouteUnavailable("TwexAPI request lease expired before dispatch")
             if can_start_page is not None and not can_start_page():
                 raise TimeoutError("search deadline reached before TwexAPI dispatch")
             if self.before_request:
                 self.before_request(self.search_timeout_s)
             url = "https://api.twexapi.io" + path
-            token = self.on_exchange_start(url, params) if self.on_exchange_start else None
+            token = self.on_exchange_start(url, {**params, "_provider_source": "twexapi"}) if self.on_exchange_start else None
             exchange_started = True
             if not self.circuit.fallback_owned(datetime.now(timezone.utc)):
-                raise TimeoutError("TwexAPI request lease expired before transport")
+                raise XClientRouteUnavailable("TwexAPI request lease expired before transport")
             headers = {"Authorization": "Bearer " + self.twexapi_key}
             response = self._twex_transport(url, params, headers)
             if response.status_code == 429:
@@ -683,19 +704,22 @@ class XClient:
             exc = RuntimeError(f"TwexAPI HTTP error: {response.status_code}")
             exc.response_status_code = response.status_code
             raise exc
-        data = response.json()
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise XClientServerError("TwexAPI returned invalid search JSON") from exc
         if not isinstance(data, dict) or data.get("code") != 200 or not isinstance(data.get("data"), list):
-            raise ValueError("TwexAPI search response invalid")
+            raise XClientServerError("TwexAPI search response invalid")
         self._request_log.append({"provider": "twexapi", "path": path, "status_code": response.status_code,
                                   "duration_ms": int((time.monotonic() - started) * 1000), "n_results": len(data["data"])})
         log.info("search_provider=twexapi status=%s results=%s", response.status_code, len(data["data"]))
         return (response.content, data) if capture_raw else data
 
-    def _twex_search_with_retry(self, query, cursor, **kwargs):
+    def _twex_search_with_retry(self, query, cursor, *, retry_rate_limit=True, **kwargs):
         try:
             return self._twex_search(query, cursor, **kwargs)
         except XClientRateLimitError as exc:
-            if self.max_retries <= 0:
+            if not retry_rate_limit or self.max_retries <= 0:
                 raise
             wait = exc.retry_after_seconds
             if wait > 30:
@@ -710,7 +734,7 @@ class XClient:
         # A failed first page has not committed any coverage, so a different
         # credential may safely retry the identical bounded query. Never move
         # a continuation token or a partially received walk to another source.
-        if not self.provider_circuits or cursor is not None or self.force_twexapi:
+        if not (self.provider_circuits or self.twex_circuit) or cursor is not None or self.force_twexapi:
             yield from self._iter_search_pages_once(query, max_results, max_pages=max_pages,
                 max_per_page=max_per_page, since_time=since_time, cursor=cursor, can_start_page=can_start_page)
             return
@@ -727,7 +751,7 @@ class XClient:
                     yielded = True
                     yield page
                 return
-            except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError):
+            except (XClientServerError, XClientAuthError, XClientRateLimitError, requests.Timeout, requests.ConnectionError):
                 if yielded:
                     raise
                 excluded.add(provider)
@@ -794,20 +818,26 @@ class XClient:
                 params["cursor"] = cursor
             if provider == "twexapi":
                 adapter = TwexAPIProvider(self)
-                data = adapter.search_page(query, cursor, can_start_page=can_start_page)
+                try:
+                    options = {"retry_rate_limit": False} if selected_provider else {}
+                    data = adapter.search_page(query, cursor, can_start_page=can_start_page, **options)
+                except XClientRateLimitError as exc:
+                    if self.twex_circuit:
+                        self.twex_circuit.record_rate_limit(datetime.now(timezone.utc), exc.retry_after_seconds)
+                    raise
                 try:
                     page = adapter.normalize_page(data, page_number=page_number, max_results=remaining)
-                except (TypeError, ValueError, KeyError):
+                except (TypeError, ValueError, KeyError) as exc:
                     if self.twex_circuit:
                         self.twex_circuit.record_failure(datetime.now(timezone.utc))
-                    raise
-                if not page.items and (cursor or page.has_more or page.continuation_invalid):
+                    raise XClientServerError("TwexAPI search response invalid") from exc
+                if not page.items and (cursor or page.has_more or page.continuation_invalid or page.next_cursor):
                     if self.twex_circuit:
                         self.twex_circuit.record_failure(datetime.now(timezone.utc))
                     raise XClientServerError("TwexAPI empty page when continuation expected")
                 if page_number == 1 and not cursor:
                     expected = self.circuit.observe_query(query, nonempty=bool(page.items), now=datetime.now(timezone.utc))
-                    if not page.items and (expected or (self.twex_circuit and self.twex_circuit.is_probe())):
+                    if unexpected_empty_search_page(page.items, expected):
                         if self.twex_circuit:
                             self.twex_circuit.record_failure(datetime.now(timezone.utc))
                         raise XClientServerError("TwexAPI empty page on expected nonempty search")
@@ -822,13 +852,19 @@ class XClient:
                     credential_option = {"credential": credential, "credential_name": provider} if credential is not None else {}
                     data = adapter.search_page(query, cursor, limit=params["limit"], timeout_s=self.search_timeout_s,
                                                max_retries=self.search_max_retries, **credential_option)
-                    page = adapter.normalize_page(data, page_number=page_number, max_results=remaining)
-                    if not page.items and (page.has_more or page.continuation_invalid or cursor):
+                    try:
+                        page = adapter.normalize_page(data, page_number=page_number, max_results=remaining)
+                    except (TypeError, ValueError, KeyError) as exc:
+                        raise XClientServerError("TwitterAPI.io search response invalid") from exc
+                    if not page.items and (page.has_more or page.continuation_invalid or cursor or page.next_cursor):
                         raise XClientServerError("primary empty page when continuation expected")
                     if page_number == 1 and not cursor:
                         expected = active_circuit.observe_query(query, nonempty=bool(page.items), now=datetime.now(timezone.utc))
-                        if not page.items and (expected or active_circuit.is_probe()):
+                        if unexpected_empty_search_page(page.items, expected):
                             raise XClientServerError("primary empty page on expected nonempty search")
+                except XClientRateLimitError as exc:
+                    active_circuit.record_rate_limit(datetime.now(timezone.utc), exc.retry_after_seconds)
+                    raise
                 except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError):
                     active_circuit.record_failure(datetime.now(timezone.utc))
                     raise
@@ -992,8 +1028,7 @@ class XClient:
             raw_body, data = TwexAPIProvider(self).search_page(effective_query, None, capture_raw=True, raw_sink=receipt_sink)
             raw_items = data["data"]
             expected = self.circuit.observe_query(effective_query, nonempty=bool(raw_items), now=datetime.now(timezone.utc))
-            if not raw_items and (data.get("has_next_page") or data.get("next_cursor") or expected
-                                  or (self.twex_circuit and self.twex_circuit.is_probe())):
+            if not raw_items and (data.get("has_next_page") or data.get("next_cursor") or expected):
                 if self.twex_circuit:
                     self.twex_circuit.record_failure(datetime.now(timezone.utc))
                 raise XClientServerError("TwexAPI empty page on expected nonempty search")
@@ -1030,7 +1065,7 @@ class XClient:
                 active_circuit.record_failure(datetime.now(timezone.utc))
                 raise XClientServerError("primary empty page when continuation expected")
             expected = active_circuit.observe_query(effective_query, nonempty=bool(raw_items), now=datetime.now(timezone.utc))
-            if not raw_items and (expected or active_circuit.is_probe()):
+            if unexpected_empty_search_page(raw_items, expected):
                 active_circuit.record_failure(datetime.now(timezone.utc))
                 raise XClientServerError("primary empty page on expected nonempty search")
             active_circuit.record_success(datetime.now(timezone.utc))

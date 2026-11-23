@@ -104,14 +104,16 @@ def saved_posts(monkeypatch, count=1):
     return posts
 
 
-def test_stopped_recovery_keeps_capture_pending_until_resume(control, monkeypatch, settings):
+@pytest.mark.parametrize("pipeline", ["compressed8_pulse_v1", "two_role"])
+def test_stopped_recovery_keeps_capture_pending_until_resume(control, monkeypatch, settings, pipeline):
     from core import product_release_source_queue, source_metric_projection
     from monitor.tasks import recover_due_product_releases
 
+    monkeypatch.setenv("X_MONITOR_CLASSIFIER_PIPELINE", pipeline)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
     job, scope, result = captured_job()
     assert result["integration"]["status"] == "stopped"
     assert not models.Product.objects.exists()
-    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
     # Keep this recovery regression on its real saved-finding/acquisition paths.
     monkeypatch.setattr(product_release_source_queue, "drain_mapping_reconciliations", lambda **kw: {})
     monkeypatch.setattr(product_release_source_queue, "drain_observations", lambda **kw: {})
@@ -135,6 +137,20 @@ def test_stopped_recovery_keeps_capture_pending_until_resume(control, monkeypatc
     assert scope.outcome == "complete" and scope.raw_count == 0
 
 
+def test_unconfigured_control_still_drains_saved_findings(monkeypatch, settings):
+    from monitor import pulse_processing
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    settings.PULSE_CONTROL_DIRECTORY = ""
+    settings.PULSE_CONTROL_R2_BUCKET = ""
+    monkeypatch.setenv("X_MONITOR_CLASSIFIER_PIPELINE", "two_role")
+    calls = []
+    monkeypatch.setattr(pulse_processing, "drain_posts", lambda **kwargs: calls.append(kwargs) or {"processed": 1})
+    result = pulse_processing.process_saved_findings(limit=3, max_seconds=5)
+    assert result == {"status": "uncontrolled", "provider_calls": 0, "processed": 1}
+    assert calls == [{"limit": 3, "max_seconds": 5, "classified_only": True}]
+
+
 def test_unavailable_control_defers_without_spending_failure_retries(control, settings):
     settings.PULSE_CONTROL_DIRECTORY = ""
     job, scope, result = captured_job()
@@ -149,13 +165,14 @@ def test_unavailable_control_defers_without_spending_failure_retries(control, se
     assert recover(job)["jobs"][0]["integration"]["status"] == "complete"
 
 
-def test_legacy_route_integration_preserves_behavior(control, monkeypatch):
+def test_two_role_keeps_configured_identity_control_when_background_disabled(control, monkeypatch):
     monkeypatch.setenv("X_MONITOR_CLASSIFIER_PIPELINE", "two_role")
     _job, scope, result = captured_job()
-    assert result["integration"]["status"] == "complete"
-    assert scope.outcome == "complete"
-    assert models.Product.objects.get().repo_id == "lab/Model4"
-    assert pulse_control.read_status()["status"] == "stop_requested"
+    assert result["integration"]["status"] == "stopped"
+    scope.refresh_from_db()
+    assert scope.outcome == "pending"
+    assert not models.Product.objects.exists()
+    assert pulse_control.read_status()["status"] == "stopped"
 
 
 def test_stop_between_posts_acknowledges_only_after_first_commit(control, monkeypatch):

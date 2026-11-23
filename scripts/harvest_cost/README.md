@@ -24,7 +24,7 @@ Legacy alias: `python scripts/harvester_cycle_cost.py …` (delegates here).
 
 ## Rates
 
-Defaults from `docs/external_vendors/twitterapi*/twitterapi_index.md`.
+Defaults from `docs/external_vendors/tapi/api/index.md`.
 Override with `--pricing-file`, `--tweet-credits`, `--call-floor-credits`, `--credits-per-usd`.
 
 ## Cycle emit

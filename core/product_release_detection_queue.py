@@ -37,7 +37,7 @@ def _bounded_queue_lock():
                        [lock_previous, statement_previous])
 
 
-def enqueue_saved_post(post_id):
+def enqueue_saved_post(post_id, *, evidence_ready=False):
     """Write the outbox inside the transaction which persists the Post."""
     if not connection.in_atomic_block:
         raise ValueError("release detection outbox needs the Post transaction")
@@ -48,13 +48,13 @@ def enqueue_saved_post(post_id):
                VALUES (%s, %s, 0, '')
                ON CONFLICT (post_id) DO UPDATE SET
                  requested_at = GREATEST(product_release_detection_states.requested_at + INTERVAL '1 microsecond', EXCLUDED.requested_at),
-                 attempts = CASE WHEN product_release_detection_states.completed_at >= product_release_detection_states.requested_at
+                 attempts = CASE WHEN %s OR product_release_detection_states.completed_at >= product_release_detection_states.requested_at
                                  THEN 0 ELSE product_release_detection_states.attempts END,
-                 retry_at = CASE WHEN product_release_detection_states.completed_at >= product_release_detection_states.requested_at
+                 retry_at = CASE WHEN %s OR product_release_detection_states.completed_at >= product_release_detection_states.requested_at
                                  THEN NULL ELSE product_release_detection_states.retry_at END,
-                 error_code = CASE WHEN product_release_detection_states.completed_at >= product_release_detection_states.requested_at
+                 error_code = CASE WHEN %s OR product_release_detection_states.completed_at >= product_release_detection_states.requested_at
                                    THEN '' ELSE product_release_detection_states.error_code END""",
-            [post_id, timezone.now()],
+            [post_id, timezone.now(), evidence_ready, evidence_ready, evidence_ready],
         )
 
 
@@ -113,16 +113,25 @@ def drain_posts(*, limit=DEFAULT_DRAIN_LIMIT, max_seconds=30, post_ids=None, cla
         from core.classification_contract import (
             COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS,
         )
+        from core.classified_product_releases import TARGETED_RELEASE_REVISION
+        from x_monitor.attribution import _TWO_ROLE_ALLOWED_REVISION_TRIPLETS
+
+        two_role_revisions = [row[2] for row in _TWO_ROLE_ALLOWED_REVISION_TRIPLETS
+                              if row[2].startswith("stage1-two-role-merge-0731-v")]
 
         full_classification = Exists(models.PostBrandClassificationState.objects.filter(
             post_id=OuterRef("post_id"),
-            prompt_version__in=[revision[2] for revision in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS],
+            prompt_version__in=[*[revision[2] for revision in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS],
+                                *two_role_revisions],
             selected_final_judgment__isnull=False,
         ))
         release_only = Exists(models.PostBrandClassificationJudgment.objects.filter(
             post_id=OuterRef("post_id"), stage="content", selector_version="pulse-release-only-v1",
             validation_state="release_only",
-            prompt_version__in=[revision[0] for revision in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS],
+            prompt_version__in=[
+                *[revision[0] for revision in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS],
+                TARGETED_RELEASE_REVISION,
+            ],
         ))
         due = due.alias(classified_ready=full_classification | release_only)
         # A backlog awaiting classification cannot occupy every bounded slot
@@ -168,9 +177,154 @@ def drain_posts(*, limit=DEFAULT_DRAIN_LIMIT, max_seconds=30, post_ids=None, cla
                     if enrichment is None:
                         result["busy"] += 1
                         continue
+                    # A reply can cite this post as its parent. The parent's
+                    # durable outbox is also the wakeup for stale dependent
+                    # evidence; enqueue inside this transaction so a worker
+                    # crash cannot lose that wakeup.
+                    dependent_query = models.TargetedExtractionState.objects.filter(
+                        post__in_reply_to_id=post_id, role="model_release_extraction",
+                        prompt_version="model-release-extraction-v2", status="succeeded", updated_at__lte=requested,
+                    )
+                    dependents = list(dependent_query.select_for_update(skip_locked=True).order_by("post_id")[:50])
+                    for dependent in dependents:
+                        dependent_id = dependent.post_id
+                        if read_publication_findings(dependent_id) is None:
+                            enqueue_saved_post(dependent_id)
+                        models.TargetedExtractionState.objects.filter(pk=dependent.pk, status="succeeded").update(
+                            updated_at=requested + timedelta(microseconds=1),
+                        )
+                    if dependent_query.exists():
+                        models.ProductReleaseDetectionState.objects.filter(
+                            post_id=post_id, requested_at=requested,
+                        ).update(retry_at=timezone.now())
+                        result["busy"] += 1
+                        continue
                     findings = read_publication_findings(post_id)
                     if findings is None:
+                        from pathlib import Path
+                        from x_monitor.config import load_config
+
+                        targeted_enabled = load_config(Path("config.yaml")).targeted_extraction.enabled
+                        from x_monitor.attribution import _TWO_ROLE_ALLOWED_REVISION_TRIPLETS
+
+                        two_role_revisions = {row[2] for row in _TWO_ROLE_ALLOWED_REVISION_TRIPLETS
+                                              if row[2].startswith("stage1-two-role-merge-0731-v")}
+
+                        outstanding = models.TargetedExtractionState.objects.filter(
+                            post_id=post_id, role="model_release_extraction",
+                            prompt_version="model-release-extraction-v2", status__in=["pending", "failed"],
+                        ).first()
+                        if outstanding is not None:
+                            from pathlib import Path
+                            from x_monitor.config import load_config
+
+                            if outstanding.attempts >= load_config(Path("config.yaml")).harvest.enrichment.max_attempts:
+                                models.ProductReleaseDetectionState.objects.filter(
+                                    post_id=post_id, requested_at=requested,
+                                ).update(attempts=MAX_ATTEMPTS, retry_at=None, error_code="release_extraction_exhausted")
+                                result["failed"] += 1
+                                continue
+
+                        if outstanding is None and targeted_enabled:
+                            from core.classified_product_releases import selected_release_revision
+                            from core.targeted_extraction import request_targeted_release
+
+                            if selected_release_revision(post_id) is not None:
+                                previous = models.TargetedExtractionState.objects.filter(
+                                    post_id=post_id, role="model_release_extraction",
+                                    prompt_version="model-release-extraction-v2", status="succeeded",
+                                ).first()
+                                if previous is not None:
+                                    request_targeted_release(post_id, model=previous.model, reopen=True)
+                                    result["waiting_for_classification"] += 1
+                                    continue
+
+                        legacy_historical_report = enrichment.source_collection_job_id is not None
+                        if legacy_historical_report:
+                            from core.classified_product_releases import classifier_owns_release_extraction
+
+                            legacy_historical_report = not classifier_owns_release_extraction(post_id)
+                        if legacy_historical_report:
+                            from core.product_release_pipeline import persist_source
+                            from core.product_release_sources import stored_posts
+
+                            outcome = persist_source(stored_posts([post_id])[0])
+                            models.ProductReleaseDetectionState.objects.filter(
+                                post_id=post_id, requested_at=requested,
+                            ).update(completed_at=requested, attempts=0, retry_at=None, error_code="")
+                            result["processed"] += 1
+                            result["candidates"] += int(outcome["disposition"] != "no_signal")
+                            continue
+                        if (enrichment.source_collection_job_id is not None
+                                and models.TargetedExtractionState.objects.filter(
+                                    post_id=post_id, role="model_release_extraction",
+                                    prompt_version="model-release-extraction-v1", status="succeeded",
+                                ).exists()):
+                            models.ProductReleaseDetectionState.objects.filter(
+                                post_id=post_id, requested_at=requested,
+                            ).update(completed_at=requested, attempts=0, retry_at=None, error_code="")
+                            result["processed"] += 1
+                            continue
+
+                        brands = set(models.PostBrand.objects.filter(post_id=post_id).values_list("brand_id", flat=True))
+                        rows = list(models.PostBrandClassificationState.objects.filter(
+                            post_id=post_id, brand_id__in=brands,
+                        ).values_list("brand_id", "outcome", "prompt_version",
+                                      "selected_final_judgment__content_judgment__canonical_judgment"))
+                        from core.product_release_intake import SourceRecord, TextEvidence, detect
+
+                        post = enrichment.post
+                        texts = [TextEvidence(locator="post", kind="raw", text=post.text or "")]
+                        if post.quoted_text:
+                            texts.append(TextEvidence(locator="quote", kind="quote", text=post.quoted_text))
+                        parent_text = models.Post.objects.filter(pk=post.in_reply_to_id).values_list("text", flat=True).first()
+                        if parent_text:
+                            texts.append(TextEvidence(locator="parent", kind="quote", text=parent_text))
+                        candidate = detect(SourceRecord(namespace="x", source_id=str(post_id), texts=tuple(texts)))
+                        completed_without_release = (
+                            enrichment.classification_status == "succeeded"
+                            and brands and {row[0] for row in rows} == brands
+                            and all(row[1] in {"classified", "context_missing"} and row[2] in two_role_revisions
+                                    for row in rows)
+                            and all(isinstance(row[3], dict) and "releases_updates" not in row[3].get("post_types", [])
+                                    for row in rows)
+                            and candidate is None
+                            and not models.PostBrandSignal.objects.filter(
+                                post_id=post_id, post_type_id="releases_updates",
+                            ).exists()
+                        )
+                        if completed_without_release:
+                            models.ProductReleaseDetectionState.objects.filter(
+                                post_id=post_id, requested_at=requested,
+                            ).update(completed_at=requested, attempts=0, retry_at=None, error_code="")
+                            result["processed"] += 1
+                            continue
+                        if (targeted_enabled and enrichment.source_collection_job_id is None
+                                and enrichment.classification_status == "succeeded" and brands
+                                and {row[0] for row in rows} == brands
+                                and all(row[2] in two_role_revisions for row in rows)
+                                and (candidate is not None or models.PostBrandSignal.objects.filter(
+                                    post_id=post_id, post_type_id="releases_updates",
+                                ).exists() or any(isinstance(row[3], dict) and "releases_updates" in row[3].get("post_types", [])
+                                                  for row in rows))):
+                            from core.targeted_extraction import request_targeted_release
+
+                            model = models.PostBrandClassificationJudgment.objects.filter(
+                                post_id=post_id, stage="content", validation_state="validated",
+                            ).order_by("-created_at").values_list("model", flat=True).first() or "unassigned"
+                            request_targeted_release(post_id, model=model)
+                        elif (enrichment.source_collection_job_id is None
+                              and enrichment.classification_status == "succeeded" and brands
+                              and {row[0] for row in rows} == brands
+                              and any(row[2] not in two_role_revisions for row in rows)):
+                            models.PostEnrichmentState.objects.filter(pk=post_id, classification_status="succeeded").update(
+                                classification_status="pending", classification_attempts=0,
+                                classification_next_attempt_at=None, classification_error_code="",
+                            )
                         result["waiting_for_classification"] += 1
+                        models.ProductReleaseDetectionState.objects.filter(
+                            post_id=post_id, requested_at=requested,
+                        ).update(retry_at=timezone.now() + timedelta(minutes=5))
                         continue
                     outcomes = [resolve_saved_release_finding(claim_id=row["anchor_claim_id"]) for row in findings]
                     unresolved = sum(row["status"] == "unresolved" for row in outcomes)

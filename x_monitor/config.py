@@ -340,6 +340,7 @@ def _default_targeted_roles() -> dict[str, TargetedExtractionRoleConfig]:
         "job_listing_extraction": "job-listing-extraction-v2",
         "personnel_change_extraction": "personnel-change-extraction-v2",
         "profile_affiliation_extraction": "profile-affiliation-extraction-v2",
+        "model_release_extraction": "model-release-extraction-v2",
     }
     return {
         role: TargetedExtractionRoleConfig(

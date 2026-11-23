@@ -26,7 +26,7 @@ services:
       - key: PULSE_CONTROL_R2_BUCKET
         value: pushinweight-media-production
       - key: X_MONITOR_CLASSIFIER_PIPELINE
-        value: compressed8_pulse_v1
+        value: two_role
       - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
         value: "True"
       - key: PYTHON_VERSION
@@ -100,6 +100,26 @@ services:
       - key: PW_SERVING_DATABASE_ROLE
         value: pushinweight_web_serving
 
+  # Public provider notices have their own cadence and do not use harvest capacity.
+  - type: cron
+    name: pushinweight-provider-announcements
+    runtime: python
+    plan: starter
+    schedule: "*/15 * * * *"
+    buildCommand: ./build.sh
+    startCommand: python manage.py poll_x_provider_announcements --interval-minutes 15
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
+
   # --------------------------------------------------------------------------
   # Queue-isolated trend-narrative worker. Render cron remains the scheduler.
   # --------------------------------------------------------------------------
@@ -115,7 +135,7 @@ services:
       - key: PULSE_CONTROL_R2_BUCKET
         value: pushinweight-media-production
       - key: X_MONITOR_CLASSIFIER_PIPELINE
-        value: compressed8_pulse_v1
+        value: two_role
       - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
         value: "True"
       - key: PYTHON_VERSION
@@ -472,7 +492,7 @@ services:
       - key: PULSE_CONTROL_R2_BUCKET
         value: pushinweight-media-production
       - key: X_MONITOR_CLASSIFIER_PIPELINE
-        value: compressed8_pulse_v1
+        value: two_role
       - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
         value: "True"
       - key: R2_ACCOUNT_ID
@@ -550,7 +570,7 @@ services:
       - key: PULSE_CONTROL_R2_BUCKET
         value: pushinweight-media-production
       - key: X_MONITOR_CLASSIFIER_PIPELINE
-        value: compressed8_pulse_v1
+        value: two_role
       - key: PRODUCT_RELEASE_BACKGROUND_ENABLED
         value: "True"
       - key: R2_ACCOUNT_ID

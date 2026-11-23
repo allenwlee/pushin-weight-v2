@@ -3,8 +3,7 @@
 Version: v0.2.0-beta.1 (package `0.2.0b1`)
 Last updated: 2026-09-21 12:39:30 JST
 
-
-
+For provider contracts, measured behavior, and prices, see [TAPI research](../external_vendors/tapi/README.md). The [provider observability runbook](../operations/x-provider-observability.md) covers current fallback receipts.
 
 **Stack:** Django + gunicorn + WhiteNoise on Render (v2). The legacy v1
 Flask + macOS launchd system is retired.
@@ -172,8 +171,7 @@ verified by direct API test 2026-07-14 — see commits `a46020f` and
 
 **Pre-call validation:** `assert_under_length_cap()` in
 `x_monitor/queries.py` raises `ValueError` if the query string exceeds
-**512 characters**. Over-cap queries silently return 0 tweets on X — the
-loud-fail prevents credit burn.
+**512 UTF-8 bytes**. TAPI returned no posts at 513 bytes in the [November boundary probe](../external_vendors/comparisons/x-search-capabilities.md#keyword-search). The check prevents sending oversized queries.
 
 **Response shape:** `{ "tweets": [...], "has_next_page": bool, "next_cursor": "..."|null, "status": "success" }`.
 
@@ -260,7 +258,7 @@ to 50 tweet IDs).
 **Vendor contract:** page size is fixed at 20. Send only required `list_id` and
 the optional `cursor`; `page_size` is not a supported query parameter. See the
 vendored contract at
-`docs/external_vendors/twitterapi_docs/endpoint/get_list_members.md`.
+`docs/external_vendors/tapi/api/endpoint/get_list_members.md`.
 
 **Safety:** provider error status, malformed/partial pagination, missing or
 duplicate stable ids, and an empty first page produce an incomplete snapshot.
@@ -427,7 +425,7 @@ cookie-rot failure mode are gone.
   (shared call-planning library).
 - `x_monitor/attribution.py` — `attribute_to_brands()`, `compile_keyword_index()`
   (shared attribution library).
-- `x_monitor/queries.py` — `assert_under_length_cap()` (512-char query
+- `x_monitor/queries.py` — `assert_under_length_cap()` (512-byte UTF-8 query
   length guard).
 - `config.yaml` — `x_monitor_list_id`, `x_query_specs` (B1/B2/B3/C1/C2
   definitions), `enabled_models`.

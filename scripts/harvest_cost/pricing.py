@@ -11,8 +11,9 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-# Prefer renamed layout; fall back to pre-rename path on older checkouts.
+# Prefer the canonical vendor index, with fallbacks for older checkouts.
 _DEFAULT_REL_CANDIDATES = (
+    Path("docs/external_vendors/tapi/api/index.md"),
     Path("docs/external_vendors/twitterapi/twitterapi_index.md"),
     Path("docs/external_vendors/twitterapi_docs/twitterapi_index.md"),
 )

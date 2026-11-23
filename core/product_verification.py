@@ -386,6 +386,24 @@ def _proposal_source_gate(
     proposal: ProductVerificationProposal, *, namespace: str
 ) -> LegitimacyDecision:
     """Evaluate immutable source evidence plus current stable Account identity."""
+    from core.models import EventDossierClaim
+
+    if proposal.source_dossier_id and EventDossierClaim.objects.filter(
+        event_dossier_source__event_dossier_id=proposal.source_dossier_id,
+        extraction_version__startswith="pulse-classified-findings-v1:",
+        event_dossier_source__post_id=proposal.source_post_id,
+    ).exists():
+        from core.classified_product_releases import read_publication_findings
+
+        selected = read_publication_findings(proposal.source_post_id)
+        dossier = proposal.source_dossier
+        visited = set()
+        while dossier.merged_into_id and dossier.pk not in visited:
+            visited.add(dossier.pk)
+            dossier = dossier.merged_into
+        if (dossier.pk in visited or selected is None
+                or not any(row["dossier_id"] == str(dossier.pk) for row in selected)):
+            return LegitimacyDecision(False, "release_evidence_stale", ("selected_release_evidence:stale",))
     evidence = proposal.account_evidence or {}
     current_handle = str(proposal.account.handle or "").removeprefix("@")
     source_handle = str(proposal.account_handle_snapshot or "").removeprefix("@")
@@ -1061,11 +1079,22 @@ def drain_pending_verifications(
     """Drain due proposals after critical post-fetch work, within caller limits."""
     if max_requests < 1:
         return VerificationDrainResult(0, 0, 0)
+    from monitor.pulse_processing import identity_application, identity_control_selected
+
+    controlled = identity_control_selected()
+    if controlled:
+        with identity_application() as boundary:
+            if boundary.status != "running":
+                return VerificationDrainResult(0, 0, 0)
     owned_client = client is None
     http = client or httpx.Client(timeout=2.0)
     attempted = resolved = deferred = 0
     try:
         for _slot in range(max_requests):
+            if controlled:
+                with identity_application() as boundary:
+                    if boundary.status != "running":
+                        break
             now = timezone.now()
             claim_token = uuid.uuid4()
             with transaction.atomic():
@@ -1131,8 +1160,12 @@ def drain_pending_verifications(
                 break
             exact_payload = (proposal.hf_evidence or {}).get("_exact_model")
             if proposal.proposed_candidate_id and isinstance(exact_payload, dict):
-                result = hf_org_socials(namespace, client=http)
-                attempted += 1
+                saved_socials = (proposal.hf_evidence or {}).get("_validated_hf_org_socials")
+                if isinstance(saved_socials, dict):
+                    result = HFMetadataResult("matched", saved_socials)
+                else:
+                    result = hf_org_socials(namespace, client=http)
+                    attempted += 1
                 if result.outcome != "matched":
                     _record_hf_outcome(
                         proposal.pk,
@@ -1142,14 +1175,22 @@ def drain_pending_verifications(
                     )
                     continue
                 try:
-                    resolved += int(
-                        _finalize_new_publisher(
-                            proposal.pk,
-                            claim_token,
-                            model_payload=exact_payload,
+                    if controlled:
+                        with identity_application() as boundary:
+                            if boundary.status != "running":
+                                _record_hf_outcome(proposal.pk, claim_token, HFMetadataResult("deferred", result.payload),
+                                                   evidence_key="_validated_hf_org_socials")
+                                deferred += 1
+                                break
+                            resolved += int(_finalize_new_publisher(
+                                proposal.pk, claim_token, model_payload=exact_payload,
+                                socials_payload=result.payload or {},
+                            ))
+                    else:
+                        resolved += int(_finalize_new_publisher(
+                            proposal.pk, claim_token, model_payload=exact_payload,
                             socials_payload=result.payload or {},
-                        )
-                    )
+                        ))
                 except (IntegrityError, ValueError) as exc:
                     logger.warning(
                         "product verification proposal %s retained for review: %s",
@@ -1167,17 +1208,29 @@ def drain_pending_verifications(
                     )
                 continue
 
-            result = exact_model_metadata(proposal.candidate_repo_id, client=http)
-            attempted += 1
+            if not proposal.proposed_candidate_id and isinstance(exact_payload, dict):
+                result = HFMetadataResult("matched", exact_payload)
+            else:
+                result = exact_model_metadata(proposal.candidate_repo_id, client=http)
+                attempted += 1
             if proposal.proposed_candidate_id and result.outcome == "matched":
                 if _record_exact_for_socials(
                     proposal.pk, claim_token, result.payload or {}
                 ):
                     deferred += 1
             else:
-                resolved += int(
-                    _finalize_known_publisher(proposal.pk, claim_token, result)
-                )
+                if controlled:
+                    with identity_application() as boundary:
+                        if boundary.status != "running":
+                            if result.outcome == "matched":
+                                _record_exact_for_socials(proposal.pk, claim_token, result.payload or {})
+                            else:
+                                _record_hf_outcome(proposal.pk, claim_token, result, evidence_key="_rejected_model")
+                            deferred += 1
+                            break
+                        resolved += int(_finalize_known_publisher(proposal.pk, claim_token, result))
+                else:
+                    resolved += int(_finalize_known_publisher(proposal.pk, claim_token, result))
     finally:
         if owned_client:
             http.close()

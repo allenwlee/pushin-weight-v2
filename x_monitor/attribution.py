@@ -3588,12 +3588,13 @@ _TWO_ROLE_PREVIOUS_CONTENT_REVISION = "stage1-content-0731-v5"
 _TWO_ROLE_SELECTED_BRAND_REVISION = "stage1-brand-interpretation-0731-v5"
 _TWO_ROLE_PREVIOUS_MERGE_REVISION = "stage1-two-role-merge-0731-v5"
 _TWO_ROLE_SELECTED_CONTENT_REVISION = "stage1-content-0731-v7"
-_TWO_ROLE_SELECTED_MERGE_REVISION = "stage1-two-role-merge-0731-v7"
+_TWO_ROLE_SELECTED_MERGE_REVISION = "stage1-two-role-merge-0731-v8"
 _TWO_ROLE_ALLOWED_REVISION_TRIPLETS = frozenset({
     COMPRESSED_CLASSIFIER_REVISIONS,
     COMPRESSED_CLASSIFIER_PREVIOUS_REVISIONS,
     COMPRESSED_CLASSIFIER_IDENTITY_REVISIONS,
     ("stage1-content-0731-v6", _TWO_ROLE_SELECTED_BRAND_REVISION, "stage1-two-role-merge-0731-v6"),
+    (_TWO_ROLE_SELECTED_CONTENT_REVISION, _TWO_ROLE_SELECTED_BRAND_REVISION, "stage1-two-role-merge-0731-v7"),
     (
         _TWO_ROLE_CONTENT_REVISION,
         _TWO_ROLE_BRAND_REVISION,
@@ -4309,6 +4310,75 @@ def _two_role_trace(
     }
 
 
+def _filter_passing_hardware_release(content, brand, tweet, catalog, brand_id):
+    """Keep a separate launch from transferring onto a passing hardware mention."""
+    from x_monitor.compressed_classifier import (
+        _catalog_term_pattern,
+        _target_claims,
+    )
+
+    entries = catalog.get("brands", [])
+    entry = next((item for item in entries if item.get("brand_id") == brand_id), {})
+    visible = str(tweet.get("text") or "")
+    terms = [entry.get("display_name", ""), *entry.get("aliases", [])]
+    hardware = next((
+        match for term in terms if term
+        if (match := re.search(
+            _catalog_term_pattern(term).pattern + r"\s+(?:GPUs?|CPUs?|APUs?)\b",
+            visible, re.IGNORECASE,
+        ))
+    ), None)
+    if not hardware:
+        return content, brand
+    clause = re.split(r"[.!?\n]", visible[hardware.end():], maxsplit=1)[0]
+    if re.search(r"\b(?:go(?:es)? on sale|launch(?:es|ed|ing)?|now available|available now|ships? today)\b", clause, re.IGNORECASE):
+        return content, brand
+    prior = visible[:hardware.start()]
+    if not (re.search(r"\b(?:paired with|works? with|works? on|runs? on|running on|compatible with|using|on)\s+$",
+                      prior, re.IGNORECASE)
+            or re.search(r"\b(?:love|hate|prefer|(?:highly\s+)?recommend)\s+(?:(?:my|the|these|those)\s+)?$",
+                         prior, re.IGNORECASE)
+            or re.match(r"\s+(?:is|are)\s+(?:really\s+|very\s+)?(?:fantastic|excellent|amazing|great|good|terrible|awful)\b",
+                        visible[hardware.end():], re.IGNORECASE)):
+        return content, brand
+    distinct_release = re.search(
+        r"\b([A-Za-z][\w-]+)\s+v\d+(?:\.\d+)+\s+(?:is|are)\s+out\b[^.!?\n]*[.!?\n]",
+        prior, re.IGNORECASE,
+    )
+    product_names = [item if isinstance(item, str) else item.get("name", "")
+                     for item in entry.get("products", []) if isinstance(item, (str, dict))]
+    if any(re.search(r"(?<!\w)" + re.escape(str(name))
+                     + r"\s+v\d+(?:\.\d+)+\s+(?:is|are)\s+out\b", prior, re.IGNORECASE)
+           for name in [*terms, *product_names] if name):
+        return content, brand
+    if not distinct_release or any(
+        distinct_release.group(1).casefold() == str(term).casefold() for term in [*terms, *product_names] if term
+    ) or any(re.search(r"(?<!\w)" + re.escape(str(name)) + r"\s*$",
+                       prior[:distinct_release.end(1)], re.IGNORECASE)
+             for name in product_names if name) or any(
+        re.search(r"(?<!\w)" + re.escape(str(term)) + r"\s+$",
+                  prior[:distinct_release.start(1)], re.IGNORECASE)
+        for term in terms if term
+    ) or any(
+        re.search(r"(?<!\w)" + re.escape(str(term)) + r"[’']s\s*$",
+                  prior[:distinct_release.start(1)], re.IGNORECASE)
+        for term in terms if term
+    ):
+        return content, brand
+    state = {
+        "target_brand": brand_id, "tracked_brands": entries,
+        "source_text": visible, "context": tweet.get("context") or [],
+    }
+    target_release, target_evaluation = _target_claims(state)
+    if not target_release and "releases_updates" in content["post_types"]:
+        content = {**content, "post_types": [
+            value for value in content["post_types"] if value != "releases_updates"
+        ] or ["other"]}
+        if not target_evaluation and brand.get("sentiment") == "positive":
+            brand = {**brand, "sentiment": "neutral"}
+    return content, brand
+
+
 def classify_batch_pragmatics_full(
     tweets: list[dict[str, Any]],
     brand_registry: list,
@@ -4534,6 +4604,10 @@ def classify_batch_pragmatics_full(
         for brand_id in tweet.get("brand_ids") or []:
             content_value = content["by_brand"][brand_id]
             brand_value = brand["by_brand"][brand_id]
+            if selected_0731 and content_value.get("outcome") == "classified":
+                content_value, brand_value = _filter_passing_hardware_release(
+                    content_value, brand_value, tweet, tracked_catalog, brand_id,
+                )
             if selected_0731 and content_value.get("outcome") == "context_missing":
                 # Context-missing is a whole-row state.  The two independent
                 # roles can disagree on its representation, so the merge
@@ -4568,8 +4642,23 @@ def classify_batch_pragmatics_full(
             ),
         }
         if selected_0731:
+            from core.product_release_intake import SourceRecord, TextEvidence, detect
+
+            visible_sources = [TextEvidence(locator="post", kind="raw", text=str(tweet.get("text") or ""))]
+            visible_sources.extend(
+                TextEvidence(locator=f"context_{position}", kind="quote", text=part["text"])
+                for position, part in enumerate(tweet.get("context") or [])
+                if isinstance(part, dict) and isinstance(part.get("text"), str)
+            )
+            source_candidate = detect(SourceRecord(
+                namespace="x", source_id=tweet_id, texts=tuple(visible_sources),
+            ))
             result["untracked_brand_promotions"] = content["untracked_brand_promotions"]
             result["promoted_subjects"] = content["promoted_subjects"]
+            result["release_candidate"] = source_candidate is not None or any(
+                "releases_updates" in row.get("post_types", [])
+                for row in content["by_brand"].values()
+            )
         else:
             # The non-selected transports keep their v1-v3 wire contract so
             # old callers and stored trace fixtures remain valid.

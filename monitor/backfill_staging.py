@@ -19,7 +19,11 @@ from datetime import UTC, datetime, timedelta
 from django.conf import settings
 from django.db.models import Sum
 
-from core.collection_capture import begin_request, finish_request
+from core.collection_capture import (
+    begin_request,
+    ensure_x_provider_catalog,
+    finish_request,
+)
 from core.collection_staging import (
     adopt_retry_state,
     adopt_staging_receipt,
@@ -43,8 +47,9 @@ from monitor.backfill_prefetch import (
     PrefetchRateDeferred,
     _endpoint,
     _params,
-    _route_config,
     _recorded_provider,
+    _request_provider_fields,
+    _route_config,
     fetch_page,
 )
 from monitor.backfill_retry import (
@@ -105,10 +110,10 @@ class StagingPrefetcher(Prefetcher):
         with fenced_run(self.claim) as (_, run):
             self.retry.save(run)
 
-    def _routed_auth_fallback(self, request, status):
+    def _routed_provider_fallback(self, request, status):
         provider = _recorded_provider(request)
         order = self.router.provider_order if self.router else ()
-        return bool(status == 401 and not request.cursor_before and provider in order
+        return bool(status in {401, 429} and not request.cursor_before and provider in order
                     and order.index(provider) < len(order) - 1 and not self.router.force_twexapi)
 
     def _pending(self, scope):
@@ -139,7 +144,7 @@ class StagingPrefetcher(Prefetcher):
                 continue
             if ((request.http_method == "GET" or (request.http_method == "POST" and _recorded_provider(request) == "twexapi")) and request.transport_outcome in {"received", "transport_error", "timeout"}
                     and (transient(request.error_code, request.http_status, policy=self.retry.policy)
-                         or self._routed_auth_fallback(request, request.http_status))):
+                         or self._routed_provider_fallback(request, request.http_status))):
                 original_scope = copy(request.scope_run)
                 original_scope.cursor = request.cursor_before
                 require(request.request_config == _route_config(original_scope, _recorded_provider(request))
@@ -188,17 +193,19 @@ class StagingPrefetcher(Prefetcher):
                     "raw_results": len(ids), "response_bytes": len(result.body or b"")}
         cursor = body.get("next_cursor") if isinstance(body, dict) else None
         retryable = (transient(result.error, response["status_code"], policy=self.retry.policy)
-                     or self._routed_auth_fallback(request, response["status_code"]))
+                     or self._routed_provider_fallback(request, response["status_code"]))
         retry_after = None
         if retryable:
             provider = _recorded_provider(request)
             order = self.router.provider_order if self.router else ()
             another_provider = (provider in order and order.index(provider) < len(order) - 1
                                 and not request.cursor_before and not self.router.force_twexapi)
-            delay = 0 if another_provider and response["status_code"] in {401, 500, 502, 503, 504} else max(
-                random.uniform(5, 10), result.retry_after_seconds or 0)
-            retry_after = result.received_at + timedelta(seconds=max(
-                delay, result.retry_after_seconds or 0))
+            if another_provider and response["status_code"] in {401, 429, 500, 502, 503, 504}:
+                # Per-route cooldown is persisted independently of this scope.
+                retry_after = result.received_at
+            else:
+                delay = max(random.uniform(5, 10), result.retry_after_seconds or 0)
+                retry_after = result.received_at + timedelta(seconds=delay)
         # Receipt, counters and lightweight metadata commit together. No body is
         # passed to finish_request, so no immutable evidence archive is created.
         with fenced_run(self.claim) as (_, run):
@@ -226,7 +233,7 @@ class StagingPrefetcher(Prefetcher):
     def _failed(self, request, result):
         self._save(request, result)
         if (not transient(result.error, result.response.get("status_code"), policy=self.retry.policy)
-                and not self._routed_auth_fallback(request, result.response.get("status_code"))):
+                and not self._routed_provider_fallback(request, result.response.get("status_code"))):
             self._check_error(result)
 
     @staticmethod
@@ -240,6 +247,7 @@ class StagingPrefetcher(Prefetcher):
 
     def pages(self, deferred_scopes):
         self.router = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+        ensure_x_provider_catalog()
         key = self.router.api_key
         futures = {}
         admission_open = True
@@ -304,7 +312,8 @@ class StagingPrefetcher(Prefetcher):
                                     request = begin_request(attempt, scope, endpoint_url=_endpoint(scope, provider), cursor=scope.cursor,
                                         method="POST" if provider == "twexapi" else "GET",
                                         request_config=_route_config(scope, provider), request_category=CATEGORY,
-                                        request_group=group, request_revision=self.retry.policy)
+                                        request_group=group, request_revision=self.retry.policy,
+                                        **_request_provider_fields(provider or getattr(self.router, "default_credential_route", None)))
                                 self.metrics["retry_requests"] += int(group is not None)
                                 future = pool.submit(fetch_page, route or key, _params(scope), max_bytes=max_bytes, timeout=30)
                                 futures[future] = (scope, request, max_bytes)

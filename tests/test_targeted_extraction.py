@@ -45,6 +45,40 @@ def _config():
     return config
 
 
+def test_release_prompt_includes_saved_profile_and_all_official_affiliations():
+    import json
+
+    from core.models import BrandAccount, Role
+    from core.targeted_extraction import _prompts
+
+    post = _post("release-profile", text="DeepSeek released a model.", brand_ids=("deepseek",))
+    post.author_description = "The Qwen official account"
+    post.save(update_fields=["author_description"])
+    qwen = Brand.objects.create(nickname="qwen", display_name="Qwen")
+    official, _ = Role.objects.get_or_create(key="official")
+    BrandAccount.objects.create(brand=qwen, account=post.author, role=official)
+
+    _, prompt = _prompts("model_release_extraction", post, pulse_release=True)
+    payload = json.loads(prompt)
+    assert payload["author_affiliations"] == [
+        {"brand_id": "qwen", "role": "official", "reviewed": True}
+    ]
+    assert any(
+        source["text"] == "The Qwen official account"
+        for source in payload["author_profile_evidence"]["sources"]
+    )
+
+
+def test_release_prompt_includes_parent_passage():
+    import json
+    from core.targeted_extraction import _prompts
+
+    post = _post("release-parent", text="It is available now.")
+    context = [{"provenance": "local_parent", "text": "We introduce Model X."}]
+    _, prompt = _prompts("model_release_extraction", post, pulse_release=True, release_context=context)
+    assert json.loads(prompt)["context"] == context
+
+
 def test_replay_sensitive_targeted_roles_use_v2_identities():
     roles = _config().roles
     assert roles["job_listing_extraction"].prompt_version == (
@@ -100,6 +134,131 @@ def test_negative_post_makes_zero_targeted_calls():
     assert result.calls_made == 0
     assert called == []
     assert TargetedExtractionState.objects.count() == 0
+
+
+def test_incomplete_combined_release_can_be_filled_by_targeted_role(monkeypatch):
+    from core import classified_product_releases
+
+    post = _post("incomplete-combined", text="Qwen released Qwen4.", brand_ids=("qwen",))
+    monkeypatch.setattr(classified_product_releases, "classifier_owns_release_extraction", lambda _: True)
+    monkeypatch.setattr(classified_product_releases, "selected_release_revision", lambda _: None)
+    received = []
+    result = run_targeted_extractions(
+        post=post, post_types={"releases_updates"}, config=_config(), max_calls=1,
+        calls={"model_release_extraction": lambda *_: {"records": []}},
+        release_persist=lambda post, records, version: received.append((post.pk, version)) or (0, 0, 0),
+    )
+    assert result.calls_made == 1 and not result.failed_roles
+    assert received == [(post.pk, "model-release-extraction-v2")]
+
+
+def test_changed_source_does_not_reuse_old_release_answer(monkeypatch):
+    from core import classified_product_releases
+    from x_monitor import attribution
+
+    monkeypatch.setattr(classified_product_releases, "_selected_release_publication",
+                        lambda _: ({"content_fingerprint": "old"}, {}, ("legacy",)))
+    monkeypatch.setattr(attribution, "_validated_tracked_brand_catalog_snapshot", lambda _: {})
+    monkeypatch.setattr(attribution, "_two_role_fingerprint", lambda *_args, **_kwargs: "new")
+    assert not classified_product_releases.selected_release_matches("post", {})
+
+
+def test_release_fingerprint_tracks_profile_and_expanded_urls(monkeypatch):
+    from core.classified_product_releases import _targeted_release_fingerprint
+    from x_monitor import attribution
+
+    monkeypatch.setattr(attribution, "_two_role_fingerprint", lambda *_args, **_kwargs: "same-feed")
+    post = _post("release-inputs", source_urls=("https://huggingface.co/qwen/old",))
+    tweet = {"author_profile_evidence": {"display_name": "Old"}, "affiliations": []}
+    original = _targeted_release_fingerprint(post, tweet, {})
+    assert _targeted_release_fingerprint(post, {**tweet, "author_profile_evidence": {"display_name": "New"}}, {}) != original
+    post.entities = {"urls": [{"expanded_url": "https://huggingface.co/qwen/new"}]}
+    assert _targeted_release_fingerprint(post, tweet, {}) != original
+
+
+def test_release_fingerprint_ignores_unrelated_catalog_revision():
+    from core.classified_product_releases import _targeted_release_fingerprint
+
+    post = _post("release-catalog", text="We released Model X.")
+    tweet = {"tweet_id": str(post.pk), "text": post.text, "brand_ids": ["anthropic"]}
+    assert _targeted_release_fingerprint(post, tweet, {"revision": "old"}) == _targeted_release_fingerprint(
+        post, tweet, {"revision": "new"},
+    )
+
+
+def test_release_fingerprint_ignores_profile_observation_time():
+    from core.classified_product_releases import _targeted_release_fingerprint
+
+    post = _post("release-profile-clock")
+    tweet = {"tweet_id": str(post.pk), "text": post.text, "brand_ids": ["anthropic"],
+             "author_profile_evidence": {"sources": [{"id": "bio", "text": "same", "observed_at": "2026-11-01"}]}}
+    before = _targeted_release_fingerprint(post, tweet, {})
+    tweet["author_profile_evidence"]["sources"][0]["observed_at"] = "2026-11-02"
+    assert _targeted_release_fingerprint(post, tweet, {}) == before
+
+
+def test_malformed_source_url_does_not_break_targeted_prompt():
+    from core.targeted_extraction import _source_urls
+
+    post = _post("release-malformed-url", text="Model X is out. https:///broken https://example.com/valid")
+    assert _source_urls(post) == ("https://example.com/valid",)
+
+
+def test_release_retry_waits_after_deferral_or_provider_failure():
+    from datetime import timedelta
+    from django.utils import timezone
+    from monitor.enrichment_queue import targeted_release_due_q
+
+    post = _post("release-retry-delay")
+    now = timezone.now()
+    state = TargetedExtractionState.objects.create(
+        post=post, role="model_release_extraction", status="pending", content_identity="0" * 64,
+        model="test", prompt_version="model-release-extraction-v2",
+    )
+    assert not TargetedExtractionState.objects.filter(pk=state.pk).filter(targeted_release_due_q(now)).exists()
+    TargetedExtractionState.objects.filter(pk=state.pk).update(updated_at=now - timedelta(minutes=2))
+    assert TargetedExtractionState.objects.filter(pk=state.pk).filter(targeted_release_due_q(now)).exists()
+    state.status = "failed"
+    state.save(update_fields=["status"])
+    assert not TargetedExtractionState.objects.filter(pk=state.pk).filter(targeted_release_due_q(now)).exists()
+    TargetedExtractionState.objects.filter(pk=state.pk).update(updated_at=now - timedelta(minutes=6))
+    assert TargetedExtractionState.objects.filter(pk=state.pk).filter(targeted_release_due_q(now)).exists()
+
+
+def test_new_release_input_gets_a_fresh_retry_allowance():
+    from core.targeted_extraction import request_targeted_release
+
+    post = _post("release-new-input")
+    state = TargetedExtractionState.objects.create(
+        post=post, role="model_release_extraction", status="failed", content_identity="a" * 64,
+        model="test", prompt_version="model-release-extraction-v2", attempts=8,
+    )
+    request_targeted_release(post.pk, model="test", content_identity="b" * 64)
+    state.refresh_from_db()
+    assert state.status == "pending" and state.attempts == 0 and state.content_identity == "b" * 64
+
+
+def test_legacy_replay_does_not_overwrite_pending_pulse_release():
+    post = _post("pending-pulse-release", text="We released Model X.")
+    TargetedExtractionState.objects.create(
+        post=post, role="model_release_extraction", status="pending", content_identity="a" * 64,
+        model="test", prompt_version="model-release-extraction-v2",
+    )
+    calls = []
+    result = run_targeted_extractions(
+        post=post, post_types={"releases_updates"}, config=_config(), max_calls=1,
+        calls={"model_release_extraction": lambda *_: calls.append(True)},
+    )
+    assert result.calls_made == 0 and calls == []
+    assert TargetedExtractionState.objects.get(post=post, role="model_release_extraction").prompt_version == "model-release-extraction-v2"
+
+
+def test_historical_release_candidate_is_not_lost_when_brand_label_is_other():
+    from types import SimpleNamespace
+    from scripts.backfill_targeted import requirements
+
+    post = _post("historical-release-candidate", text="Maya v1.1 is out. It runs on NVIDIA GPUs.")
+    assert "model_release_extraction" in requirements(post, SimpleNamespace(targeted_extraction=_config()))
 
 
 def test_named_release_without_url_or_version_keeps_source_specific_pending_dossiers():
@@ -160,6 +319,9 @@ def test_named_release_with_unidentified_publisher_is_saved_and_searchable():
 
 
 def test_postfetch_dispatch_saves_and_queues_named_release_without_link():
+    from types import SimpleNamespace
+    from scripts.backfill_targeted import requirements
+
     from core import models
     from core.product_release_acquisition import queue_saved_release_claims
 
@@ -179,6 +341,13 @@ def test_postfetch_dispatch_saves_and_queues_named_release_without_link():
     }
     result = run_targeted_extractions(**arguments)
     assert result.calls_made == 1 and not result.failed_roles
+    models.PostTypeKey.objects.get_or_create(key="releases_updates")
+    models.SentimentKey.objects.get_or_create(key="neutral")
+    models.PostBrandSignal.objects.create(post=post, brand_id="nanbeige",
+                                          post_type_id="releases_updates", sentiment_id="neutral")
+    identity = requirements(post, SimpleNamespace(targeted_extraction=arguments["config"]))
+    state = TargetedExtractionState.objects.get(post=post, role="model_release_extraction")
+    assert identity["model_release_extraction"] == state.content_identity
     assert models.EventDossierClaim.objects.filter(claim_kind_reference__code="release_report").count() == 1
     assert models.EventDossierClaimCollectionJob.objects.count() == 1
     assert queue_saved_release_claims(persist=True)["queued"] == 0

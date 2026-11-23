@@ -1,8 +1,10 @@
 # Harvester cycle cost & budget table
 
+This page records an August cycle. See the [November production search cost comparison](../external_vendors/comparisons/2026-11-23-151025-production-search-cost-comparison.md) for a more recent measured workload and provider estimates.
+
 **Source cycle:** last complete 15-min group before the 402 errors started.
 **Bucket:** 2026-08-05 16:00:00 → 16:14:59 UTC (86 posts fetched, 0 errors).
-**Pricing source:** [docs/research/twitterapi_docs/INDEX.md#pricing](../research/twitterapi_docs/INDEX.md#pricing) (scraped 2026-08-06 from `https://twitterapi.io/pricing`).
+**Pricing source:** [archived TAPI pricing index](../external_vendors/tapi/api/index.md#pricing) (scraped 2026-08-06 from `https://twitterapi.io/pricing`).
 **Conversion:** 1 USD = 100,000 credits.
 
 ## Per-call cost
@@ -61,7 +63,7 @@ Per-call result counts are not currently logged at message-create level (`x_moni
 
 ## Files
 
-- `docs/research/twitterapi_docs/INDEX.md` — pricing knowledge (this table's source)
+- [TAPI pricing index](../external_vendors/tapi/api/index.md#pricing) — pricing knowledge (this table's source)
 - `x_monitor/x_client.py` — `SEARCH_PATH = /twitter/tweet/advanced_search` (the API callsite)
 - `x_monitor/run.py:958-978` — budget guard with the wrong `300 credits/page` constant
 - `config.yaml:65` — `daily_ceiling: 333` (read but not enforced)

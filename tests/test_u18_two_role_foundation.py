@@ -151,13 +151,7 @@ def test_mismatched_sibling_identity_leaves_the_post_invalid_without_a_fallback(
     (0, 0, 0), (1, 0, 0), (2, 2, 20), (3, 2, 20), (4, 4, 21),
 ])
 def test_reserved_pair_budget_never_starts_an_orphan_role(remaining, expected_calls, expected_valid):
-    from x_monitor.attribution import (
-        _TWO_ROLE_BRAND_REVISION,
-        _TWO_ROLE_CONTENT_REVISION,
-        _TWO_ROLE_MERGE_REVISION,
-        _TWO_ROLE_SELECTED_BRAND_REVISION,
-        classify_batch_pragmatics_full,
-    )
+    from x_monitor.attribution import classify_batch_pragmatics_full
 
     class LimitedTransport(TwoRoleTransport):
         @property
@@ -626,7 +620,8 @@ def test_real_cycle_classifier_path_sends_reviewed_affiliations_to_both_roles(mo
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
-def test_selected_cycle_uses_validated_english_timestamp_and_full_catalog(monkeypatch):
+@pytest.mark.parametrize("saved_english", ["", "Validated English literal"])
+def test_selected_cycle_uses_validated_english_timestamp_and_full_catalog(monkeypatch, saved_english):
     """M18 pin: v4 fixed slots get their final literal source packet."""
     from datetime import datetime, timezone
 
@@ -659,17 +654,13 @@ def test_selected_cycle_uses_validated_english_timestamp_and_full_catalog(monkey
     created_at = datetime(2026, 9, 18, 12, 34, 56, tzinfo=timezone.utc)
     post = Post.objects.create(
         tweet_id="v4-final-source", author=author, text="日本語の投稿", lang="ja",
-        created_at=created_at,
+        created_at=created_at, text_en=saved_english,
     )
     PostBrand.objects.create(post=post, brand=brand)
     PostEnrichmentState.objects.create(post=post)
 
-    def translate(rows, *_args, **_kwargs):
-        return [{
-            "tweet_id": row["tweet_id"], "lang_detected": "ja",
-            "text_en": "Validated English literal", "text_zh_cn": "经验证的英文直译",
-            "text_ja": row["text"], "translation_failed": False,
-        } for row in rows]
+    def translate(*_args, **_kwargs):
+        pytest.fail("Classification must not request a translation")
 
     transport = FixedSlotTwoRoleTransport()
     monkeypatch.setattr(literal_translation, "translate_batch_literal_plaintext", translate)
@@ -682,16 +673,18 @@ def test_selected_cycle_uses_validated_english_timestamp_and_full_catalog(monkey
 
     counters = CycleRunner(cfg=cfg)._run_post_fetch([], run_id="v4-final-packet")
 
-    assert counters["n_translated"] == 1
+    assert counters["n_translated"] == 0
     assert len(transport.calls) == 2
     for call in transport.calls:
         packet = call["payload"]
         evidence = packet["cases"]["P01"]["evidence"]
-        assert evidence["english_translation"] == "Validated English literal"
+        assert evidence["english_translation"] == saved_english
+        assert evidence["source_text"] == "日本語の投稿"
         assert evidence["created_at"] == created_at.isoformat()
         catalog = packet["tracked_brands"]["brands"]
         assert catalog == [{
             "brand_id": "v4_final",
+            "display_name": "Final Brand",
             "aliases": ["Final Brand", "Final Keyword", "v4_final"],
             "handles": ["final_author"],
             "domains": [],
@@ -701,4 +694,4 @@ def test_selected_cycle_uses_validated_english_timestamp_and_full_catalog(monkey
             "accounts": [{"handle": "final_author", "role": "official"}],
         }]
     post.refresh_from_db()
-    assert post.text_en == "Validated English literal"
+    assert post.text_en == saved_english

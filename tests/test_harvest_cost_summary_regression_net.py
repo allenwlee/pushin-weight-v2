@@ -9,7 +9,7 @@ from scripts.harvest_cost.pricing import load_pricing
 
 REPO = Path(__file__).resolve().parent.parent
 
-# Pinned defaults from docs/external_vendors/twitterapi*/twitterapi_index.md
+# Pinned defaults from docs/external_vendors/tapi/api/index.md
 PINNED_TWEET_CREDITS = 15
 PINNED_CREDITS_PER_USD = 100_000
 PINNED_FLOOR = 15

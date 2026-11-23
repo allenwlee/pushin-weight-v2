@@ -47,6 +47,7 @@ OPTION_TYPES = {
         "review_basis": str,
         "cutoff": str,
     },
+    "provider_announcements": {},
     "x_cycle": {"adapter": str, "credential_purpose": str},
     "x_backfill": {
         "adapter": str,
@@ -358,10 +359,11 @@ def validate_settings(job):
         )
     if job.schedule_driver == "external_render_cron":
         require(
-            job.operation in {"x_cycle", "chatter_search"}
-            and job.source_id == "x"
-            and job.purpose == "content",
-            "external driver reserved for X cycle",
+            job.purpose == "content" and (
+                (job.operation in {"x_cycle", "chatter_search"} and job.source_id == "x")
+                or (job.operation == "provider_announcements" and job.source_id == "twitterapi")
+            ),
+            "operation does not support an external cron",
         )
     ranked_chatter = (
         job.instruction_version == 2 and job.source_id == "x"

@@ -70,7 +70,6 @@ def recover_due_product_releases() -> dict[str, object]:
         drain_due_hf_acquisitions,
         recover_release_registrations,
     )
-    from core.product_release_detection_queue import drain_posts
     from core.product_release_source_queue import (
         drain_mapping_reconciliations,
         drain_observations,
@@ -78,12 +77,9 @@ def recover_due_product_releases() -> dict[str, object]:
     from core.source_metric_projection import recover_release_projection_followups
 
     try:
-        if load_config(Path("config.yaml")).llm.classifier_pipeline == "compressed8_pulse_v1":
-            from monitor.pulse_processing import process_saved_findings
+        from monitor.pulse_processing import process_saved_findings
 
-            detection = process_saved_findings()
-        else:
-            detection = drain_posts(limit=50, max_seconds=20)
+        detection = process_saved_findings()
     except Exception:
         logger.exception("Release detection recovery failed; later wake-up can retry")
         detection = {"status": "error"}

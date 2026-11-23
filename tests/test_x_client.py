@@ -58,6 +58,7 @@ def test_exchange_receipts_include_each_physical_retry_and_response_body(monkeyp
 
     assert client._get("/twitter/tweet/advanced_search", {"query": "Qwen"}) == {"tweets": []}
     assert len(starts) == 2
+    assert [params["_provider_source"] for _, params in starts] == ["twitterapi", "twitterapi"]
     assert [token for token, _ in finishes] == [1, 2]
     assert [receipt["status_code"] for _, receipt in finishes] == [503, 200]
     assert [receipt["body"] for _, receipt in finishes] == [b"busy", b'{"tweets":[]}']
