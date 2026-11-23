@@ -1535,3 +1535,521 @@ def test_cycle_publishes_sibling_when_release_brand_identity_is_disputed(monkeyp
     assert models.PostBrandClassificationState.objects.get(post=state.post, brand_id="qwen").outcome == "context_missing"
     assert read_publication_findings(state.pk)[0]["finding"]["brand_id"] is None
     assert not models.PostBrandClassificationJudgment.objects.filter(post=state.post, validation_state="release_only").exists()
+
+
+def test_promotion_retry_preserves_completed_feed_when_later_vote_loses_context(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+    retry = False
+
+    def responses(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['binding:missing_subject']['noul'] = 0.9
+            if retry:
+                result['answers']['identity_namesake_only']['noul'] = 0.9
+        return result
+
+    transport.messages_create = responses
+    runner._run_post_fetch([], run_id='promotion-first')
+    first = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    assert first.outcome == 'classified'
+    selected_id = first.selected_final_judgment_id
+    before = list(models.PostBrandSignal.objects.filter(post=state.post).values_list('post_type_id', 'sentiment_id'))
+    release = read_publication_findings(state.pk)
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    retry = True
+    runner._run_post_fetch([], run_id='promotion-retry')
+    first.refresh_from_db()
+    assert first.outcome == 'classified'
+    assert first.selected_final_judgment_id == selected_id
+    assert list(models.PostBrandSignal.objects.filter(post=state.post).values_list('post_type_id', 'sentiment_id')) == before
+    assert read_publication_findings(state.pk) == release
+
+
+def test_completed_promotion_retry_keeps_prior_feed_and_records_reason(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+    retry = False
+
+    def responses(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['binding:missing_subject']['noul'] = 0.1 if retry else 0.9
+            if retry:
+                result['answers']['identity_namesake_only']['noul'] = 0.9
+        return result
+
+    transport.messages_create = responses
+    runner._run_post_fetch([], run_id='promotion-unresolved')
+    first = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    selected_id = first.selected_final_judgment_id
+    original_signals = list(models.PostBrandSignal.objects.filter(post=state.post).values_list('post_type_id', 'sentiment_id'))
+    original_release = read_publication_findings(state.pk)
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    retry = True
+    runner._run_post_fetch([], run_id='promotion-resolved')
+    first.refresh_from_db()
+    state.refresh_from_db()
+    assert state.classification_status == 'succeeded'
+    assert first.selected_final_judgment_id == selected_id
+    assert list(models.PostBrandSignal.objects.filter(post=state.post).values_list('post_type_id', 'sentiment_id')) == original_signals
+    assert read_publication_findings(state.pk) == original_release
+    assert models.PostBrandClassificationJudgment.objects.filter(
+        post=state.post, stage='final', changes_json__promotion_retry_reason='fill_unresolved_promotion',
+    ).exists()
+
+
+def test_promotion_retry_reassesses_when_source_text_materially_changes(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+    retry = False
+
+    def responses(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['binding:missing_subject']['noul'] = 0.9
+            if retry:
+                result['answers']['identity_namesake_only']['noul'] = 0.9
+        return result
+
+    transport.messages_create = responses
+    runner._run_post_fetch([], run_id='material-first')
+    first = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    assert first.outcome == 'classified'
+    selected_id = first.selected_final_judgment_id
+    state.post.text += ' The quoted context has changed.'
+    state.post.save(update_fields=['text'])
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    retry = True
+    runner._run_post_fetch([], run_id='material-retry')
+    first.refresh_from_db()
+    assert first.selected_final_judgment_id != selected_id
+    assert first.outcome == 'context_missing'
+    assert first.selected_final_judgment.changes_json['feed_replacement_reason'] == 'feed_material_source_changed'
+
+
+def test_ambiguous_legacy_promotion_retry_keeps_feed_and_fills_release(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+    document = deepcopy(transport.document)
+    transport.document['release_findings'] = {'schema': 'invalid', 'findings': []}
+    retry = False
+
+    def responses(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['binding:missing_subject']['noul'] = 0.1 if retry else 0.9
+            if retry:
+                result['answers']['identity_namesake_only']['noul'] = 0.9
+        return result
+
+    transport.messages_create = responses
+    runner._run_post_fetch([], run_id='ambiguous-first')
+    first = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    selected_id = first.selected_final_judgment_id
+    assert first.outcome == 'classified'
+    assert read_publication_findings(state.pk) is None
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    transport.document = document
+    retry = True
+    runner._run_post_fetch([], run_id='ambiguous-retry')
+    first.refresh_from_db()
+    state.refresh_from_db()
+    assert state.classification_status == 'succeeded'
+    assert first.selected_final_judgment_id == selected_id
+    assert first.outcome == 'classified'
+    assert read_publication_findings(state.pk)[0]['finding']['observed_name'] == 'Qwen4'
+    assert models.PostBrandClassificationJudgment.objects.filter(
+        post=state.post, stage='final', changes_json__promotion_retry_reason='fill_unresolved_promotion',
+    ).exists()
+
+
+def test_promotion_retry_keeps_completed_brand_while_other_brand_improves(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    deepseek = models.Brand.objects.create(nickname='deepseek', display_name='DeepSeek')
+    models.PostBrand.objects.create(post=state.post, brand=deepseek)
+    catalog = [
+        {'brand_id': 'qwen', 'aliases': ['Qwen'], 'products': [], 'accounts': []},
+        {'brand_id': 'deepseek', 'aliases': ['DeepSeek'], 'products': [], 'accounts': []},
+    ]
+    monkeypatch.setattr(cycle, '_classification_tracked_brand_catalog', lambda: catalog)
+    original = transport.messages_create
+    retry = False
+
+    def responses(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            request = json.loads(kwargs['messages'][0]['content'])
+            brands = request['state']['target_brands']
+            qwen, other = brands.index('qwen'), brands.index('deepseek')
+            result['answers']['binding:missing_subject']['noul'] = 0.9
+            result['answers'][f'b{qwen}:relevant']['noul'] = 0.9
+            result['answers'][f'b{other}:relevant']['noul'] = 0.9
+            result['answers'][f'b{qwen if retry else other}:identity_namesake_only']['noul'] = 0.9
+        return result
+
+    transport.messages_create = responses
+    runner._run_post_fetch([], run_id='mixed-first')
+    qwen = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    other = models.PostBrandClassificationState.objects.get(post=state.post, brand=deepseek)
+    assert qwen.outcome == 'classified' and other.outcome == 'context_missing'
+    selected_id = qwen.selected_final_judgment_id
+    release_fingerprint = selected_release_revision(state.pk)['content_fingerprint']
+    catalog[0]['aliases'].append('Additional Qwen alias')
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    retry = True
+    runner._run_post_fetch([], run_id='mixed-retry')
+    qwen.refresh_from_db()
+    other.refresh_from_db()
+    assert qwen.outcome == 'classified' and qwen.selected_final_judgment_id == selected_id
+    assert other.outcome == 'classified'
+    assert other.selected_final_judgment.changes_json['feed_replacement_reason'] == 'unresolved_feed_improved'
+    assert read_publication_findings(state.pk)
+    assert selected_release_revision(state.pk)['content_fingerprint'] == release_fingerprint
+
+
+def test_promotion_retry_does_not_reclassify_completed_feed_from_identity_vote(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+    retry = False
+
+    def responses(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['binding:missing_subject']['noul'] = 0.9
+            if retry:
+                result['answers']['identity_namesake_only']['noul'] = 0.9
+                result['answers']['relevant']['noul'] = 0.1
+        return result
+
+    transport.messages_create = responses
+    runner._run_post_fetch([], run_id='identity-first')
+    prior = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    assert prior.outcome == 'classified'
+    selected_id = prior.selected_final_judgment_id
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    retry = True
+    runner._run_post_fetch([], run_id='identity-exclusion')
+    prior.refresh_from_db()
+    assert prior.outcome == 'classified'
+    assert prior.selected_final_judgment_id == selected_id
+
+
+def test_promotion_retry_preserves_legacy_completed_feed_without_partial_marker(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+    retry = False
+
+    def responses(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['binding:missing_subject']['noul'] = 0.9
+            if retry:
+                result['answers']['identity_namesake_only']['noul'] = 0.9
+        return result
+
+    transport.messages_create = responses
+    runner._run_post_fetch([], run_id='legacy-promotion-first')
+    selected = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    final = selected.selected_final_judgment
+    selected_id = final.pk
+    final.changes_json.pop('feed_axes_complete')
+    final.changes_json.pop('feed_input_fingerprint')
+    final.save(update_fields=['changes_json'])
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    retry = True
+    runner._run_post_fetch([], run_id='legacy-promotion-retry')
+    selected.refresh_from_db()
+    assert selected.outcome == 'classified'
+    assert selected.selected_final_judgment_id == selected_id
+
+
+def test_promotion_retry_new_brand_does_not_replace_completed_brand(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+    retry = False
+
+    def responses(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['binding:missing_subject']['noul'] = 0.9
+            if retry:
+                request = json.loads(kwargs['messages'][0]['content'])
+                brands = request['state']['target_brands']
+                qwen = brands.index('qwen')
+                other = brands.index('deepseek')
+                result['answers'][f'b{qwen}:identity_namesake_only']['noul'] = 0.9
+                result['answers'][f'b{other}:relevant']['noul'] = 0.9
+        return result
+
+    transport.messages_create = responses
+    runner._run_post_fetch([], run_id='new-brand-first')
+    qwen = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    selected_id = qwen.selected_final_judgment_id
+    deepseek = models.Brand.objects.create(nickname='deepseek', display_name='DeepSeek')
+    models.PostBrand.objects.create(post=state.post, brand=deepseek)
+    catalog = [
+        {'brand_id': 'qwen', 'aliases': ['Qwen'], 'products': [], 'accounts': []},
+        {'brand_id': 'deepseek', 'aliases': ['DeepSeek'], 'products': [], 'accounts': []},
+    ]
+    monkeypatch.setattr(cycle, '_classification_tracked_brand_catalog', lambda: catalog)
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    retry = True
+    runner._run_post_fetch([], run_id='new-brand-retry')
+    qwen.refresh_from_db()
+    assert qwen.outcome == 'classified'
+    assert qwen.selected_final_judgment_id == selected_id
+    assert models.PostBrandClassificationState.objects.get(post=state.post, brand=deepseek).outcome == 'classified'
+
+
+def test_resolved_positive_promotion_retains_audit_judgment(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    state.post.text += ' Try OrbitChat today!'
+    state.post.save(update_fields=['text'])
+    transport.document['entities'].append({
+        'name': 'OrbitChat', 'source': 'post', 'evidence': 'Try OrbitChat today!',
+    })
+    original = transport.messages_create
+    retry = False
+
+    def responses(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['binding:missing_subject']['noul'] = 0.1 if retry else 0.9
+            if retry:
+                result['answers']['untracked_pitch']['noul'] = 0.9
+                result['answers']['binding:S0:pitch']['noul'] = 0.9
+        return result
+
+    transport.messages_create = responses
+    runner._run_post_fetch([], run_id='positive-promotion-first')
+    previous = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    selected_id = previous.selected_final_judgment_id
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    retry = True
+    runner._run_post_fetch([], run_id='positive-promotion-retry')
+    previous.refresh_from_db()
+    assert previous.selected_final_judgment_id == selected_id
+    promotion = models.PostUntrackedBrandPromotion.objects.get(post=state.post)
+    assert promotion.final_judgment_id is not None
+    assert promotion.final_judgment.changes_json['promotion_retry_reason'] == 'fill_unresolved_promotion'
+
+
+def test_replaying_old_generation_without_feed_fingerprint_is_idempotent(monkeypatch):
+    state, publication = captured_publication(monkeypatch)
+    selected = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    final = selected.selected_final_judgment
+    final.changes_json.pop('feed_input_fingerprint')
+    final.save(update_fields=['changes_json'])
+    previous = read_publication_findings(state.pk)
+    cycle._publish_stage1_classification(**publication)
+    selected.refresh_from_db()
+    assert selected.selected_final_judgment_id == final.pk
+    assert read_publication_findings(state.pk) == previous
+
+
+def test_retry_does_not_replace_an_unimproved_context_missing_judgment(monkeypatch):
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = transport.messages_create
+
+    def responses(**kwargs):
+        result = original(**kwargs)
+        if not kwargs['model'].startswith('deepseek'):
+            result['answers']['binding:missing_subject']['noul'] = 0.9
+            result['answers']['identity_namesake_only']['noul'] = 0.9
+        return result
+
+    transport.messages_create = responses
+    runner._run_post_fetch([], run_id='missing-first')
+    selected = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    assert selected.outcome == 'context_missing'
+    selected_id = selected.selected_final_judgment_id
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(classification_next_attempt_at=None)
+    runner._run_post_fetch([], run_id='missing-retry')
+    selected.refresh_from_db()
+    assert selected.outcome == 'context_missing'
+    assert selected.selected_final_judgment_id == selected_id
+
+
+def test_explicit_reassessment_can_replace_completed_feed_and_records_reason(monkeypatch):
+    state, publication = captured_publication(monkeypatch)
+    selected = models.PostBrandClassificationState.objects.get(post=state.post, brand_id='qwen')
+    prior_id = selected.selected_final_judgment_id
+    models.PostEnrichmentState.objects.filter(pk=state.pk).update(
+        claim_run_id='explicit-reassessment', claim_expires_at=timezone.now() + timedelta(minutes=5),
+    )
+    publication['run_id'] = 'explicit-reassessment'
+    publication['force_feed_reassessment'] = True
+    cycle._publish_stage1_classification(**publication)
+    selected.refresh_from_db()
+    assert selected.selected_final_judgment_id != prior_id
+    assert selected.selected_final_judgment.changes_json['feed_replacement_reason'] == 'explicit_reassessment'
+    assert read_publication_findings(state.pk)
+
+
+def test_worker_publishes_feed_and_retries_release_after_jev_overflow(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = compressed_classifier._context_limits
+
+    def limits(request):
+        result = original(request)
+        if any(key.startswith("release:") for key in request["questions"]):
+            result["context_valid"] = False
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    runner._run_post_fetch([], run_id="overflow-feed")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    assert len(transport.calls) == 2
+    selected = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment
+    assert selected is not None
+    from monitor.views import _enrich_posts_with_classifications
+
+    rows = _enrich_posts_with_classifications(models.Post.objects.filter(pk=state.pk))
+    assert rows[0]["classifications_by_brand"]["qwen"]["classification_status"] == "classified"
+    assert rows[0]["classifications_by_brand"]["qwen"]["post_types"]
+    assert selected_release_revision(state.pk) is None
+    assert read_publication_findings(state.pk) is None
+
+
+def test_worker_saves_release_when_only_release_questions_fit(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = compressed_classifier._context_limits
+
+    def limits(request):
+        result = original(request)
+        if any(not key.startswith("release:") for key in request["questions"]):
+            result["context_valid"] = False
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    runner._run_post_fetch([], run_id="overflow-release")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    assert len(transport.calls) == 2
+    assert not models.PostBrandClassificationState.objects.filter(post_id=state.pk).exists()
+    assert selected_release_revision(state.pk) is not None
+    assert read_publication_findings(state.pk)[0]["finding"]["observed_name"] == "Qwen4"
+
+
+def test_overflow_retry_finishes_release_without_replacing_saved_feed(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = compressed_classifier._context_limits
+
+    def limits(request):
+        result = original(request)
+        keys = request["questions"]
+        if any(key.startswith("release:") for key in keys) and any(not key.startswith("release:") for key in keys):
+            result["context_valid"] = False
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    runner._run_post_fetch([], run_id="overflow-first")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    previous = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment_id
+    assert previous is not None
+    state.classification_next_attempt_at = timezone.now() - timedelta(seconds=1)
+    state.save(update_fields=["classification_next_attempt_at"])
+    runner._run_post_fetch([], run_id="overflow-retry")
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    assert len(transport.calls) == 4
+    assert models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment_id == previous
+    assert read_publication_findings(state.pk)[0]["finding"]["observed_name"] == "Qwen4"
+
+
+def test_overflow_retry_does_not_reuse_feed_after_source_changes(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    original = compressed_classifier._context_limits
+
+    def limits(request):
+        result = original(request)
+        keys = request["questions"]
+        if any(key.startswith("release:") for key in keys) and any(not key.startswith("release:") for key in keys):
+            result["context_valid"] = False
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    runner._run_post_fetch([], run_id="overflow-first-changed")
+    models.Post.objects.filter(pk=state.pk).update(text=state.post.text + " A correction follows.")
+    state.refresh_from_db()
+    state.classification_next_attempt_at = timezone.now() - timedelta(seconds=1)
+    state.save(update_fields=["classification_next_attempt_at"])
+    runner._run_post_fetch([], run_id="overflow-second-changed")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    request = json.loads(transport.calls[-1]["messages"][0]["content"])
+    assert any(not key.startswith("release:") for key in request["questions"])
+    assert selected_release_revision(state.pk) is None
+
+
+def test_overflow_with_unresolved_promotion_does_not_mark_feed_complete_for_release_retry(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    original_limits = compressed_classifier._context_limits
+    original_send = transport.messages_create
+
+    def limits(request):
+        result = original_limits(request)
+        keys = request["questions"]
+        if any(key.startswith("release:") for key in keys) and any(not key.startswith("release:") for key in keys):
+            result["context_valid"] = False
+        return result
+
+    def send(**kwargs):
+        result = original_send(**kwargs)
+        if not kwargs["model"].startswith("deepseek"):
+            result["answers"].pop("untracked_pitch", None)
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    monkeypatch.setattr(transport, "messages_create", send)
+    runner._run_post_fetch([], run_id="overflow-promotion-unknown")
+    state.refresh_from_db()
+    assert state.classification_status == "pending"
+    final = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment
+    assert final.changes_json.get("release_overflow_deferred") is not True
+
+
+def test_changed_source_overflow_publishes_new_feed_and_preserves_prior_release(monkeypatch):
+    from x_monitor import compressed_classifier
+
+    state, runner, transport = setup_cycle(monkeypatch)
+    runner._run_post_fetch([], run_id="complete-before-overflow")
+    saved = read_publication_findings(state.pk)
+    saved_fingerprint = selected_release_revision(state.pk)["content_fingerprint"]
+    previous = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment_id
+    assert saved[0]["finding"]["observed_name"] == "Qwen4"
+    models.Post.objects.filter(pk=state.pk).update(text=state.post.text + " A correction follows.")
+    state.refresh_from_db()
+    state.classification_status = "pending"
+    state.classification_next_attempt_at = timezone.now() - timedelta(seconds=1)
+    state.save(update_fields=["classification_status", "classification_next_attempt_at"])
+    original = compressed_classifier._context_limits
+
+    def limits(request):
+        result = original(request)
+        keys = request["questions"]
+        if any(key.startswith("release:") for key in keys) and any(not key.startswith("release:") for key in keys):
+            result["context_valid"] = False
+        return result
+
+    monkeypatch.setattr(compressed_classifier, "_context_limits", limits)
+    runner._run_post_fetch([], run_id="changed-overflow")
+    current = models.PostBrandClassificationState.objects.get(post_id=state.pk).selected_final_judgment_id
+    assert current != previous
+    assert read_publication_findings(state.pk)[0]["finding"] == saved[0]["finding"]
+    assert selected_release_revision(state.pk)["content_fingerprint"] == saved_fingerprint
+    assert len(transport.calls) == 4

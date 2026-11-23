@@ -1,4 +1,4 @@
-"""Real command, shared runner and PostgreSQL: jobs never borrow scheduled keys."""
+"""Real command, shared runner and PostgreSQL: credentials follow configured order."""
 import json
 from datetime import UTC, datetime
 from io import StringIO
@@ -358,12 +358,27 @@ def test_on_demand_key_is_selected_with_all_three_keys_present(pipeline, monkeyp
     assert run(ready_job())["collection_drained"]
 
 
-def test_missing_on_demand_key_never_falls_back_or_claims(pipeline, monkeypatch):
+def test_missing_all_provider_keys_does_not_use_legacy_key_or_claim(pipeline, monkeypatch):
+    monkeypatch.setattr(XClient, "from_env", REAL_FACTORY)
     monkeypatch.delenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", raising=False)
+    monkeypatch.delenv("TWITTERAPI_IO_SCHEDULED_API_KEY", raising=False)
+    monkeypatch.delenv("TWEXAPI_API_KEY", raising=False)
+    monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "test-legacy")
+    with pytest.raises(RuntimeError, match="No configured X data provider credential"):
+        run(ready_job())
+    assert not pipeline.requests and not CollectionRun.objects.exists()
+
+
+def test_missing_on_demand_key_uses_scheduled_key(pipeline, monkeypatch):
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+
+    monkeypatch.setattr(XClient, "from_env", REAL_FACTORY)
+    monkeypatch.delenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", raising=False)
+    monkeypatch.delenv("TWEXAPI_API_KEY", raising=False)
     monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "test-scheduled")
     monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "test-legacy")
-    with pytest.raises(RuntimeError, match="TWITTERAPI_IO_ON_DEMAND_API_KEY"):
-        run(ready_job())
+    client = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+    assert client.api_key == "test-scheduled"
     assert not pipeline.requests and not CollectionRun.objects.exists()
 
 

@@ -1048,7 +1048,7 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
-    def test_partial_hour_uses_the_actual_harvest_end_on_axis_and_tooltip(self):
+    def test_stale_harvest_does_not_freeze_the_axis_or_tooltip(self):
         from datetime import datetime, timedelta
         from unittest.mock import patch
         from zoneinfo import ZoneInfo
@@ -1059,23 +1059,24 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
             'brand': 'deepseek', 'tab': 'lang', 'window': 1, 'locale': 'en',
         }).json()
         self.assertEqual(len(baseline['days']), 288)
-        end = datetime.fromisoformat(baseline['days'][-1]) + timedelta(minutes=5)
-        post = Post.objects.create(tweet_id='partial-hour-last-post', created_at=end - timedelta(minutes=1), lang_detected='en', text='Synthetic last covered post.')
+        harvest_end = datetime.fromisoformat(baseline['days'][-1]) + timedelta(minutes=5)
+        post = Post.objects.create(tweet_id='partial-hour-last-post', created_at=harvest_end - timedelta(minutes=1), lang_detected='en', text='Synthetic last covered post.')
         PostBrand.objects.create(post=post, brand_id='deepseek')
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
                 for lag in (5, 10):
-                    with patch('monitor.views._dashboard_now', return_value=end + timedelta(minutes=lag)):
+                    now = harvest_end + timedelta(minutes=lag)
+                    with patch('monitor.views._dashboard_now', return_value=now):
                         context = self._context(browser)
                         page = context.new_page()
                         with page.expect_response(lambda response: '/dashboard/each/chart/' in response.url and response.status == 200) as response:
                             page.goto(f'{self.live_server_url}/dashboard/each?brand=deepseek&tab=lang&window=1&locale=en', wait_until='networkidle')
                         source = response.value.json()
-                        self.assertEqual(len(source['days']), 288 - lag // 5)
+                        self.assertEqual(len(source['days']), 288)
                         actual_end = datetime.fromisoformat(source['days'][-1]) + timedelta(minutes=5)
-                        self.assertEqual(actual_end, end)
-                        local_end = end.astimezone(ZoneInfo('Asia/Tokyo'))
+                        self.assertEqual(actual_end, now)
+                        local_end = now.astimezone(ZoneInfo('Asia/Tokyo'))
                         expected_clock = f"{local_end.hour % 12 or 12}:{local_end.minute:02d}{'am' if local_end.hour < 12 else 'pm'}"
                         for mode in ('percent', 'volume', 'percent'):
                             with self.subTest(lag=lag, mode=mode):
@@ -1083,7 +1084,7 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
                                 self._wait_for_chart(page, 'lang')
                                 state = page.evaluate(EACH_CHART_STATE)
                                 self.assertEqual(state['labels'], 24)
-                                self.assertEqual(state['lastTickText'], expected_clock, 'Axis must not claim unharvested time')
+                                self.assertEqual(state['lastTickText'], expected_clock, 'Axis follows the current closed boundary even when harvest is stale')
                                 title = page.evaluate("""() => {
                                   const c=Chart.getChart(document.querySelector('[data-each-canvas]'));
                                   const datasetIndex=c.data.datasets.findIndex(d=>d.categoryKey==='en');

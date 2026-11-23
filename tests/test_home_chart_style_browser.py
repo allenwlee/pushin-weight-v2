@@ -252,11 +252,11 @@ class HomeChartCoverageAxisBrowserTests(StaticLiveServerTestCase):
         self.harvested = timezone.now() - timedelta(minutes=47)
         seed_general_style_home(self, harvested_at=self.harvested)
 
-    def test_one_day_axis_ends_at_harvest_coverage_not_request_time(self) -> None:
+    def test_one_day_axis_ends_at_current_closed_boundary_not_stale_coverage(self) -> None:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
-                for locale, pattern in (("en", r"^\d{1,2}:\d{2}[ap]m$"), ("ja", r"^\d{2}:\d{2}$")):
+                for locale, pattern in (("en", r"^\d{1,2}:\d{2}[ap]m$"), ("ja", r"^\d{2}:\d{2}$"), ("zh_hans", r"^\d{2}:\d{2}$")):
                     run = open_page(browser, self.live_server_url)
                     page = run.page
                     goto_home(run, self.live_server_url, f"locale={locale}&window=1")
@@ -266,12 +266,29 @@ class HomeChartCoverageAxisBrowserTests(StaticLiveServerTestCase):
                         state["payload"]["harvest_coverage"]["chart_end_at"],
                         coverage_end.isoformat(),
                     )
+                    axis_end = closed_five_minute_boundary(timezone.now())
+                    self.assertEqual(
+                        state["payload"]["days"][-1],
+                        (axis_end - timedelta(minutes=5)).isoformat(),
+                    )
+                    self.assertGreater(len(state["payload"]["days"]), 280)
                     expected = page.evaluate(
                         "([end, locale]) => window.pwTime.clockText(new Date(end), locale)",
-                        [coverage_end.isoformat(), locale],
+                        [axis_end.isoformat(), locale],
                     )
                     self.assertEqual(state["lastTick"], expected)
                     self.assertRegex(state["lastTick"], pattern)
+                    self.assertNotEqual(
+                        state["lastTick"],
+                        page.evaluate(
+                            "([end, locale]) => window.pwTime.clockText(new Date(end), locale)",
+                            [coverage_end.isoformat(), locale],
+                        ),
+                    )
+                    self.assertTrue(any(state["payload"]["partial_buckets"]))
+                    status = page.locator("[data-pw-chart-status]")
+                    self.assertTrue(status.is_visible())
+                    self.assertEqual(status.inner_text(), {"en": "Recent chart data is incomplete", "ja": "直近のグラフデータは不完全です", "zh_hans": "近期图表数据不完整"}[locale])
                     run.context.close()
             finally:
                 browser.close()

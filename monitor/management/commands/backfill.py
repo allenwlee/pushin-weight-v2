@@ -736,6 +736,7 @@ class Command(BaseCommand):
     @staticmethod
     def _enrichment_status(state):
         from django.db.models import Q
+
         from core.models import PostEnrichmentState
         post_ids = list(dict.fromkeys(pid for unit in state["units"] for pid in unit["post_ids"]))
         complete = set(PostEnrichmentState.objects.filter(

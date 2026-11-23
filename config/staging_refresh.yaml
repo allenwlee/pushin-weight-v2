@@ -212,6 +212,8 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   excluded_tables:
+    # Provider health and pacing leases belong to their own environment.
+    - search_provider_circuits
     # Spending allowances are provisioned separately in each environment.
     - enrichment_budget_windows
     # Scope links cannot be copied when their rare-hit inbox parent is excluded.
@@ -288,6 +290,7 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    - search_provider_circuits
     - enrichment_budget_windows
     - product_release_detection_states
     # Pre-0132 snapshots lack the shared job vocabulary and assignments.
@@ -742,6 +745,7 @@ relations:
 
 scrub:
   truncate_tables:
+    - search_provider_circuits
     - enrichment_budget_windows
     - collection_scope_rare_hits
     - materialization_state

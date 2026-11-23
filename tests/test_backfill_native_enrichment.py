@@ -241,7 +241,10 @@ def test_saved_chinese_translation_uses_real_script_and_reuses_only_exact_paid_t
 ):
     from monitor.backfill_enrichment import replay_requested_saved_translation
     from monitor.cycle import CycleRunner
-    from monitor.enrichment_queue import HISTORICAL_SCRIPT_DEMAND, request_post_translation
+    from monitor.enrichment_queue import (
+        HISTORICAL_SCRIPT_DEMAND,
+        request_post_translation,
+    )
     from monitor.post_artifacts import literal_translation_artifact_complete
     from tests.test_deepinfra import _response
     from x_monitor import literal_translation
@@ -385,8 +388,9 @@ def test_partial_paid_packet_is_honest_and_does_not_starve_replay(native, outsta
     assert response.json()["results"][0]["status"] == ("deferred" if outstanding else "unavailable")
     # Repeated reader demands must not reset this owned request or reserve a
     # second daily slot. The historical owner can still resume pending work.
-    from core.models import PostSynthesisRateLimitBucket
     from django.utils.crypto import salted_hmac
+
+    from core.models import PostSynthesisRateLimitBucket
     capacity = PostSynthesisRateLimitBucket.objects.filter(
         scope_hash=salted_hmac("post-translation-capacity", "all", algorithm="sha256").hexdigest(),
     )
@@ -1077,7 +1081,7 @@ def test_saved_translation_replay_does_not_require_classifier_client(native):
     from monitor.enrichment_queue import request_post_translation
     from monitor.post_artifacts import literal_translation_artifact_complete
 
-    job, cfg, delegates, _ = native
+    _job, cfg, delegates, _ = native
     advance(native, initial=True)
     PostEnrichmentState.objects.update(translation_requested=False)
     advance(native)
@@ -1090,9 +1094,9 @@ def test_saved_translation_replay_does_not_require_classifier_client(native):
 
 def test_historical_run_defers_active_reader_claim_and_advances_other_members(native):
     job, cfg, delegates, policy = native
-    from monitor.backfill_enrichment import execute_enrichment
     # Establish the historical ownership before a reader acquires the lease.
     from core.provider_batches import own_historical_posts
+    from monitor.backfill_enrichment import execute_enrichment
     own_historical_posts(job, ['native-1', 'native-2'])
     PostEnrichmentState.objects.filter(pk='native-1').update(
         claim_owner='reader', claim_run_id='reader', claim_expires_at=timezone.now() + timedelta(minutes=5),
