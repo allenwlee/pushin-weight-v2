@@ -36,6 +36,8 @@ class Command(BaseCommand):
         if (not start or not end or timezone.is_naive(start) or timezone.is_naive(end)
                 or not timedelta(0) < end - start <= timedelta(days=7)):
             raise CommandError("Supply offset-aware timestamps covering at most seven days.")
+        unsent = Q(error_code="XClientRouteUnavailable")
+        unknown = Q(transport_outcome__in=["pending", "unknown"])
         rows = CollectionRequest.objects.filter(
             attempt__run__job__source_id="x",
             receipt_kind="physical",
@@ -46,8 +48,9 @@ class Command(BaseCommand):
             "scope_run__requested_start_at", "scope_run__requested_end_at",
             "provider_source_id", "credential_purpose", "endpoint_url",
         ).annotate(
-            sends=Count("pk", filter=~Q(transport_outcome__in=["pending", "unknown"])),
-            unconfirmed=Count("pk", filter=Q(transport_outcome__in=["pending", "unknown"])),
+            sends=Count("pk", filter=~(unknown | unsent)),
+            unconfirmed=Count("pk", filter=unknown & ~unsent),
+            canceled_before_send=Count("pk", filter=unsent),
             successful_http=Count("pk", filter=Q(http_status__gte=200, http_status__lt=300)),
             rate_limited=Count("pk", filter=Q(http_status=429)),
             unavailable=Count("pk", filter=Q(http_status=503)),
@@ -56,9 +59,10 @@ class Command(BaseCommand):
             ])),
             returned=Sum(Coalesce("returned_count", "raw_count", output_field=BigIntegerField())),
             returned_count_unknown=Count("pk", filter=Q(raw_count__isnull=True, returned_count__isnull=True)),
-            mean_response_time=Avg(ExpressionWrapper(
-                F("received_at") - F("started_at"), output_field=DurationField(),
-            )),
+            mean_response_time=Avg(
+                ExpressionWrapper(F("received_at") - F("started_at"), output_field=DurationField()),
+                filter=~(unknown | unsent),
+            ),
         ).order_by("attempt__run_id", "scope_run__scope_key", "provider_source_id")
         for row in rows.iterator():
             row["provider_source_id"] = row["provider_source_id"] or "unknown"

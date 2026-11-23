@@ -510,3 +510,40 @@ def test_scheduled_fallback_has_two_physical_receipts_in_one_run():
     assert rows["twitterapi"]["unavailable"] == 1
     assert rows["twexapi"]["successful_http"] == 1
     assert rows["twexapi"]["returned"] == 0
+
+
+def test_provider_usage_does_not_count_a_lost_dispatch_lease_as_a_send():
+    from datetime import timedelta
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from core.models import DataSource
+    from core.x_cycle_lineage import ScheduledCycleLineage
+
+    DataSource.objects.get_or_create(
+        pk="twexapi", defaults={"name": "TwexAPI", "source_type": "social"},
+    )
+    call = SimpleNamespace(call_id="B1", query_string="lost dispatch lease")
+    lineage = ScheduledCycleLineage.start(
+        [call], limits={"requests": 3, "bytes": 10000, "seconds": 30, "items": 100},
+        invocation_id="lost-dispatch-lease",
+    )
+    scope = lineage.begin_call(call, since_epoch=1783809000, until_epoch=1783809300)
+    receipt = lineage.begin_exchange(
+        scope, endpoint_url="https://api.twexapi.io/twitter/advanced_search/page",
+        params={"_provider_source": "twexapi"},
+    )
+    lineage.finish_exchange(receipt, {"outcome": "transport_error", "error_type": "XClientRouteUnavailable"})
+
+    output = StringIO()
+    call_command(
+        "report_x_provider_usage",
+        since=(receipt.started_at - timedelta(seconds=1)).isoformat(),
+        until=(receipt.started_at + timedelta(seconds=1)).isoformat(),
+        stdout=output,
+    )
+    row = json.loads(output.getvalue())
+    assert row["sends"] == row["unconfirmed"] == 0
+    assert row["canceled_before_send"] == 1
+    assert row["mean_response_time"] is None
