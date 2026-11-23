@@ -5,7 +5,7 @@ import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
-from core.models import CollectionRun
+from core.models import CollectionRun, DataSource
 
 PAGE = """
 <div class="tgme_widget_message js-widget_message" data-post="twitterapiio/42">
@@ -31,6 +31,7 @@ def test_preview_preserves_source_time_and_message_identity():
 def test_poll_deduplicates_evidence_recovers_and_preserves_edits(monkeypatch):
     from monitor import provider_announcements as poll
 
+    DataSource.objects.filter(pk="twitterapi").delete()
     clock = [poll.timezone.now()]
     monkeypatch.setattr(poll, "_now", lambda: clock[0])
     monkeypatch.setattr("core.collection_state.timezone.now", lambda: clock[0])

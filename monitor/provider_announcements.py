@@ -10,7 +10,11 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from core.collection_capture import begin_request, finish_request
+from core.collection_capture import (
+    begin_request,
+    ensure_x_provider_catalog,
+    finish_request,
+)
 from core.collection_jobs import register_job, set_job_state
 from core.collection_scheduling import schedule_slot
 from core.collection_state import claim_job, fenced_run, finish_run
@@ -97,6 +101,7 @@ def fetch_preview():
 
 @transaction.atomic
 def _claim(interval):
+    ensure_x_provider_catalog()
     source = DataSource.objects.select_for_update().get(pk="twitterapi")
     job_key = f"twitterapi:telegram-announcements:{interval}"
     existing = CollectionJob.objects.select_for_update().filter(job_key=job_key).first()
