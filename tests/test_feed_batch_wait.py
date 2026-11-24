@@ -112,6 +112,11 @@ def test_continuous_worker_only_waits_when_it_can_service_the_deadline(monkeypat
     state = _state("wait-or-translate", translation_requested=translate)
     state.post.lang = "en"
     state.post.save(update_fields=["lang"])
+    if not translate:
+        # Queue eligibility checks PostBrand; a saved row can still lack text.
+        blank = _state("brand-without-source")
+        blank.post.text = ""
+        blank.post.save(update_fields=["text"])
     cfg = _cfg()
     cfg.llm.literal_translation_v2_enabled = True
     cfg.llm.classifier_model = DEEPSEEK_0731_MODEL
@@ -143,6 +148,13 @@ def test_continuous_worker_only_waits_when_it_can_service_the_deadline(monkeypat
     monkeypatch.setattr("monitor.pulse_processing.process_saved_findings", lambda: recoveries.append(True))
     monkeypatch.setattr("core.product_release_acquisition.dispatch_due_recovery", lambda: None)
     output = StringIO()
+    # A second pass before sleep would otherwise spin for up to 60 real seconds.
+    if not translate:
+        original = CycleRunner._run_post_fetch
+        def only_once(*args, **kwargs):
+            assert not recoveries, "wholly deferred pass must yield to the normal poll"
+            return original(*args, **kwargs)
+        monkeypatch.setattr(CycleRunner, "_run_post_fetch", only_once)
     call_command("run_enrichment_worker", stdout=output)
     assert recoveries
     assert intake == ([state.pk] if translate else [])
@@ -152,6 +164,7 @@ def test_continuous_worker_only_waits_when_it_can_service_the_deadline(monkeypat
         assert state.translation_status == state.classification_status == "succeeded"
         assert len(translator.calls) == len(classifier.calls) == 2
     else:
+        assert result["n_enrichment_claimed"] == 2
         assert result["n_classification_batch_waiting"] == 1
         assert state.classification_status == "pending" and classifier.calls == []
     assert len(waits) == 1 and 0 < waits[0] <= cfg.harvest.enrichment.poll_seconds

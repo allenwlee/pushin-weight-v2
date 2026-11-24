@@ -130,8 +130,7 @@ class Command(BaseCommand):
                     max_batches is not None and batches >= max_batches
                 ):
                     return
-                if (result.get("n_classification_batch_waiting")
-                        and result["n_classification_batch_waiting"] == result["n_enrichment_claimed"]):
+                if result.get("classification_batch_wait_only"):
                     remaining = result["classification_batch_wait_until"] - time.time()
                     stopped.wait(min(control.poll_seconds, max(0, remaining)))
                 elif not result.get("n_enrichment_claimed"):

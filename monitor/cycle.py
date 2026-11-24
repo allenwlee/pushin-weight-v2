@@ -4280,9 +4280,10 @@ class CycleRunner:
                     if item.get("_persisted_post_id")
                 }
                 source_ids.update(str(value) for value in (kwargs.get("post_ids") or ()))
-                claimed_ids = set(result.get("enrichment_current_cycle_post_ids", ()))
-                claimed_ids.update(result.get("enrichment_carryover_post_ids", ()))
-                source_ids.update(claimed_ids.difference(result.get("classification_batch_waiting_ids", ())))
+                if not result.get("classification_batch_wait_only"):
+                    claimed_ids = set(result.get("enrichment_current_cycle_post_ids", ()))
+                    claimed_ids.update(result.get("enrichment_carryover_post_ids", ()))
+                    source_ids.update(claimed_ids.difference(result.get("classification_batch_waiting_ids", ())))
                 if source_ids:
                     try:
                         result["product_release_intake"] = enqueue_posts(source_ids)
@@ -4608,6 +4609,7 @@ class CycleRunner:
 
             # A wholly waiting pass can release its leases before building the catalog.
             if (wait_until := feed_tail_deadline(classification_tweets)) is not None:
+                counters["classification_batch_wait_only"] = True
                 counters["classification_batch_waiting_ids"] = [t["tweet_id"] for t in classification_tweets]
                 counters["n_classification_batch_waiting"] = len(classification_tweets)
                 counters["classification_batch_wait_until"] = wait_until
