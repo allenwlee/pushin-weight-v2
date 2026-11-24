@@ -551,3 +551,95 @@ def test_live_catalog_scope_preserves_targets_mentions_and_full_catalog_for_publ
         )
         assert sent == tweet["_feed_prompt_catalog"]
     assert tweet["tracked_brand_catalog"] == catalog["brands"]
+
+
+def test_compact_batch_catalog_keeps_every_visible_term_and_ownership_in_both_roles():
+    from x_monitor.attribution import (
+        _tracked_brand_catalog,
+        _validated_tracked_brand_catalog_snapshot,
+        classify_batch_pragmatics_full,
+    )
+
+    catalog = _tracked_brand_catalog([], [{"tracked_brand_catalog": [
+        {"brand_id": "target", "display_name": "Target Inc", "products": [
+            "org/雪猫", "OnlySeenInTranslation", *[f"Unused{i}" for i in range(300)]
+        ], "handles": ["team", "hidden"], "accounts": [
+            {"handle": "team", "role": "official"}, {"handle": "hidden", "role": "staff"}
+        ]},
+        {"brand_id": "other-owner", "aliases": ["OnlySeenInTranslation", "Missing"]},
+        {"brand_id": "floor", "products": ["UnusedFloorProduct"]},
+        {"brand_id": "unrelated", "aliases": ["Muse"]},
+    ]}])
+    floor = {"floor"}
+    transport = _SelectedTransport()
+    tweet = {"tweet_id": "1", "text": "museum @team", "brand_ids": ["target"],
+             "english_translation": "OnlySeenInTranslation", "context": [{"text": "org/雪猫です"}],
+             "tracked_brand_catalog": catalog["brands"]}
+    result, = classify_batch_pragmatics_full(
+        [tweet], [], transport, tracked_catalog_snapshot=catalog,
+        feed_baseline_ids=floor, feed_catalog_mode="compact_baseline",
+    )
+    assert result["valid"] and set(result["by_brand"]) == {"target"}
+    assert len(transport.calls) == 2
+    for call in transport.calls:
+        sent = call["payload"]["tracked_brands"]
+        assert _validated_tracked_brand_catalog_snapshot(sent) == sent == tweet["_feed_prompt_catalog"]
+        rows = {r["brand_id"]: r for r in sent["brands"]}
+        assert set(rows) == {"target", "other-owner"} | floor
+        assert rows["target"]["display_name"] == "Target Inc"
+        assert rows["target"]["products"] == ["OnlySeenInTranslation", "org/雪猫"]
+        assert rows["target"]["handles"] == ["team"]
+        assert rows["target"]["accounts"] == [{"handle": "team", "role": "official"}]
+        assert rows["other-owner"]["aliases"] == ["OnlySeenInTranslation"]
+        assert "Unused" not in json.dumps(sent)
+    assert catalog == _validated_tracked_brand_catalog_snapshot(catalog)
+    assert "Unused299" in json.dumps(tweet["tracked_brand_catalog"])
+
+
+def test_compact_feed_preserves_batch_boundaries_and_does_not_leak_into_legacy_calls():
+    from x_monitor.attribution import (
+        _tracked_brand_catalog,
+        classify_batch_pragmatics_full,
+    )
+
+    catalog = _tracked_brand_catalog([], [{"tracked_brand_catalog": [
+        {"brand_id": "_unattributed"}, {"brand_id": "visible-owner", "domains": ["vendor.example"]},
+        {"brand_id": "split", "aliases": ["two\nwords"]},
+    ]}])
+    tweets = [
+        {"tweet_id": str(i), "text": "two", "english_translation": "words",
+         "context": [], "brand_ids": ["_unattributed"], "source_language": "en"}
+        for i in range(21)
+    ]
+    tweets[-1]["text"] = "https://vendor.example/"
+    transport = _SelectedTransport()
+    results = classify_batch_pragmatics_full(
+        tweets, [], transport, tracked_catalog_snapshot=catalog,
+        feed_baseline_ids=set(), feed_catalog_mode="compact_baseline",
+    )
+    assert all(row["valid"] and set(row["by_brand"]) == {"_unattributed"} for row in results)
+    assert len(transport.calls) == 4
+    for call in transport.calls:
+        payload = call["payload"]
+        ids = {row["brand_id"] for row in payload["tracked_brands"]["brands"]}
+        assert ids == ({"_unattributed", "split"} if len(payload["cases"]) == 20 else {"_unattributed", "visible-owner"})
+
+    legacy = _SelectedTransport()
+    classify_batch_pragmatics_full(tweets[:1], [], legacy, tracked_catalog_snapshot=catalog)
+    assert len(legacy.calls) == 2
+    assert all(call["payload"]["tracked_brands"] == catalog for call in legacy.calls)
+
+def test_compact_baseline_preserves_legacy_row_without_sending_cross_source_alias():
+    from x_monitor.attribution import _feed_prompt_catalog, _tracked_brand_catalog
+
+    catalog = _tracked_brand_catalog([], [{"tracked_brand_catalog": [
+        {"brand_id": "legacy-owner", "aliases": ["first\nsecond"]},
+    ]}])
+    batch = [{"text": "first", "english_translation": "second"}]
+    rows = {
+        mode: _feed_prompt_catalog(batch, catalog, set(), feed_catalog_mode=mode)["brands"]
+        for mode in ("baseline", "compact_baseline")
+    }
+    assert [row["brand_id"] for row in rows["baseline"]] == ["legacy-owner"]
+    assert [row["brand_id"] for row in rows["compact_baseline"]] == ["legacy-owner"]
+    assert rows["compact_baseline"][0]["aliases"] == ["legacy-owner"]

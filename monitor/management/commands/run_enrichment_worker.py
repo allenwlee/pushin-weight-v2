@@ -4,6 +4,7 @@ import json
 import os
 import signal
 import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -111,6 +112,7 @@ class Command(BaseCommand):
                     [],
                     run_id=f"enrichment-{uuid.uuid4().hex}",
                     fair_queue=True,
+                    coalesce_feed_batches=ids is None and not options["once"] and max_batches is None,
                     post_ids=ids,
                     scope="pilot" if options["pilot"] else "continuous",
                     stop_event=stopped,
@@ -128,7 +130,11 @@ class Command(BaseCommand):
                     max_batches is not None and batches >= max_batches
                 ):
                     return
-                if not result.get("n_enrichment_claimed"):
+                if (result.get("n_classification_batch_waiting")
+                        and result["n_classification_batch_waiting"] == result["n_enrichment_claimed"]):
+                    remaining = result["classification_batch_wait_until"] - time.time()
+                    stopped.wait(min(control.poll_seconds, max(0, remaining)))
+                elif not result.get("n_enrichment_claimed"):
                     stopped.wait(control.poll_seconds)
         except DatabaseLockError as exc:
             raise CommandError(str(exc)) from exc

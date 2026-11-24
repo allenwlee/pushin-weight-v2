@@ -729,7 +729,8 @@ def test_two_role_invalid_release_quote_keeps_feed_and_retries(monkeypatch, tmp_
     assert read_publication_findings(state.post_id)[0]["finding"]["observed_name"] == "Qwen4"
 
 
-def test_two_role_publishes_maya_hardware_mention_as_other_neutral(monkeypatch):
+@pytest.mark.parametrize('mode', [None, 'baseline', 'compact_baseline'])
+def test_two_role_publishes_maya_hardware_mention_as_other_neutral(monkeypatch, mode):
     from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
 
     class IncorrectLaunchTransport(FixedSlotTwoRoleTransport):
@@ -753,6 +754,9 @@ def test_two_role_publishes_maya_hardware_mention_as_other_neutral(monkeypatch):
          "products": [], "accounts": []},
     ])
     runner.cfg.llm.classifier_pipeline = "two_role"
+    if mode is not None:
+        runner.cycle_kind = "enrichment"
+        runner.cfg.llm.feed_catalog_mode = mode
     runner._post_fetch_clients["classification"] = IncorrectLaunchTransport()
     runner._run_post_fetch([], run_id="maya-passing-hardware")
     selected = models.PostBrandClassificationState.objects.get(post_id=state.post_id, brand=nvidia)

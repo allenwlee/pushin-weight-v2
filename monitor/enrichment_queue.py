@@ -15,7 +15,12 @@ from django.db import transaction
 from django.db.models import CharField, Exists, F, Func, OuterRef, Q
 from django.utils import timezone
 
-from core.models import OriginalContentCall, PostBrand, PostEnrichmentState, TargetedExtractionState
+from core.models import (
+    OriginalContentCall,
+    PostBrand,
+    PostEnrichmentState,
+    TargetedExtractionState,
+)
 
 STAGES = ("translation", "classification")
 HISTORICAL_SCRIPT_DEMAND = "requested_historical_script_detection"
@@ -87,6 +92,24 @@ def scheduled_due_q(now: datetime) -> Q:
     return stage_due_q("translation", now) | (
         stage_due_q("classification", now) & Q(has_classification_target)
     )
+
+
+def classification_batch_wait_until(
+    tweets: list[dict[str, Any]], states: list[PostEnrichmentState], now: datetime,
+) -> datetime | None:
+    """Give an otherwise idle worker a bounded window to combine a small batch."""
+    from x_monitor.attribution import MAX_FIXED_DECISION_SLOTS
+
+    if not 1 <= len(tweets) <= 5:
+        return None
+    if sum(len(tweet["brand_ids"]) for tweet in tweets) >= MAX_FIXED_DECISION_SLOTS:
+        return None
+    ids = {tweet["tweet_id"] for tweet in tweets}
+    oldest_ready = min(
+        state.classification_next_attempt_at or state.created_at for state in states if state.pk in ids
+    )
+    due = oldest_ready + timedelta(seconds=60)
+    return due if now < due else None
 
 
 def stage_is_due(state: PostEnrichmentState, stage: str, now: datetime) -> bool:

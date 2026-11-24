@@ -4280,8 +4280,9 @@ class CycleRunner:
                     if item.get("_persisted_post_id")
                 }
                 source_ids.update(str(value) for value in (kwargs.get("post_ids") or ()))
-                source_ids.update(str(value) for value in result.get("enrichment_current_cycle_post_ids", ()))
-                source_ids.update(str(value) for value in result.get("enrichment_carryover_post_ids", ()))
+                claimed_ids = set(result.get("enrichment_current_cycle_post_ids", ()))
+                claimed_ids.update(result.get("enrichment_carryover_post_ids", ()))
+                source_ids.update(claimed_ids.difference(result.get("classification_batch_waiting_ids", ())))
                 if source_ids:
                     try:
                         result["product_release_intake"] = enqueue_posts(source_ids)
@@ -4320,6 +4321,7 @@ class CycleRunner:
         translation_only: bool = False,
         pulse_backfill: bool = False,
         fair_queue: bool = False,
+        coalesce_feed_batches: bool = False,
         dispatch_guard: Any | None = None,
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
@@ -4593,6 +4595,26 @@ class CycleRunner:
             else None
         )
 
+        feed_tail_deadline = None
+        if (
+            coalesce_feed_batches and not translation_tweets and not release_retry_tweets
+            and getattr(classifier_client, "request_profile", None) == "deepseek_0731"
+        ):
+            from monitor.enrichment_queue import classification_batch_wait_until
+
+            def feed_tail_deadline(batch):
+                wait_until = classification_batch_wait_until(batch, claimed_states, django_timezone.now())
+                return wait_until.timestamp() if wait_until is not None else None
+
+            # A wholly waiting pass can release its leases before building the catalog.
+            if (wait_until := feed_tail_deadline(classification_tweets)) is not None:
+                counters["classification_batch_waiting_ids"] = [t["tweet_id"] for t in classification_tweets]
+                counters["n_classification_batch_waiting"] = len(classification_tweets)
+                counters["classification_batch_wait_until"] = wait_until
+                for state in claimed_states:
+                    _release_enrichment_claim(state.pk, run_id=run_id)
+                return counters
+
         # Build brand_registry from Brand model
         from core.models import Brand as BrandModel
 
@@ -4667,6 +4689,14 @@ class CycleRunner:
             and source_collection_job_id is None and classification_input_snapshot is None
             and repair_manifest is None and not pulse_backfill
         ):
+            catalog_mode = self.cfg.llm.feed_catalog_mode
+            # Deferred replies must retain the exact packet used for submission.
+            if getattr(classifier_client, "deferred_requests", False) is True:
+                catalog_mode = "baseline"
+            if catalog_mode != "baseline":
+                feed_catalog_kwargs["feed_catalog_mode"] = catalog_mode
+            if classification_tweets:
+                logger.info("feed_catalog_dispatch run_id=%s mode=%s", run_id, catalog_mode)
             # Membership of the 182-brand catalog at 16:15 JST on Nov 17.
             cutoff = datetime(2026, 11, 17, 7, 15, tzinfo=UTC)
             feed_catalog_kwargs["feed_baseline_ids"] = {b.pk for b in brand_rows if b.created_at < cutoff}
@@ -4865,40 +4895,65 @@ class CycleRunner:
                 release_pair_budget=dispatch_guard.release_unused_pair if dispatch_guard is not None else None,
                 **self._backfill_model_callbacks(),
             )
-            try:
-                results = classify_batch_pragmatics_full(
-                    classification_tweets,
-                    brand_registry,
-                    bounded_classifier_client,
-                    model=self.cfg.llm.classifier_model,
-                    on_batch_error=classification_failed,
-                    **feed_catalog_kwargs,
-                    deadline=classification_deadline,
-                    max_workers=(
-                        enrichment_cfg.pulse_classification_concurrency
-                        if classifier_profile == "compressed8_pulse_v1"
-                        else enrichment_cfg.classification_concurrency
-                    ),
-                    telemetry_context={"stage": "post_fetch", "run_id": run_id},
-                    tracked_catalog_snapshot=(
-                        classification_catalog
-                        if classifier_profile in {"deepseek_0731", "compressed8_pulse_v1"}
-                        else None
-                    ),
-                    **(
-                        {"on_result": publish_result}
-                        if classifier_profile == "compressed8_pulse_v1" and repair_manifest is None
-                        else {}
-                    ),
-                )
-            except Exception as exc:
-                logger.warning(
-                    "_run_post_fetch: classify failed: %s", exc, exc_info=True
-                )
-                self._error_counts["classifier_batch_failed"] += 1
-                classification_error_code = "classifier_exception"
-            finally:
-                self._llm_call_count += bounded_classifier_client.calls
+
+            def classify_group(tweets, **timing):
+                nonlocal classification_error_code
+                calls_before = bounded_classifier_client.calls
+                try:
+                    return classify_batch_pragmatics_full(
+                        tweets,
+                        brand_registry,
+                        bounded_classifier_client,
+                        model=self.cfg.llm.classifier_model,
+                        on_batch_error=classification_failed,
+                        **feed_catalog_kwargs,
+                        **timing,
+                        deadline=classification_deadline,
+                        max_workers=(
+                            enrichment_cfg.pulse_classification_concurrency
+                            if classifier_profile == "compressed8_pulse_v1"
+                            else enrichment_cfg.classification_concurrency
+                        ),
+                        telemetry_context={"stage": "post_fetch", "run_id": run_id},
+                        tracked_catalog_snapshot=(
+                            classification_catalog
+                            if classifier_profile in {"deepseek_0731", "compressed8_pulse_v1"}
+                            else None
+                        ),
+                        **(
+                            {"on_result": publish_result}
+                            if classifier_profile == "compressed8_pulse_v1" and repair_manifest is None
+                            else {}
+                        ),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "_run_post_fetch: classify failed: %s", exc, exc_info=True
+                    )
+                    self._error_counts["classifier_batch_failed"] += 1
+                    classification_error_code = "classifier_exception"
+                    return []
+                finally:
+                    self._llm_call_count += bounded_classifier_client.calls - calls_before
+
+            results = classify_group(
+                classification_tweets, **({"tail_wait_deadline": feed_tail_deadline} if feed_tail_deadline else {}),
+            )
+
+        # Keep the tail claim through publication of head results. Those answers
+        # can uncover new downstream provider work on the only available worker.
+        waiting_tail = [
+            tweet for tweet, result in zip(classification_tweets, results)
+            if "batch_wait_until" in result
+        ] if feed_tail_deadline else []
+        flushed_tail = {}
+
+        def flush_waiting_tail():
+            if waiting_tail:
+                replies = classify_group(waiting_tail)
+                for i, tweet in enumerate(waiting_tail):
+                    flushed_tail[tweet["tweet_id"]] = replies[i] if i < len(replies) else {}
+                waiting_tail.clear()
 
         if repair_manifest is not None:
             # A repair is an exact-set operation. Inspect every complete result
@@ -4944,8 +4999,24 @@ class CycleRunner:
             published_results[tid] = (result, _ClassificationPublishOutcome(outcome="preserved"), 0)
         for i, (tweet, result) in enumerate(retry_pairs + list(zip(classification_tweets, results))):
             tid = tweet["tweet_id"]
+            if waiting_tail and "batch_wait_until" in result:
+                wait_until = result["batch_wait_until"]
+                if time.time() >= wait_until:
+                    flush_waiting_tail()
+                else:
+                    counters["classification_batch_waiting_ids"] = [t["tweet_id"] for t in waiting_tail]
+                    counters["n_classification_batch_waiting"] = len(waiting_tail)
+                    counters["classification_batch_wait_until"] = wait_until
+                    for pending in waiting_tail:
+                        pending_id = pending["tweet_id"]
+                        actual_classification_ids.discard(pending_id)
+                        classification_publish_ids.discard(pending_id)
+                        _release_enrichment_claim(pending_id, run_id=run_id)
+                    waiting_tail.clear()
             if tid not in classification_publish_ids:
                 continue
+            if tid in flushed_tail:
+                result = flushed_tail[tid]
             if tid not in published_results:
                 publish_result(tweet, result)
             result, flag_result, removed_subjects = published_results[tid]
@@ -5024,6 +5095,7 @@ class CycleRunner:
                     post_types=post_types,
                     config=self.cfg.targeted_extraction,
                     calls=getattr(self, "_targeted_extraction_calls", {}),
+                    **({"before_provider_call": flush_waiting_tail} if waiting_tail else {}),
                     max_calls=targeted_calls_remaining,
                     deadline=deadline,
                     release_persist=release_persist,
