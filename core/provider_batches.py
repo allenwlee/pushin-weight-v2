@@ -230,6 +230,7 @@ def record_post_membership(run, scope, post_ids, *, observed_at=None):
 
 def _pending_scheduled_releases(post_ids):
     from pathlib import Path
+
     from x_monitor.config import load_config
 
     maximum = load_config(Path("config.yaml")).harvest.enrichment.max_attempts
