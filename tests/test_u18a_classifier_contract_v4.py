@@ -95,7 +95,6 @@ def test_selected_fingerprint_includes_all_model_evidence_fields():
 
 def test_selected_parser_rejects_invented_promotion_evidence_per_post():
     from x_monitor.attribution import (
-        BrandRow,
         _two_role_fixed_slot_payload,
         _two_role_parse_fixed_slots,
     )
@@ -513,3 +512,42 @@ def test_selected_runtime_makes_all_axes_unavailable_when_content_lacks_context(
     }
     assert rows[0]["untracked_brand_promotions"] == []
     assert rows[0]["promoted_subjects"] == []
+
+
+def test_live_catalog_scope_preserves_targets_mentions_and_full_catalog_for_publication():
+    from x_monitor.attribution import (
+        _tracked_brand_catalog,
+        _two_role_fingerprint,
+        classify_batch_pragmatics_full,
+    )
+
+    rows = [
+        {"brand_id": "baseline"},
+        {"brand_id": "direct-target"},
+        {"brand_id": "official-owner"},
+        {"brand_id": "alias-owner", "aliases": ["Parallel Tools"]},
+        {"brand_id": "product-owner", "products": ["雪猫"]},
+        {"brand_id": "handle-owner", "handles": ["repo_team"]},
+        {"brand_id": "unrelated", "aliases": ["Muse"]},
+    ]
+    tweet = {
+        "tweet_id": "1", "text": "The museum uses @repo_team.",
+        "brand_ids": ["direct-target"], "context": [{"text": "新しい雪猫です"}],
+        "english_translation": "Parallel Tools", "source_language": "en",
+        "affiliations": [{"reviewed": True, "role": "official", "brand_id": "official-owner"}],
+    }
+    catalog = _tracked_brand_catalog([], [{"tracked_brand_catalog": rows}])
+    tweet["tracked_brand_catalog"] = catalog["brands"]
+    transport = _SelectedTransport()
+    result, = classify_batch_pragmatics_full(
+        [tweet], [], transport, tracked_catalog_snapshot=catalog, feed_baseline_ids={"baseline"},
+    )
+    assert result["valid"]
+    for call in transport.calls:
+        sent = call["payload"]["tracked_brands"]
+        assert {r["brand_id"] for r in sent["brands"]} == {r["brand_id"] for r in rows} - {"unrelated"}
+        assert result["classification_trace"]["final"]["input_context_fingerprint"] == _two_role_fingerprint(
+            tweet, tracked_catalog=sent,
+        )
+        assert sent == tweet["_feed_prompt_catalog"]
+    assert tweet["tracked_brand_catalog"] == catalog["brands"]

@@ -51,6 +51,8 @@ Occupied staging: if a staged route finds `staging` in use by an unrelated relea
 
 ## Delivery Exceptions
 
+- Nov 24 JST. Allen approved a temporary feed-classifier catalog reduction and direct production delivery. For fresh live two-role requests, send the Nov 17 16:15 JST brand cohort plus decision targets, reviewed affiliations, and catalog owners whose terms appear in the batch evidence. Use the complete catalog for promotion checks. Verify the deployed worker's prompt size and first completed batch using normal traffic.
+
 - 2026-11-24 ~11:40 JST: owner asked to run this plan autonomously ("lfg to deployment"), selecting production as the endpoint. The owner chose no route, so the staged default applies, and the occupied-staging default in `AGENTS.md` still holds. KTD12's one-release-at-a-time sequence and four-cycle watch still apply.
 - 2026-11-24 13:15 JST: `origin/staging` (`fa85d9d3`) holds unrelated Chatter release commits that are not on `main`, so a fast-forward to staging is impossible. The route switches to direct production under the occupied-staging default in `AGENTS.md` (owner default, 2026-11-09).
 - The shared local test database lacks main's migration 0239. Applying it was blocked by the session's permission guard. Database-backed tests therefore run in the pull-request CI workflow (`backfill.yml`, PostgreSQL service) until the owner applies 0239 or approves it.

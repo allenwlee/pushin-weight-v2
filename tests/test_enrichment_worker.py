@@ -748,11 +748,15 @@ def test_shared_name_promotion_publishes_and_drops_only_that_subject(monkeypatch
         lambda: [
             {"brand_id": brand, "aliases": ["Muse"], "products": [], "keywords": []}
             for brand in ("deepseek", "another-brand")
-        ],
+        ] + [{"brand_id": "absent-new-brand", "aliases": ["Absent New Brand"]}],
     )
 
     class SharedNamePromotion(_SelectedV4Transport):
         def messages_create(self, **kwargs):
+            packet = json.loads(kwargs["messages"][0]["content"])
+            sent = {row["brand_id"] for row in packet["tracked_brands"]["brands"]}
+            assert {"deepseek", "another-brand"} <= sent
+            assert "absent-new-brand" not in sent
             response = super().messages_create(**kwargs)
             if "promoted_subjects" in response:
                 for slot in json.loads(kwargs["messages"][0]["content"])["cases"]:
@@ -770,7 +774,7 @@ def test_shared_name_promotion_publishes_and_drops_only_that_subject(monkeypatch
     caplog.set_level(logging.INFO, logger="monitor.cycle")
     caplog.clear()  # drop the setup run's single-owner log line
     cycle.CycleRunner(
-        cfg=_cfg(),
+        cfg=_cfg(), cycle_kind="enrichment",
         _post_fetch_clients={"translation": None, "classification": SharedNamePromotion()},
     )._run_post_fetch([], run_id="shared-name-promotion")
     state.refresh_from_db()

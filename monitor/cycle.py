@@ -1342,10 +1342,10 @@ def _publish_stage1_classification(
             from x_monitor.attribution import _validated_tracked_brand_catalog_snapshot
 
             tracked_catalog = _validated_tracked_brand_catalog_snapshot(
-                {
+                tweet.get("_feed_prompt_catalog", {
                     "revision": catalog_revision,
                     "brands": tweet.get("tracked_brand_catalog"),
-                }
+                })
             )
         fingerprint = _two_role_fingerprint(
             tweet,
@@ -4661,6 +4661,15 @@ class CycleRunner:
         # thin for this catalog; curated terms/accounts are authoritative.
         classification_publish_ids = {str(t["tweet_id"]) for t in classification_tweets}
         classifier_profile = getattr(classifier_client, "request_profile", None)
+        feed_catalog_kwargs = {}
+        if (
+            classifier_profile == "deepseek_0731" and self.cycle_kind in {"scheduled", "enrichment"}
+            and source_collection_job_id is None and classification_input_snapshot is None
+            and repair_manifest is None and not pulse_backfill
+        ):
+            # Membership of the 182-brand catalog at 16:15 JST on Nov 17.
+            cutoff = datetime(2026, 11, 17, 7, 15, tzinfo=UTC)
+            feed_catalog_kwargs["feed_baseline_ids"] = {b.pk for b in brand_rows if b.created_at < cutoff}
         if classifier_profile in {"deepseek_0731", "compressed8_pulse_v1"}:
             # Deferred replies describe the evidence submitted with their paid
             # request. Replay that exact packet, including its catalog revision,
@@ -4863,6 +4872,7 @@ class CycleRunner:
                     bounded_classifier_client,
                     model=self.cfg.llm.classifier_model,
                     on_batch_error=classification_failed,
+                    **feed_catalog_kwargs,
                     deadline=classification_deadline,
                     max_workers=(
                         enrichment_cfg.pulse_classification_concurrency

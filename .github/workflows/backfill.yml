@@ -44,6 +44,7 @@ on:
       - 'tests/test_harvester_state_models.py'
       - 'tests/test_enrichment_worker.py'
       - 'tests/test_u18a_v4_classification_persistence.py'
+      - 'tests/test_u18a_classifier_contract_v4.py'
       - 'x_monitor/search_provider_circuit.py'
       - 'tests/test_x_provider_contract.py'
       - 'tests/test_provider_announcements.py'
@@ -158,4 +159,5 @@ jobs:
           tests/test_cycle_route_wait.py
           tests/test_cycle_tip_sweep.py tests/test_harvester_state_models.py
           tests/test_enrichment_worker.py tests/test_u18a_v4_classification_persistence.py
+          tests/test_u18a_classifier_contract_v4.py
           tests/test_promotion_subject_matcher.py

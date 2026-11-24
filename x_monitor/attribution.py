@@ -4379,6 +4379,35 @@ def _filter_passing_hardware_release(content, brand, tweet, catalog, brand_id):
     return content, brand
 
 
+def _feed_prompt_catalog(batch, catalog, baseline_ids):
+    """Select baseline brands and all owners of a name visible in this batch."""
+    required = set(baseline_ids)
+    evidence = []
+    for tweet in batch:
+        required.update(tweet.get("brand_ids") or [])
+        required.update(row["brand_id"] for row in _canonical_reviewed_affiliations(tweet.get("affiliations")))
+        evidence.extend((tweet.get("text") or "", tweet.get("english_translation") or ""))
+        for item in tweet.get("context") or []:
+            if isinstance(item, dict):
+                evidence.append(item.get("text") or "")
+            elif isinstance(item, str):
+                evidence.append(item)
+    visible = "\n".join(evidence).casefold()
+
+    def mentioned(row):
+        terms = [row["brand_id"], row.get("display_name", "")]
+        for key in ("aliases", "products", "handles", "domains", "hashtags", "keywords"):
+            terms.extend(row[key])
+        for term in terms:
+            term = term.casefold()
+            if term and term in visible and re.search(_literal_term_pattern(term), visible):
+                return True
+        return False
+
+    rows = [row for row in catalog["brands"] if row["brand_id"] in required or mentioned(row)]
+    return _tracked_brand_catalog([], [{"tracked_brand_catalog": rows}])
+
+
 def classify_batch_pragmatics_full(
     tweets: list[dict[str, Any]],
     brand_registry: list,
@@ -4392,6 +4421,7 @@ def classify_batch_pragmatics_full(
     max_workers: int = 3,
     telemetry_context: dict[str, Any] | None = None,
     tracked_catalog_snapshot: dict[str, Any] | None = None,
+    feed_baseline_ids: set[str] | None = None,
     on_result: Callable[[dict[str, Any], dict[str, Any]], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Classify batches with exactly two disjoint, concurrently scheduled roles.
@@ -4461,13 +4491,21 @@ def classify_batch_pragmatics_full(
     if kept:
         indexed_batches.append((indexes, kept))
 
+    if selected_0731 and feed_baseline_ids is not None:
+        for _, batch in indexed_batches:
+            prompt_catalog = _feed_prompt_catalog(batch, tracked_catalog, feed_baseline_ids)
+            for tweet in batch:
+                tweet["_feed_prompt_catalog"] = prompt_catalog
+            logger.info("feed_classifier_catalog batch_posts=%d prompt_brands=%d full_brands=%d",
+                        len(batch), len(prompt_catalog["brands"]), len(tracked_catalog["brands"]))
+
     def prepare_role(batch: list[dict[str, Any]], role: str):
         fixed_contract = (
             _two_role_fixed_slot_payload(
                 batch,
                 role,
                 request_profile="deepseek_0731",
-                tracked_catalog=tracked_catalog,
+                tracked_catalog=batch[0].get("_feed_prompt_catalog", tracked_catalog),
             ) if selected_0731 else None
         )
         if selected_0731 and fixed_contract is None:
@@ -4635,7 +4673,7 @@ def classify_batch_pragmatics_full(
                 content=content, brand=brand, final=canonical,
                 fingerprint=_two_role_fingerprint(
                     tweet,
-                    tracked_catalog=tracked_catalog if selected_0731 else None,
+                    tracked_catalog=tweet.get("_feed_prompt_catalog", tracked_catalog) if selected_0731 else None,
                 ), model=model,
                 request_identity=getattr(anthropic_client, "request_identity", None),
                 request_profile="deepseek_0731" if selected_0731 else None,
