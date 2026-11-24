@@ -23,7 +23,7 @@ what was really requested rather than what the code intended.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
@@ -186,17 +186,26 @@ def test_steady_window_narrows_after_the_first_cycle(harvest):
 # --- failure hold + recovery (the properties that protect volume) --------
 
 
-def test_failed_cycle_does_not_advance_the_cursor(harvest):
-    from core.models import CallState
+def _assert_backlog_owns_failed_window(api, failure_stats):
+    """KTD8 (plan 2026-11-24-012909): a failed window accepted by the backlog
+    is owned by that row, so the cursor advances to the window's end; the
+    window itself stays pending with its exact bounds. Nothing is lost."""
+    from core.models import CallState, HarvestBacklogWindow
 
+    since, until = _window(api)
+    entry = failure_stats["calls"][0]
+    assert entry["coverage_transfer"] == "transferred" and entry["cursor_advanced"] is True
+    window = HarvestBacklogWindow.objects.get(pk=entry["backlog_window_id"])
+    assert window.state == "pending" and window.reason_code == "search_failed"
+    assert (int(window.remaining_since.timestamp()), int(window.remaining_until.timestamp())) == (since, until)
+    assert int(CallState.objects.get(call_id=window.call_id).last_completed_at.timestamp()) == until
+
+
+def test_failed_cycle_hands_its_window_to_the_backlog(harvest):
     call = [_call()]
     harvest(call, [[_tweet("1")]])
-    first = CallState.objects.get().last_completed_at
-
-    harvest(call, [XClientRateLimitError("429")])
-    assert CallState.objects.get().last_completed_at == first, (
-        "cursor moved despite a failed fetch; that window is now unreachable"
-    )
+    api, failure = harvest(call, [XClientRateLimitError("429")])
+    _assert_backlog_owns_failed_window(api, failure)
 
 
 def test_cycle_after_a_failure_recovers_the_missed_span(harvest, monkeypatch):
@@ -212,8 +221,9 @@ def test_cycle_after_a_failure_recovers_the_missed_span(harvest, monkeypatch):
     a1, _ = harvest(call, [[_tweet("1")]])
     slot[0] += timedelta(minutes=15)
     a2, failure = harvest(call, [XClientRateLimitError("429")])
-    assert int(CallState.objects.get().last_completed_at.timestamp()) == _window(a1)[1]
-    assert failure["calls"][0]["cursor_advanced"] is False
+    # KTD8: the backlog accepted the failed window, so it owns that interval.
+    _assert_backlog_owns_failed_window(a2, failure)
+    assert int(CallState.objects.get().last_completed_at.timestamp()) == _window(a2)[1]
     window = HarvestBacklogWindow.objects.get(pk=failure["calls"][0]["backlog_window_id"])
     assert (int(window.remaining_since.timestamp()), int(window.remaining_until.timestamp())) == _window(a2)
     assert window.remaining_since.timestamp() <= _window(a1)[1]
@@ -231,15 +241,12 @@ def test_cycle_after_a_failure_recovers_the_missed_span(harvest, monkeypatch):
     )
 
 
-def test_server_error_also_holds_the_cursor(harvest):
-    """Not just rate limits -- any transient failure must hold."""
-    from core.models import CallState
-
+def test_server_error_also_hands_its_window_to_the_backlog(harvest):
+    """Not just rate limits -- any transient failure keeps its window (KTD8)."""
     call = [_call()]
     harvest(call, [[_tweet("1")]])
-    first = CallState.objects.get().last_completed_at
-    harvest(call, [XClientServerError("503")])
-    assert CallState.objects.get().last_completed_at == first
+    api, failure = harvest(call, [XClientServerError("503")])
+    _assert_backlog_owns_failed_window(api, failure)
 
 
 def test_recovery_resumes_normal_advance(harvest, monkeypatch):
@@ -320,9 +327,10 @@ def test_one_failing_call_does_not_stall_the_others_cursors(harvest):
 
     calls = [_call("B1"), _call("B2", "doubao")]
     # B1 fails, B2 succeeds (script is consumed in call order).
-    harvest(calls, [XClientRateLimitError("429"), [_tweet("1")]])
+    api, stats = harvest(calls, [XClientRateLimitError("429"), [_tweet("1")]])
 
-    assert CallState.objects.get(call_id="B1").last_completed_at is None
+    # KTD8: B1's failed window is owned by the backlog; its cursor advanced.
+    _assert_backlog_owns_failed_window(api, stats)
     assert CallState.objects.filter(call_id="B2").exists(), (
         "a failure on an earlier call blocked a later call's cursor"
     )
@@ -363,3 +371,98 @@ def test_empty_windows_keep_advancing_across_cycles(harvest):
     # Same-second ties are a test-clock artifact; the point is that an empty
     # sweep is not treated as a failure (which would hold the cursor back).
     assert CallState.objects.get().last_completed_at >= first
+
+
+# --- U6 (plan 2026-11-24-012909): missed-window coverage -----------------
+
+
+def _slots(monkeypatch):
+    from django.utils import timezone as django_timezone
+
+    slot = [(datetime.now(UTC) - timedelta(hours=2)).replace(second=0, microsecond=0)]
+    monkeypatch.setattr(django_timezone, "now", lambda: slot[0])
+    monkeypatch.setattr(CycleRunner, "_wall_now", lambda self: slot[0])
+    return slot
+
+
+def test_outage_with_start_jitter_leaves_no_uncovered_second(harvest, monkeypatch):
+    """KTD8 / the B9 gap: a call fails for three cycles whose start times
+    jitter, then succeeds. The clamped spans and the failed windows coalesce
+    into one pending backlog window, and live windows plus that window cover
+    every second of the outage."""
+    from core.models import HarvestBacklogWindow
+
+    slot = _slots(monkeypatch)
+    base = slot[0]
+    call = [_call()]
+    a1, _ = harvest(call, [[_tweet("1")]])
+    failures = []
+    for offset in (timedelta(minutes=15, seconds=40), timedelta(minutes=29, seconds=35),
+                   timedelta(minutes=45, seconds=10)):
+        slot[0] = base + offset
+        failures.append(harvest(call, [XClientServerError("503")]))
+    assert failures[0][1]["totals"]["n_clamped_spans_queued"] == 1
+    assert failures[2][1]["totals"]["n_clamped_spans_queued"] == 1
+
+    pending = list(HarvestBacklogWindow.objects.filter(state="pending"))
+    assert len(pending) == 1
+    window = pending[0]
+    assert int(window.remaining_since.timestamp()) == _window(a1)[1]
+    assert int(window.remaining_until.timestamp()) == _window(failures[-1][0])[1]
+
+    slot[0] = base + timedelta(minutes=60)
+    a5, recovered = harvest(call, [[_tweet("5")]])
+    assert recovered["calls"][0]["status"] == "completed"
+    assert _window(a5)[0] <= int(window.remaining_until.timestamp())
+    assert HarvestBacklogWindow.objects.filter(pk=window.pk, state="pending").exists()
+
+
+def test_cursor_older_than_a_day_is_logged_and_counted_not_queued(harvest):
+    """KTD8: spans older than the backlog's max_age_hours (24) belong to an
+    operator-run X post backfill; they are counted, never queued."""
+    from core.models import CallState, HarvestBacklogWindow
+
+    call = _call()
+    CallState.objects.create(brand_id=call.brand_id, call_id=call.call_id, call_kind=call.call_kind,
+                             bucket="", query_id=call.call_id,
+                             last_completed_at=datetime.now(UTC) - timedelta(hours=25))
+    _, stats = harvest([call], [[_tweet("1")]])
+    assert stats["totals"]["n_clamped_spans_uncovered"] == 1
+    assert stats["totals"]["n_clamped_spans_queued"] == 0
+    assert not HarvestBacklogWindow.objects.exists()
+
+
+def test_refused_transfer_holds_the_cursor_and_the_next_cycle_records_the_span(harvest, monkeypatch):
+    """KTD8: when the backlog refuses a failed window (capacity), the cursor
+    is held; once capacity frees, the next cycle records the clamped span
+    instead of silently dropping it. capacity_refused is a counted event."""
+    from core.models import CallState, HarvestBacklogWindow
+
+    slot = _slots(monkeypatch)
+    base = slot[0]
+    call = _call()
+    harvest([call], [[_tweet("1")]])
+    identity = {"brand_id": call.brand_id, "call_id": call.call_id, "call_kind": call.call_kind,
+                "bucket": "", "query_id": call.call_id}
+    for n in range(8):
+        start = base - timedelta(hours=3, minutes=10 * n)
+        HarvestBacklogWindow.objects.create(
+            **identity, original_since=start - timedelta(minutes=1), original_until=start,
+            remaining_since=start - timedelta(minutes=1), remaining_until=start,
+            reason_code="page_cap", next_attempt_at=base + timedelta(days=1),
+        )
+    slot[0] = base + timedelta(minutes=15)
+    _, refused = harvest([call], [XClientServerError("503")])
+    assert refused["calls"][0]["coverage_transfer"] == "capacity_refused"
+    assert refused["calls"][0]["cursor_advanced"] is False
+    assert refused["totals"]["n_backlog_capacity_refused"] == 1
+    assert CallState.objects.get().last_completed_at == base
+
+    HarvestBacklogWindow.objects.filter(reason_code="page_cap").order_by("pk").first().delete()
+    slot[0] = base + timedelta(minutes=30)
+    monkeypatch.setattr(CycleRunner, "_replay_backlog", lambda *a, **k: [])
+    api, recovered = harvest([call], [[_tweet("3")]])
+    assert recovered["totals"]["n_clamped_spans_queued"] == 1
+    clamp = HarvestBacklogWindow.objects.get(reason_code="lookback_clamp")
+    assert clamp.remaining_since == base
+    assert int(clamp.remaining_until.timestamp()) == _window(api)[0]

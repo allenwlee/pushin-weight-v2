@@ -44,6 +44,15 @@ def test_harvest_runtime_defaults_pin_u9_contract():
     assert cfg.harvest.enrichment.claim_safe_envelope_seconds == 630
 
 
+def test_committed_yaml_replays_up_to_eight_windows_per_cycle():
+    """KTD9 (plan 2026-11-24-012909): the committed cron raises the replay
+    ceiling from 2 to 8 (time-bounded, stops at the first unsendable replay)
+    so ~96 queued windows drain in about 12 cycles. The model default stays 2."""
+    backlog = load_config(REPO / "config.yaml").harvest.backlog
+    assert backlog.replays_per_cycle == 8
+    assert (backlog.pending_per_call, backlog.max_attempts, backlog.max_age_hours) == (8, 8, 24)
+
+
 def test_committed_yaml_pins_production_two_lane_envelope():
     enrichment = load_config(REPO / "config.yaml").harvest.enrichment
 

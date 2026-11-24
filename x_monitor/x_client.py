@@ -19,7 +19,7 @@ import os
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -85,6 +85,66 @@ class XClientRouteUnavailable(XClientServerError):
     """Local pacing prevented this route from reaching transport."""
 
 
+class XClientQueryOutcome(XClientServerError):
+    """The route answered, but this query's page cannot certify its result.
+
+    KTD2 (plan 2026-11-24-012909): an empty continuation, a repeated cursor
+    or an unexpectedly empty first page describes one query, not the health
+    of the provider route, so it never counts against the route's circuit.
+    """
+
+
+class XClientNoRoute(XClientServerError):
+    """No configured route became eligible inside the caller's admission."""
+
+
+# Indirections keep the routed search loop testable with an injected clock.
+# They resolve the standard functions at call time, so tests that patch
+# ``time.sleep`` directly keep working.
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _monotonic() -> float:
+    return time.monotonic()
+
+
+def _sleep(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+# KTD4: a refused continuation page is retried on the same route and cursor
+# after these delays (TwexAPI: "retry the same cursor, not the next page").
+CONTINUATION_RETRY_DELAYS_SECONDS = (5.0, 15.0)
+# KTD4: a TwexAPI 429 without Retry-After waits the first retry step.
+TWEX_DEFAULT_RETRY_AFTER_SECONDS = 5
+# KTD3: per-cycle (process-local) TwitterAPI.io route-failure budget.
+TWITTERAPI_CYCLE_FAILURE_BUDGET = 3
+# KTD1: a first page refused with 429 or an unobtained pacing slot keeps its
+# route eligible; after this many such refusals the call stops trying it.
+FIRST_PAGE_LIMITED_ATTEMPTS = 3
+# The TwexAPI pacing-slot wait in ``_twex_search`` (seconds).
+TWEX_SLOT_WAIT_SECONDS = 30
+
+
+def _retryable_page_error(exc: BaseException) -> bool:
+    """429, 5xx, transport timeout or connection failure (KTD4)."""
+    if isinstance(exc, (XClientRouteUnavailable, XClientQueryOutcome, XClientNoRoute)):
+        return False
+    if isinstance(exc, XClientRateLimitError):
+        return True
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+        return True
+    return isinstance(exc, XClientServerError) and (getattr(exc, "response_status_code", None) or 0) >= 500
+
+
+def _route_failure(exc: BaseException) -> bool:
+    """KTD2: transport error, 5xx, timeout, 401 or an unusable response body."""
+    if isinstance(exc, (XClientRouteUnavailable, XClientQueryOutcome, XClientNoRoute, XClientRateLimitError)):
+        return False
+    return isinstance(exc, (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError))
+
+
 def _search_results(data: Any) -> list[dict[str, Any]]:
     """Reject provider errors before an empty result can certify exhaustion."""
     if not isinstance(data, dict):
@@ -110,6 +170,8 @@ class SearchPage:
     clipped: bool = False
     continuation_invalid: bool = False
     raw_post_ids: tuple[str | None, ...] = ()
+    # U5: a TwexAPI walk inferred complete from an empty page.
+    ended_on_empty_page: bool = False
 
 
 def search_page_from_response(
@@ -257,9 +319,13 @@ class XClient:
     search_max_retries: int = field(default=0, kw_only=True)
     force_twexapi: bool = field(default=False, kw_only=True)
     default_credential_route: str | None = field(default=None, repr=False, kw_only=True)
-    # One scheduled cycle owns this client. Only an observed 429 arms a wait.
-    _twex_retry_at: float | None = field(default=None, init=False, repr=False)
-    _rate_limit_wait_used: bool = field(default=False, init=False, repr=False)
+    # One scheduled cycle owns this client (``from_env`` per run), so these
+    # counters are per cycle and process-local; shared circuit rows are not.
+    route_wait_seconds: float = field(default=0.0, init=False, repr=False)
+    exchanges_started: int = field(default=0, init=False, repr=False)
+    query_history_enabled: bool = field(default=True, init=False, repr=False)
+    _ok_replies: int = field(default=0, init=False, repr=False)
+    _route_failures: dict[str, int] = field(default_factory=dict, init=False, repr=False)
     before_request: Callable[[float], None] | None = None
     after_response: Callable[[dict[str, Any]], None] | None = None
     on_exchange_start: Callable[[str, dict[str, Any]], Any] | None = None
@@ -280,9 +346,10 @@ class XClient:
         manual_override = os.environ.get("X_DATA_PROVIDER_ORDER_ON_DEMAND") if purpose == TwitterApiCredentialPurpose.ON_DEMAND else None
         order_setting = manual_override if manual_override is not None else os.environ.get("X_DATA_PROVIDER_ORDER")
         if order_setting is None:
-            preferred = "scheduled" if purpose == TwitterApiCredentialPurpose.SCHEDULED else "on_demand"
-            alternate = "on_demand" if preferred == "scheduled" else "scheduled"
-            order = (f"twitterapi:{preferred}", f"twitterapi:{alternate}", "twexapi")
+            if purpose == TwitterApiCredentialPurpose.SCHEDULED:
+                order = ("twitterapi:scheduled", "twexapi")
+            else:
+                order = ("twitterapi:on_demand", "twitterapi:scheduled", "twexapi")
         else:
             order = parse_provider_order(order_setting)
             if purpose == TwitterApiCredentialPurpose.ON_DEMAND and manual_override is None and {
@@ -290,6 +357,12 @@ class XClient:
             }.issubset(order):
                 order = tuple("twitterapi:on_demand" if name == "twitterapi:scheduled" else
                               "twitterapi:scheduled" if name == "twitterapi:on_demand" else name for name in order)
+        if purpose == TwitterApiCredentialPurpose.SCHEDULED:
+            # Owner decision 2026-11-24 (plan 2026-11-24-012909): scheduled
+            # collection never sends the on-demand key, even when it is
+            # present or named in X_DATA_PROVIDER_ORDER. Order is
+            # twitterapi:scheduled, then twexapi.
+            order = tuple(name for name in order if name != "twitterapi:on_demand")
         scheduled = get_twitterapi_api_key(TwitterApiCredentialPurpose.SCHEDULED)
         ondemand = get_twitterapi_api_key(TwitterApiCredentialPurpose.ON_DEMAND)
         credentials = {name: value for name, value in (
@@ -328,11 +401,62 @@ class XClient:
         # Twex uses one account key for both scheduled and on-demand work.
         twex_identity = hashlib.sha256(key.encode()).hexdigest()[:16] if key else "not-configured"
         twex_circuit = SearchProviderCircuit(twex_identity, provider="twexapi", endpoint_family="search", threshold=threshold, cooldown=cooldown)
+        from x_monitor.search_provider_circuit import cooldown_ladder
+
+        # KTD2: the code default threshold (1) differs from the cron's env (2);
+        # print what this process actually resolved.
+        log.info(
+            "search routing resolved: purpose=%s order=%s threshold=%s cooldown_ladder=%s "
+            "search_timeout_s=%s search_max_retries=%s twexapi_interval_s=%s",
+            purpose.value, ",".join(available), threshold, list(cooldown_ladder(cooldown)),
+            timeout, retries, interval,
+        )
         return cls(api_key=primary_key or (credentials.get(primary_name) if primary_name else ""), twexapi_key=key, circuit=circuit,
                    twex_circuit=twex_circuit, provider_order=tuple(available), provider_credentials=credentials, provider_circuits=circuits,
                    twexapi_interval_s=interval, search_timeout_s=timeout,
                    search_max_retries=retries, force_twexapi=force,
                    default_credential_route="twitterapi:" + purpose.value.replace("-", "_") if primary_key else primary_name)
+
+    @property
+    def routed_search(self) -> bool:
+        """True for the multi-route client (circuits, search timeout, failover)."""
+        return bool(self.provider_circuits or self.twex_circuit)
+
+    def search_request_envelope(self) -> float:
+        """Worst-case seconds for one search request this client can start.
+
+        KTD6: the multi-route client never uses ``timeout_s``/``max_retries``
+        for search; its envelope is the search timeout times attempts, plus
+        the TwexAPI pacing-slot wait, plus 8 s. The single-provider client
+        keeps the legacy ``timeout_s * (max_retries + 1) + 8`` (188 s).
+        """
+        if not self.routed_search:
+            return float(self.timeout_s) * (int(self.max_retries) + 1) + 8.0
+        slot_wait = TWEX_SLOT_WAIT_SECONDS if (self.twexapi_key and "twexapi" in self.provider_order) else 0
+        return float(self.search_timeout_s) * (int(self.search_max_retries) + 1) + slot_wait + 8.0
+
+    def first_page_reserve(self) -> float:
+        """Seconds to keep in reserve for each call not yet sent this cycle.
+
+        One paced TwexAPI start when TwexAPI is a route, otherwise one
+        search timeout; a full envelope per call would exceed the deadline.
+        """
+        if not self.routed_search:
+            return 0.0
+        if self.twexapi_key and "twexapi" in self.provider_order:
+            # Pacing gap plus the observed ~1.4 s transport (7.4 s spacing).
+            return float(self.twexapi_interval_s) + 2.0
+        return float(self.search_timeout_s)
+
+    def ok_replies(self) -> int:
+        """HTTP 200 replies received by this client (lineage reply ordinal)."""
+        return self._ok_replies
+
+    def _note_exchange(self, receipt: dict[str, Any] | None = None) -> None:
+        if receipt is None:
+            self.exchanges_started += 1
+        elif receipt.get("outcome") == "received" and receipt.get("status_code") == 200:
+            self._ok_replies += 1
 
     # --- low-level HTTP --------------------------------------------------
 
@@ -374,6 +498,7 @@ class XClient:
                 self.on_exchange_start(path, trace_params)
                 if self.on_exchange_start is not None else None
             )
+            self._note_exchange()
             try:
                 if self.max_response_bytes is None:
                     r = requests.get(url, params=params, headers=self._headers(credential),
@@ -404,6 +529,7 @@ class XClient:
                     "outcome": "received", "status_code": r.status_code,
                     "body": r.content, "error_type": None,
                 })
+            self._note_exchange({"outcome": "received", "status_code": r.status_code})
             if raw_sink is not None:
                 raw_sink(r.content)
             if self.after_response is not None:
@@ -635,7 +761,13 @@ class XClient:
             raise
         except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError, ValueError):
             if self.twex_circuit:
-                self.twex_circuit.record_failure(datetime.now(timezone.utc))
+                self.twex_circuit.record_failure(_utcnow())
+            raise
+        except BaseException:
+            # Not a route result (other 4xx, deadline TimeoutError, generator
+            # close): release any probe so it is not held for its full lease.
+            if self.twex_circuit and getattr(self.twex_circuit, "is_probe", lambda: False)():
+                self.twex_circuit.abandon_probe()
             raise
         return result
 
@@ -646,27 +778,35 @@ class XClient:
                                      max_bytes=self.max_response_bytes or 8 * 1024 * 1024)
 
     def _twex_search(self, query, cursor, *, capture_raw=False, raw_sink=None, can_start_page=None):
-        wait_started = time.monotonic()
+        wait_started = _monotonic()
         while True:
             if can_start_page is not None and not can_start_page():
                 raise TimeoutError("search deadline reached before TwexAPI dispatch")
-            wait = self.circuit.acquire_fallback(datetime.now(timezone.utc), self.search_timeout_s + 30)
+            wait = self.circuit.acquire_fallback(_utcnow(), self.search_timeout_s + 30)
             if not wait:
                 break
-            if time.monotonic() - wait_started > 30:
+            if _monotonic() - wait_started > TWEX_SLOT_WAIT_SECONDS:
                 raise XClientRouteUnavailable("TwexAPI request slot unavailable before deadline")
-            time.sleep(min(wait, 1))
+            # Never inside a transaction: acquire_fallback has committed.
+            _sleep(min(wait, 1))
         params = {"searchTerms": [query], "sortBy": "Latest"}
         if cursor:
             params["next_cursor"] = cursor
         path = "/twitter/advanced_search/page"
-        started = time.monotonic()
+        started = _monotonic()
         token = None
         exchange_started = False
         release_interval = self.twexapi_interval_s
+        retry_after = None
         try:
-            if not self.circuit.fallback_owned(datetime.now(timezone.utc)):
+            if not self.circuit.fallback_owned(_utcnow()):
                 raise XClientRouteUnavailable("TwexAPI request lease expired before dispatch")
+            # KTD1: a half-open probe is claimed only once the pacing slot is
+            # held, so a caller waiting for the slot never blocks the probe.
+            twex = self.twex_circuit
+            if (twex is not None and not getattr(twex, "is_probe", lambda: False)()
+                    and not twex.primary_permitted(_utcnow())):
+                raise XClientRouteUnavailable("TwexAPI recovery probe is held elsewhere")
             if can_start_page is not None and not can_start_page():
                 raise TimeoutError("search deadline reached before TwexAPI dispatch")
             if self.before_request:
@@ -674,13 +814,15 @@ class XClient:
             url = "https://api.twexapi.io" + path
             token = self.on_exchange_start(url, {**params, "_provider_source": "twexapi"}) if self.on_exchange_start else None
             exchange_started = True
-            if not self.circuit.fallback_owned(datetime.now(timezone.utc)):
+            self._note_exchange()
+            if not self.circuit.fallback_owned(_utcnow()):
                 raise XClientRouteUnavailable("TwexAPI request lease expired before transport")
             headers = {"Authorization": "Bearer " + self.twexapi_key}
             response = self._twex_transport(url, params, headers)
             if response.status_code == 429:
                 retry = str(response.headers.get("Retry-After", ""))
-                release_interval = max(release_interval, int(retry) if retry.isdigit() else 6)
+                retry_after = int(retry) if retry.isdigit() else TWEX_DEFAULT_RETRY_AFTER_SECONDS
+                release_interval = max(release_interval, retry_after)
         except requests.RequestException as exc:
             if exchange_started and self.on_exchange_finish:
                 self.on_exchange_finish(token, {"outcome": "transport_error", "status_code": None,
@@ -692,10 +834,12 @@ class XClient:
                                                 "body": None, "error_type": type(exc).__name__})
             raise
         finally:
-            self.circuit.release_fallback(datetime.now(timezone.utc), release_interval)
+            # A slot that sent nothing imposes no provider spacing.
+            self.circuit.release_fallback(_utcnow(), release_interval if exchange_started else 0)
         if self.on_exchange_finish:
             self.on_exchange_finish(token, {"outcome": "received", "status_code": response.status_code,
                                             "body": response.content, "error_type": None})
+        self._note_exchange({"outcome": "received", "status_code": response.status_code})
         if raw_sink is not None:
             raw_sink(response.content)
         if self.after_response:
@@ -712,7 +856,7 @@ class XClient:
                                  "attempt": 1, "response_bytes": len(response.content), "provider": "twexapi"})
         if response.status_code == 429:
             exc = XClientRateLimitError("TwexAPI rate limit")
-            exc.retry_after_seconds = release_interval
+            exc.retry_after_seconds = retry_after
             exc.response_status_code = response.status_code
             raise exc
         if response.status_code == 401:
@@ -750,6 +894,90 @@ class XClient:
             time.sleep(wait)
             return self._twex_search(query, cursor, **kwargs)
 
+    def _route_circuit(self, provider):
+        if provider == "twexapi":
+            return self.twex_circuit
+        if provider.startswith("twitterapi:"):
+            return self.provider_circuits.get(provider)
+        return self.circuit
+
+    def _route_configured(self, provider):
+        if provider == "twexapi":
+            return bool(self.twexapi_key and self.circuit)
+        if provider.startswith("twitterapi:"):
+            return provider in self.provider_circuits
+        return True
+
+    def _count_route_failure(self, provider):
+        if provider.startswith("twitterapi"):
+            self._route_failures[provider] = self._route_failures.get(provider, 0) + 1
+
+    def _select_search_route(self, excluded, can_wait_for_rate_limit=None):
+        """KTD1: choose the first eligible route in owner order, else wait for one.
+
+        Eligibility is read without claiming a probe. An open route is always
+        used before any waiting. When none is eligible, sleep (outside any
+        database transaction) until the earliest route becomes eligible, if
+        the caller admits that wait plus one request; otherwise raise
+        ``XClientNoRoute``. KTD3: while another route is usable, a
+        TwitterAPI.io credential with three route failures in this cycle is
+        skipped for the rest of the cycle.
+        """
+        while True:
+            now = _utcnow()
+            candidates = [name for name in self.provider_order
+                          if name not in excluded and self._route_configured(name)]
+
+            def over_budget(name):
+                return (name.startswith("twitterapi")
+                        and self._route_failures.get(name, 0) >= TWITTERAPI_CYCLE_FAILURE_BUDGET)
+
+            usable = [name for name in candidates if not over_budget(name)]
+            if not usable:
+                usable = candidates
+            eligible_times = []
+            paced_only = None
+            for name in usable:
+                circuit = self._route_circuit(name)
+                if circuit is None:
+                    return name
+                pacing = None
+                if name == "twexapi":
+                    pacing_peek = getattr(self.circuit, "pacing_eligible_at", None)
+                    pacing = pacing_peek(now) if pacing_peek is not None else None
+                peek = getattr(circuit, "next_eligible_at", None)
+                if peek is None:
+                    # In-memory compatibility circuits only expose the claim.
+                    if circuit.primary_permitted(now):
+                        if pacing is None:
+                            return name
+                        paced_only = paced_only or name
+                    continue
+                eligible_at = peek(now)
+                if eligible_at is None:
+                    if name == "twexapi":
+                        if pacing is None:
+                            # The probe is claimed after the pacing slot (_twex_search).
+                            return name
+                        # Busy only on the shared pacing slot: prefer any open
+                        # route, else let _twex_search wait for the slot.
+                        paced_only = paced_only or name
+                        continue
+                    if circuit.primary_permitted(now):
+                        return name
+                    eligible_at = peek(_utcnow()) or now + timedelta(seconds=1)
+                eligible_times.append(eligible_at)
+            if paced_only is not None:
+                return paced_only
+            if not eligible_times:
+                raise XClientNoRoute("no configured search provider is available")
+            wait = max(0.05, (min(eligible_times) - now).total_seconds())
+            if can_wait_for_rate_limit is None or not can_wait_for_rate_limit(wait):
+                raise XClientNoRoute("no configured search provider is available")
+            log.info("Scheduled search waiting %.2fs for the earliest eligible search route", wait)
+            self.route_wait_seconds += wait
+            _sleep(wait)
+
     def _iter_search_pages(
         self, query, max_results, *, max_pages=5, max_per_page=20,
         since_time=None, cursor=None, can_start_page=None, can_wait_for_rate_limit=None,
@@ -759,46 +987,66 @@ class XClient:
         # a continuation token or a partially received walk to another source.
         if not (self.provider_circuits or self.twex_circuit) or cursor is not None or self.force_twexapi:
             yield from self._iter_search_pages_once(query, max_results, max_pages=max_pages,
-                max_per_page=max_per_page, since_time=since_time, cursor=cursor, can_start_page=can_start_page)
+                max_per_page=max_per_page, since_time=since_time, cursor=cursor, can_start_page=can_start_page,
+                can_wait=can_wait_for_rate_limit)
             return
         excluded = set()
+        limited: dict[str, int] = {}
+        replies_before = self._ok_replies
         while True:
             if can_start_page is not None and not can_start_page():
                 raise TimeoutError("search deadline reached before provider dispatch")
-            try:
-                provider = self._choose_search_provider(excluded)
-            except XClientServerError:
-                # A failed keyword retains its window. Give a subsequent keyword
-                # a single chance once the provider's short Retry-After expires.
-                if (can_wait_for_rate_limit is None or self._twex_retry_at is None
-                        or self._rate_limit_wait_used or "twexapi" in excluded):
-                    raise
-                wait = self._twex_retry_at - time.monotonic()
-                if not 0 < wait <= 30 or not can_wait_for_rate_limit(wait):
-                    raise
-                self._rate_limit_wait_used = True
-                log.info("Scheduled search waiting %.2fs after TwexAPI 429", wait)
-                time.sleep(wait)
-                continue
-            if provider == "twexapi":
-                self._twex_retry_at = None
+            provider = self._select_search_route(excluded, can_wait_for_rate_limit)
             yielded = False
             try:
                 for page in self._iter_search_pages_once(query, max_results, max_pages=max_pages,
                         max_per_page=max_per_page, since_time=since_time, cursor=None,
-                        can_start_page=can_start_page, selected_provider=provider):
+                        can_start_page=can_start_page, selected_provider=provider,
+                        can_wait=can_wait_for_rate_limit):
                     yielded = True
+                    # Lineage links each saved post to the Nth 200 reply of its
+                    # scope; a discarded first-page reply shifts that ordinal.
+                    ordinal = self._ok_replies - replies_before
+                    if ordinal > page.page_number:
+                        for item in page.items:
+                            item["_api_page_number"] = ordinal
                     yield page
                 return
-            except (XClientServerError, XClientAuthError, XClientRateLimitError, requests.Timeout, requests.ConnectionError) as exc:
-                if (provider == "twexapi" and can_wait_for_rate_limit is not None
-                        and isinstance(exc, XClientRateLimitError) and 0 < exc.retry_after_seconds <= 30):
-                    self._twex_retry_at = time.monotonic() + exc.retry_after_seconds
+            except (XClientRateLimitError, XClientRouteUnavailable):
+                # The route is eligible again at a known time (429 reset or the
+                # next pacing slot); it is not excluded for this call.
+                if yielded:
+                    raise
+                limited[provider] = limited.get(provider, 0) + 1
+                if limited[provider] >= FIRST_PAGE_LIMITED_ATTEMPTS:
+                    excluded.add(provider)
+                if len(excluded) >= len(self.provider_order):
+                    raise
+            except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError):
                 if yielded:
                     raise
                 excluded.add(provider)
                 if len(excluded) >= len(self.provider_order):
                     raise
+
+    def _retry_continuation(self, exc, *, provider, circuit, cursor, attempt, can_wait, can_start_page):
+        """KTD4: retry a refused continuation on the same route and cursor."""
+        if (not cursor or can_wait is None or attempt >= len(CONTINUATION_RETRY_DELAYS_SECONDS)
+                or not _retryable_page_error(exc)):
+            return False
+        delay = CONTINUATION_RETRY_DELAYS_SECONDS[attempt]
+        peek = getattr(circuit, "next_eligible_at", None)
+        eligible_at = peek(_utcnow()) if peek is not None else None
+        if eligible_at is not None:
+            delay = max(delay, (eligible_at - _utcnow()).total_seconds())
+        if not can_wait(delay):
+            return False
+        log.info("Retrying %s continuation page on the same cursor in %.1fs (%s)", provider, delay, type(exc).__name__)
+        self.route_wait_seconds += delay
+        _sleep(delay)
+        if can_start_page is not None and not can_start_page():
+            return False
+        return provider == "twexapi" or circuit is None or bool(circuit.primary_permitted(_utcnow()))
 
     def _iter_search_pages_once(
         self,
@@ -811,6 +1059,7 @@ class XClient:
         cursor: str | None = None,
         can_start_page: Callable[[], bool] | None = None,
         selected_provider: str | None = None,
+        can_wait: Callable[[float], bool] | None = None,
     ) -> Iterator[SearchPage]:
         """Yield normalized pages without fetching the next page early."""
         from x_monitor.x_data_provider import TwitterAPIProvider, TwexAPIProvider
@@ -822,21 +1071,22 @@ class XClient:
         if cursor and cursor.startswith("twexapi:"):
             if not self.twexapi_key or not self.circuit:
                 raise ValueError("TwexAPI cursor requires the fallback credential")
-            if self.twex_circuit and not self.twex_circuit.primary_permitted(datetime.now(timezone.utc)):
+            if self.twex_circuit and not self.twex_circuit.primary_permitted(_utcnow()):
                 raise XClientServerError("TwexAPI cursor held while provider circuit is open")
             provider = "twexapi"
             cursor = cursor.removeprefix("twexapi:")
         elif cursor and cursor.startswith("twitterapi:"):
             parts = cursor.split(":", 2)
             provider = ":".join(parts[:2])
-            if provider not in self.provider_circuits or not self.provider_circuits[provider].primary_permitted(datetime.now(timezone.utc)):
+            if provider not in self.provider_circuits or not self.provider_circuits[provider].primary_permitted(_utcnow()):
                 raise XClientServerError("TwitterAPI cursor held while provider circuit is open")
             cursor = parts[2]
-        elif cursor and self.circuit and not self.circuit.primary_permitted(datetime.now(timezone.utc)):
+        elif cursor and self.circuit and not self.circuit.primary_permitted(_utcnow()):
             raise XClientServerError("TwitterAPI cursor held while provider circuit is open")
         elif not cursor and selected_provider is None and (self.twexapi_key or self.provider_circuits) and self.circuit:
             provider = self._choose_search_provider()
         active_circuit = self.provider_circuits.get(provider, self.circuit)
+        routed = bool(self.twexapi_key or self.provider_circuits)
         page_number = 0
         seen_cursors = {cursor} if cursor else set()
         seen_ids = set()
@@ -845,80 +1095,39 @@ class XClient:
                 return
             page_circuit = self.twex_circuit if provider == "twexapi" else active_circuit
             renew = getattr(page_circuit, "renew_probe", None)
-            if renew and not renew(datetime.now(timezone.utc)):
+            if renew and not renew(_utcnow()):
                 raise XClientRouteUnavailable("search recovery probe lease expired")
             page_number += 1
             remaining = None if max_results is None else max_results - n_returned
-            params: dict[str, Any] = {
-                "query": query,
-                "queryType": "Latest",
-                "limit": max_per_page if remaining is None else min(max_per_page, remaining),
-            }
+            limit = max_per_page if remaining is None else min(max_per_page, remaining)
             # NB: do NOT add a URL-side time-filter param here — TwitterAPI.io
             # silently drops unknown URL params on advanced_search. The time
             # floor is injected into the query string as an inline
             # `since_time:<n>` operator, handled in run_search before we get
             # here. See docs/debug/2026-07-14-160222-call-state-not-persisting.md
             # for the API test that proved the URL-param form is ignored.
-            if cursor:
-                params["cursor"] = cursor
-            if provider == "twexapi":
-                adapter = TwexAPIProvider(self)
-                options = {"retry_rate_limit": False} if selected_provider else {}
-                data = adapter.search_page(query, cursor, can_start_page=can_start_page, **options)
+            attempt = 0
+            while True:
                 try:
-                    page = adapter.normalize_page(data, page_number=page_number, max_results=remaining)
-                except (TypeError, ValueError, KeyError) as exc:
-                    if self.twex_circuit:
-                        self.twex_circuit.record_failure(datetime.now(timezone.utc))
-                    raise XClientServerError("TwexAPI search response invalid") from exc
-                if _unresolved_empty_page(page, data, cursor):
-                    if twex_empty_with_cursor(data) and page.next_cursor not in seen_cursors:
-                        if self.twex_circuit:
-                            self.twex_circuit.abandon_probe()
-                        if not cursor:
-                            yield replace(page, continuation_invalid=True, has_more=False, next_cursor=None)
-                            return
-                    elif self.twex_circuit:
-                        self.twex_circuit.record_failure(datetime.now(timezone.utc))
-                    raise XClientServerError("TwexAPI empty page when continuation expected")
-                if page_number == 1 and not cursor:
-                    expected = self.circuit.observe_query(query, nonempty=bool(page.items), now=datetime.now(timezone.utc))
-                    if unexpected_empty_search_page(page.items, expected):
-                        if self.twex_circuit:
-                            self.twex_circuit.record_failure(datetime.now(timezone.utc))
-                        raise XClientServerError("TwexAPI empty page on expected nonempty search")
-                if page.next_cursor:
-                    page = replace(page, next_cursor="twexapi:" + page.next_cursor)
-            elif (self.twexapi_key or self.provider_circuits) and active_circuit:
-                try:
-                    adapter = TwitterAPIProvider(self)
-                    credential = self.provider_credentials.get(provider)
-                    credential_option = {"credential": credential, "credential_name": provider} if credential is not None else {}
-                    data = adapter.search_page(query, cursor, limit=params["limit"], timeout_s=self.search_timeout_s,
-                                               max_retries=self.search_max_retries, **credential_option)
-                    try:
+                    if provider == "twexapi":
+                        page = self._twex_page(TwexAPIProvider(self), query, cursor, page_number=page_number,
+                                               remaining=remaining, can_start_page=can_start_page,
+                                               selected=selected_provider is not None)
+                    elif routed and active_circuit:
+                        page = self._twitterapi_page(TwitterAPIProvider(self), provider, active_circuit, query,
+                                                     cursor, page_number=page_number, remaining=remaining,
+                                                     limit=limit)
+                    else:
+                        adapter = TwitterAPIProvider(self)
+                        data = adapter.search_page(query, cursor, limit=limit)
                         page = adapter.normalize_page(data, page_number=page_number, max_results=remaining)
-                    except (TypeError, ValueError, KeyError) as exc:
-                        raise XClientServerError("TwitterAPI.io search response invalid") from exc
-                    if _unresolved_empty_page(page, data, cursor):
-                        raise XClientServerError("primary empty page when continuation expected")
-                    if page_number == 1 and not cursor:
-                        expected = active_circuit.observe_query(query, nonempty=bool(page.items), now=datetime.now(timezone.utc))
-                        if unexpected_empty_search_page(page.items, expected):
-                            raise XClientServerError("primary empty page on expected nonempty search")
-                except XClientRateLimitError as exc:
-                    active_circuit.record_rate_limit(datetime.now(timezone.utc), exc.retry_after_seconds)
-                    raise
-                except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError):
-                    active_circuit.record_failure(datetime.now(timezone.utc))
-                    raise
-                if page.next_cursor and provider.startswith("twitterapi:"):
-                    page = replace(page, next_cursor=provider + ":" + page.next_cursor)
-            else:
-                adapter = TwitterAPIProvider(self)
-                data = adapter.search_page(query, cursor, limit=params["limit"])
-                page = adapter.normalize_page(data, page_number=page_number, max_results=remaining)
+                    break
+                except Exception as exc:
+                    if not (routed and self._retry_continuation(
+                            exc, provider=provider, circuit=page_circuit, cursor=cursor, attempt=attempt,
+                            can_wait=can_wait, can_start_page=can_start_page)):
+                        raise
+                    attempt += 1
             ids = {identity for identity in page.raw_post_ids if identity}
             next_cursor = page.next_cursor
             if next_cursor and provider == "twexapi":
@@ -926,18 +1135,16 @@ class XClient:
             elif next_cursor and provider.startswith("twitterapi:"):
                 next_cursor = next_cursor.removeprefix(provider + ":")
             if page.has_more and (next_cursor in seen_cursors or bool(ids) and ids <= seen_ids):
+                # KTD2: a repeated cursor or duplicate-only page ends this
+                # query's walk incomplete; it says nothing about route health.
                 page = replace(page, continuation_invalid=True)
             n_returned += len(page.items)
             seen_ids.update(ids)
             page_circuit = (self.twex_circuit if provider == "twexapi" else active_circuit
-                            if self.twexapi_key or self.provider_circuits else None)
+                            if routed else None)
             if page_circuit:
-                if page.continuation_invalid:
-                    page_circuit.record_failure(datetime.now(timezone.utc))
-                elif (not page.has_more or page.clipped
-                      or (max_results is not None and n_returned >= max_results)
-                      or (max_pages is not None and page_number >= max(1, max_pages))):
-                    page_circuit.record_success(datetime.now(timezone.utc))
+                # KTD2: every valid page proves the route answered.
+                page_circuit.record_success(_utcnow())
             try:
                 yield page
             except GeneratorExit:
@@ -954,6 +1161,74 @@ class XClient:
             else:
                 cursor = page.next_cursor
             seen_cursors.add(cursor)
+
+    def _twex_page(self, adapter, query, cursor, *, page_number, remaining, can_start_page, selected):
+        options = {"retry_rate_limit": False} if selected else {}
+        data = adapter.search_page(query, cursor, can_start_page=can_start_page, **options)
+        try:
+            if data.get("next_cursor") is not None and not isinstance(data.get("next_cursor"), str):
+                raise TypeError("TwexAPI next_cursor must be a string")
+            page = adapter.normalize_page(data, page_number=page_number, max_results=remaining)
+        except (AttributeError, TypeError, ValueError, KeyError) as exc:
+            if self.twex_circuit:
+                self.twex_circuit.record_failure(_utcnow())
+            raise XClientServerError("TwexAPI search response invalid") from exc
+        if not page.items:
+            # Owner decision 2026-11-24 (R5/KTD7, TwexAPI only): a TwexAPI
+            # search ends at its first empty page and is complete, whether or
+            # not that page offers a cursor and whether or not earlier pages
+            # returned posts. No evidence shows results after an empty page;
+            # if it appears, the rule becomes the second consecutive empty
+            # page. The request ledger keeps returned_count/cursor_after so
+            # every inferred end can be recomputed.
+            if page_number == 1 and not cursor and self.query_history_enabled:
+                self.circuit.observe_query(query, nonempty=False, now=_utcnow())
+            log.info("search_provider=twexapi walk ended on an empty page (page=%s cursor_offered=%s)",
+                     page_number, bool(page.next_cursor))
+            return replace(page, has_more=False, next_cursor=None, continuation_invalid=False,
+                           clipped=False, ended_on_empty_page=True)
+        if page_number == 1 and not cursor and self.query_history_enabled:
+            self.circuit.observe_query(query, nonempty=True, now=_utcnow())
+        if page.next_cursor:
+            page = replace(page, next_cursor="twexapi:" + page.next_cursor)
+        return page
+
+    def _twitterapi_page(self, adapter, provider, active_circuit, query, cursor, *, page_number, remaining, limit):
+        try:
+            credential = self.provider_credentials.get(provider)
+            credential_option = {"credential": credential, "credential_name": provider} if credential is not None else {}
+            data = adapter.search_page(query, cursor, limit=limit, timeout_s=self.search_timeout_s,
+                                       max_retries=self.search_max_retries, **credential_option)
+            try:
+                page = adapter.normalize_page(data, page_number=page_number, max_results=remaining)
+            except (TypeError, ValueError, KeyError) as exc:
+                raise XClientServerError("TwitterAPI.io search response invalid") from exc
+            # TwitterAPI.io end-of-results rules are unchanged; these are query
+            # outcomes (KTD2) and do not count against the route.
+            if _unresolved_empty_page(page, data, cursor):
+                raise XClientQueryOutcome("primary empty page when continuation expected")
+            if page_number == 1 and not cursor and self.query_history_enabled:
+                expected = active_circuit.observe_query(query, nonempty=bool(page.items), now=_utcnow())
+                if unexpected_empty_search_page(page.items, expected):
+                    raise XClientQueryOutcome("primary empty page on expected nonempty search")
+        except XClientRateLimitError as exc:
+            active_circuit.record_rate_limit(_utcnow(), exc.retry_after_seconds)
+            raise
+        except XClientQueryOutcome:
+            if getattr(active_circuit, "is_probe", lambda: False)():
+                active_circuit.abandon_probe()
+            raise
+        except (XClientServerError, XClientAuthError, requests.Timeout, requests.ConnectionError):
+            active_circuit.record_failure(_utcnow())
+            self._count_route_failure(provider)
+            raise
+        except BaseException:
+            if getattr(active_circuit, "is_probe", lambda: False)():
+                active_circuit.abandon_probe()
+            raise
+        if page.next_cursor and provider.startswith("twitterapi:"):
+            page = replace(page, next_cursor=provider + ":" + page.next_cursor)
+        return page
 
     def _walk_search(
         self,

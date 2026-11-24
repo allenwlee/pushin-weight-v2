@@ -158,7 +158,14 @@ from x_monitor.attribution import (
     attribute_to_brands,
     compile_keyword_index,
 )
-from x_monitor.config import Config, CycleConfig, load_config
+from x_monitor.config import (
+    BacklogConfig,
+    Config,
+    CycleConfig,
+    legacy_request_envelope,
+    load_config,
+    search_tail_seconds,
+)
 from x_monitor.harvest_policy import HarvestPolicy
 from x_monitor.jev_decisions import build_jev_decision_gate
 from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap, query_size_bytes
@@ -1782,8 +1789,43 @@ def _cursor_key(call: PlannedCall) -> dict[str, str]:
     }
 
 
+def _search_request_envelope(api: Any) -> float:
+    """KTD6: the client's own worst case for one search request.
+
+    The multi-route client derives it from its search timeout and pacing;
+    the single-provider client and test doubles keep the legacy 188 s
+    ``timeout_s * (max_retries + 1) + 8``.
+    """
+    envelope = getattr(api, "search_request_envelope", None)
+    if callable(envelope):
+        return float(envelope())
+    return legacy_request_envelope(
+        getattr(api, "timeout_s", 60), getattr(api, "max_retries", 2)
+    )
+
+
+def _query_history_suppressed(api: Any):
+    """KTD9: replays ignore the expected-results heuristic (window width)."""
+    from contextlib import contextmanager
+
+    @contextmanager
+    def suppressed():
+        if not hasattr(api, "query_history_enabled"):
+            yield
+            return
+        previous = api.query_history_enabled
+        api.query_history_enabled = False
+        try:
+            yield
+        finally:
+            api.query_history_enabled = previous
+
+    return suppressed()
+
+
 def _read_cursor_since(
-    call: PlannedCall, *, now: datetime, cfg: Config | None = None
+    call: PlannedCall, *, now: datetime, cfg: Config | None = None,
+    clamps: list[tuple[datetime, datetime]] | None = None,
 ) -> datetime:
     """Resolve the `since_time` floor for one call, clamped to cfg.cycle.max_lookback.
 
@@ -1837,7 +1879,22 @@ def _read_cursor_since(
                 prior - now,
             )
             return ceiling
-        return max(prior - timedelta(seconds=cycle_cfg.cursor_overlap_seconds), floor)
+        wanted = prior - timedelta(seconds=cycle_cfg.cursor_overlap_seconds)
+        if wanted < floor:
+            if prior < floor:
+                # KTD8: the lookback clamp used to drop [prior, floor) silently.
+                # (Only the overlap is lost when prior == floor, and the
+                # previous window already covered it.)
+                logger.warning(
+                    "_read_cursor_since: stale cursor for call_id=%s (%s); live "
+                    "window clamped to %s; uncovered span [%s, %s)",
+                    call.call_id, prior.isoformat(), floor.isoformat(),
+                    prior.isoformat(), floor.isoformat(),
+                )
+                if clamps is not None:
+                    clamps.append((prior, floor))
+            return floor
+        return wanted
     except Exception as exc:
         logger.warning(
             "_read_cursor_since: cursor read failed for call_id=%s: %s; "
@@ -2612,6 +2669,14 @@ class CycleRunner:
         self._collection_window_end = _collection_window_end
         self._cycle_started_monotonic = _cycle_started_monotonic
         self._llm_call_count: int = 0
+        # KTD6 first-page fairness: ordinary calls after the current one that
+        # have not been sent this cycle. Zero outside the live call loop.
+        self._unsent_calls_after: int = 0
+        self._last_window_clamp: tuple[datetime, datetime] | None = None
+        # U6 counted events (previously only error strings).
+        self._backlog_capacity_refused: int = 0
+        self._clamped_spans_queued: int = 0
+        self._clamped_spans_uncovered: int = 0
 
         # Per-cycle accumulators for the run summary
         self._posts_seen: int = 0
@@ -2638,6 +2703,78 @@ class CycleRunner:
             "synthesis_prewarm_failed": 0,
             "enrichment_quarantined": 0,
         }
+
+    def _search_tail_seconds(self, api: Any) -> float:
+        """KTD6 reserved tail; zero for the single-provider client."""
+        if not getattr(api, "routed_search", False):
+            return 0.0
+        return search_tail_seconds(
+            self.cfg,
+            metrics_request_envelope=legacy_request_envelope(
+                getattr(api, "timeout_s", 60), getattr(api, "max_retries", 2)
+            ),
+        )
+
+    def _first_page_reserve_seconds(self, api: Any) -> float:
+        reserve = getattr(api, "first_page_reserve", None)
+        if not callable(reserve) or not getattr(api, "routed_search", False):
+            return 0.0
+        return float(reserve()) * self._unsent_calls_after
+
+    def _note_transfer(self, transfer: Any) -> None:
+        if getattr(transfer, "outcome", None) == "capacity_refused":
+            self._backlog_capacity_refused += 1
+
+    def _record_clamped_span(self, call: PlannedCall, *, now: datetime) -> str | None:
+        """KTD8: queue the span a stale cursor's lookback clamp skipped.
+
+        The span coalesces with overlapping pending windows for the call
+        through ``normalize_residual``. A span older than the backlog's
+        ``max_age_hours`` is logged and counted as uncovered instead; it
+        belongs to an operator-run X post backfill.
+        """
+        clamp = self._last_window_clamp
+        self._last_window_clamp = None
+        if clamp is None:
+            return None
+        since, until = clamp
+        backlog_cfg = self.cfg.harvest.backlog
+        since = since.replace(microsecond=0)
+        until = until.replace(microsecond=0)
+        if since >= until:
+            return None
+        if since < now - timedelta(hours=backlog_cfg.max_age_hours):
+            logger.warning(
+                "run: call_id=%s clamped span [%s, %s) is older than %sh; "
+                "left for an X post backfill",
+                call.call_id, since.isoformat(), until.isoformat(), backlog_cfg.max_age_hours,
+            )
+            self._clamped_spans_uncovered += 1
+            return "uncovered_too_old"
+        try:
+            with transaction.atomic():
+                result = HarvestBacklogWindow.objects.normalize_residual(
+                    call_identity=_cursor_key(call),
+                    original_since=since,
+                    original_until=until,
+                    remaining_since=since,
+                    remaining_until=until,
+                    reason_code="lookback_clamp",
+                    pending_limit=backlog_cfg.pending_per_call,
+                    quarantined_limit=backlog_cfg.quarantined_per_call,
+                )
+        except (DatabaseError, ValueError) as exc:
+            logger.warning("run: clamped span for %s was not recorded: %s", call.call_id, exc)
+            self._clamped_spans_uncovered += 1
+            self._errors.append(f"coverage.{call.call_id}: clamp_record_failed")
+            return "record_failed"
+        if not result.ownership_recorded:
+            self._backlog_capacity_refused += 1
+            self._clamped_spans_uncovered += 1
+            self._errors.append(f"coverage.{call.call_id}: clamp_capacity_refused")
+            return "capacity_refused"
+        self._clamped_spans_queued += 1
+        return result.outcome
 
     @property
     def twitterapi_credential_purpose(self) -> TwitterApiCredentialPurpose:
@@ -2842,7 +2979,9 @@ class CycleRunner:
                 False,
             )
 
-        since_dt = _read_cursor_since(call, now=now, cfg=self.cfg)
+        clamps: list[tuple[datetime, datetime]] = []
+        since_dt = _read_cursor_since(call, now=now, cfg=self.cfg, clamps=clamps)
+        self._last_window_clamp = clamps[0] if clamps else None
         return int(since_dt.timestamp()), int(now.timestamp()), True
 
     def _fetch_tweets(
@@ -2914,17 +3053,35 @@ class CycleRunner:
             max_pages_cap = 1
         page_admission = {}
         if deadline is not None:
+            # KTD6 applies to scheduled collection. The X post backfill keeps
+            # its page budget on the legacy envelope so its paid page count
+            # per budget does not change here.
             request_envelope = (
-                float(getattr(api, "timeout_s", 60))
-                * (int(getattr(api, "max_retries", 2)) + 1)
-                + 8.0
+                _search_request_envelope(api) if self.cycle_kind == "scheduled"
+                else legacy_request_envelope(
+                    getattr(api, "timeout_s", 60), getattr(api, "max_retries", 2)
+                )
             )
             if self.cycle_kind == "scheduled":
-                page_admission["can_start_page"] = (
-                    lambda: deadline.remaining() >= request_envelope
+                # KTD6: the multi-route client also keeps a derived tail for
+                # the steps after search, and (first-page fairness) reserves
+                # one paced first page for every call not yet sent before it
+                # admits a continuation page or a route wait. The single-
+                # provider client keeps its baseline 188 s admission exactly.
+                tail = self._search_tail_seconds(api)
+                reserve = self._first_page_reserve_seconds(api)
+                replies = getattr(api, "ok_replies", None)
+                replies_at_start = replies() if callable(replies) else None
+
+                def first_page_received() -> bool:
+                    return replies_at_start is not None and replies() > replies_at_start
+
+                page_admission["can_start_page"] = lambda: deadline.remaining() >= (
+                    request_envelope + tail + (reserve if first_page_received() else 0.0)
                 )
                 page_admission["can_wait_for_rate_limit"] = (
-                    lambda delay: deadline.remaining() >= delay + request_envelope
+                    lambda delay: deadline.remaining()
+                    >= delay + request_envelope + tail + reserve
                 )
             else:
                 page_budget = int(deadline.remaining() // request_envelope)
@@ -5410,27 +5567,47 @@ class CycleRunner:
             if cycle_started_monotonic is None
             else cycle_started_monotonic
         )
+        scheduled = self.cycle_kind == "scheduled"
         request_envelope = (
-            float(getattr(api, "timeout_s", 60))
-            * (int(getattr(api, "max_retries", 2)) + 1)
-            + 8.0
+            _search_request_envelope(api) if scheduled
+            else legacy_request_envelope(getattr(api, "timeout_s", 60), getattr(api, "max_retries", 2))
         )
+        tail = self._search_tail_seconds(api) if scheduled else 0.0
+        routed = scheduled and bool(getattr(api, "routed_search", False))
         backlog_cfg = self.cfg.harvest.backlog
+        # KTD9: replays run while the KTD6 tail allows, up to the configured
+        # ceiling; each window is tried at most once per run.
+        tried_window_ids: set[int] = set()
+        # The raised ceiling is for the scheduled cron. Operator-run replays
+        # (``backfill --quarantined``, on-demand key) keep their previous
+        # per-invocation count, the model default.
+        replay_limit = (
+            backlog_cfg.replays_per_cycle if scheduled
+            else min(backlog_cfg.replays_per_cycle, BacklogConfig().replays_per_cycle)
+        )
 
-        for _ in range(backlog_cfg.replays_per_cycle):
-            if not deadline.can_start(request_envelope):
+        for _ in range(replay_limit):
+            if not deadline.can_start(request_envelope + tail):
                 reports.append({"status": "deadline_exhausted"})
                 break
+            # The claim must outlive the replay envelope plus the longest
+            # route wait the deadline could still admit.
+            expiry_seconds = max(int(request_envelope * 2), 60)
+            if routed and callable(getattr(deadline, "remaining", None)):
+                expiry_seconds = max(expiry_seconds, int(deadline.remaining() + request_envelope))
             claim = HarvestBacklogWindow.objects.claim_next(
                 owner=f"cycle:{run_id}",
                 run_id=run_id,
                 claim_expires_at=datetime.now(timezone.utc)
-                + timedelta(seconds=max(int(request_envelope * 2), 60)),
+                + timedelta(seconds=expiry_seconds),
                 include_quarantined=include_quarantined,
                 only_quarantined=quarantined_only,
+                exclude_ids=tried_window_ids,
             )
             if claim is None:
                 break
+            tried_window_ids.add(claim.pk)
+            exchanges_before = getattr(api, "exchanges_started", None)
 
             identity = {
                 field: getattr(claim, field)
@@ -5471,10 +5648,20 @@ class CycleRunner:
                     )
                     lineage.bind_api(api, scope_id)
                 try:
-                    items, outcome = self._fetch_tweets(call, api, window=discovery_window, deadline=deadline)
+                    with _query_history_suppressed(api):
+                        items, outcome = self._fetch_tweets(call, api, window=discovery_window, deadline=deadline)
                 finally:
                     if scope_id is not None:
                         lineage.unbind_api(api)
+                # KTD9: an attempt is consumed only by a physical request.
+                # Length-cap and credit-ceiling refusals are our own limits on
+                # this window and keep their previous attempt accounting.
+                sent = (
+                    outcome in {"length_cap_exceeded", "daily_credit_ceiling"}
+                    or not isinstance(exchanges_before, int)
+                    or getattr(api, "exchanges_started", exchanges_before) > exchanges_before
+                )
+                report["request_sent"] = sent
                 if scope_id is not None:
                     lineage.finish_call(
                         scope_id, post_ids=[], raw_count=len(items),
@@ -5593,6 +5780,7 @@ class CycleRunner:
                         max_attempts=backlog_cfg.max_attempts,
                         max_age_hours=backlog_cfg.max_age_hours,
                         retry_at=self._wall_now() + timedelta(minutes=15),
+                        refund_attempt=not sent,
                     )
                 elif outcome == "ok":
                     if scope_id is not None:
@@ -5615,12 +5803,22 @@ class CycleRunner:
                         if epochs
                         else None
                     )
+                    narrowed = (
+                        narrowed_until is not None
+                        and claim.remaining_since < narrowed_until < claim.remaining_until
+                    )
+                    # KTD9: progress (a narrower window) and a replay that sent
+                    # nothing do not count toward the attempt ceiling; the
+                    # same +15 min delay as a failed replay keeps the window
+                    # out of this cycle's loop.
                     report["status"] = return_claim(
                         claim.pk,
                         reason="replay_truncated",
                         max_attempts=backlog_cfg.max_attempts,
                         max_age_hours=backlog_cfg.max_age_hours,
                         remaining_until=narrowed_until,
+                        retry_at=self._wall_now() + timedelta(minutes=15),
+                        refund_attempt=narrowed or not sent,
                     )
             except Exception as exc:
                 logger.warning("backlog replay failed for window=%s: %s", claim.pk, exc)
@@ -5633,6 +5831,10 @@ class CycleRunner:
                 self._errors.append(f"backlog.{claim.call_id}: {exc}")
             report["wall_clock_ms"] = round((self._monotonic() - replay_started) * 1000)
             reports.append(report)
+            if report.get("request_sent") is False:
+                # KTD9: stop at the first replay that could not reach a
+                # provider; later windows would fail the same way.
+                break
         return reports
 
     def replay_backlog_only(self, *, include_quarantined: bool = False) -> dict[str, Any]:
@@ -5910,7 +6112,13 @@ class CycleRunner:
             (call.call_id for call in reversed(calls) if call.call_id in PAID_DISCOVERY_CALL_IDS), None
         )
 
+        ordinary_call_ids = [
+            call.call_id for call in calls if call.call_id not in PAID_DISCOVERY_CALL_IDS
+        ]
         for call in calls:
+            if call.call_id not in PAID_DISCOVERY_CALL_IDS:
+                ordinary_call_ids.remove(call.call_id)
+                self._unsent_calls_after = len(ordinary_call_ids)
             call_t0 = self._monotonic()
             request_started_at = self._wall_now().isoformat()
             call_entry: dict[str, Any] = {
@@ -5982,8 +6190,13 @@ class CycleRunner:
             )
             call_entry["window_since"] = since_epoch
             call_entry["window_until"] = until_epoch
+            if cursor_owned and self.cycle_kind == "scheduled" and self._backfill_context is None:
+                self._record_clamped_span(call, now=self._collection_window_end or call_now)
+            else:
+                self._last_window_clamp = None
 
             # Fetch
+            route_wait_before = getattr(api, "route_wait_seconds", None)
             lineage_scope_id = None
             if self._scheduled_lineage is not None:
                 lineage_scope_id = self._scheduled_lineage.begin_call(
@@ -6004,6 +6217,10 @@ class CycleRunner:
             finally:
                 if lineage_scope_id is not None:
                     self._scheduled_lineage.unbind_api(api)
+            if isinstance(route_wait_before, (int, float)):
+                call_entry["route_wait_ms"] = round(
+                    (float(getattr(api, "route_wait_seconds", 0.0)) - route_wait_before) * 1000
+                )
             if self._backfill_context is not None:
                 call_entry["backfill_progress"] = dict(self._backfill_fetch_receipt)
             discovery_window = (since_epoch, until_epoch)
@@ -6080,9 +6297,13 @@ class CycleRunner:
                     call.call_id,
                     outcome,
                 )
+                cursor_advanced = False
                 if outcome == "error" and cursor_owned and self.cycle_kind == "scheduled":
-                    # A held cursor can age beyond the live lookback before the next run.
                     # Give this exact failed window a durable replay record.
+                    # KTD8: once the backlog accepts it, the backlog row owns
+                    # the interval and the cursor advances (the same hand-off
+                    # truncated calls use). A refused transfer holds the cursor,
+                    # and the next cycle records the clamped span instead.
                     transfer = transfer_truncated_coverage(
                         call_identity=_cursor_key(call),
                         original_since=since_epoch,
@@ -6091,15 +6312,17 @@ class CycleRunner:
                         reason_code="search_failed",
                         pending_limit=self.cfg.harvest.backlog.pending_per_call,
                         quarantined_limit=self.cfg.harvest.backlog.quarantined_per_call,
-                        advance_cursor=False,
+                        advance_cursor=True,
                         retry_at=call_now + timedelta(minutes=15),
                     )
+                    self._note_transfer(transfer)
+                    cursor_advanced = transfer.cursor_advanced
                     call_entry["coverage_transfer"] = transfer.outcome
                     call_entry["backlog_window_id"] = transfer.backlog_window_id
                     if transfer.outcome != "transferred":
                         self._errors.append(f"coverage.{call.call_id}: {transfer.outcome}")
                 call_entry["status"] = outcome
-                call_entry["cursor_advanced"] = False
+                call_entry["cursor_advanced"] = cursor_advanced
                 call_entry["fetch_n"] = call_entry.get("n_results", 0)
                 call_entry["wall_clock_ms"] = round((self._monotonic() - call_t0) * 1000)
                 summary["calls"].append(call_entry)
@@ -6146,6 +6369,7 @@ class CycleRunner:
                                 self.cfg.harvest.backlog.quarantined_per_call
                             ),
                         )
+                        self._note_transfer(transfer)
                         call_entry["coverage_transfer"] = transfer.outcome
                         call_entry["cursor_advanced"] = transfer.cursor_advanced
                         call_entry["backlog_window_id"] = transfer.backlog_window_id
@@ -6305,6 +6529,7 @@ class CycleRunner:
                             self.cfg.harvest.backlog.quarantined_per_call
                         ),
                     )
+                    self._note_transfer(transfer)
                     call_entry["coverage_transfer"] = transfer.outcome
                     call_entry["cursor_advanced"] = transfer.cursor_advanced
                     call_entry["backlog_window_id"] = transfer.backlog_window_id
@@ -6356,7 +6581,11 @@ class CycleRunner:
             tr["keep_rate_mean"] = round(sum(rates) / len(rates), 4) if rates else 0.0
             tr["keep_rate_max"] = round(max(rates), 4) if rates else 0.0
 
+        self._unsent_calls_after = 0
         summary["tip_sweep_wall_clock_sec"] = round(self._monotonic() - t0, 3)
+        # Deliberate route waits (KTD1) count toward first-page latency, so a
+        # degraded provider can raise tip_sweep_first_page_timeout; the flag's
+        # meaning is unchanged.
         tip_sweep_target_ms = int(self.cfg.harvest.tip_sweep_target_seconds * 1000)
         summary["tip_sweep_within_target"] = (
             first_page_max_ms <= tip_sweep_target_ms
@@ -6538,6 +6767,9 @@ class CycleRunner:
 
         # ---- Finalize ----
         summary["totals"]["n_results"] = self._posts_seen
+        summary["totals"]["n_backlog_capacity_refused"] = self._backlog_capacity_refused
+        summary["totals"]["n_clamped_spans_queued"] = self._clamped_spans_queued
+        summary["totals"]["n_clamped_spans_uncovered"] = self._clamped_spans_uncovered
         summary["totals"]["n_inserted"] = self._posts_inserted
         summary["totals"]["n_updated"] = self._posts_updated
         summary["totals"]["n_persist_failed"] = self._posts_persist_failed

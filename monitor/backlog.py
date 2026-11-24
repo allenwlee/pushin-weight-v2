@@ -151,8 +151,17 @@ def return_claim(
     remaining_until: datetime | None = None,
     now: datetime | None = None,
     retry_at: datetime | None = None,
+    refund_attempt: bool = False,
 ) -> str:
-    """Return an interrupted claim to pending or quarantine it at a ceiling."""
+    """Return an interrupted claim to pending or quarantine it at a ceiling.
+
+    KTD9 (plan 2026-11-24-012909): ``refund_attempt`` returns the attempt
+    ``claim_next`` charged when the replay sent no physical request or made
+    progress by narrowing its window; such a return never reaches the
+    attempt ceiling. Age quarantine uses the window's newest uncovered time
+    (``remaining_until``), so coalescing an old row with a fresh span does
+    not age the fresh span out.
+    """
 
     now = now or django_timezone.now()
     with transaction.atomic():
@@ -165,8 +174,10 @@ def return_claim(
             narrowed = min(_aware(remaining_until), window.remaining_until)
             if narrowed > window.remaining_since:
                 window.remaining_until = narrowed
-        too_old = window.first_seen_at <= now - timedelta(hours=max_age_hours)
-        if window.attempts >= max_attempts or too_old:
+        if refund_attempt and window.attempts > 0:
+            window.attempts -= 1
+        too_old = window.remaining_until <= now - timedelta(hours=max_age_hours)
+        if (window.attempts >= max_attempts and not refund_attempt) or too_old:
             window.state = HarvestBacklogWindow.State.QUARANTINED
             window.quarantine_reason = reason[:128]
             window.quarantined_at = now

@@ -420,3 +420,75 @@ def test_enrichment_state_is_one_to_one_and_stores_no_payload():
         "model_output",
         "raw_payload",
     }
+
+
+# --- U6 (plan 2026-11-24-012909): claim and return accounting
+
+
+def _claimed_window(*, remaining_until, first_seen_at=None):
+    from core.models import HarvestBacklogWindow
+
+    now = timezone.now()
+    window = HarvestBacklogWindow.objects.create(
+        **CALL_A, original_since=remaining_until - timedelta(minutes=15),
+        original_until=remaining_until, remaining_since=remaining_until - timedelta(minutes=15),
+        remaining_until=remaining_until, reason_code="search_failed",
+    )
+    if first_seen_at is not None:
+        HarvestBacklogWindow.objects.filter(pk=window.pk).update(first_seen_at=first_seen_at)
+    claimed = HarvestBacklogWindow.objects.claim_next(
+        owner="cycle", run_id="run", now=now, claim_expires_at=now + timedelta(minutes=5),
+    )
+    assert claimed.pk == window.pk
+    return window
+
+
+def test_age_quarantine_uses_the_newest_uncovered_time():
+    """KTD8: a coalesced window keeps its oldest ``first_seen_at``, so age is
+    judged by ``remaining_until``; a fresh span is not aged out with it."""
+    from core.models import HarvestBacklogWindow
+    from monitor.backlog import return_claim
+
+    now = timezone.now()
+    stale = _claimed_window(remaining_until=now - timedelta(hours=25))
+    assert return_claim(stale.pk, reason="error", max_attempts=8, max_age_hours=24, now=now) == "quarantined"
+    HarvestBacklogWindow.objects.all().delete()
+
+    fresh = _claimed_window(remaining_until=now - timedelta(minutes=5),
+                            first_seen_at=now - timedelta(hours=25))
+    assert return_claim(fresh.pk, reason="error", max_attempts=8, max_age_hours=24, now=now) == "pending"
+
+
+def test_refunded_attempt_never_reaches_the_ceiling():
+    """KTD9: a replay that sent nothing returns its attempt."""
+    from core.models import HarvestBacklogWindow
+    from monitor.backlog import return_claim
+
+    now = timezone.now()
+    window = _claimed_window(remaining_until=now - timedelta(minutes=5))
+    HarvestBacklogWindow.objects.filter(pk=window.pk).update(attempts=8)
+    assert return_claim(window.pk, reason="error", max_attempts=8, max_age_hours=24,
+                        now=now, refund_attempt=True) == "pending"
+    window.refresh_from_db()
+    assert window.attempts == 7
+
+
+def test_claim_next_skips_windows_already_tried_in_this_run():
+    from core.models import HarvestBacklogWindow
+
+    now = timezone.now()
+    first = HarvestBacklogWindow.objects.create(
+        **CALL_A, original_since=now - timedelta(hours=2), original_until=now - timedelta(hours=1),
+        remaining_since=now - timedelta(hours=2), remaining_until=now - timedelta(hours=1),
+        reason_code="search_failed",
+    )
+    second = HarvestBacklogWindow.objects.create(
+        **CALL_A, original_since=now - timedelta(minutes=50), original_until=now - timedelta(minutes=40),
+        remaining_since=now - timedelta(minutes=50), remaining_until=now - timedelta(minutes=40),
+        reason_code="search_failed",
+    )
+    claimed = HarvestBacklogWindow.objects.claim_next(
+        owner="cycle", run_id="run", now=now, claim_expires_at=now + timedelta(minutes=5),
+        exclude_ids={first.pk},
+    )
+    assert claimed.pk == second.pk

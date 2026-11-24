@@ -155,6 +155,10 @@ def test_credential_order_names_and_defaults():
 
 
 def test_two_twitter_keys_are_distinct_circuit_entries(monkeypatch):
+    """Owner decision 2026-11-24 (plan 2026-11-24-012909, U2 scheduled order):
+    scheduled collection routes ``twitterapi:scheduled`` then ``twexapi`` and
+    never the on-demand key, so the distinct-circuit property is pinned on the
+    on-demand client, which still holds both TwitterAPI.io credentials."""
     from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
     from x_monitor.x_client import XClient
     monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "scheduled-fixture")
@@ -162,8 +166,48 @@ def test_two_twitter_keys_are_distinct_circuit_entries(monkeypatch):
     monkeypatch.setenv("TWEXAPI_API_KEY", "twex-fixture")
     monkeypatch.delenv("X_DATA_PROVIDER_ORDER", raising=False)
     client = XClient.from_env(TwitterApiCredentialPurpose.SCHEDULED)
-    assert client.provider_order == ("twitterapi:scheduled", "twitterapi:on_demand", "twexapi")
-    assert client.provider_circuits["twitterapi:scheduled"].purpose != client.provider_circuits["twitterapi:on_demand"].purpose
+    assert client.provider_order == ("twitterapi:scheduled", "twexapi")
+    assert "twitterapi:on_demand" not in client.provider_circuits
+    manual = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+    assert manual.provider_circuits["twitterapi:scheduled"].purpose != manual.provider_circuits["twitterapi:on_demand"].purpose
+
+
+@pytest.mark.parametrize("order_setting", [None, "twitterapi:scheduled,twitterapi:on_demand,twexapi",
+                                           "twitterapi:on_demand,twexapi,twitterapi:scheduled"])
+def test_scheduled_order_never_includes_the_on_demand_key(monkeypatch, order_setting):
+    """Owner decision 2026-11-24: the on-demand key is never a scheduled route,
+    even when present and even when ``X_DATA_PROVIDER_ORDER`` names it (M18:
+    mismatched env values). Non-scheduled order is unchanged."""
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient
+    monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "scheduled-fixture")
+    monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "ondemand-fixture")
+    monkeypatch.setenv("TWEXAPI_API_KEY", "twex-fixture")
+    if order_setting is None:
+        monkeypatch.delenv("X_DATA_PROVIDER_ORDER", raising=False)
+    else:
+        monkeypatch.setenv("X_DATA_PROVIDER_ORDER", order_setting)
+    client = XClient.from_env(TwitterApiCredentialPurpose.SCHEDULED)
+    assert "twitterapi:on_demand" not in client.provider_order
+    if order_setting is None:
+        assert client.provider_order == ("twitterapi:scheduled", "twexapi")
+    sent = []
+    monkeypatch.setattr(client, "_get", lambda *a, **kw: sent.append(kw.get("credential")) or {
+        "tweets": [], "has_next_page": False})
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: sent.append("twex") or {
+        "code": 200, "data": [], "has_next_page": False})
+    monkeypatch.setattr("x_monitor.search_provider_circuit.SearchProviderCircuit.primary_permitted",
+                        lambda self, now: True)
+    monkeypatch.setattr("x_monitor.search_provider_circuit.SearchProviderCircuit.next_eligible_at",
+                        lambda self, now: None)
+    monkeypatch.setattr("x_monitor.search_provider_circuit.SearchProviderCircuit.pacing_eligible_at",
+                        lambda self, now: None)
+    monkeypatch.setattr("x_monitor.search_provider_circuit.SearchProviderCircuit.record_success",
+                        lambda self, now: None)
+    monkeypatch.setattr("x_monitor.search_provider_circuit.SearchProviderCircuit.observe_query",
+                        lambda self, *a, **kw: False)
+    client.run_search("Qwen")
+    assert "ondemand-fixture" not in sent
 
 
 def _two_key_client(monkeypatch, *, duplicate=False):
@@ -184,7 +228,9 @@ def _two_key_client(monkeypatch, *, duplicate=False):
     return XClient.from_env(TwitterApiCredentialPurpose.SCHEDULED)
 
 
-def test_scheduled_503_falls_through_to_on_demand(monkeypatch):
+def test_scheduled_503_falls_through_to_twex_never_on_demand(monkeypatch):
+    """Owner decision 2026-11-24: a scheduled 503 falls back straight to
+    TwexAPI; the on-demand credential is never tried by scheduled collection."""
     from x_monitor.x_client import XClientServerError
     client = _two_key_client(monkeypatch)
     calls = []
@@ -193,8 +239,10 @@ def test_scheduled_503_falls_through_to_on_demand(monkeypatch):
         if calls[-1] == "fixture-scheduled": raise XClientServerError("503")
         return {"tweets": [], "has_next_page": False}
     monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: calls.append("twex") or {
+        "code": 200, "data": [], "has_next_page": False})
     assert client.run_search("Qwen") == ([], False)
-    assert calls == ["fixture-scheduled", "fixture-ondemand"]
+    assert calls == ["fixture-scheduled", "twex"]
 
 
 def test_two_twitter_failures_fall_through_to_twex(monkeypatch):
@@ -207,7 +255,8 @@ def test_two_twitter_failures_fall_through_to_twex(monkeypatch):
     monkeypatch.setattr(client, "_get", fail)
     monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: calls.append("twex") or {"code": 200, "data": [], "has_next_page": False})
     assert client.run_search("Qwen") == ([], False)
-    assert calls == ["fixture-scheduled", "fixture-ondemand", "twex"]
+    # Owner decision 2026-11-24: scheduled order is twitterapi:scheduled, twexapi.
+    assert calls == ["fixture-scheduled", "twex"]
 
 
 def test_same_twitter_key_is_not_retried_as_second_credential(monkeypatch):
@@ -257,23 +306,30 @@ def test_duplicate_key_failure_goes_directly_to_twex(monkeypatch):
 
 
 
-def test_raw_receipt_uses_on_demand_after_scheduled_circuit_opens(monkeypatch):
-    from x_monitor.x_client import XClientServerError
-    client = _two_key_client(monkeypatch)
+def test_raw_receipt_uses_second_credential_after_first_circuit_opens(monkeypatch):
+    """Owner decision 2026-11-24 removed the on-demand key from scheduled
+    routes, so the two-credential raw-receipt fallback is pinned on the
+    on-demand client (on_demand, then scheduled), whose order is unchanged."""
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient, XClientServerError
+    _two_key_client(monkeypatch)
+    client = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
     calls = []
     def fake_get(*args, **kwargs):
         calls.append(kwargs["credential"])
-        if calls[-1] == "fixture-scheduled": raise XClientServerError("503")
+        if calls[-1] == "fixture-ondemand": raise XClientServerError("503")
         return b'{"tweets":[]}', {"tweets": [], "has_next_page": False}
     monkeypatch.setattr(client, "_get", fake_get)
     with pytest.raises(XClientServerError):
         client.run_search_page_with_raw("Qwen", since_time=1, until_time=2)
     raw, _, items, _, _ = client.run_search_page_with_raw("Qwen", since_time=1, until_time=2)
     assert raw == b'{"tweets":[]}' and items == []
-    assert calls == ["fixture-scheduled", "fixture-ondemand"]
+    assert calls == ["fixture-ondemand", "fixture-scheduled"]
 
 
 def test_scheduled_auth_failure_uses_distinct_fallback(monkeypatch):
+    """Owner decision 2026-11-24: the scheduled fallback after a 401 is
+    TwexAPI, never the on-demand TwitterAPI.io key."""
     from x_monitor.x_client import XClientAuthError
     client = _two_key_client(monkeypatch)
     calls = []
@@ -282,8 +338,10 @@ def test_scheduled_auth_failure_uses_distinct_fallback(monkeypatch):
         if calls[-1] == "fixture-scheduled": raise XClientAuthError("401")
         return {"tweets": [], "has_next_page": False}
     monkeypatch.setattr(client, "_get", request)
+    monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: calls.append("twex") or {
+        "code": 200, "data": [], "has_next_page": False})
     assert client.run_search("Qwen") == ([], False)
-    assert calls == ["fixture-scheduled", "fixture-ondemand"]
+    assert calls == ["fixture-scheduled", "twex"]
 
 
 def test_manual_search_uses_on_demand_then_scheduled(monkeypatch):
@@ -351,9 +409,13 @@ def test_rate_limit_falls_through_in_both_orders(monkeypatch, first):
             raise error
         return body
 
+    # KTD1 (plan 2026-11-24-012909): a 429 no longer excludes the route; it
+    # stays ineligible until its reset. The fake models that reset window by
+    # blocking the throttled route, so the open route is used without waiting.
     for route, circuit in (("twexapi", client.twex_circuit),
                            ("twitterapi:scheduled", client.provider_circuits["twitterapi:scheduled"])):
-        monkeypatch.setattr(circuit, "record_rate_limit", lambda _, seconds, route=route: cooldowns.append((route, seconds)), raising=False)
+        monkeypatch.setattr(circuit, "record_rate_limit", lambda _, seconds, route=route, circuit=circuit: (
+            cooldowns.append((route, seconds)), setattr(circuit, "failed", True)), raising=False)
     monkeypatch.setattr(client, "_get", lambda *a, **kw: send("twitterapi:scheduled", {"tweets": []}))
     monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: send("twexapi", {"code": 200, "data": []}))
 
@@ -386,9 +448,17 @@ def test_twex_pacing_unavailable_tries_twitter_without_counting_a_provider_failu
     client = _two_key_client(monkeypatch)
     client.provider_order = ("twexapi", "twitterapi:scheduled")
     abandoned = []
+    busy = []
     monkeypatch.setattr(client.twex_circuit, "abandon_probe", lambda: abandoned.append(True), raising=False)
+    # KTD1: an unobtained pacing slot keeps TwexAPI eligible at the slot's
+    # known time instead of excluding it; the open TwitterAPI.io route is
+    # used before any waiting.
+    from datetime import timedelta
+    monkeypatch.setattr(client.circuit, "pacing_eligible_at",
+                        lambda now: now + timedelta(seconds=5) if busy else None, raising=False)
 
     def unavailable(*args, **kwargs):
+        busy.append(True)
         raise XClientRouteUnavailable("shared pacing slot still busy")
 
     monkeypatch.setattr(client, "_twex_search_with_retry", unavailable)

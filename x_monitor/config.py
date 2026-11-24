@@ -600,6 +600,39 @@ class HarvestConfig(BaseModel):
         )
 
 
+def legacy_request_envelope(timeout_s: float, max_retries: int) -> float:
+    """Worst case for one ``XClient._get`` exchange at the client's settings."""
+    return float(timeout_s) * (int(max_retries) + 1) + 8.0
+
+
+def search_tail_seconds(cfg: Config, *, metrics_request_envelope: float) -> float:
+    """Seconds the multi-route search phase must leave for the steps after it.
+
+    KTD6 (plan 2026-11-24-012909): derived from existing settings, never a
+    literal. It reserves the rare-type decision drain allocation (when that
+    lane is enabled) plus one metrics-refresh chunk envelope (when metrics
+    refresh is enabled; ``run_metrics_refresh`` stops at the first chunk the
+    deadline cannot admit).
+
+    The 630 s inline enrichment admission (``claim_safe_envelope_seconds``)
+    is deliberately not reserved. ``config.yaml`` declares
+    ``harvest.enrichment.mode: inline`` for every service, including the
+    harvest cron, while the separate enrichment worker holds the process
+    slot (``process_slots_busy``), so the cron classifies nothing inline.
+    Reserving 630 s on top of the other steps would exceed the 780 s
+    deadline and stop every search. The search share therefore keeps the
+    pre-change trade-off: a long search can still defer inline enrichment,
+    exactly as the 188 s admission allowed before.
+    """
+    tail = 0.0
+    rare = cfg.discovery.rare_types
+    if rare.enabled:
+        tail += float(rare.jev.gate_allocation_seconds)
+    if cfg.metrics_refresh.enabled:
+        tail += float(metrics_request_envelope)
+    return tail
+
+
 DEEPSEEK_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic"
 DEEPINFRA_OPENAI_BASE_URL = "https://api.deepinfra.com/v1/openai"
 DEEPSEEK_0731_MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
