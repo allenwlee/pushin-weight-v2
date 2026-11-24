@@ -239,3 +239,22 @@ def test_load_config_unset_env_falls_back_to_defaults(monkeypatch, tmp_path):
     assert cfg.llm.classifier_model == "deepseek-v4-flash"
     assert cfg.llm.relevancy_model == "deepseek-v4-flash"
     assert cfg.llm.signal_model == "deepseek-v4-flash"
+
+
+def test_unknown_feed_catalog_mode_rejected(monkeypatch):
+    from pydantic import ValidationError
+
+    from x_monitor.config import load_config
+
+    monkeypatch.setenv("X_MONITOR_FEED_CATALOG_MODE", "compact_typo")
+    with pytest.raises(ValidationError, match="feed_catalog_mode"):
+        load_config(CONFIG_PATH)
+
+
+def test_live_feed_catalog_mode_defaults_to_compact_with_full_catalog_rollback(monkeypatch):
+    from x_monitor.config import load_config
+
+    monkeypatch.delenv("X_MONITOR_FEED_CATALOG_MODE", raising=False)
+    assert load_config(CONFIG_PATH).llm.feed_catalog_mode == "compact_baseline"
+    monkeypatch.setenv("X_MONITOR_FEED_CATALOG_MODE", "baseline")
+    assert load_config(CONFIG_PATH).llm.feed_catalog_mode == "baseline"

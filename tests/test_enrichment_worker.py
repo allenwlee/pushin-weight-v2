@@ -1139,3 +1139,70 @@ def test_failed_checkpoint_commit_preserves_both_active_pairs(monkeypatch):
     client.release_reservations(*sibling)
     assert len(sent) == client.calls == guard.calls == 1
     assert guard.prepaid == 0
+
+
+@pytest.mark.parametrize(
+    "kind,mode,expected",
+    [
+        ("enrichment", "baseline", {"deepseek": ["unused product"], "floor-only": ["absent"]}),
+        ("enrichment", "compact_baseline", {"deepseek": [], "floor-only": []}),
+        ("enrichment", None, {"deepseek": [], "floor-only": []}),
+        ("manual", "compact_baseline", {"deepseek": ["unused product"], "floor-only": ["absent"]}),
+    ],
+)
+def test_feed_catalog_modes_publish_from_real_post_fetch(monkeypatch, tmp_path, caplog, kind, mode, expected):
+    import json
+    from datetime import UTC, datetime
+
+    from django.core.management import call_command
+
+    from core.models import Brand, PostBrandSignal
+    from monitor import cycle
+    from tests.test_u18a_v4_classification_persistence import _SelectedV4Transport
+    from x_monitor.config import load_config
+
+    caplog.set_level("INFO", logger="monitor.cycle")
+    policy = tmp_path / "policy.yaml"
+    policy.write_text("enabled_models: [deepseek]\ndaily_ceiling: 100\n")
+    if mode is None:
+        monkeypatch.delenv("X_MONITOR_FEED_CATALOG_MODE", raising=False)
+    else:
+        monkeypatch.setenv("X_MONITOR_FEED_CATALOG_MODE", mode)
+    cfg = load_config(policy)
+    call_command("seed_i18n_labels", verbosity=0)
+    state = _state("catalog-mode-probe")
+    state.post.text = "DeepSeek is faster. Try Example Harness today #AI"
+    state.post.save(update_fields=["text"])
+    state.translation_status = "succeeded"
+    state.save(update_fields=["translation_status"])
+    floor = Brand.objects.create(nickname="floor-only")
+    Brand.objects.filter(pk=floor.pk).update(created_at=datetime(2026, 11, 15, tzinfo=UTC))
+    monkeypatch.setattr(cycle, "_requeue_recent_incomplete_translations", lambda **kwargs: 0)
+    monkeypatch.setattr(cycle, "_classification_tracked_brand_catalog", lambda: [
+        {"brand_id": "deepseek", "products": ["unused product"]},
+        {"brand_id": "floor-only", "products": ["absent"]},
+    ])
+    packets = []
+
+    # Use a different valid reply in one arm to detect stale selections in the reader.
+    reply_type = "news_reporting" if kind == "enrichment" and mode != "baseline" else "results_analysis"
+
+    class Transport(_SelectedV4Transport):
+        def messages_create(self, **kwargs):
+            packet = json.loads(kwargs["messages"][0]["content"])
+            packets.append({row["brand_id"]: row["products"] for row in packet["tracked_brands"]["brands"]})
+            response = super().messages_create(**kwargs)
+            if "post_promotions" in response:
+                response["decisions"]["D01"]["post_types"] = [reply_type]
+            return response
+
+    cycle.CycleRunner(
+        cfg=cfg, cycle_kind=kind,
+        _post_fetch_clients={"translation": None, "classification": Transport()},
+    )._run_post_fetch([], run_id="catalog-mode-test")
+    if kind == "enrichment":
+        assert f"feed_catalog_dispatch run_id=catalog-mode-test mode={mode or 'compact_baseline'}" in caplog.text
+    assert packets == [expected, expected]
+    assert list(PostBrandSignal.objects.filter(post_id=state.pk).values_list("post_type_id", flat=True)) == [
+        reply_type
+    ]

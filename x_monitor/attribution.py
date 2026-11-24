@@ -40,7 +40,7 @@ import re
 import threading
 import time
 from collections.abc import Callable, Mapping
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 from urllib.parse import unquote, urlsplit
@@ -1313,6 +1313,7 @@ def classify_post(
 # --- Stage 1 full pragmatics classifier ----------------------------------
 
 _CLASSIFY_BASE_BATCH_SIZE: int = 20
+MAX_FIXED_DECISION_SLOTS = 99
 _CLASSIFY_REVIEW_BATCH_SIZE: int = 10
 _CLASSIFY_REPAIR_LIMIT: int = 20
 _VALID_UNSANCTIONED_FLAGS = frozenset(
@@ -3867,7 +3868,7 @@ def _two_role_fixed_slot_payload(
             if not isinstance(brand_id, str) or not brand_id:
                 return None
             decision_slot = f"D{len(decision_slots) + 1:02d}"
-            if len(decision_slots) >= 99:
+            if len(decision_slots) >= MAX_FIXED_DECISION_SLOTS:
                 return None
             decisions[decision_slot] = brand_id
             decision_slots[decision_slot] = (tweet_id, brand_id)
@@ -4379,8 +4380,8 @@ def _filter_passing_hardware_release(content, brand, tweet, catalog, brand_id):
     return content, brand
 
 
-def _feed_prompt_catalog(batch, catalog, baseline_ids):
-    """Select baseline brands and all owners of a name visible in this batch."""
+def _feed_prompt_catalog(batch, catalog, baseline_ids, *, feed_catalog_mode="baseline"):
+    """Select all required and visible owners, optionally trimming their evidence terms."""
     required = set(baseline_ids)
     evidence = []
     for tweet in batch:
@@ -4392,19 +4393,42 @@ def _feed_prompt_catalog(batch, catalog, baseline_ids):
                 evidence.append(item.get("text") or "")
             elif isinstance(item, str):
                 evidence.append(item)
-    visible = "\n".join(evidence).casefold()
+    spans = [source.casefold() for source in evidence]
+    visible = "\n".join(spans)
+    term_fields = ("aliases", "products", "handles", "domains", "hashtags", "keywords")
+    match_cache = {}
 
-    def mentioned(row):
-        terms = [row["brand_id"], row.get("display_name", "")]
-        for key in ("aliases", "products", "handles", "domains", "hashtags", "keywords"):
-            terms.extend(row[key])
-        for term in terms:
-            term = term.casefold()
-            if term and term in visible and re.search(_literal_term_pattern(term), visible):
-                return True
-        return False
+    def mentioned(term, *, within_source):
+        key = term.casefold()
+        # Only literal newlines can match the separator introduced above.
+        check_spans = within_source and "\n" in key
+        cache_key = (key, check_spans)
+        if cache_key not in match_cache:
+            matched = False
+            if key and key in visible:
+                pattern = re.compile(_literal_term_pattern(key))
+                matched = any(pattern.search(span) for span in spans) if check_spans else bool(pattern.search(visible))
+            match_cache[cache_key] = matched
+        return match_cache[cache_key]
 
-    rows = [row for row in catalog["brands"] if row["brand_id"] in required or mentioned(row)]
+    def owns_mention(row):
+        return (
+            mentioned(row["brand_id"], within_source=False)
+            or mentioned(row.get("display_name", ""), within_source=False)
+            or any(mentioned(term, within_source=False) for field in term_fields for term in row[field])
+        )
+
+    rows = []
+    for row in catalog["brands"]:
+        # Retain legacy owner membership, including aliases spanning two fields.
+        if row["brand_id"] not in required and not owns_mention(row):
+            continue
+        if feed_catalog_mode == "baseline":
+            rows.append(row)
+            continue
+        fields = {field: [term for term in row[field] if mentioned(term, within_source=True)] for field in term_fields}
+        accounts = [account for account in row["accounts"] if mentioned(account["handle"], within_source=True)]
+        rows.append({**row, **fields, "accounts": accounts})
     return _tracked_brand_catalog([], [{"tracked_brand_catalog": rows}])
 
 
@@ -4422,6 +4446,8 @@ def classify_batch_pragmatics_full(
     telemetry_context: dict[str, Any] | None = None,
     tracked_catalog_snapshot: dict[str, Any] | None = None,
     feed_baseline_ids: set[str] | None = None,
+    feed_catalog_mode: str = "baseline",
+    tail_wait_deadline: Callable[[list[dict[str, Any]]], float | None] | None = None,
     on_result: Callable[[dict[str, Any], dict[str, Any]], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Classify batches with exactly two disjoint, concurrently scheduled roles.
@@ -4481,7 +4507,7 @@ def classify_batch_pragmatics_full(
             continue
         if kept and (
             len(kept) >= _CLASSIFY_BASE_BATCH_SIZE
-            or (selected_0731 and decision_count + len(brand_ids) > 99)
+            or (selected_0731 and decision_count + len(brand_ids) > MAX_FIXED_DECISION_SLOTS)
         ):
             indexed_batches.append((indexes, kept))
             indexes, kept, decision_count = [], [], 0
@@ -4491,9 +4517,12 @@ def classify_batch_pragmatics_full(
     if kept:
         indexed_batches.append((indexes, kept))
 
-    if selected_0731 and feed_baseline_ids is not None:
+    if selected_0731 and feed_baseline_ids is None:
+        for tweet in tweets:
+            tweet.pop("_feed_prompt_catalog", None)
+    elif selected_0731:
         for _, batch in indexed_batches:
-            prompt_catalog = _feed_prompt_catalog(batch, tracked_catalog, feed_baseline_ids)
+            prompt_catalog = _feed_prompt_catalog(batch, tracked_catalog, feed_baseline_ids, feed_catalog_mode=feed_catalog_mode)
             for tweet in batch:
                 tweet["_feed_prompt_catalog"] = prompt_catalog
             logger.info("feed_classifier_catalog batch_posts=%d prompt_brands=%d full_brands=%d",
@@ -4576,10 +4605,10 @@ def classify_batch_pragmatics_full(
             return batch, role, {}
 
     role_rows: dict[tuple[str, str], dict[str, Any]] = {}
-    tasks: list[tuple[list[dict[str, Any]], str, str | None]] = []
     release_reservations: list[tuple[str, str]] = []
     reserve_pair = getattr(anthropic_client, "reserve_pair", None)
-    for _, batch in indexed_batches:
+
+    def tasks_for_batch(batch):
         if callable(reserve_pair):
             pair_options = {}
             if getattr(anthropic_client, "requires_pair_bounds", False):
@@ -4592,36 +4621,45 @@ def classify_batch_pragmatics_full(
                     bounds.append({"model": model, "max_tokens": max_tokens, "system": system,
                                    "messages": [{"role": "user", "content": prompt}]})
                 if len(bounds) != 2:
-                    continue
+                    return []
                 pair_options["request_bounds"] = bounds
             try:
                 reservation = reserve_pair(attempts_per_role=_MAX_RETRIES, **pair_options)
             except LLMCallBudgetExhausted as exc:
                 if on_batch_error is not None:
                     on_batch_error(batch, exc)
-                continue
+                return []
             if reservation is None:
-                continue
+                return []
             content_token, brand_token = reservation
             release_reservations.append((content_token, brand_token))
-            tasks.extend(((batch, "content", content_token), (batch, "brand_interpretation", brand_token)))
-        else:
-            tasks.extend((batch, role, None) for role in ("content", "brand_interpretation"))
-    if not tasks:
-        return empty
+            return [(batch, "content", content_token), (batch, "brand_interpretation", brand_token)]
+        return [(batch, role, None) for role in ("content", "brand_interpretation")]
+
     available_calls = getattr(anthropic_client, "remaining_calls", None)
+    eligible_batches = indexed_batches
     if available_calls is not None and not callable(reserve_pair):
-        pair_count = min(len(indexed_batches), max(0, int(available_calls)) // 2)
-        tasks = [
-            (batch, role, None)
-            for _, batch in indexed_batches[:pair_count]
-            for role in ("content", "brand_interpretation")
-        ]
-        if not tasks:
-            return empty
-    with ThreadPoolExecutor(max_workers=min(max(1, max_workers), len(tasks))) as executor:
+        eligible_batches = indexed_batches[: max(0, int(available_calls)) // 2]
+    if not eligible_batches:
+        return empty
+    tail_indexes, tail = eligible_batches[-1]
+    wait_until = None
+    if tail_wait_deadline and selected_0731 and len(eligible_batches) == len(indexed_batches):
+        wait_until = tail_wait_deadline(tail)
+    groups = eligible_batches[:-1] if wait_until is not None else eligible_batches
+    with ThreadPoolExecutor(max_workers=min(max(1, max_workers), len(eligible_batches) * 2)) as executor:
         try:
-            futures = [executor.submit(call_role, batch, role, reservation) for batch, role, reservation in tasks]
+            tasks = [task for _, batch in groups for task in tasks_for_batch(batch)]
+            futures = [executor.submit(call_role, *task) for task in tasks]
+            if wait_until is not None:
+                remaining = wait_until - time.time()
+                if remaining > 0 and futures:
+                    wait(futures, timeout=remaining)
+                if time.time() >= wait_until or any(not f.done() for f in futures):
+                    futures.extend(executor.submit(call_role, *task) for task in tasks_for_batch(tail))
+                else:
+                    for index in tail_indexes:
+                        empty[index] = {"batch_wait_until": wait_until}
             for future in as_completed(futures):
                 _, role, parsed = future.result()
                 for tweet_id, row in parsed.items():

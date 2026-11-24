@@ -2370,6 +2370,7 @@ def run_targeted_extractions(
     calls: Mapping[str, TargetedCall],
     max_calls: int,
     deadline: Any | None = None,
+    before_provider_call: Callable[[], None] | None = None,
     release_persist: Callable | None = None,
     release_context: list | None = None,
     release_source_text: str | None = None,
@@ -2471,6 +2472,11 @@ def run_targeted_extractions(
             state.attempts = 0
         if dispatched_state_updated_at is None:
             dispatched_state_updated_at = state.updated_at
+        if before_provider_call is not None:
+            before_provider_call()
+            if deadline is not None and not deadline.can_start(config.request_timeout_seconds + 8):
+                deferred.extend(roles[role_index:])
+                break
         attempted_at = timezone.now()
         started = time.monotonic()
         usage = {"input_tokens": 0, "output_tokens": 0}
