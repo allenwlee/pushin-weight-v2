@@ -514,6 +514,59 @@ class PublicTrackedBrandsBrowserTests(StaticLiveServerTestCase):
             PostBrand.objects.create(post=post, brand_id=nickname)
         _clear_home_pulse_cache()
 
+    def test_one_meta_deselection_recovers_from_script_and_chart_gateway_errors(self):
+        _record_current_harvest()
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = browser.new_page(viewport=VIEWPORTS["desktop"], timezone_id="Asia/Tokyo")
+                store_requests = []
+                chart_script_requests = []
+                charts = []
+                documents = []
+
+                def first_gateway_error(route, attempts):
+                    attempts.append(route.request.url)
+                    if len(attempts) == 1:
+                        route.fulfill(status=502, body="Bad Gateway")
+                    else:
+                        route.continue_()
+
+                held_store = []
+                def delay_recovered_store(route):
+                    store_requests.append(route.request.url)
+                    if len(store_requests) == 1:
+                        route.fulfill(status=502, body="Bad Gateway")
+                    else:
+                        held_store.append(route)
+
+                page.on("request", lambda req: documents.append(req.url)
+                        if req.resource_type == "document" else None)
+                page.route("**/pw-filter-store*.js*", delay_recovered_store)
+                page.route("**/pw-chart*.js*", lambda route: first_gateway_error(route, chart_script_requests))
+                page.goto(f"{self.live_server_url}/?window=7&locale=en", wait_until="domcontentloaded")
+                page.wait_for_function("() => document.querySelector('script[data-reader-retry][src*=pw-filter-store]')")
+                series = page.locator("canvas[data-home]").evaluate("c => JSON.parse(c.dataset.home).series")
+                self.assertIn("llama", series)
+                page.route("**/chart.html?**", lambda route: first_gateway_error(route, charts))
+                page.locator('[data-group="brands"]').press("Enter")
+                page.locator('.is-portaled input[data-pw-filter-group="brands"][value="llama"]').uncheck()
+                self.assertIsNone(page.evaluate("window.pwFilter"))
+                self.assertEqual(len(held_store), 1)
+                held_store[0].continue_()
+                page.wait_for_function("""() => {
+                    const chart = Chart.getChart(document.querySelector('canvas[data-home]'));
+                    const labels = chart?.data.datasets.map(dataset => dataset.label) || [];
+                    return labels.includes('qwen (total)') && !labels.includes('llama (total)');
+                }""", timeout=6000)
+                self.assertEqual(len(store_requests), 2)
+                self.assertEqual(len(chart_script_requests), 2)
+                self.assertEqual(len(charts), 2)
+                self.assertEqual(charts[0], charts[1])
+                self.assertEqual(len(documents), 1)
+            finally:
+                browser.close()
+
     def test_descending_windows_and_timeout_feedback_use_one_click(self):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()

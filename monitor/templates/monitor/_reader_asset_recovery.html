@@ -1,0 +1,48 @@
+<script>
+  (function () {
+    let failedScripts = new Set();
+    // Capture load errors before the browser starts fetching these assets.
+    document.addEventListener('error', function (event) {
+      const link = event.target;
+      if (failedScripts && link instanceof HTMLScriptElement && link.defer && link.src &&
+          new URL(link.src).origin === location.origin) {
+        failedScripts.add(link);
+        return;
+      }
+      if (!(link instanceof HTMLLinkElement) || !link.relList.contains('stylesheet') ||
+          new URL(link.href).origin !== location.origin) return;
+
+      const attempts = Number(link.dataset.styleRetries || 0);
+      if (attempts >= 2) return;
+      setTimeout(function () {
+        if (!link.isConnected) return;
+        const replacement = link.cloneNode(false);
+        replacement.dataset.styleRetries = String(attempts + 1);
+        link.replaceWith(replacement);
+      }, attempts === 0 ? 500 : 1500);
+    }, true);
+    document.addEventListener('DOMContentLoaded', async function () {
+      // Restoring a missed dependency precedes restoring any later failed script.
+      const scripts = Array.from(document.scripts).filter(script => failedScripts.has(script));
+      failedScripts = null;
+      if (!scripts.length) return;
+      await new Promise(resolve => setTimeout(resolve, 500));
+      for (const original of scripts) {
+        let current = original;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const script = document.createElement('script');
+          for (const attr of original.attributes) script.setAttribute(attr.name, attr.value);
+          script.dataset.readerRetry = 'true';
+          const loaded = new Promise(resolve => {
+            script.onload = () => resolve(true);
+            script.onerror = () => resolve(false);
+          });
+          current.replaceWith(script);
+          current = script;
+          if (await loaded) break;
+          if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+      }
+    }, {once: true});
+  })();
+</script>

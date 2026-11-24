@@ -59,6 +59,7 @@ jobs:
           tests/test_home_count_summary_migrations.py tests/test_refresh_home_counts.py
           tests/test_home_count_render_config.py tests/test_public_home_window_cookie.py
           tests/test_reader_stylesheets.py
+          tests/test_home_v22_browser.py::PublicTrackedBrandsBrowserTests::test_one_meta_deselection_recovers_from_script_and_chart_gateway_errors
           tests/test_enrichment_worker.py::test_claim_allows_visible_synthesis_demand_to_commit
           tests/test_trend_narrative_projection.py tests/test_taxonomy_compatibility_surfaces.py
           tests/test_home_v22_feed_row_shape.py tests/test_home_v22_filter_pills.py

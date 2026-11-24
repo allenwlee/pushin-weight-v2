@@ -60,7 +60,7 @@
     {
       "id": "harvest-coverage-seeder",
       "path": "tests/test_chart_harvest_coverage.py",
-      "sha256": "ed7abdcc637135661f6e279593c921b33383019667438700b5b40542c3da9f36"
+      "sha256": "d0c87732f95ce7bce7e741da6f9b1adc73e82c23789838d900400e19b09419a2"
     },
     {
       "id": "ping-delay-bootstrap",

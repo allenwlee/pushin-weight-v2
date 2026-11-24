@@ -1753,9 +1753,9 @@
     activeController = typeof AbortController === 'function' ? new AbortController() : null;
     var timedOut = false;
     var timeout = setTimeout(function () {
-      if (activeController && requestGeneration === generation) {
+      if (requestGeneration === generation) {
         timedOut = true;
-        activeController.abort();
+        if (activeController) activeController.abort();
       }
     }, REQUEST_TIMEOUT_MS);
     var filters = filtersForEvent(event);
@@ -1763,14 +1763,20 @@
       '&window=' + encodeURIComponent(filters.window || 1) +
       '&locale=' + encodeURIComponent(currentLocale(region)) +
       '&timezone=' + encodeURIComponent(BROWSER_TIMEZONE);
-    return fetch(url, {
+    var options = {
       credentials: 'same-origin',
       signal: activeController ? activeController.signal : undefined,
-    }).then(function (response) {
+    };
+    return fetch(url, options).then(async function (response) {
+      if ([502, 503, 504].includes(response.status)) {
+        await new Promise(function (resolve) { setTimeout(resolve, 500); });
+        if (requestGeneration === generation && !timedOut) response = await fetch(url, options);
+      }
       if (!response.ok) throw new Error('chart response status was not OK');
       return response.text();
     }).then(function (html) {
       if (requestGeneration !== generation) return false;
+      if (timedOut) throw new Error('Chart request timed out');
       var payload = payloadFromFragment(html);
       if (!validPayload(payload)) throw new Error('chart response payload was malformed');
       if (requestGeneration !== generation) return false;
@@ -1825,8 +1831,9 @@
         renderPulse(region, payload.pulse);
         renderHeadline(payload.trend_narrative);
         updateProjectionStates(region, payload, false);
-        if ((payload.granularity || 'day') === 'day' &&
-            payload.bucket_timezone !== BROWSER_TIMEZONE) {
+        // A recovered chart may have missed a filter event before it subscribed.
+        if ((document.currentScript && document.currentScript.dataset.readerRetry) ||
+            ((payload.granularity || 'day') === 'day' && payload.bucket_timezone !== BROWSER_TIMEZONE)) {
           requestChart();
         }
       }

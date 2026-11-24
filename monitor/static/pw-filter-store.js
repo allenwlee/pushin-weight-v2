@@ -411,8 +411,16 @@
   function wireControlPanel() {
     var panel = getFilterPanel();
     if (panel) {
+      var inputs = document.querySelectorAll('input[type="checkbox"][data-pw-filter-group]');
+      // A reader can change a checkbox before a failed script finishes retrying.
+      var edits = document.currentScript && document.currentScript.dataset.readerRetry
+        ? Array.from(inputs).filter(input => input.checked !== input.defaultChecked)
+          .map(input => [input, input.checked])
+        : [];
       MULTI_VALUE_KEYS.concat(['untracked_brand_promotions', 'unsanctioned']).forEach(syncControlPanelGroup);
-      panel.querySelectorAll('input[type="checkbox"][data-pw-filter-group]').forEach(function (input) {
+      edits.forEach(function ([input, checked]) { input.checked = checked; });
+      new Set(edits.map(([input]) => input.dataset.pwFilterGroup)).forEach(syncFromControls);
+      inputs.forEach(function (input) {
         input.addEventListener('change', function () {
           syncFromControls(input.getAttribute('data-pw-filter-group'));
         });

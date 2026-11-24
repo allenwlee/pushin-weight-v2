@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright
 
 
 @pytest.mark.parametrize("blueprint", ["render.yaml", "render-staging.yaml"])
-def test_web_service_can_serve_a_stylesheet_while_a_request_waits(blueprint):
+def test_web_blueprint_configures_at_least_two_workers(blueprint):
     services = yaml.safe_load(Path(blueprint).read_text())["services"]
     web, = (service for service in services if service["type"] == "web")
     environment = {entry["key"]: entry.get("value") for entry in web["envVars"] if "key" in entry}

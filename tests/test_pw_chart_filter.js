@@ -1016,6 +1016,22 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(obsoleteFailure.region.status.hidden && obsoleteFailure.pulseStatus.hidden,
     'an obsolete Mimo failure cannot surface stale chart or pulse warnings');
 
+  const gateway = makeSandbox();
+  gateway.fetchQueue.push(Promise.resolve({ ok: false, status: 502 }), response(payload(7, 1, 'latest')));
+  gateway.document.dispatchEvent(new gateway.sandbox.CustomEvent('pw:filter-change'));
+  await flush();
+  gateway.setFilters({ window: 7, brands: ['qwen'] });
+  gateway.document.dispatchEvent(new gateway.sandbox.CustomEvent('pw:filter-change'));
+  await new Promise(resolve => setTimeout(resolve, 600));
+  assert(gateway.fetchCalls.length === 2 && gateway.region.currentPayload.window_days === 7,
+    'changing filters during gateway backoff discards the obsolete retry');
+  const unavailable = makeSandbox();
+  unavailable.fetchQueue.push(Promise.resolve({ ok: false, status: 503 }), Promise.resolve({ ok: false, status: 504 }));
+  unavailable.document.dispatchEvent(new unavailable.sandbox.CustomEvent('pw:filter-change'));
+  await new Promise(resolve => setTimeout(resolve, 600));
+  assert(unavailable.fetchCalls.length === 2 && !unavailable.region.status.hidden,
+    'a persistent gateway failure stops after one retry and exposes the failure');
+
   const aborted = makeSandbox();
   const abortedRequest = deferred();
   aborted.fetchQueue.push(abortedRequest.promise);

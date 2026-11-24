@@ -42,6 +42,7 @@ def product_identity():
         ROOT / "monitor/content_views.py",
         ROOT / "monitor/urls.py",
         ROOT / "monitor/templates/monitor/general.html",
+        ROOT / "monitor/templates/monitor/_reader_asset_recovery.html",
         ROOT / "monitor/templates/monitor/chatter.html",
         *sorted((ROOT / "monitor/templates/monitor/general").glob("*.html")),
         *sorted((ROOT / "monitor/templates/monitor/content").glob("*.html")),
