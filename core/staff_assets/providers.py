@@ -38,12 +38,14 @@ class SerpApiBaidu:
         self.api_key = api_key
 
     def search(self, parameters):
-        if (
-            set(parameters) != {"engine", "q", "rn", "pn"}
-            or parameters["engine"] != "baidu"
-            or parameters["rn"] != 50
-            or parameters["pn"] != 0
-        ):
+        # The legacy staff worker uses 50 results; named-person research uses
+        # the collector's first-page, ten-result request without a page offset.
+        supported = (
+            set(parameters) == {"engine", "q", "rn", "pn"}
+            and parameters["rn"] == 50
+            and parameters["pn"] == 0
+        ) or (set(parameters) == {"engine", "q", "rn"} and parameters["rn"] == 10)
+        if not supported or parameters["engine"] != "baidu":
             raise ValueError("Only the bounded first Baidu page is supported")
         with requests.get(
             "https://serpapi.com/search.json",

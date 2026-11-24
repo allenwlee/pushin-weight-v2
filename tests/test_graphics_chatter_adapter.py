@@ -22,14 +22,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
-def frozen_chatter():
+def frozen_chatter(request):
     physical = consideration(consideration_state="selected")
     row = consideration(consideration_state="selected")
     first = Post.objects.create(tweet_id="98001", text="A later mutable edit.", created_at=physical.run.facts_as_of)
     second = Post.objects.create(tweet_id="98002", text="Another mutable edit.", created_at=physical.run.facts_as_of)
     sources = []
     for post, passage, author in [
-        (first, "The reporter calls this a limited preview, quoting its maker.", "reporter"),
+        (first, getattr(request, "param", "The reporter calls this a limited preview, quoting its maker."), "reporter"),
         (second, "Last year the maker described a different prototype.", "historian"),
     ]:
         source = history.project_post(post)

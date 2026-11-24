@@ -80,10 +80,12 @@ def _creation_limits(run_id):
     return {'soft_time_limit': max(145, timeout + 10), 'time_limit': max(150, timeout + 15)}
 
 
-def dispatch_creation(*, run_id, content_id=None):
+def dispatch_creation(*, run_id, content_id=None, countdown=0):
     from monitor.tasks import advance_graphics_package
 
     limits = _creation_limits(run_id)
+    if countdown:
+        return _enqueue(advance_graphics_package, [run_id], queue=CREATION_QUEUE, limits=limits, countdown=countdown)
     if limits:
         return _enqueue(advance_graphics_package, [run_id], queue=CREATION_QUEUE, limits=limits)
     return _enqueue(advance_graphics_package, [run_id], queue=CREATION_QUEUE)
@@ -113,6 +115,8 @@ def dispatch_action(run_id, decision):
         return False
     action = decision.get('action') or decision.get('next_action')
     if action == 'advance':
+        if decision.get('countdown'):
+            return dispatch_creation(run_id=run_id, countdown=decision['countdown'])
         return dispatch_creation(run_id=run_id)
     if action == 'video':
         return dispatch_video(run_id=run_id, text_id=decision['text_id'])
@@ -189,6 +193,8 @@ def _recovery_loop():
                 except Exception:
                     logger.exception('Chatter start recovery scan failed')
                 reconcile_due()
+                from core.staff_assets.person_research import recover_due
+                recover_due()
             except Exception:
                 logger.exception('Graphics recovery scan failed')
             finally:

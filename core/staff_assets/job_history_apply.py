@@ -70,7 +70,7 @@ def _instant(value):
     return result
 
 
-def _source(person, source):
+def _source(person, source, *, role_fields=None):
     """Resolve a source before attaching it; never mutate a conflicting source."""
     observed = _instant(source.get("observed_at"))
     text = source.get("text")
@@ -78,6 +78,22 @@ def _source(person, source):
     if not isinstance(text, str) or not text.strip() or not isinstance(url, str):
         raise _Hold("Source text and URL are required")
     kind = source.get("kind")
+    if kind == "person_intake":
+        intake = StaffIntake.objects.filter(pk=source.get("intake_id"), person=person,
+                                          source_key__startswith="person-intake:").first()
+        packet = intake.payload.get("person_intake", {}) if intake else {}
+        if (not intake or intake.observed_at != observed or packet.get("passage") != text or
+            (packet.get("source_url") or str(packet.get("source_id") or "")) != url):
+            raise _Hold("Person intake does not bind this person, source, passage and observation")
+        proposed = intake.payload.get("intake_affiliation") or {}
+        if not role_fields or any((
+            role_fields.get("brand_id") != proposed.get("brand_id"),
+            role_fields.get("observed_organization_name") != proposed.get("organization"),
+            role_fields.get("status") != proposed.get("status", "unknown"),
+            role_fields.get("title_raw") != (proposed.get("title") or proposed.get("title_raw")),
+        )):
+            raise _Hold("Role differs from the resolved source observation")
+        return None, None, observed
     if kind == "post":
         post_id = source.get("post_id")
         if (
@@ -309,6 +325,40 @@ def _source_account_key(source):
     raise _Hold("Unsupported or unresolved source kind")
 
 
+def _role_inventory(query):
+    rows = list(query.values("id", "claim_identity", "affiliation_type_reference__code", "status",
+                             "start_date", "start_date_precision", "end_date", "end_date_precision",
+                             "review_status", "superseded_at", "superseded_by_id", *ROLE_TEXT_FIELDS))
+    for row in rows:
+        row["affiliation_type"] = row.pop("affiliation_type_reference__code")
+    return rows
+
+
+def intake_role(person, role, brand, *, passage, reference, observed, intake=None):
+    """Preview or apply a claim whose source belongs to a resolved intake subject."""
+    from core.staff_assets.job_history import ROLE_FIELDS, _role_fields
+
+    proposed = {key: value for key, value in role.items() if key in ROLE_FIELDS}
+    proposed.update(source_keys=[reference], title_raw=role.get("title") or role.get("title_raw"))
+    try:
+        fields = {**_role_fields(proposed), "brand_id": brand}
+    except (TypeError, ValueError) as exc:
+        return {"action": "hold", "reason": str(exc)}
+    for key in (*ROLE_TEXT_FIELDS, "start_date", "end_date"):
+        if fields.get(key) and fields[key].casefold() not in passage.casefold():
+            return {"action": "hold", "reason": f"{key} lacks literal support in the source"}
+    rows = _role_inventory(PersonBrandAffiliation.objects.filter(person=person, brand_id=brand))
+    decision = reconcile_role(fields, rows)
+    if decision["action"] == "review_existing":
+        return {"action": "hold", "reason": "Conflicting existing employment claims"}
+    if not intake:
+        return {"action": decision["action"], "fields": fields}
+    source = {"kind": "person_intake", "intake_id": intake.pk, "url": reference,
+              "text": passage, "observed_at": observed.isoformat()}
+    return apply_sourced_role(person_id=person.pk, fields=fields, source=source,
+                             expected_action=decision["action"], expected_id=(decision["match"] or {}).get("id"))
+
+
 def apply_sourced_role(
     *,
     person_id,
@@ -327,17 +377,14 @@ def apply_sourced_role(
     """
     try:
         with transaction.atomic():
-            source_account_key = _source_account_key(source)
             bound_sources = [source, *supporting_sources]
-            if any(str(_source_account_key(entry)) != str(source_account_key) for entry in bound_sources):
-                raise _Hold("Role sources belong to different accounts")
-            if (
-                not source_account_key
-                or not Account.objects.select_for_update()
-                .filter(pk=source_account_key)
-                .exists()
-            ):
-                raise _Hold("Source account is unavailable")
+            intake_source = source.get("kind") == "person_intake" and not supporting_sources
+            if not intake_source:
+                source_account_key = _source_account_key(source)
+                if any(str(_source_account_key(entry)) != str(source_account_key) for entry in bound_sources):
+                    raise _Hold("Role sources belong to different accounts")
+                if not source_account_key or not Account.objects.select_for_update().filter(pk=source_account_key).exists():
+                    raise _Hold("Source account is unavailable")
             person = Person.objects.select_for_update().get(pk=person_id)
             if expected_action not in {"create", "enrich", "add_evidence"}:
                 raise _Hold("Prepared role is held or has an unsupported action")
@@ -383,6 +430,7 @@ def apply_sourced_role(
             if (
                 isinstance(status, str)
                 and status != "unknown"
+                and not intake_source
                 and not any(status.casefold() in text for text in source_texts)
             ):
                 # A saved bio may support the role without literally supporting
@@ -397,7 +445,7 @@ def apply_sourced_role(
                 *ROLE_TEXT_FIELDS,
                 "start_date",
                 "end_date",
-                "status",
+                *(("status",) if not intake_source else ()),
             ):
                 value = fields.get(key)
                 if (
@@ -409,7 +457,7 @@ def apply_sourced_role(
                     )
                 ):
                     raise _Hold("Role field lacks literal source support: " + key)
-            resolved_sources = [(entry, *_source(person, entry)) for entry in bound_sources]
+            resolved_sources = [(entry, *_source(person, entry, role_fields=fields)) for entry in bound_sources]
             brand_created = False
             existing_brand = Brand.objects.filter(pk=brand).first()
             if (
@@ -481,27 +529,8 @@ def apply_sourced_role(
                 raise _Hold(
                     "Organization name is not uniquely bound to the selected brand"
                 )
-            qs = PersonBrandAffiliation.objects.select_for_update().filter(
-                person=person, brand_id=brand
-            )
-            rows = list(
-                qs.values(
-                    "id",
-                    "claim_identity",
-                    "affiliation_type_reference__code",
-                    "status",
-                    "start_date",
-                    "start_date_precision",
-                    "end_date",
-                    "end_date_precision",
-                    "review_status",
-                    "superseded_at",
-                    "superseded_by_id",
-                    *ROLE_TEXT_FIELDS,
-                )
-            )
-            for row in rows:
-                row["affiliation_type"] = row.pop("affiliation_type_reference__code")
+            qs = PersonBrandAffiliation.objects.select_for_update().filter(person=person, brand_id=brand)
+            rows = _role_inventory(qs)
             decision = reconcile_role(fields, rows)
             if decision["action"] == "review_existing":
                 raise _Hold("Role matches are conflicting or ambiguous")
@@ -580,6 +609,8 @@ def apply_sourced_role(
                     "profile_snapshot_id": snapshot.pk if snapshot else None,
                     "observed_at": observed.isoformat(),
                 }
+                if intake_source:
+                    source_data["intake_id"] = bound_source["intake_id"]
                 evidence_hash = digest([bound_source["url"], bound_source["text"], source_data])
                 evidence, made = PersonBrandAffiliationEvidence.objects.get_or_create(
                     affiliation=role,

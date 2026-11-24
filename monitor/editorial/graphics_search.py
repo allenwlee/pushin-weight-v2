@@ -5,7 +5,7 @@ this estimate is neither a provider-enforced cap nor a statement of the bill.
 """
 
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -49,7 +49,7 @@ def exa_request_json(query):
     return json.dumps({'query': query, 'type': 'auto', 'numResults': _MAX_RESULTS})
 
 
-def search_exa_query(query, *, api_key, transport=None):
+def search_exa_query(query, *, api_key, transport=None, timeout=15):
     """Perform one request after the caller has reserved its estimated cost."""
     _queries({'queries': [query]})
     if not isinstance(api_key, str) or not api_key.strip():
@@ -59,7 +59,7 @@ def search_exa_query(query, *, api_key, transport=None):
     request = Request('https://api.exa.ai/search', data=body, headers={
         'Content-Type': 'application/json', 'x-api-key': api_key,
     }, method='POST')
-    response = json.loads(transport(request, 15))
+    response = json.loads(transport(request, timeout))
     results = response['results']
     if not isinstance(results, list):
         raise TypeError('Invalid Exa search response')
@@ -73,7 +73,17 @@ def search_exa_query(query, *, api_key, transport=None):
             continue
         title = item.get('title')
         clean.append({'url': url, 'title': title if isinstance(title, str) else ''})
-    return {'query': query, 'results': clean}
+    group = {'query': query, 'results': clean}
+    # Exa documents costDollars.total as an estimate for this request.
+    receipt = response.get('costDollars')
+    if isinstance(receipt, dict):
+        try:
+            amount = Decimal(str(receipt.get('total')))
+            if amount.is_finite() and 0 <= amount <= 1_000_000:
+                group['estimated_usd'] = str(amount)
+        except (InvalidOperation, ValueError):
+            pass
+    return group
 
 
 def search_exa(discovery, *, api_key, transport=None):

@@ -171,3 +171,12 @@ def test_pending_material_update_survives_reranking_without_fresh_development():
     result = apply_selection(packet, reply)
     assert result["leads"][0]["material_change"] == "A new fact"
     assert result["leads"][0]["headlines"] == history["pending"][0]["headlines"]
+
+
+def test_person_hints_come_only_from_the_selected_headlines():
+    packet = decision_packet([sample(0, "Mistral CEO Arthur Mensch speaks")], BASE, {})
+    reply = votes(packet)
+    reply["ranked_stories"][0]["people"] = ["Arthur Mensch", "An Invented Name"]
+    result = apply_selection(packet, reply)
+    assert result["leads"][0]["people"] == ["Arthur Mensch"]
+    assert "people" not in apply_selection(packet, votes(packet))["leads"][0]

@@ -3,11 +3,30 @@
 import ipaddress
 import socket
 import time
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from urllib.parse import urljoin, urlsplit
 
 import urllib3
 
 MAX_BYTES = 12 * 1024 * 1024
+_deadline_fetches = ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="public-source"
+)
+
+
+def fetch_before_deadline(url, *, max_bytes, deadline):
+    """Bound the caller's wait including DNS and a server that drips body bytes."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("Reference-fetch deadline exceeded")
+    future = _deadline_fetches.submit(
+        fetch_public_response, url, max_bytes=max_bytes, deadline=deadline
+    )
+    try:
+        return future.result(timeout=remaining)
+    finally:
+        future.cancel()  # A queued request must not start after its caller timed out.
 
 
 def public_addresses(url):
@@ -38,17 +57,26 @@ def public_addresses(url):
 
 
 def fetch_public_response(url, *, max_bytes=MAX_BYTES, deadline=None, resolver=None):
-    deadline = min(deadline, time.monotonic() + 45) if deadline is not None else time.monotonic() + 45
+    deadline = (
+        min(deadline, time.monotonic() + 45)
+        if deadline is not None
+        else time.monotonic() + 45
+    )
     resolver = resolver or public_addresses
     for _ in range(4):
         if time.monotonic() >= deadline:
             raise TimeoutError("Reference-fetch deadline exceeded")
         parsed, port, addresses = resolver(url)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Reference-fetch deadline exceeded")
         # Pin the validated IP; DNS is not resolved again during the connection.
         options = {
             "host": addresses[0],
             "port": port,
-            "timeout": urllib3.Timeout(connect=5, read=10),
+            "timeout": urllib3.Timeout(
+                total=remaining, connect=min(5, remaining), read=min(10, remaining)
+            ),
             "retries": False,
         }
         if parsed.scheme == "https":
@@ -78,10 +106,20 @@ def fetch_public_response(url, *, max_bytes=MAX_BYTES, deadline=None, resolver=N
             if response.status != 200:
                 raise ValueError(f"Media HTTP status {response.status}")
             body = bytearray()
-            for chunk in response.stream(65536, decode_content=True):
+            # read1 returns available decoded bytes without waiting to fill a
+            # full chunk. Recheck the deadline during a slow response stream.
+            read1 = getattr(response, "read1", None)
+            chunks = (
+                iter(partial(read1, 65536, decode_content=True), b"")
+                if read1
+                else response.stream(65536, decode_content=True)
+            )
+            for chunk in chunks:
                 body.extend(chunk)
                 if len(body) > max_bytes or time.monotonic() > deadline:
                     raise ValueError("Media download limit exceeded")
+            if time.monotonic() > deadline:
+                raise TimeoutError("Reference-fetch deadline exceeded")
             return bytes(body), url, response.headers.get("Content-Type", "")
         finally:
             if response:

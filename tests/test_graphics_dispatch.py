@@ -125,7 +125,10 @@ def test_staging_workers_are_isolated_from_existing_queues():
         assert {'key': 'EXA_API_KEY', 'sync': False} in service['envVars']
     review = services['pushinweight-staging-graphics-review']
     assert '-Q graphics-review --concurrency=1' in review['startCommand']
-    assert not any(item['key'] == 'EXA_API_KEY' for item in review['envVars'])
+    # Portrait research shares this worker so a slow search cannot occupy the writer.
+    assert {'key': 'EXA_API_KEY', 'sync': False} in review['envVars']
+    from monitor.tasks import research_chatter_person
+    assert research_chatter_person.queue == 'graphics-review'
     assert not any(item['key'] == 'XAI_API_KEY_PW' for item in review['envVars'])
     assert {'key': 'GRAPHICS_RECONCILER_ENABLED', 'value': 'False'} in review['envVars']
     assert '-Q trend-narratives --concurrency=1' in services['pushinweight-staging-headlines']['startCommand']
@@ -177,7 +180,8 @@ def test_production_graphics_workers_use_production_resources_and_isolated_queue
         if name.endswith('-review'):
             assert '-Q graphics-review --concurrency=1' in service['startCommand']
             assert env['GRAPHICS_RECONCILER_ENABLED']['value'] == 'False'
-            assert 'XAI_API_KEY_PW' not in env and 'EXA_API_KEY' not in env
+            assert 'XAI_API_KEY_PW' not in env
+            assert env['EXA_API_KEY']['sync'] is False
         else:
             assert '-Q graphics-creation --concurrency=1' in service['startCommand']
             assert env['GRAPHICS_RECONCILER_ENABLED']['value'] == 'True'

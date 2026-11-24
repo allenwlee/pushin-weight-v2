@@ -319,3 +319,15 @@ def test_existing_portrait_kind_is_read_and_unreviewed_avatar_is_a_gap(tmp_path)
         and "reuse_not_permitted_by_caller" in gap.reasons
         for gap in pack.gaps
     )
+
+
+@pytest.mark.django_db
+def test_specific_research_result_is_selected_before_image_limit(tmp_path):
+    person = Person.objects.create()
+    storage = FileSystemStorage(location=tmp_path / "store")
+    for color in ("red", "blue", "green", "yellow"):
+        row, _ = saved_reference(tmp_path, person, storage, color=color, source=color)
+        approve(row)
+    refs = read_graphics_references(person.pk, storage=storage, permitted_reuse={"permitted"},
+                                    portrait_mimes={"image/png"}, media_ids=[row.pk], max_images=1)
+    assert [r.person_media_id for r in refs.references] == [row.pk]

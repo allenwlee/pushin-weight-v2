@@ -232,14 +232,19 @@ def ranking_prefix():
     return (Path(settings.BASE_DIR) / "config/editorial_chatter_chain/trends-ranking.txt").read_text()
 
 
-def workflow_version(lane="personalized-trends-v1"):
+def workflow_version(lane="personalized-trends-v1", *, person_hints=True):
     from .chatter_discovery import prompts
 
     if lane == ROLLING_LANE:
-        from .chatter_windows import PROMPT
+        from .chatter_windows import ranking_prompt
 
-        return digest([lane, OFFICIAL_ENDPOINT, OFFICIAL_PARAMS, PROMPT.read_text(), prompts()])
+        return digest([lane, OFFICIAL_ENDPOINT, OFFICIAL_PARAMS, ranking_prompt(person_hints=person_hints), prompts()])
     return digest(["personalized-trends-v1", OFFICIAL_ENDPOINT, OFFICIAL_PARAMS, ranking_prefix(), prompts()])
+
+
+def supported_version(version, lane):
+    return (version == workflow_version(lane)
+            or lane == ROLLING_LANE and version == workflow_version(lane, person_hints=False))
 
 
 def reserve_due_slot(source_cycle_id, started, *, cfg, purpose, scope=TRENDS_SCOPE):
@@ -527,7 +532,7 @@ def discover_trends(run_id, *, cfg=None, transport=None, official_get=None, toke
             cfg = EditorialConfig.model_validate(run.config_snapshot["editorial"])
         except (ValueError, KeyError):
             return {"status": "held", "run_id": run.pk, "error_code": "invalid_trends_checkpoint"}
-        if run.workflow_version != workflow_version(state.lane):
+        if not supported_version(run.workflow_version, state.lane):
             return {"status": "held", "run_id": run.pk, "error_code": "trends_prompt_changed"}
         if run.scope_key == CAPTURE_SCOPE and run.execution_state == "completed":
             return {"status": "captured", "run_id":run.pk}

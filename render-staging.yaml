@@ -399,6 +399,8 @@ services:
         value: "True"
       - key: ORIGINAL_CONTENT_STORAGE
         value: shared
+      - key: EXA_API_KEY
+        sync: false
       - key: OPENROUTER_API_KEY
         fromService:
           type: worker

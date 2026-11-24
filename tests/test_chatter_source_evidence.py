@@ -3,6 +3,7 @@
 import json
 from datetime import timedelta
 from unittest.mock import Mock
+from urllib.parse import urlencode
 
 import pytest
 from django.utils import timezone
@@ -211,7 +212,15 @@ def test_ranked_recipe_is_saved_without_redundant_development_query(ranked):
 
 @pytest.mark.parametrize("ranked", [1], indirect=True)
 @pytest.mark.parametrize("legacy_checkpoint", [False, True])
-def test_expired_captured_prefix_resumes_without_repeating_physical_requests(ranked, monkeypatch, legacy_checkpoint):
+@pytest.mark.parametrize("saved_trace", [
+    "",
+    "&_credential_purpose=twitterapi%3Aon_demand",
+    "&_provider_source=twitterapi",
+    "&_provider_source=twitterapi&_credential_purpose=twitterapi%3Aon_demand",
+])
+def test_expired_captured_prefix_resumes_without_repeating_physical_requests(
+    ranked, monkeypatch, legacy_checkpoint, saved_trace,
+):
     import monitor.editorial.chatter_gathering as gathering
     from monitor.editorial.chatter_sources import source_resume_is_safe
 
@@ -232,6 +241,13 @@ def test_expired_captured_prefix_resumes_without_repeating_physical_requests(ran
         gather_trends(run.pk, cfg=cfg, x_client=client)
     send.assert_called_once()
     execution = CollectionRun.objects.get(content_run=run, job__job_key__startswith="chatter-search:")
+    first_receipt = CollectionRequest.objects.get(attempt__run=execution)
+    url, params, _ = send.call_args.args
+    assert first_receipt.endpoint_url == url + "?" + urlencode(params)
+    if saved_trace:
+        CollectionRequest.objects.filter(pk=first_receipt.pk).update(
+            endpoint_url=first_receipt.endpoint_url + saved_trace
+        )
     CollectionRun.objects.filter(pk=execution.pk).update(
         completed_at=None, status="running", execution_state="running",
         lease_expires_at=timezone.now() - timedelta(seconds=1))
@@ -255,7 +271,7 @@ def test_expired_captured_prefix_resumes_without_repeating_physical_requests(ran
 
 
 @pytest.mark.parametrize("ranked", [1], indirect=True)
-@pytest.mark.parametrize("fault", ["active_lease", "unknown_send", "archive_checksum"])
+@pytest.mark.parametrize("fault", ["active_lease", "unknown_send", "archive_checksum", "duplicate_receipt"])
 def test_source_recovery_rejects_live_or_unverifiable_captures(ranked, monkeypatch, fault):
     from monitor.editorial.chatter_gathering import compile_recipe
     from monitor.editorial.chatter_sources import SourceSession, source_resume_is_safe
@@ -266,10 +282,18 @@ def test_source_recovery_rejects_live_or_unverifiable_captures(ranked, monkeypat
     run, cfg = ranked
     recipe = compile_recipe(read_ranked_batch(run.pk)["leads"][0], run.facts_as_of)
     session = SourceSession(run, cfg, purpose=TwitterApiCredentialPurpose.ON_DEMAND, client=XClient(api_key="fixture-only"))
-    request = session.start(SEARCH_PATH, {"query": recipe["query"], "queryType": "Latest", "limit": 20})
+    params = {"query": recipe["query"], "queryType": "Latest", "limit": 20}
+    request = session.start(SEARCH_PATH, params)
+    receipt = {"outcome": "received", "status_code": 200,
+               "body": json.dumps({"tweets": [wire(run, "88011")], "has_next_page": False}).encode()}
     if fault != "unknown_send":
-        session.finish(request, {"outcome": "received", "status_code": 200,
-                                "body": json.dumps({"tweets": [wire(run, "88011")], "has_next_page": False}).encode()})
+        session.finish(request, receipt)
+    if fault == "duplicate_receipt":
+        duplicate = session.start(SEARCH_PATH, {**params, "cursor": "fixture"})
+        session.finish(duplicate, receipt)
+        CollectionRequest.objects.filter(pk=duplicate.pk).update(
+            endpoint_url=request.endpoint_url + "&_provider_source=twitterapi"
+        )
     if fault != "active_lease":
         CollectionRun.objects.filter(pk=session.claim.run_id).update(lease_expires_at=timezone.now() - timedelta(seconds=1))
     if fault == "archive_checksum":

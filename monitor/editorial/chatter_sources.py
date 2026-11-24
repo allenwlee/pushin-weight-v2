@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -52,6 +52,18 @@ from .chatter_history import (
 from .persistence import BudgetHeld
 
 SOURCE_FINALIZATION_HEADROOM = timedelta(minutes=3)
+SEARCH_TRACE_FIELDS = {"_provider_source", "_credential_purpose"}
+
+
+def _physical_source_url(url):
+    """Remove local trace labels from old receipts, preserving the exact encoded query."""
+    if not url:
+        return url
+    path, _, query = url.partition("?")
+    wire_query = "&".join(
+        param for param in query.split("&") if param.partition("=")[0] not in SEARCH_TRACE_FIELDS
+    )
+    return path + "?" + wire_query if wire_query else path
 
 
 class CompactPost(BaseModel):
@@ -173,7 +185,7 @@ def _validated_ranked_execution(run, execution, requests, purpose):
             or execution.completed_at is None and (
                 execution.lease_expires_at is None or execution.lease_expires_at > now)
             or execution.attempts.exclude(credential_purpose=purpose).exists()
-            or len({request.endpoint_url for request in requests}) != len(requests)):
+            or len({_physical_source_url(request.endpoint_url) for request in requests}) != len(requests)):
         raise BudgetHeld("saved Chatter source execution requires reconciliation")
     for request in requests:
         if (request.attempt.run_id != execution.pk or request.transport_outcome != "received"
@@ -398,6 +410,13 @@ class SourceSession:
         """Saved compact evidence for gathering to replay before new I/O."""
         return CollectionRequest.objects.filter(attempt__run_id=self.claim.run_id).select_related("archive", "attempt").order_by("started_at", "pk")
 
+    def _captures_for_endpoint(self, endpoint):
+        # Older writers appended the client's internal labels to the transmitted URL.
+        candidates = self.captured_requests().filter(
+            Q(endpoint_url=endpoint) | Q(endpoint_url__startswith=endpoint + "&_")
+        )
+        return [row for row in candidates if _physical_source_url(row.endpoint_url) == endpoint]
+
     def captured_reply(self, request):
         if (request.attempt.run_id != self.claim.run_id or request.archive is None
                 or request.archive.encoding != "selected-json-canonical-v1"):
@@ -421,7 +440,7 @@ class SourceSession:
 
         def get(path, params):
             endpoint = self.client.base_url + path + ("?" + urlencode(params) if params else "")
-            saved = list(self.captured_requests().filter(endpoint_url=endpoint))
+            saved = self._captures_for_endpoint(endpoint)
             if saved:
                 if len(saved) != 1 or saved[0].transport_outcome != "received" or saved[0].http_status != 200:
                     raise BudgetHeld("saved source send requires reconciliation")
@@ -498,6 +517,8 @@ class SourceSession:
         if self.policy_reader and not self.policy_reader().chatter.enabled:
             raise BudgetHeld("Chatter disabled before source dispatch")
         model = path == "https://api.x.ai/v1/responses"
+        if self.ranked_lane and not model:
+            params = {key: value for key, value in params.items() if key not in SEARCH_TRACE_FIELDS}
         query = params.get("query") if not model else None
         bounds = {}
         if query:
@@ -517,9 +538,7 @@ class SourceSession:
             current = locked_run(self.run.pk, self.run.fence)
             with fenced_run(self.claim):
                 endpoint_url = path if model else self.client.base_url + path + ("?" + urlencode(params) if params else "")
-                if self.ranked_lane and CollectionRequest.objects.filter(
-                    attempt__run_id=self.claim.run_id, endpoint_url=endpoint_url
-                ).exists():
+                if self.ranked_lane and self._captures_for_endpoint(endpoint_url):
                     raise BudgetHeld("saved source request already captured; replay required")
                 if (
                     not self.ranked_lane

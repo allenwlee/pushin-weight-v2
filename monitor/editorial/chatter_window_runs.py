@@ -15,6 +15,7 @@ from .chatter_history import locked_run
 from .chatter_trends import (
     CAPTURE_SCOPE,
     DECISION_SCOPE,
+    ROLLING_LANE,
     WINDOW_RANK_STAGE,
     _headlines,
     _save,
@@ -22,6 +23,7 @@ from .chatter_trends import (
     checkpoint,
     envelope_for,
     runs_in_trial,
+    supported_version,
     workflow_version,
 )
 from .chatter_windows import (
@@ -269,7 +271,7 @@ def _result(packet, reply, call_id):
 def _reply(run, packet, cfg, *, send, transport=None):
     if not packet["needs_ranking"]:
         return None, None
-    request = selection_request(packet)
+    request = selection_request(packet, person_hints=run.workflow_version == workflow_version(ROLLING_LANE))
     expected = request_payload(cfg.chatter.ranking, request)
     _, fingerprint = request_fingerprint(expected)
     call = OriginalContentCall.objects.filter(run=run, stage=WINDOW_RANK_STAGE).first()
@@ -392,7 +394,7 @@ def decide_window(run_id, *, transport=None, resume=False):
             pk=run_id, scope_key=DECISION_SCOPE
         )
         state = checkpoint(run)
-        if run.workflow_version != workflow_version(state.lane):
+        if not supported_version(run.workflow_version, state.lane):
             raise ValueError("window_prompt_changed")
         if state.committed_at:
             read_window_batch(run, state)
