@@ -180,7 +180,8 @@ def test_production_graphics_workers_use_production_resources_and_isolated_queue
         if name.endswith('-review'):
             assert '-Q graphics-review --concurrency=1' in service['startCommand']
             assert env['GRAPHICS_RECONCILER_ENABLED']['value'] == 'False'
-            assert 'XAI_API_KEY_PW' not in env and 'EXA_API_KEY' not in env
+            assert 'XAI_API_KEY_PW' not in env
+            assert env['EXA_API_KEY']['sync'] is False
         else:
             assert '-Q graphics-creation --concurrency=1' in service['startCommand']
             assert env['GRAPHICS_RECONCILER_ENABLED']['value'] == 'True'
