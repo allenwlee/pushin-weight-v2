@@ -22,6 +22,9 @@ services:
     startCommand: gunicorn project.wsgi:application --log-file -
     healthCheckPath: /accounts/login/
     envVars:
+      # Keep serving assets and health checks while a request waits on PostgreSQL.
+      - key: WEB_CONCURRENCY
+        value: "2"
       - key: PYTHON_VERSION
         value: 3.12.0
       - key: DEBUG

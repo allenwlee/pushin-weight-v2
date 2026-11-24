@@ -244,8 +244,10 @@ def claim_enrichment_states(
                     quarantined += 1
                 state.save()
 
+        # Lease only the queue entry. Locking the joined post also blocks
+        # foreign-key checks when a reader requests commentary for it.
         eligible = (
-            PostEnrichmentState.objects.select_for_update(skip_locked=True)
+            PostEnrichmentState.objects.select_for_update(skip_locked=True, of=("self",))
             .select_related("post")
             .filter(
                 available,

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from decimal import Decimal
 
 import pytest
+from django.db import connection, connections, transaction
 from django.utils import timezone
 
 from core.models import EnrichmentBudgetWindow, PostEnrichmentState
@@ -32,6 +34,33 @@ def test_waiting_two_days_is_not_a_failed_attempt():
     state.refresh_from_db()
     assert state.translation_attempts == state.classification_attempts == 0
     assert state.translation_status == state.classification_status == "pending"
+
+
+def test_claim_allows_visible_synthesis_demand_to_commit():
+    from monitor.post_synthesis import request_post_synthesis
+
+    state = _state("visible-while-claimed")
+    config = _cfg()
+
+    def request_from_web_connection():
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL lock_timeout = '1s'")
+                demand, = request_post_synthesis(
+                    post_ids=[state.pk], reason="visible", config=config.synthesis
+                )
+            return demand.post_id
+        finally:
+            connections.close_all()
+
+    with transaction.atomic():
+        batch = claim_enrichment_states(
+            cfg=config.harvest.enrichment, run_id="claim", fair_queue=True
+        )
+        assert batch.current_cycle_post_ids == (state.pk,)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            assert pool.submit(request_from_web_connection).result(timeout=5) == state.pk
 
 
 def test_worker_fairness_and_borrowing():

@@ -1,0 +1,17 @@
+<script>
+  // Register before the stylesheet links so this also works on a cold page load.
+  document.addEventListener('error', function (event) {
+    const link = event.target;
+    if (!(link instanceof HTMLLinkElement) || !link.relList.contains('stylesheet') ||
+        new URL(link.href).origin !== location.origin) return;
+
+    const attempts = Number(link.dataset.styleRetries || 0);
+    if (attempts >= 2) return;
+    setTimeout(function () {
+      if (!link.isConnected) return;
+      const replacement = link.cloneNode(false);
+      replacement.dataset.styleRetries = String(attempts + 1);
+      link.replaceWith(replacement);
+    }, attempts === 0 ? 500 : 1500);
+  }, true);
+</script>
