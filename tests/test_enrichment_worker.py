@@ -649,7 +649,7 @@ def test_lost_process_lock_prevents_physical_dispatch_and_attempt():
     assert state.translation_status == "pending"
 
 
-@pytest.mark.parametrize("failure", ["ambiguous", "malformed"])
+@pytest.mark.parametrize("failure", ["malformed"])
 def test_invalid_promotion_retry_preserves_previous_publication(monkeypatch, failure):
     import json
 
@@ -674,15 +674,6 @@ def test_invalid_promotion_retry_preserves_previous_publication(monkeypatch, fai
     )
     state.classification_status = "pending"
     state.save(update_fields=["classification_status"])
-    if failure == "ambiguous":
-        monkeypatch.setattr(
-            cycle,
-            "_classification_tracked_brand_catalog",
-            lambda: [
-                {"brand_id": brand, "aliases": ["Muse"], "products": [], "keywords": []}
-                for brand in ("deepseek", "another-brand")
-            ],
-        )
 
     class InvalidPromotion(_SelectedV4Transport):
         def messages_create(self, **kwargs):
@@ -695,7 +686,7 @@ def test_invalid_promotion_retry_preserves_previous_publication(monkeypatch, fai
                             "handle": None,
                             "domain": None,
                             "account_handle": None,
-                            "evidence": "Try Muse." if failure == "ambiguous" else None,
+                            "evidence": None,
                         }
                     ]
             return response
@@ -724,6 +715,71 @@ def test_invalid_promotion_retry_preserves_previous_publication(monkeypatch, fai
         )
         == prior_evidence_ids
     )
+
+
+def test_shared_name_promotion_publishes_and_drops_only_that_subject(monkeypatch, caplog):
+    """A promoted name owned by two tracked brands no longer discards the post.
+
+    Before 2026-11-24 the legacy two_role path raised
+    classification_promotion_identity_ambiguous and threw away the whole paid
+    classification (146 pending posts on 2026-11-24). Now the subject is dropped
+    from the untracked list, like a single-owner match, and the drop is logged
+    with the matched term and both owners.
+    """
+    import json
+    import logging
+
+    from core.models import PostBrandSignal
+    from monitor import cycle
+    from tests.test_u18a_v4_classification_persistence import _SelectedV4Transport
+
+    test_real_classifier_and_publisher_preserve_labels_while_normalizing_tracked_subjects(
+        monkeypatch,
+        ["Muse", "Independent Harness"],
+        ["Independent Harness"],
+        1,
+    )
+    state = PostEnrichmentState.objects.get(pk="promotion-chain")
+    state.classification_status = "pending"
+    state.save(update_fields=["classification_status"])
+    monkeypatch.setattr(
+        cycle,
+        "_classification_tracked_brand_catalog",
+        lambda: [
+            {"brand_id": brand, "aliases": ["Muse"], "products": [], "keywords": []}
+            for brand in ("deepseek", "another-brand")
+        ],
+    )
+
+    class SharedNamePromotion(_SelectedV4Transport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            if "promoted_subjects" in response:
+                for slot in json.loads(kwargs["messages"][0]["content"])["cases"]:
+                    response["promoted_subjects"][slot] = [
+                        {
+                            "name": "Muse",
+                            "handle": None,
+                            "domain": None,
+                            "account_handle": None,
+                            "evidence": "Try Muse.",
+                        }
+                    ]
+            return response
+
+    caplog.set_level(logging.INFO, logger="monitor.cycle")
+    cycle.CycleRunner(
+        cfg=_cfg(),
+        _post_fetch_clients={"translation": None, "classification": SharedNamePromotion()},
+    )._run_post_fetch([], run_id="shared-name-promotion")
+    state.refresh_from_db()
+    assert state.classification_status == "succeeded"
+    assert not state.classification_error_code
+    assert PostBrandSignal.objects.filter(post_id=state.pk).exists()
+    dropped = [r.getMessage() for r in caplog.records if "promoted subject dropped" in r.getMessage()]
+    assert dropped, "the shared-name drop must be logged"
+    assert "muse" in dropped[0].lower()
+    assert "another-brand" in dropped[0] and "deepseek" in dropped[0]
 
 
 @pytest.mark.parametrize("arrival_multiplier", [1, 2, 3])

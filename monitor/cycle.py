@@ -4607,8 +4607,17 @@ class CycleRunner:
                     original_count = len(result["promoted_subjects"])
                     catalog = tweet.get("tracked_brand_catalog") or []
                     matcher = PromotionSubjectMatcher(catalog) if classifier_profile == "compressed8_pulse_v1" else None
-                    result = discard_tracked_promotion_subjects(result, catalog, matcher=matcher)
+                    discarded: list[dict[str, Any]] = []
+                    result = discard_tracked_promotion_subjects(
+                        result, catalog, matcher=matcher, discard_records=discarded,
+                    )
                     removed_subjects = original_count - len(result["promoted_subjects"])
+                    for record in discarded:
+                        logger.info(
+                            "post_fetch: promoted subject dropped post_id=%s term=%r owners=%s tier=%s",
+                            tid, record.get("matched_term"), ",".join(record.get("owners") or []),
+                            record.get("tier"),
+                        )
                 publication_model = self.cfg.llm.classifier_model
                 if classifier_profile == "compressed8_pulse_v1":
                     from x_monitor.compressed_classifier import COMBINED_MODEL

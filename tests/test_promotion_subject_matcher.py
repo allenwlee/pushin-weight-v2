@@ -202,3 +202,18 @@ def test_system_check_reports_invalid_config_without_weakening_validation(tmp_pa
     assert len(errors) == 1
     assert errors[0].id == "monitor.E051"
     assert "unknown brand" in errors[0].msg
+
+
+def test_legacy_publication_drops_a_subject_owned_by_two_tracked_brands():
+    """Legacy (two_role) normalization drops a shared-name subject instead of
+    raising classification_promotion_identity_ambiguous (2026-11-24)."""
+    from monitor.classification_persistence import discard_tracked_promotion_subjects
+
+    subject = {"name": "Muse", "handle": None, "domain": None, "account_handle": None, "evidence": "Try Muse."}
+    result = {"valid": True, "promoted_subjects": [subject], "untracked_brand_promotions": ["general"]}
+    catalog = [{"brand_id": b, "aliases": ["Muse"], "products": [], "keywords": []} for b in ("deepseek", "another-brand")]
+    records = []
+    normalized = discard_tracked_promotion_subjects(result, catalog, discard_records=records)
+    assert normalized["promoted_subjects"] == []
+    assert normalized["untracked_brand_promotions"] == []
+    assert sorted(records[0]["owners"]) == ["another-brand", "deepseek"]

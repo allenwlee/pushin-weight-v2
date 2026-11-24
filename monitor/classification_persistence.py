@@ -188,8 +188,9 @@ def discard_tracked_promotion_subjects(
     retained = []
     for subject in subjects:
         match = matcher.match(subject, exact_only=legacy)
-        if legacy and match is not None and len(match.owners) > 1:
-            raise ValueError("classification_promotion_identity_ambiguous")
+        # A term owned by several tracked brands still proves the subject is not
+        # an untracked brand. Drop it like a single-owner match; no owner is
+        # chosen, so no identity is claimed and the valid result still publishes.
         if match is None:
             retained.append(subject)
         elif discard_records is not None:
