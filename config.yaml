@@ -228,7 +228,7 @@ targeted_extraction:
       max_tokens: 2000
     model_release_extraction:
       model: deepseek-ai/DeepSeek-V4-Flash-0731
-      prompt_version: model-release-extraction-v1
+      prompt_version: model-release-extraction-v2
       max_tokens: 2500
 
 # Reply-chain cluster threshold. Tune via PR.
@@ -273,7 +273,9 @@ harvest:
     quarantined_per_call: 4
     max_attempts: 8
     max_age_hours: 24
-    replays_per_cycle: 2
+    # KTD9 (plan 2026-11-24-012909): a ceiling, not a quota. Replays run only
+    # while the search tail allows and stop at the first that cannot send.
+    replays_per_cycle: 8
   list_membership:
     page_size: 20
     max_pages: 100

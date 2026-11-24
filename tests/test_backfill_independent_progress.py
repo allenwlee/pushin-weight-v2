@@ -29,6 +29,52 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 native = native_fixture
 
 
+def test_historical_job_waits_for_pending_scheduled_release(native):
+    from core.models import TargetedExtractionState
+    from core.provider_batches import own_historical_posts
+
+    job = native[0]
+    post = Post.objects.create(tweet_id="scheduled-release-before-backfill", text="A release")
+    state = PostEnrichmentState.objects.create(post=post, classification_status="succeeded", translation_requested=True)
+    release = TargetedExtractionState.objects.create(
+        post=post, role="model_release_extraction", prompt_version="model-release-extraction-v2",
+        model="fake", content_identity="0" * 64, status="pending",
+    )
+    with transaction.atomic():
+        record_post_membership(job.runs.first(), None, [post.pk])
+    state.refresh_from_db()
+    assert state.source_collection_job_id is None
+    assert own_historical_posts(job, [post.pk], defer_conflicts=True) == {post.pk: "scheduled_release_pending"}
+    release.status = "succeeded"
+    release.save(update_fields=["status"])
+    assert own_historical_posts(job, [post.pk], defer_conflicts=True) == {}
+    state.refresh_from_db()
+    assert state.source_collection_job_id == job.pk
+    state.translation_requested = False
+    state.translation_status = "succeeded"
+    state.save(update_fields=["translation_requested", "translation_status"])
+    release.status = "pending"
+    release.save(update_fields=["status"])
+    from monitor.enrichment_queue import claim_enrichment_states
+
+    claim = claim_enrichment_states(cfg=native[1].harvest.enrichment, run_id="scheduled-release-owner-test",
+                                    include_targeted_release=True, post_ids={post.pk})
+    assert not claim.states
+
+
+def test_historical_post_without_release_claim_gets_raw_detection(native):
+    from core import models
+    from core.product_release_detection_queue import drain_posts, enqueue_posts
+
+    post = Post.objects.get(pk="native-1")
+    post.text = "We announce a new model."
+    post.save(update_fields=["text"])
+    enqueue_posts([post.pk])
+    result = drain_posts(post_ids=[post.pk], classified_only=True)
+    assert result["processed"] == result["candidates"] == 1
+    assert models.EventDossier.objects.filter(sources__post=post).exists()
+
+
 def _complete(native):
     provider = DirectProvider()
     for turn in range(10):
@@ -51,7 +97,9 @@ def _new_campaign(native):
     )
     post = Post.objects.create(tweet_id="native-0", text="I tried Qwen today.", lang="en")
     PostBrand.objects.create(post=post, brand_id="qwen")
-    PostEnrichmentState.objects.create(post=post)
+    # This suite checks both translation and classification ownership. After
+    # translation became optional it must request that work explicitly.
+    PostEnrichmentState.objects.create(post=post, translation_requested=True)
     with transaction.atomic():
         record_post_membership(run, None, ["native-0", "native-1", "native-2"])
     return job, cfg, delegates, policy
@@ -214,7 +262,8 @@ def test_duplicate_racing_admission_does_not_roll_back_independent_requests(nati
 
     monkeypatch.setattr(enrichment, "_register_requests", register)
     first = _aggregate(native, provider, initial=True)
-    assert first["deferred_reasons"] == {"model_request_already_outstanding_or_complete": 1}
+    # The shared request contains both posts, so the per-post deferral count is two.
+    assert first["deferred_reasons"] == {"model_request_already_outstanding_or_complete": 2}
     assert OriginalContentCall.objects.count() == 6 and provider.sent == 6
     for _ in range(8):
         result = _aggregate(native, provider)

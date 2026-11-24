@@ -4131,8 +4131,12 @@ class HarvestBacklogWindowManager(models.Manager):
         call_identity: dict[str, str] | None = None,
         include_quarantined: bool = False,
         only_quarantined: bool = False,
+        exclude_ids=(),
     ):
-        """Claim one due interval with PostgreSQL skip-locked semantics."""
+        """Claim one due interval with PostgreSQL skip-locked semantics.
+
+        ``exclude_ids`` lets one replay loop skip windows it already tried.
+        """
 
         now = now or timezone.now()
         with transaction.atomic():
@@ -4148,6 +4152,8 @@ class HarvestBacklogWindowManager(models.Manager):
             )
             if call_identity:
                 candidates = candidates.filter(**call_identity)
+            if exclude_ids:
+                candidates = candidates.exclude(pk__in=list(exclude_ids))
             window = candidates.order_by("first_seen_at", "remaining_since", "pk").first()
             if window is None:
                 return None

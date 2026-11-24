@@ -61,6 +61,81 @@ class FixedSlotTransport:
         return response
 
 
+@pytest.mark.parametrize(
+    ("source", "post_type", "sentiment"),
+    [
+        ("Maya v1.1.64 is out 💫\n\nEXL3 now works on AMD APUs paired with NVIDIA GPUs.", "other", "neutral"),
+        ("NVIDIA GPUs are now available and excellent.", "releases_updates", "positive"),
+        ("Today we are launching our next generation of NVIDIA GPUs.", "releases_updates", "positive"),
+        ("We just launched our new architecture. The first NVIDIA GPUs based on it are now available.", "releases_updates", "positive"),
+        ("Launched today: Blackwell. These new NVIDIA GPUs go on sale this week.", "releases_updates", "positive"),
+        ("We released v2.1 of our NVIDIA GPUs.", "releases_updates", "positive"),
+        ("NVIDIA's Apex v1.1 is out. It runs on NVIDIA GPUs.", "releases_updates", "positive"),
+        ("Maya v1.1 is out. Our new NVIDIA GPUs go on sale today.", "releases_updates", "positive"),
+        ("Maya v1.1 is out. I love my NVIDIA GPUs.", "other", "positive"),
+        ("NVIDIA Nova v1.2 is out. It runs on NVIDIA GPUs.", "releases_updates", "positive"),
+        ("Maya v1.0 is out. We just started shipping our new NVIDIA GPUs.", "releases_updates", "positive"),
+        ("Maya v1.0 is out. NVIDIA GPUs are fantastic!", "other", "positive"),
+    ],
+)
+def test_selected_route_does_not_assign_maya_launch_to_nvidia(source, post_type, sentiment):
+    from x_monitor.attribution import BrandRow, classify_batch_pragmatics_full
+
+    class IncorrectLaunchTransport(FixedSlotTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            for decision in response["decisions"].values():
+                if "post_types" in decision:
+                    decision["post_types"] = ["releases_updates"]
+                if "sentiment" in decision:
+                    decision["sentiment"] = "positive"
+            return response
+
+    post = {
+        "tweet_id": "2121908611320266918",
+        "text": source,
+        "context": [],
+        "brand_ids": ["nemo_megatron"],
+        "source_language": "en",
+    }
+    brands = [BrandRow(brand_id="nemo_megatron", display_name="NVIDIA", accent_color="#777", is_sentinel=False)]
+    result = classify_batch_pragmatics_full([post], brands, IncorrectLaunchTransport())[0]
+    assert result["valid"]
+    assert result["by_brand"]["nemo_megatron"]["post_types"] == [post_type]
+    assert result["by_brand"]["nemo_megatron"]["sentiment"] == sentiment
+
+
+def test_post_level_launch_candidate_survives_correct_passing_mention():
+    from x_monitor.attribution import BrandRow, classify_batch_pragmatics_full
+
+    class PassingMention(FixedSlotTransport):
+        def messages_create(self, **kwargs):
+            response = super().messages_create(**kwargs)
+            for decision in response["decisions"].values():
+                if "post_types" in decision:
+                    decision["post_types"] = ["other"]
+            return response
+
+    post = {"tweet_id": "maya-candidate", "text": "Maya v1.1.64 is out. It runs on NVIDIA GPUs.",
+            "context": [], "brand_ids": ["nemo_megatron"], "source_language": "en"}
+    brand = BrandRow(brand_id="nemo_megatron", display_name="NVIDIA", accent_color="#777", is_sentinel=False)
+    result = classify_batch_pragmatics_full([post], [brand], PassingMention())[0]
+    assert result["valid"] and result["release_candidate"]
+    assert result["by_brand"]["nemo_megatron"]["post_types"] == ["other"]
+
+
+@pytest.mark.parametrize("name", ["CUDA", "Triton Inference Server"])
+def test_passing_hardware_filter_keeps_a_known_brand_product_release(name):
+    from x_monitor.attribution import _filter_passing_hardware_release
+
+    content = {"outcome": "classified", "post_types": ["releases_updates"]}
+    brand = {"sentiment": "positive"}
+    catalog = {"brands": [{"brand_id": "nvidia", "display_name": "NVIDIA",
+                           "aliases": [], "products": [name]}]}
+    tweet = {"text": f"{name} v12.1 is out. This toolkit targets NVIDIA GPUs."}
+    assert _filter_passing_hardware_release(content, brand, tweet, catalog, "nvidia") == (content, brand)
+
+
 def test_selected_profile_uses_tested_deepinfra_request_without_native_json_mode():
     from x_monitor.openrouter import OpenRouterChatCompletionsClient
 
@@ -185,7 +260,7 @@ def test_selected_runtime_maps_fixed_slots_to_v4_catalog_and_affiliations_for_bo
     )] == [
         "stage1-content-0731-v7",
         "stage1-brand-interpretation-0731-v5",
-        "stage1-two-role-merge-0731-v7",
+        "stage1-two-role-merge-0731-v8",
     ]
     for call in transport.calls:
         request = call["request"]

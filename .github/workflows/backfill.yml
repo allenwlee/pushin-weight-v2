@@ -29,6 +29,22 @@ on:
       - 'monitor/run_lock.py'
       - 'x_monitor/x_client.py'
       - 'x_monitor/search_provider_circuit.py'
+      - 'monitor/classification_persistence.py'
+      - 'core/product_release_detection_queue.py'
+      - 'monitor/enrichment_queue.py'
+      - 'x_monitor/provider_telemetry.py'
+      - 'monitor/pulse_views.py'
+      - 'core/pulse_readers.py'
+      - 'scripts/harvest_baseline/**'
+      - 'tests/test_twexapi_*.py'
+      - 'tests/test_cycle_backlog_replay.py'
+      - 'tests/test_cycle_route_wait.py'
+      - 'tests/test_harvest_backlog_transfer.py'
+      - 'tests/test_cycle_tip_sweep.py'
+      - 'tests/test_harvester_state_models.py'
+      - 'tests/test_enrichment_worker.py'
+      - 'tests/test_u18a_v4_classification_persistence.py'
+      - 'x_monitor/search_provider_circuit.py'
       - 'tests/test_x_provider_contract.py'
       - 'tests/test_provider_announcements.py'
       - 'tests/test_collection_storage_migration.py'
@@ -137,3 +153,9 @@ jobs:
           tests/test_account_extensions.py tests/test_account_extensions_migration.py
           tests/test_publisher_accounts.py tests/test_collection_schema_regression_net.py
           tests/test_account_user_about_model.py
+          tests/test_twexapi_breaker.py tests/test_twexapi_search.py
+          tests/test_cycle_backlog_replay.py tests/test_harvest_backlog_transfer.py
+          tests/test_cycle_route_wait.py
+          tests/test_cycle_tip_sweep.py tests/test_harvester_state_models.py
+          tests/test_enrichment_worker.py tests/test_u18a_v4_classification_persistence.py
+          tests/test_promotion_subject_matcher.py

@@ -335,7 +335,10 @@ def _source_urls(post: Post) -> tuple[str, ...]:
     def collect(value: Any) -> None:
         if isinstance(value, str):
             for candidate in _URL_PATTERN.findall(value):
-                parsed = _url(candidate.rstrip(".,);]"))
+                try:
+                    parsed = _url(candidate.rstrip(".,);]"))
+                except ValueError:
+                    continue
                 if parsed:
                     found.add(parsed)
         elif isinstance(value, Mapping):
@@ -1867,6 +1870,125 @@ def _persist_categories(
     return written
 
 
+def _persist_release_proposal(post, record, model_name, brand, candidate, dossier, *, publisher_scoped=False):
+    candidate_repo_id = _text(record.get("candidate_repo_id"), maximum=256) or ""
+    if post.author_id and (brand is not None or candidate is not None):
+        source_identity_evidence = source_repo_evidence(post, candidate_repo_id)
+        proposal, _ = ProductVerificationProposal.objects.get_or_create(
+            proposal_key=_hash(
+                {
+                    "post": str(post.pk),
+                    "account": str(post.author_id),
+                    "model": model_name,
+                    "repo": candidate_repo_id.casefold(),
+                    **({"publisher": str(brand.pk) if brand else f"candidate:{candidate.pk}"}
+                       if publisher_scoped else {}),
+                }
+            ),
+            defaults={
+                "source_post": post,
+                "source_dossier": dossier,
+                "proposed_brand": brand,
+                "proposed_candidate": candidate,
+                "account_id": post.author_id,
+                "account_handle_snapshot": post.author_handle or "",
+                "observed_name": model_name,
+                "candidate_repo_id": candidate_repo_id,
+                "account_evidence": {
+                    "stable_account_id": post.author.author_id,
+                    "handle": post.author_handle or "",
+                    "account_handle_at_extraction": post.author.handle or "",
+                    "account_verified_type": code_for(post.author, "verified_type"),
+                    "post_author_verified_type": code_for(post, "author_verified_type"),
+                    **source_identity_evidence,
+                },
+                "policy_version": POLICY_VERSION,
+                "hf_outcome": "pending" if candidate_repo_id else "deferred",
+                "rule_trace": [
+                    (
+                        "awaiting_exact_public_hf_metadata"
+                        if source_identity_evidence["exact_hf_repo_link"]
+                        else "source_exact_repo_link_missing_owner_review_required"
+                    )
+                    if candidate_repo_id
+                    else "candidate_repo_id_missing_owner_review_required",
+                ],
+            },
+        )
+        if proposal.source_dossier_id is None:
+            proposal.source_dossier = dossier
+            proposal.save(update_fields=["source_dossier"])
+        release_stops = {"automatic_verification_stopped:release_superseded",
+                         "automatic_verification_stopped:release_reassessment_pending",
+                         "automatic_verification_stopped:release_evidence_stale"}
+        if proposal.review_status == "pending" and release_stops.intersection(proposal.rule_trace):
+            trace = [item for item in proposal.rule_trace if item not in release_stops]
+            proposal.account_evidence = {**dict(proposal.account_evidence or {}), **source_identity_evidence}
+            if source_identity_evidence["exact_hf_repo_link"]:
+                trace = [item for item in trace if item != "automatic_verification_stopped:source_exact_repo_link_missing"]
+                if candidate_repo_id and proposal.hf_outcome == "deferred":
+                    proposal.hf_outcome = "pending"
+            if not any(str(item).startswith("automatic_verification_stopped:") for item in trace):
+                trace = [item for item in trace if item != "automatic_verification_stopped"]
+            proposal.rule_trace = trace
+            proposal.source_dossier = dossier
+            proposal.save(update_fields=["source_dossier", "account_evidence", "hf_outcome", "rule_trace", "updated_at"])
+        # The established proposal key can cover several distinct reports
+        # from the same Post. Keep its first linked dossier and preserve
+        # every additional report as its own source claim.
+
+
+def persist_pulse_release_projections(post, findings, version, *, reconcile=False):
+    """Keep the existing rare-type and verification readers on the saved evidence."""
+    from core.classified_product_releases import read_publication_findings
+    from core.models import EventDossierClaim, PostBrandClassificationJudgment
+
+    saved = {row["finding"]["finding_key"]: row for row in (read_publication_findings(post.pk, allow_pending=True) or [])}
+    if reconcile:
+        # These are projections of selected release claims. Keep the claims,
+        # but retire projections that no longer represent the selected answer.
+        keep_categories = {(f.get("brand_id"), f.get("brand_candidate_id"), f.get("category")) for f in findings}
+        for category in RareTypeCategoryAssignment.objects.filter(post=post, classification_version=version):
+            if (category.brand_id, category.brand_discovery_candidate_id, category.category) not in keep_categories:
+                category.delete()
+        revisions = PostBrandClassificationJudgment.objects.filter(
+            post=post, prompt_version=version, provider_role="targeted-release",
+        ).values_list("revision_id", flat=True)
+        dossier_ids = EventDossierClaim.objects.filter(
+            event_dossier_source__post=post,
+            extraction_version__in=[f"pulse-classified-findings-v1:{revision}" for revision in revisions],
+        ).values_list("event_dossier_source__event_dossier_id", flat=True)
+        keep_proposals = {(str(f.get("observed_name") or ""), str(f.get("candidate_repo_id") or "").casefold(),
+                           f.get("brand_id"), f.get("brand_candidate_id"))
+                          for f in findings}
+        for proposal in ProductVerificationProposal.objects.select_for_update().filter(
+            source_post=post, source_dossier_id__in=dossier_ids, review_status="pending",
+        ):
+            if (proposal.observed_name, proposal.candidate_repo_id.casefold(), proposal.proposed_brand_id,
+                    proposal.proposed_candidate_id) not in keep_proposals:
+                proposal.rule_trace = [*proposal.rule_trace, "automatic_verification_stopped",
+                                       "automatic_verification_stopped:release_superseded"]
+                proposal.verification_claim_token = None
+                proposal.verification_claim_expires_at = None
+                proposal.save(update_fields=["rule_trace", "verification_claim_token", "verification_claim_expires_at", "updated_at"])
+    for finding in findings:
+        row = saved.get(finding["finding_key"])
+        if row is None:
+            raise ValueError("targeted_release_projection_missing_finding")
+        brand = Brand.objects.filter(pk=finding.get("brand_id")).first() if finding.get("brand_id") else None
+        candidate = (BrandDiscoveryCandidate.objects.filter(pk=finding["brand_candidate_id"]).first()
+                     if finding.get("brand_candidate_id") else None)
+        if brand is None and candidate is None:
+            continue
+        record = {"categories": [finding["category"]] if finding.get("category") else [],
+                  "candidate_repo_id": finding.get("candidate_repo_id") or ""}
+        _persist_categories(post=post, record=record, version=version, brand=brand, candidate=candidate)
+        claim = EventDossierClaim.objects.select_related("event_dossier_source__event_dossier").get(pk=row["anchor_claim_id"])
+        if finding.get("observed_name"):
+            _persist_release_proposal(post, record, finding["observed_name"], brand, candidate,
+                                      claim.event_dossier_source.event_dossier, publisher_scoped=True)
+
+
 def _persist_product_release_reports(
     post: Post, records: list[Mapping[str, Any]], version: str
 ):
@@ -1951,54 +2073,7 @@ def _persist_product_release_reports(
             extraction_version=version,
             queue_acquisition=True,
         )
-        candidate_repo_id = _text(record.get("candidate_repo_id"), maximum=256) or ""
-        if post.author_id and (brand is not None or candidate is not None):
-            source_identity_evidence = source_repo_evidence(post, candidate_repo_id)
-            proposal, _ = ProductVerificationProposal.objects.get_or_create(
-                proposal_key=_hash(
-                    {
-                        "post": str(post.pk),
-                        "account": str(post.author_id),
-                        "model": model_name,
-                        "repo": candidate_repo_id.casefold(),
-                    }
-                ),
-                defaults={
-                    "source_post": post,
-                    "source_dossier": dossier,
-                    "proposed_brand": brand,
-                    "proposed_candidate": candidate,
-                    "account_id": post.author_id,
-                    "account_handle_snapshot": post.author_handle or "",
-                    "observed_name": model_name,
-                    "candidate_repo_id": candidate_repo_id,
-                    "account_evidence": {
-                        "stable_account_id": post.author.author_id,
-                        "handle": post.author_handle or "",
-                        "account_handle_at_extraction": post.author.handle or "",
-                        "account_verified_type": code_for(post.author, "verified_type"),
-                        "post_author_verified_type": code_for(post, "author_verified_type"),
-                        **source_identity_evidence,
-                    },
-                    "policy_version": POLICY_VERSION,
-                    "hf_outcome": "pending" if candidate_repo_id else "deferred",
-                    "rule_trace": [
-                        (
-                            "awaiting_exact_public_hf_metadata"
-                            if source_identity_evidence["exact_hf_repo_link"]
-                            else "source_exact_repo_link_missing_owner_review_required"
-                        )
-                        if candidate_repo_id
-                        else "candidate_repo_id_missing_owner_review_required",
-                    ],
-                },
-            )
-            if proposal.source_dossier_id is None:
-                proposal.source_dossier = dossier
-                proposal.save(update_fields=["source_dossier"])
-            # The established proposal key can cover several distinct reports
-            # from the same Post. Keep its first linked dossier and preserve
-            # every additional report as its own source claim.
+        _persist_release_proposal(post, record, model_name, brand, candidate, dossier)
         written += int(created)
         evidence += int(evidence_created)
     return written, evidence, candidates
@@ -2037,7 +2112,57 @@ def _parse_response(
     }
 
 
-def _prompts(role: str, post: Post, *, version: str | None = None) -> tuple[str, str]:
+def request_targeted_release(post_id, *, model, content_identity=None, reopen=False):
+    """Record release work without changing an already published feed judgment."""
+    state, created = TargetedExtractionState.objects.get_or_create(
+        post_id=post_id, role="model_release_extraction",
+        defaults={"content_identity": content_identity or "0" * 64, "model": model,
+                  "prompt_version": "model-release-extraction-v2", "status": "pending"},
+    )
+    if not created and (reopen or state.status == "succeeded" or state.prompt_version != "model-release-extraction-v2"
+                        or (content_identity is not None and state.content_identity != content_identity)):
+        from core.models import EventDossierClaim, PostBrandClassificationJudgment
+
+        revisions = PostBrandClassificationJudgment.objects.filter(
+            post_id=post_id, prompt_version="model-release-extraction-v2", provider_role="targeted-release",
+        ).values_list("revision_id", flat=True)
+        dossier_ids = EventDossierClaim.objects.filter(
+            event_dossier_source__post_id=post_id,
+            extraction_version__in=[f"pulse-classified-findings-v1:{revision}" for revision in revisions],
+        ).values_list("event_dossier_source__event_dossier_id", flat=True)
+        with transaction.atomic():
+            for proposal in ProductVerificationProposal.objects.select_for_update().filter(
+                source_post_id=post_id, source_dossier_id__in=dossier_ids, review_status="pending",
+            ):
+                trace = list(proposal.rule_trace or [])
+                for item in ("automatic_verification_stopped", "automatic_verification_stopped:release_reassessment_pending"):
+                    if item not in trace:
+                        trace.append(item)
+                proposal.rule_trace = trace
+                proposal.verification_claim_token = proposal.verification_claim_expires_at = None
+                proposal.save(update_fields=["rule_trace", "verification_claim_token", "verification_claim_expires_at", "updated_at"])
+        state.status = "pending"
+        state.prompt_version = "model-release-extraction-v2"
+        state.attempts = 0
+        if content_identity is not None:
+            state.content_identity = content_identity
+        state.save(update_fields=["status", "prompt_version", "attempts", "content_identity", "updated_at"])
+        from core.models import ProductReleaseDetectionState
+
+        ProductReleaseDetectionState.objects.filter(
+            post_id=post_id, error_code="release_extraction_exhausted",
+        ).update(attempts=0, retry_at=None, error_code="")
+    return state
+
+
+def _effective_prompt_version(role, configured_version, *, pulse_release=False):
+    if role == "model_release_extraction" and not pulse_release:
+        return "model-release-extraction-v1"
+    return configured_version
+
+
+def _prompts(role: str, post: Post, *, version: str | None = None,
+             pulse_release: bool = False, release_context: list | None = None) -> tuple[str, str]:
     source_kind = (
         "ambiguous profile observation"
         if role == "profile_affiliation_extraction"
@@ -2065,6 +2190,54 @@ def _prompts(role: str, post: Post, *, version: str | None = None) -> tuple[str,
             "redirect_resolution": False,
         },
     }
+    if role == "model_release_extraction" and not pulse_release and post.in_reply_to_id:
+        parent_text = Post.objects.filter(pk=post.in_reply_to_id).values_list("text", flat=True).first()
+        if parent_text:
+            payload["parent_text"] = parent_text
+    if role == "model_release_extraction" and pulse_release:
+        payload["context"] = release_context or []
+        system += (
+            " A suite announcement that mentions existing components is one release."
+            " Include a component separately only when the source introduces it."
+            " For each record supply source_excerpt as an exact quote identifying"
+            " the offering and release, publisher_relation as source_author,"
+            " attributed_party or null, and novelty as new_release, historical_release,"
+            " availability_update or unresolved. The categories array must contain exactly one primary category."
+            " For source-supported access, return claim_kind as availability and access_channel as"
+            " api, weights, hosted_app, software_download, source_code, data_download or physical_product;"
+            " otherwise use release_report and null. The exact quote must support the claim and channel."
+            " For multiple access milestones on one offering, include milestones as a list of"
+            " claim_kind, source_excerpt, access_channel, release_precision and release_value;"
+            " quote and date each milestone separately. Use an empty list if none."
+            " Supply family_name and family_excerpt only when the source explicitly"
+            " names the family and the quote contains both family and model."
+            " Supply lineage_evidence as a list of relationship_kind (new_version,"
+            " finetune, adapter, quantized, merge), parent_observed_name and an exact"
+            " source_excerpt containing both names. Use an empty list if absent."
+        )
+    if role == "model_release_extraction" and pulse_release and post.author_id:
+        from core.models import BrandAccount
+        from core.official_company_accounts import build_evidence
+
+        evidence = build_evidence(post.author, [{
+            "id": str(post.pk),
+            "text": post.text,
+            "author_description": post.author_description,
+            "profile_bio": post.author_profile_bio,
+            "observed_at": post.fetched_at.isoformat() if post.fetched_at else None,
+        }])
+        evidence["sources"] = [
+            {**{key: value for key, value in source.items() if key != "observed_at"}, "text": source["text"][:2048]}
+            for source in evidence["sources"]
+            if source["id"] != f"post:{post.pk}"
+        ][:12]
+        payload["author_profile_evidence"] = evidence
+        payload["author_affiliations"] = [
+            {"brand_id": brand_id, "role": role_id, "reviewed": True}
+            for brand_id, role_id in BrandAccount.objects.filter(
+                account_id=post.author_id, account__data_source_id="x",
+            ).order_by("brand_id", "role_id").values_list("brand_id", "role_id")
+        ]
     if role in {"personnel_change_extraction", "profile_affiliation_extraction"}:
         payload["source_published_at"] = post.created_at.isoformat() if post.created_at else None
         payload["source_observed_at"] = post.fetched_at.isoformat() if post.fetched_at else None
@@ -2137,6 +2310,16 @@ def _prompts(role: str, post: Post, *, version: str | None = None) -> tuple[str,
     return system, user
 
 
+def targeted_request_input(role, post, role_config, *, pulse_release=False, release_context=None):
+    version = _effective_prompt_version(role, role_config.prompt_version, pulse_release=pulse_release)
+    system, user = _prompts(role, post, version=version,
+                            pulse_release=role == "model_release_extraction" and pulse_release,
+                            release_context=release_context)
+    identity = _hash({"post": str(post.pk), "role": role, "system": system, "user": user,
+                      "model": role_config.model, "prompt_version": version})
+    return system, user, version, identity
+
+
 def _increment_discovery_counts(
     *,
     post: Post,
@@ -2187,6 +2370,11 @@ def run_targeted_extractions(
     calls: Mapping[str, TargetedCall],
     max_calls: int,
     deadline: Any | None = None,
+    release_persist: Callable | None = None,
+    release_context: list | None = None,
+    release_source_text: str | None = None,
+    release_source_retweet: bool | None = None,
+    release_reusable: bool | None = None,
 ) -> TargetedExtractionResult:
     if not config.enabled or max_calls < 1:
         return TargetedExtractionResult()
@@ -2196,9 +2384,10 @@ def run_targeted_extractions(
         if key in post_types
     ]
     if "model_release_extraction" in roles:
-        from core.classified_product_releases import classifier_owns_release_extraction
+        from core.classified_product_releases import classifier_owns_release_extraction, selected_release_revision
 
-        if classifier_owns_release_extraction(post.pk):
+        if ((release_reusable if release_reusable is not None else selected_release_revision(post.pk) is not None) if release_persist
+                else classifier_owns_release_extraction(post.pk)):
             roles.remove("model_release_extraction")
     has_ambiguous_profile = AffiliationClaimEvidence.objects.filter(
         pk__in=PersonBrandAffiliationEvidence.objects.filter(
@@ -2228,28 +2417,60 @@ def run_targeted_extractions(
             failed.append(role)
             continue
         role_config = config.roles[role]
-        system, user = _prompts(role, post, version=role_config.prompt_version)
-        content_identity = _hash(
-            {
-                "post": str(post.pk),
-                "role": role,
-                "system": system,
-                "user": user,
-                "model": role_config.model,
-                "prompt_version": role_config.prompt_version,
-            }
-        )
-        state, _ = TargetedExtractionState.objects.get_or_create(
-            post=post,
-            role=role,
-            defaults={
-                "content_identity": content_identity,
-                "model": role_config.model,
-                "prompt_version": role_config.prompt_version,
-            },
-        )
+        state = None
+        dispatched_state_updated_at = None
+        if role == "model_release_extraction" and release_persist:
+            state, _ = TargetedExtractionState.objects.get_or_create(
+                post=post, role=role,
+                defaults={"content_identity": "0" * 64, "model": role_config.model,
+                          "prompt_version": "model-release-extraction-v2", "status": "pending"},
+            )
+            dispatched_state_updated_at = state.updated_at
+            current_post = Post.objects.get(pk=post.pk)
+            context = {row.get("provenance"): row.get("text") for row in (release_context or []) if isinstance(row, dict)}
+            current_parent = Post.objects.filter(pk=current_post.in_reply_to_id).values_list("text", flat=True).first()
+            if release_source_text is not None and (
+                release_source_text != (current_post.text or "")
+                or release_source_retweet != current_post.is_retweet
+                or context.get("stored_quote", "") != (current_post.quoted_text or "")
+                or context.get("local_parent", "") != (current_parent or "")
+            ):
+                failed.append(role)
+                continue
+            if (current_post.text, current_post.quoted_text, _source_urls(current_post)) != (
+                post.text, post.quoted_text, _source_urls(post),
+            ):
+                failed.append(role)
+                continue
+        try:
+            system, user, prompt_version, content_identity = targeted_request_input(
+                role, post, role_config, pulse_release=release_persist is not None,
+                release_context=release_context,
+            )
+        except (TypeError, ValueError) as exc:
+            if role != "model_release_extraction" or release_persist is None:
+                raise
+            state.status = "failed"
+            state.attempts += 1
+            state.last_error_code = type(exc).__name__[:128]
+            TargetedExtractionState.objects.filter(pk=state.pk, updated_at=dispatched_state_updated_at).update(
+                status=state.status, attempts=state.attempts, last_error_code=state.last_error_code,
+                updated_at=timezone.now(),
+            )
+            failed.append(role)
+            continue
+        if state is None:
+            state, _ = TargetedExtractionState.objects.get_or_create(
+                post=post, role=role,
+                defaults={"content_identity": content_identity, "model": role_config.model,
+                          "prompt_version": prompt_version},
+            )
         if state.status == "succeeded" and state.content_identity == content_identity:
             continue
+        if state.content_identity != content_identity:
+            state.attempts = 0
+        if dispatched_state_updated_at is None:
+            dispatched_state_updated_at = state.updated_at
         attempted_at = timezone.now()
         started = time.monotonic()
         usage = {"input_tokens": 0, "output_tokens": 0}
@@ -2260,9 +2481,15 @@ def run_targeted_extractions(
             response = call(system, user, role_config.model, role_config.max_tokens)
             records, usage = _parse_response(response)
             with transaction.atomic():
-                written, evidence, candidates = _PERSISTERS[role](
-                    post, records, role_config.prompt_version
-                )
+                if role == "model_release_extraction" and release_persist:
+                    from core.models import PostEnrichmentState
+
+                    PostEnrichmentState.objects.select_for_update().filter(post=post).first()
+                    current = TargetedExtractionState.objects.select_for_update().get(pk=state.pk)
+                    if current.updated_at != dispatched_state_updated_at:
+                        raise ValueError("targeted_release_input_changed_during_request")
+                persist = release_persist if role == "model_release_extraction" and release_persist else _PERSISTERS[role]
+                written, evidence, candidates = persist(post, records, prompt_version)
             records_written += written
             evidence_written += evidence
             candidates_written += candidates
@@ -2283,17 +2510,45 @@ def run_targeted_extractions(
             error_code = type(exc).__name__[:128]
             failed.append(role)
         calls_made += 1
+        def record_superseded_attempt():
+            TargetedExtractionAttempt.objects.create(
+                state_id=state.pk,
+                attempt_identity=_hash({"state": state.pk, "at": attempted_at.isoformat(), "result": "superseded"}),
+                attempted_at=attempted_at, outcome="failed", model=role_config.model,
+                prompt_version=prompt_version, input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"],
+                latency_ms=max(round((time.monotonic() - started) * 1000), 0), error_code="input_superseded",
+            )
+        if (role == "model_release_extraction" and release_persist
+                and TargetedExtractionState.objects.filter(pk=state.pk).exclude(
+                    updated_at=dispatched_state_updated_at,
+                ).exists() and outcome != "succeeded"):
+            # A newer harvest request owns this state. Never overwrite it with
+            # the result of an older provider call.
+            record_superseded_attempt()
+            continue
         latency_ms = max(round((time.monotonic() - started) * 1000), 0)
         state.content_identity = content_identity
         state.model = role_config.model
-        state.prompt_version = role_config.prompt_version
+        state.prompt_version = prompt_version
         state.attempts += 1
         state.status = outcome
         state.result_hash = result_hash
         state.last_error_code = error_code
         state.last_attempted_at = attempted_at
         state.completed_at = attempted_at if outcome == "succeeded" else None
-        state.save()
+        if role == "model_release_extraction" and release_persist:
+            changed = TargetedExtractionState.objects.filter(
+                pk=state.pk, updated_at=dispatched_state_updated_at,
+            ).update(content_identity=state.content_identity, model=state.model,
+                     prompt_version=state.prompt_version, attempts=state.attempts,
+                     status=state.status, result_hash=state.result_hash,
+                     last_error_code=state.last_error_code, last_attempted_at=state.last_attempted_at,
+                     completed_at=state.completed_at, updated_at=timezone.now())
+            if not changed:
+                record_superseded_attempt()
+                continue
+        else:
+            state.save()
         if role == "profile_affiliation_extraction":
             ProfileMovementCandidate.objects.filter(source_post=post).update(
                 status=outcome,
@@ -2312,7 +2567,7 @@ def run_targeted_extractions(
             attempted_at=attempted_at,
             outcome=outcome,
             model=role_config.model,
-            prompt_version=role_config.prompt_version,
+            prompt_version=prompt_version,
             input_tokens=usage["input_tokens"],
             output_tokens=usage["output_tokens"],
             latency_ms=latency_ms,

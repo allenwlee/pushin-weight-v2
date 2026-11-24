@@ -26,6 +26,7 @@ from core.models import (
     Post,
     PostEnrichmentState,
     ProviderBatch,
+    TargetedExtractionState,
 )
 from x_monitor.provider_telemetry import normalize_usage
 
@@ -218,12 +219,25 @@ def record_post_membership(run, scope, post_ids, *, observed_at=None):
         raise BatchAdmissionError("historical_membership_requires_x_backfill")
     ids = save_post_membership(run, scope, post_ids, observed_at=observed_at)
     now = timezone.now()
+    pending_release = _pending_scheduled_releases(ids)
     PostEnrichmentState.objects.filter(
         Q(translation_requested=True, translation_status="pending") | Q(classification_status="pending"),
         Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now),
         post_id__in=ids,
         source_collection_job__isnull=True,
-    ).update(source_collection_job_id=run.job_id)
+    ).exclude(post_id__in=pending_release).update(source_collection_job_id=run.job_id)
+
+
+def _pending_scheduled_releases(post_ids):
+    from pathlib import Path
+
+    from x_monitor.config import load_config
+
+    maximum = load_config(Path("config.yaml")).harvest.enrichment.max_attempts
+    return set(TargetedExtractionState.objects.filter(
+        post_id__in=post_ids, role="model_release_extraction", prompt_version="model-release-extraction-v2",
+        status__in=["pending", "failed"], attempts__lt=maximum,
+    ).values_list("post_id", flat=True))
 
 
 def historical_ownership_conflicts(job, states):
@@ -237,6 +251,10 @@ def historical_ownership_conflicts(job, states):
         p: "historical_state_missing_or_claimed" for p, s in pending.items()
         if s.claim_expires_at and s.claim_expires_at > now
     }
+    scheduled_release = _pending_scheduled_releases(pending)
+    for post_id in scheduled_release:
+        if pending[post_id].source_collection_job_id is None:
+            conflicts.setdefault(post_id, "scheduled_release_pending")
     foreign = {p for p, s in pending.items()
                if s.source_collection_job_id not in {None, job.pk}}
     if foreign:

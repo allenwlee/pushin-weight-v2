@@ -87,6 +87,7 @@ _CALL_KEYS = {
     "reserved_credits",
     "estimated_credits",
     "confirmed_credits",
+    "route_wait_ms",
 }
 _PLANNED_CALL_KEYS = {
     "call_id",
@@ -100,6 +101,7 @@ _BACKLOG_KEYS = _CALL_KEYS | {
     "attempt",
     "membership_run_id",
     "role_degraded",
+    "request_sent",
 }
 _TOTAL_KEYS = {
     "n_calls_planned",
@@ -113,6 +115,9 @@ _TOTAL_KEYS = {
     "keep_rate_min",
     "keep_rate_mean",
     "keep_rate_max",
+    "n_backlog_capacity_refused",
+    "n_clamped_spans_queued",
+    "n_clamped_spans_uncovered",
 }
 _POST_FETCH_KEYS_V1 = {
     "n_translated",

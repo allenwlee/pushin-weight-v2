@@ -92,9 +92,13 @@ def build_evidence(
             url = row.get("expanded_url")
             if not isinstance(url, str):
                 continue
-            parsed = urlparse(url)
-            if parsed.scheme in {"http", "https"} and parsed.hostname:
-                domains.add(parsed.hostname.lower().removeprefix("www."))
+            try:
+                parsed = urlparse(url)
+                hostname = parsed.hostname
+            except ValueError:
+                continue
+            if parsed.scheme in {"http", "https"} and hostname:
+                domains.add(hostname.lower().removeprefix("www."))
                 add(f"{source_id}:url:{index}", url)
 
     identifier = str(account.author_id)

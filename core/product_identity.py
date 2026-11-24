@@ -243,7 +243,11 @@ def resolve_saved_release_finding(*, claim_id):
             or (issuer.get("observed_name") and issuer["observed_name"] in issuer.get("source_excerpt", ""))
         ))
     ) else None)
-    if post and name and packet["extraction_version"] == "compressed8-pulse-content-v2":
+    from core.classified_product_releases import TARGETED_RELEASE_REVISION
+
+    if post and name and packet["extraction_version"] in {
+        "compressed8-pulse-content-v2", TARGETED_RELEASE_REVISION,
+    }:
         from core.classified_product_releases import (
             read_publication_findings,
             selected_release_revision,
@@ -530,6 +534,14 @@ def resolve_saved_release_finding(*, claim_id):
         _ensure_model_family(product, finding, claim)
         if trusted_finding and finding.get("family_evidence"):
             _apply_reported_family_name(product, finding["family_evidence"], claim)
+        if (trusted_finding and post and product.brand_id
+                and packet["extraction_version"] == TARGETED_RELEASE_REVISION):
+            from core.targeted_extraction import persist_pulse_release_projections
+
+            persist_pulse_release_projections(
+                post, [{**finding, "brand_id": product.brand_id, "brand_candidate_id": None}],
+                TARGETED_RELEASE_REVISION,
+            )
     return {
         "status": "created" if created else "matched" if product else "unresolved",
         "product_id": product.pk if product else None,

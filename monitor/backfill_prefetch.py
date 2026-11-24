@@ -39,7 +39,9 @@ from x_monitor.x_client import (
     XClient,
     _search_results,
     search_page_from_response,
+    twex_empty_with_cursor,
     twexapi_search_page,
+    unexpected_empty_search_page,
 )
 
 
@@ -74,7 +76,9 @@ class CapturedPage:
         body = self.body if self.body is not None else read_document(self.request.archive)
         if self.request.endpoint_url.startswith("https://api.twexapi.io/"):
             page = twexapi_search_page(body, received_at=self.request.received_at)
-            if page.next_cursor:
+            if twex_empty_with_cursor(body):
+                page = replace(page, continuation_invalid=True, has_more=False, next_cursor=None)
+            elif page.next_cursor:
                 page = replace(page, next_cursor="twexapi:" + page.next_cursor)
             yield page
         else:
@@ -93,6 +97,7 @@ class TransportResult:
     received_at: datetime
     seconds: float
     retry_after_seconds: int | None = None
+    inconclusive_empty: bool = False
 
 
 @dataclass(frozen=True)
@@ -258,7 +263,9 @@ class Prefetcher:
             circuit = self.router.twex_circuit
         else:
             circuit = self.router.provider_circuits[route.name]
-        if status == 429:
+        if result.inconclusive_empty:
+            circuit.abandon_probe()
+        elif status == 429:
             circuit.record_rate_limit(datetime.now(UTC), result.retry_after_seconds or 30)
         elif status == 401 or (status is not None and status >= 500) or (result.error and status in (None, 200)):
             circuit.record_failure(datetime.now(UTC))
@@ -267,13 +274,26 @@ class Prefetcher:
 
     def _assess_route_result(self, request, result):
         route = self.routes.get(request.pk)
-        if (route is None or result.error or result.response.get("status_code") != 200
-                or request.cursor_before):
+        if route is None or result.error or result.response.get("status_code") != 200:
             return result
         circuit = self.router.twex_circuit if route.name == "twexapi" else self.router.provider_circuits[route.name]
         count = result.response.get("raw_results", 0)
+        if not count and result.body and (route.name == "twexapi" or circuit.is_probe()):
+            try:
+                body = json.loads(result.body)
+            except (TypeError, ValueError):
+                return replace(result, error="XClientServerError")
+            if isinstance(body, dict) and route.name == "twexapi" and twex_empty_with_cursor(body):
+                if body["next_cursor"] == (request.cursor_before or "").removeprefix("twexapi:"):
+                    return replace(result, error="XClientServerError")
+                return replace(result, inconclusive_empty=True)
+            if (not request.cursor_before and circuit.is_probe() and isinstance(body, dict)
+                    and (body.get("has_next_page") or body.get("next_cursor"))):
+                return replace(result, error="XClientServerError")
+        if request.cursor_before:
+            return result
         expected = circuit.observe_query(_params(request.scope_run)["query"], nonempty=bool(count), now=datetime.now(UTC))
-        if not count and (expected or circuit.is_probe()):
+        if unexpected_empty_search_page(count, expected):
             return replace(result, error="XClientServerError")
         return result
 

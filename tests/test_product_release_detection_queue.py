@@ -4,11 +4,26 @@ from datetime import timedelta
 
 import pytest
 from django.utils import timezone
+from django.db import transaction
 
 from core import models
 from core.product_release_detection_queue import drain_posts, enqueue_posts
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
+
+
+def test_new_saved_evidence_reopens_exhausted_detection():
+    from core.product_release_detection_queue import enqueue_saved_post
+
+    post = models.Post.objects.create(tweet_id="new-evidence-after-exhaustion", text="A post")
+    enqueue_posts([post.pk])
+    models.ProductReleaseDetectionState.objects.filter(post=post).update(
+        attempts=3, error_code="release_extraction_exhausted", retry_at=timezone.now() + timedelta(days=1),
+    )
+    with transaction.atomic():
+        enqueue_saved_post(post.pk, evidence_ready=True)
+    state = models.ProductReleaseDetectionState.objects.get(post=post)
+    assert state.attempts == 0 and state.error_code == "" and state.retry_at is None
 
 
 def test_queue_retains_nonmatches_and_processes_candidates_without_provider_calls():
@@ -205,12 +220,16 @@ def test_real_post_save_and_detection_handoff_are_atomic(settings, monkeypatch):
     assert drain_posts()["candidates"] == 1
 
 
-def test_lost_broker_wakeup_leaves_durable_post_for_later_recovery(settings, monkeypatch):
+def test_lost_broker_wakeup_leaves_durable_post_for_later_recovery(settings, monkeypatch, tmp_path):
+    from core import classified_product_releases
     from monitor.cycle import CycleRunner
+    from monitor import pulse_control
     from monitor.tasks import recover_due_product_releases
     from tests.test_post_enrichment_queue import _cfg, _state
 
     settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
     state = _state("scan-broker-recovery")
     state.post.text = "We announce a new model."
     state.post.save(update_fields=["text"])
@@ -224,8 +243,15 @@ def test_lost_broker_wakeup_leaves_durable_post_for_later_recovery(settings, mon
     assert result["product_release_intake"]["queued"] == 1
     assert not models.EventDossier.objects.exists()
     assert models.ProductReleaseDetectionState.objects.get(post=state.post).completed_at is None
+    # A complete, saved empty answer can be drained without a provider request.
+    monkeypatch.setattr(classified_product_releases, "read_publication_findings", lambda _: ())
+    from django.db import transaction
+    from core.product_release_detection_queue import enqueue_saved_post
+    with transaction.atomic():
+        enqueue_saved_post(state.pk, evidence_ready=True)
     recovered = recover_due_product_releases.run()
-    assert recovered["detection"]["candidates"] == 1 and recovered["provider_calls"] == 0
+    assert recovered["detection"]["processed"] == 1
+    assert recovered["detection"]["candidates"] == 0 and recovered["provider_calls"] == 0
     assert models.ProductReleaseDetectionState.objects.get(post=state.post).completed_at is not None
 
 

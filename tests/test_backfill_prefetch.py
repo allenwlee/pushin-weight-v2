@@ -33,6 +33,60 @@ from tests.test_backfill_pipeline import pipeline as captured_pipeline
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 pipeline = pytest.fixture(name="pipeline")(captured_pipeline.__wrapped__)
 REAL_GET = requests.get
+
+
+@pytest.mark.parametrize("provider", ["twitterapi:scheduled", "twexapi"])
+def test_empty_page_advertising_continuation_is_not_a_healthy_probe(monkeypatch, provider):
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    from monitor import backfill_prefetch
+
+    body = {"code": 200, "data": [], "tweets": [], "has_next_page": True, "next_cursor": "next"}
+    from unittest.mock import Mock
+    circuit = Mock()
+    circuit.is_probe.return_value = True
+    prefetcher = backfill_prefetch.Prefetcher(None, None, None, backfill_prefetch.PrefetchOptions())
+    prefetcher.router = SimpleNamespace(twex_circuit=circuit, provider_circuits={provider: circuit},
+                                        circuit=circuit, twexapi_interval_s=1)
+    prefetcher.routes = {"request": SimpleNamespace(name=provider)}
+    request = SimpleNamespace(pk="request", cursor_before=None)
+    result = backfill_prefetch.TransportResult(body=json.dumps(body).encode(),
+        response={"status_code": 200, "raw_results": 0}, error=None, received_at=datetime.now(UTC), seconds=0)
+    assessed = prefetcher._assess_route_result(request, result)
+    prefetcher._finish_route(request, assessed)
+    if provider == "twexapi":
+        assert assessed.error is None and assessed.inconclusive_empty
+        circuit.abandon_probe.assert_called_once_with()
+        circuit.record_failure.assert_not_called()
+        request.endpoint_url = "https://api.twexapi.io/twitter/advanced_search/page"
+        request.received_at = result.received_at
+        page, = backfill_prefetch.CapturedPage(request, assessed.response, False, body).pages()
+        assert page.continuation_invalid and page.next_cursor is None
+    else:
+        assert assessed.error == "XClientServerError"
+        circuit.record_failure.assert_called_once()
+    circuit.record_success.assert_not_called()
+
+
+@pytest.mark.parametrize("provider", ["twitterapi:scheduled", "twexapi"])
+@pytest.mark.parametrize("expected", [False, True])
+def test_prefetch_quiet_recovery_probe_only_fails_for_expected_results(monkeypatch, provider, expected):
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    from monitor import backfill_prefetch
+
+    circuit = SimpleNamespace(observe_query=lambda *_args, **_kwargs: expected, is_probe=lambda: True)
+    prefetcher = backfill_prefetch.Prefetcher(None, None, None, backfill_prefetch.PrefetchOptions())
+    prefetcher.router = SimpleNamespace(twex_circuit=circuit, provider_circuits={provider: circuit})
+    prefetcher.routes = {"request": SimpleNamespace(name=provider)}
+    monkeypatch.setattr(backfill_prefetch, "_params", lambda _: {"query": "quiet query"})
+    request = SimpleNamespace(pk="request", cursor_before=None, scope_run=None)
+    result = backfill_prefetch.TransportResult(body=b"{}", response={"status_code": 200, "raw_results": 0},
+                                                 error=None, received_at=datetime.now(UTC), seconds=0)
+    assessed = prefetcher._assess_route_result(request, result)
+    assert assessed.error == ("XClientServerError" if expected else None)
 from datetime import UTC, datetime
 
 from x_monitor.x_client import XClient

@@ -172,9 +172,12 @@ def test_failures_open_circuit_then_next_search_uses_fallback(monkeypatch):
     assert len(calls) == 2 and len(posts) == 2
 
 
-def test_empty_page_with_continuation_counts_as_failure(monkeypatch):
+def test_empty_page_with_continuation_is_a_query_outcome_not_a_route_failure(monkeypatch):
+    """KTD2 (plan 2026-11-24-012909): TwitterAPI.io's end-of-results rule is
+    unchanged (an empty page that still advertises more is not certified),
+    but it is a query outcome and no longer counts against the route."""
     import pytest
-    from x_monitor.x_client import XClient, XClientServerError
+    from x_monitor.x_client import XClient, XClientQueryOutcome
     class Circuit:
         def __init__(self): self.failures = 0
         def primary_permitted(self, now): return True
@@ -183,8 +186,8 @@ def test_empty_page_with_continuation_counts_as_failure(monkeypatch):
     circuit = Circuit()
     client = XClient(api_key="primary", twexapi_key="secondary", circuit=circuit)
     monkeypatch.setattr(client, "_get", lambda *a, **k: {"tweets": [], "has_next_page": True, "next_cursor": "next"})
-    with pytest.raises(XClientServerError): client.run_search("DeepSeek")
-    assert circuit.failures == 1
+    with pytest.raises(XClientQueryOutcome): client.run_search("DeepSeek")
+    assert circuit.failures == 0
 
 
 def test_forced_twexapi_search_never_calls_primary(monkeypatch):
@@ -262,7 +265,9 @@ def test_empty_twexapi_continuation_stops_without_looping(monkeypatch):
     monkeypatch.setattr("x_monitor.x_client.requests.post", send)
     client = XClient(api_key="primary", twexapi_key="secondary", circuit=Circuit())
     posts, incomplete = client.run_search("DeepSeek", max_results=50)
-    assert len(posts) == 2 and incomplete
+    # Owner decision 2026-11-24 (R5/KTD7, TwexAPI only): the first empty page
+    # ends the walk complete even though it offers a cursor.
+    assert len(posts) == 2 and not incomplete
     assert len(calls) == 2
 
 
@@ -307,9 +312,11 @@ def test_recorded_tweet_preserves_links_and_media():
     assert result["extended_entities"]["media"][0]["media_url_https"] == "https://pbs.twimg.com/media/example.jpg"
 
 
-def test_first_page_empty_with_prior_nonempty_evidence_counts_as_failure(monkeypatch):
+def test_first_page_empty_with_prior_nonempty_evidence_is_not_certified(monkeypatch):
+    """KTD2: the expected-results heuristic still refuses to certify the
+    TwitterAPI.io page, but the outcome belongs to the query, not the route."""
     import pytest
-    from x_monitor.x_client import XClient, XClientServerError
+    from x_monitor.x_client import XClient, XClientQueryOutcome
     class Circuit:
         def __init__(self): self.failures = 0
         def primary_permitted(self, now): return True
@@ -320,8 +327,8 @@ def test_first_page_empty_with_prior_nonempty_evidence_counts_as_failure(monkeyp
     circuit = Circuit()
     client = XClient(api_key="primary", twexapi_key="secondary", circuit=circuit)
     monkeypatch.setattr(client, "_get", lambda *a, **k: {"tweets": [], "has_next_page": False})
-    with pytest.raises(XClientServerError): client.run_search("DeepSeek")
-    assert circuit.failures == 1
+    with pytest.raises(XClientQueryOutcome): client.run_search("DeepSeek")
+    assert circuit.failures == 0
 
 
 def test_twexapi_author_profile_website_and_verification_are_preserved():
@@ -376,8 +383,11 @@ def test_twex_backfill_uses_serial_client_and_refuses_incompatible_prefetch():
             _select_prefetch(direct_staging=direct, has_prefetch=existing, collection_options=options, force_twexapi=True)
 
 
-def test_twex_positive_pages_feed_empty_page_guard(monkeypatch):
-    from x_monitor.x_client import XClient, XClientServerError
+def test_twex_positive_pages_feed_history_but_empty_page_is_complete(monkeypatch):
+    """Owner decision 2026-11-24 (KTD7): for TwexAPI first pages the expected-
+    results heuristic no longer turns an empty page into a failure; the empty
+    page ends the search complete. Nonempty pages still feed query history."""
+    from x_monitor.x_client import XClient
 
     class Circuit:
         def __init__(self): self.count = 0
@@ -391,8 +401,8 @@ def test_twex_positive_pages_feed_empty_page_guard(monkeypatch):
     monkeypatch.setattr(client, "_twex_search_with_retry", lambda *a, **kw: next(responses))
     for i in range(3):
         assert client.run_search("busy", since_time=i, until_time=i + 1)[0]
-    with pytest.raises(XClientServerError):
-        client.run_search("busy", since_time=4, until_time=5)
+    assert circuit.count == 3
+    assert client.run_search("busy", since_time=4, until_time=5) == ([], False)
 
 
 def test_rate_limit_shared_cooldown_even_when_retries_disabled(monkeypatch):

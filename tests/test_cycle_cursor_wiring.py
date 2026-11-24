@@ -294,13 +294,20 @@ def test_empty_window_still_advances_cursor(wired):
 
 
 def _assert_held_and_replayable(call, failed_request):
+    """KTD8 (plan 2026-11-24-012909): once the backlog accepts the exact
+    failed window, the backlog row owns it and the cursor advances to the
+    window's end (the hand-off truncated calls already use). The window is
+    never lost: it is pending replay with its exact bounds."""
     from core.models import CallState, HarvestBacklogWindow
 
     identity = _cursor_key(call)
-    assert not CallState.objects.filter(**identity, last_completed_at__isnull=False).exists()
     window = HarvestBacklogWindow.objects.get(**identity)
+    assert window.state == HarvestBacklogWindow.State.PENDING
+    assert window.reason_code == "search_failed"
     assert int(window.remaining_since.timestamp()) == failed_request["since_time"]
     assert int(window.remaining_until.timestamp()) == failed_request["until_time"]
+    state = CallState.objects.get(**identity)
+    assert int(state.last_completed_at.timestamp()) == failed_request["until_time"]
 
 
 def test_rate_limit_error_does_not_advance_cursor(wired):

@@ -655,6 +655,107 @@ def test_captured_sources_use_existing_new_publisher_policy(
     assert execute_hf_name_search(social_job.pk, client=client)["physical_requests"] == 0
 
 
+def test_pulse_stop_keeps_existing_verification_pending_until_resume(settings, tmp_path):
+    from monitor import pulse_control
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    pulse_control.initialize(directory=tmp_path, state="stopped", actor="fixture", reason="test")
+    proposal = _new_publisher_proposal()
+    calls = []
+
+    def respond(request):
+        calls.append(request.url.path)
+        if request.url.path.startswith("/api/models/"):
+            return httpx.Response(200, json={"id": "NewPublisher-AI/Model-One", "author": "NewPublisher-AI", "sha": "abc"})
+        return httpx.Response(200, json={"_id": "hf-org-id", "org": "NewPublisher-AI",
+                                         "socialHandles": {"twitter": "NewPublisher_AI"}})
+
+    result = drain_pending_verifications(max_requests=1, deadline=None, client=_client(respond))
+    proposal.refresh_from_db()
+    assert result.attempted == 0 and calls == [] and proposal.review_status == "pending"
+    assert not Product.objects.exists()
+    pulse_control.request_state("running", expected_revision=1, actor="fixture", reason="resume")
+    drain_pending_verifications(max_requests=1, deadline=None, client=_client(respond))
+    drain_pending_verifications(max_requests=1, deadline=None, client=_client(respond))
+    proposal.refresh_from_db()
+    assert proposal.review_status == "approved" and len(calls) == 2
+
+
+def test_stop_during_verification_preserves_capture_without_identity_write(settings, tmp_path):
+    from monitor import pulse_control
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    brand, _org, account, post = _publisher()
+    RareTypeCategoryAssignment.objects.create(post=post, brand=brand, category="model-llm",
+                                               source_evidence={}, classification_version="test")
+    proposal = ProductVerificationProposal.objects.create(
+        proposal_key="e" * 64, source_post=post, proposed_brand=brand, account=account,
+        observed_name="M2", candidate_repo_id="MiniMaxAI/M2", policy_version="product-x-hf-v1",
+    )
+
+    def respond(_request):
+        pulse_control.request_state("stopped", expected_revision=1, actor="fixture", reason="during capture")
+        return httpx.Response(200, json={"id": "MiniMaxAI/M2", "sha": "one"})
+
+    result = drain_pending_verifications(max_requests=1, deadline=None, client=_client(respond))
+    proposal.refresh_from_db()
+    assert result.attempted == 1 and result.resolved == 0
+    assert proposal.review_status == "pending" and proposal.hf_evidence["_exact_model"]["id"] == "MiniMaxAI/M2"
+    assert not Product.objects.exists() and not PostBrandProduct.objects.exists()
+
+
+def test_stop_during_malformed_verification_keeps_rejection_and_stops_requests(settings, tmp_path):
+    from monitor import pulse_control
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    proposal = _new_publisher_proposal()
+    calls = []
+
+    def respond(request):
+        calls.append(request.url.path)
+        pulse_control.request_state("stopped", expected_revision=1, actor="fixture", reason="during capture")
+        return httpx.Response(200, json={"id": proposal.candidate_repo_id, "author": "another-publisher"})
+
+    result = drain_pending_verifications(max_requests=3, deadline=None, client=_client(respond))
+    proposal.refresh_from_db()
+    assert result.attempted == len(calls) == 1
+    assert proposal.hf_outcome == "malformed"
+    assert "_exact_model" not in proposal.hf_evidence
+    assert proposal.hf_evidence["_rejected_model"]["author"] == "another-publisher"
+
+
+@pytest.mark.parametrize("initial_link,updated_link", [(True, False), (False, True)])
+def test_reassessed_release_refreshes_exact_repository_evidence(initial_link, updated_link):
+    from core.product_release_dossiers import record_release_report
+    from core.targeted_extraction import _persist_release_proposal
+
+    brand, _org, _account, post = _publisher()
+    url = "https://huggingface.co/MiniMaxAI/M2"
+    post.text = url if initial_link else "Announcing M2"
+    post.save(update_fields=["text"])
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "M2"}, release_identity="refresh-source-evidence",
+        observed_name="M2", source_url=None, maturity_code="unknown", release_value=None,
+        release_precision="unknown", extraction_version="test",
+    )
+    record = {"candidate_repo_id": "MiniMaxAI/M2"}
+    _persist_release_proposal(post, record, "M2", brand, None, dossier, publisher_scoped=True)
+    proposal = ProductVerificationProposal.objects.get(source_post=post)
+    assert proposal.account_evidence["exact_hf_repo_link"] is initial_link
+    proposal.rule_trace = ["automatic_verification_stopped", "automatic_verification_stopped:release_reassessment_pending"]
+    proposal.save(update_fields=["rule_trace"])
+    post.text = url if updated_link else "Announcing M2"
+    post.save(update_fields=["text"])
+    _persist_release_proposal(post, record, "M2", brand, None, dossier, publisher_scoped=True)
+    proposal.refresh_from_db()
+    assert proposal.account_evidence["exact_hf_repo_link"] is updated_link
+
+
 def test_new_publisher_exact_model_is_cached_then_socials_resume_without_refetch():
     proposal = _new_publisher_proposal()
     calls = []

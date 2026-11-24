@@ -545,7 +545,7 @@ def _has_identity_vote(decoded):
 
 _RELEASE_VERB = r"(?:announc(?:e[sd]?|ing)|releas(?:e[sd]?|ing)|launch(?:es|ed|ing)?|introduc(?:e[sd]?|ing)|unveil(?:s|ed|ing)?)"
 _RELEASE_PREDICATE = rf"(?:{_RELEASE_VERB}|(?:is|are|now|was|were)\s+(?:now\s+)?(?:available|out|live|released)|ships?\b)"
-_EVALUATION = r"(?:excellent|amazing|great|good|wonderful|terrible|awful|better|worse|faster|slower|impressive)"
+_EVALUATION = r"(?:fantastic|excellent|amazing|great|good|wonderful|terrible|awful|better|worse|faster|slower|impressive)"
 _TARGET_DESCRIPTION = r"(?:models?|weights?|files?|tools?|apps?|GPUs?|CPUs?|APUs?|research|service|update)"
 _TARGET_MODIFIERS = rf"(?:\s+(?:new|AI|developer|latest|{_TARGET_DESCRIPTION})){{0,4}}"
 
@@ -579,7 +579,8 @@ def _target_claims(state):
             evaluation |= bool(
                 re.match(rf"{_TARGET_MODIFIERS}(?:,\s+which)?\s+(?:(?:is|are|works?|runs?)\s+(?:really\s+|very\s+)?(?:{_EVALUATION}|well))\b",
                          after, re.IGNORECASE)
-                or re.search(r"\b(?:love|hate|prefer)\s+$", before, re.IGNORECASE)
+                or re.search(r"\b(?:love|hate|prefer)\s+(?:(?:my|the|these|those)\s+)?$", before, re.IGNORECASE)
+                or re.search(r"\b(?:highly\s+)?recommend\s+(?:(?:my|the|these|those)\s+)?$", before, re.IGNORECASE)
             )
     return release, evaluation
 
