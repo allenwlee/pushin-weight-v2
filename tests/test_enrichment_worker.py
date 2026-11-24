@@ -768,6 +768,7 @@ def test_shared_name_promotion_publishes_and_drops_only_that_subject(monkeypatch
             return response
 
     caplog.set_level(logging.INFO, logger="monitor.cycle")
+    caplog.clear()  # drop the setup run's single-owner log line
     cycle.CycleRunner(
         cfg=_cfg(),
         _post_fetch_clients={"translation": None, "classification": SharedNamePromotion()},
