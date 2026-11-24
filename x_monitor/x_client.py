@@ -392,7 +392,7 @@ class XClient:
         retries = int(os.getenv("TWITTERAPI_SEARCH_MAX_RETRIES", "0"))
         threshold = int(os.getenv("TWEXAPI_BREAKER_FAILURE_THRESHOLD", "1"))
         cooldown = int(os.getenv("TWEXAPI_BREAKER_COOLDOWN_SECONDS", "180"))
-        if not math.isfinite(interval) or interval <= 0 or timeout <= 0 or retries < 0 or threshold < 1 or cooldown < 1:
+        if not math.isfinite(interval) or interval < 0 or timeout <= 0 or retries < 0 or threshold < 1 or cooldown < 1:
             raise ValueError("invalid TwexAPI search fallback configuration")
         circuits = {name: SearchProviderCircuit(hashlib.sha256(credentials[name].encode()).hexdigest()[:16], provider="twitterapi", endpoint_family="search", threshold=threshold, cooldown=cooldown)
                     for name in available if name.startswith("twitterapi:")}

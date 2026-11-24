@@ -569,6 +569,11 @@ services:
     envVars:
       - key: TWEXAPI_BREAKER_FAILURE_THRESHOLD
         value: "2"
+      # Owner 2026-11-24: no fixed wait between TwexAPI requests. One request
+      # still runs at a time across all processes, and a 429 holds the route
+      # for its Retry-After (default 5 s).
+      - key: TWEXAPI_INTERVAL_SECONDS
+        value: "0"
       - key: PULSE_CONTROL_R2_BUCKET
         value: pushinweight-media-production
       - key: X_MONITOR_CLASSIFIER_PIPELINE
