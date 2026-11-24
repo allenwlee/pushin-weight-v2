@@ -39,6 +39,7 @@ REAL_GET = requests.get
 def test_empty_page_advertising_continuation_is_not_a_healthy_probe(monkeypatch, provider):
     from datetime import UTC, datetime
     from types import SimpleNamespace
+
     from monitor import backfill_prefetch
 
     body = {"code": 200, "data": [], "tweets": [], "has_next_page": True, "next_cursor": "next"}
@@ -73,6 +74,7 @@ def test_empty_page_advertising_continuation_is_not_a_healthy_probe(monkeypatch,
 def test_prefetch_quiet_recovery_probe_only_fails_for_expected_results(monkeypatch, provider, expected):
     from datetime import UTC, datetime
     from types import SimpleNamespace
+
     from monitor import backfill_prefetch
 
     circuit = SimpleNamespace(observe_query=lambda *_args, **_kwargs: expected, is_probe=lambda: True)
