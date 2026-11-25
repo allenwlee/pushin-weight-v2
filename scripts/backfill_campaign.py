@@ -43,7 +43,7 @@ from core.provider_batches import (
     set_enrichment_control,
 )
 from monitor.backfill_collection import (
-    CALL_IDS,
+    CURRENT_POLICY_CALL_IDS,
     POLICY_ADAPTER_VERSION,
     config_digest,
     execute_job,
@@ -127,7 +127,7 @@ def manifest(
     validate_concurrency(direct_concurrency)
     deadline = deadline or timezone.now() + timedelta(hours=72)
     planned = plan_calls_for_cycle(cfg, scheduled_exclusions=True)
-    admitted = CALL_IDS | {"A", "RARE_EXTRA"}
+    admitted = CURRENT_POLICY_CALL_IDS
     if not planned or not any(c.call_id == "A" for c in planned) or any(
         c.call_id not in admitted for c in planned
     ):

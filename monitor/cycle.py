@@ -3530,6 +3530,7 @@ class CycleRunner:
         index: Any = None,
         search_terms: dict[str, str] | None = None,
         hit_ids: set[int] | None = None,
+        hit_call_ids: dict[int, str] | None = None,
     ) -> dict[str, int]:
         """Join Jev-kept durable hits to the normal Post/enrichment queue."""
 
@@ -3548,7 +3549,10 @@ class CycleRunner:
             item = dict(hit.public_payload or {})
             item["id"] = str(hit.provider_post_id)
             item["tweet_id"] = str(hit.provider_post_id)
-            call_id = call_ids_by_lane.get(hit.run.lane, RARE_EXTRA_CALL_ID)
+            call_id = (
+                hit_call_ids[hit.pk] if hit_call_ids is not None
+                else call_ids_by_lane.get(hit.run.lane, RARE_EXTRA_CALL_ID)
+            )
             item["source_query_id"] = call_id
             item["_discovery_lane"] = "special-events" if call_id != RARE_EXTRA_CALL_ID else "rare_types"
             item["_discovery_query_id"] = hit.run.source_query.query_id
@@ -4009,7 +4013,7 @@ class CycleRunner:
         context = self._backfill_context
         if context is None or context.page_writer is None:
             return self._route_and_persist(call, items)
-        if call.call_id == RARE_EXTRA_CALL_ID and context.rare_page_writer:
+        if call.call_id in PAID_DISCOVERY_CALL_IDS and context.rare_page_writer:
             return context.rare_page_writer(self, call, items)
         drops, degraded = 0, []
         if call.call_id == "A":

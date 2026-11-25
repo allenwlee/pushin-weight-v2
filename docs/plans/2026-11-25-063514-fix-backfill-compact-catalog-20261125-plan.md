@@ -87,3 +87,7 @@ Exercise fresh and replayed historical request construction through the same cal
 - The compact path was exercised through direct and native paid-reply simulations, including a restart after catalog edits. A separate regression pin covers the hardware alias that the paid compact prompt can omit.
 - The November 18 dry run confirmed 16 scopes, 1,000 maximum X requests, 5,209 maximum model requests, and a $5 post-collection enrichment reservation. Production held 1,040 Posts published during the pilot window before the run.
 - Browser checks had no affected route.
+
+### Pilot preflight follow-up
+
+Render job `job-dc38k8s0916s7383dmig` stopped while creating the dry-run manifest, before provider calls or collection registration. Production enables both special-events search routes. The historical adapter now accepts the shared paid-discovery inventory, sends these routes through the campaign-owned discovery inbox and Jev gate, and publishes accepted hits with their original route IDs. Existing legacy rare discovery remains covered. The dry run with the cron's configured overrides produced 18 scopes and the same caps. The follow-up suite passed 141 tests, including 101 PostgreSQL-required tests with zero skips or errors.

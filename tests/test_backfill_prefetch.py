@@ -464,7 +464,10 @@ def test_capture_accounting_crash_is_repaired_once_before_replay(http_pages, mon
     assert execute_job(job.pk)["state"] == "completed"
 
 
-def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(http_pages, monkeypatch, tmp_path):
+@pytest.mark.parametrize("rare_call", ["RARE_EXTRA", "SPECIALEVENTS1", "SPECIALEVENTS2"])
+def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(
+    http_pages, monkeypatch, tmp_path, rare_call,
+):
     from decimal import Decimal
 
     from django.db import connection
@@ -475,9 +478,10 @@ def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(http_page
 
     # Qwen's current planned ordinary route is B3; keep the rare/ordinary
     # capture comparison anchored to an actually admitted search.
-    job = policy_job(monkeypatch, tmp_path, calls={"B3", "RARE_EXTRA"}, rare=True)
+    rare_pack = True if rare_call == "RARE_EXTRA" else "special-events-v1"
+    job = policy_job(monkeypatch, tmp_path, calls={"B3", rare_call}, rare=rare_pack)
     rare_query = next(u["ownership"]["query"] for u in job.scope["units"]
-                      if u["ownership"]["call_id"] == "RARE_EXTRA")
+                      if u["ownership"]["call_id"] == rare_call)
     monkeypatch.setenv("TYPESAFE_API_KEY", "fixture-only")
     model_calls = []
 
@@ -504,7 +508,7 @@ def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(http_page
     assert len(state["requests"]) == 2 and len(model_calls) == 1
     assert set(Post.objects.values_list("pk", flat=True)) == {"rare-kept", "ordinary-1", "ordinary-2"}
     scopes = CollectionScopeRun.objects.filter(run_id=report["run_id"])
-    for call, expected in (("RARE_EXTRA", 1), ("B3", 2)):
+    for call, expected in ((rare_call, 1), ("B3", 2)):
         scope = scopes.get(scope_key=call)
         assert not hasattr(scope, "envelopes")
         pages = [entry for entry in page_receipts(scope) if entry.get("prefetch_request_id")]
@@ -512,6 +516,7 @@ def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(http_page
         assert scope.raw_count == expected
     assert RareTypeSearchRun.objects.get().raw_result_count == 1
     assert RareTypeSearchHit.objects.get().post_id == "rare-kept"
+    assert Post.objects.get(pk="rare-kept").source_query_id == rare_call
 
 
 def test_expired_interrupted_run_resumes_committed_cursor_without_recollection(http_pages, monkeypatch):

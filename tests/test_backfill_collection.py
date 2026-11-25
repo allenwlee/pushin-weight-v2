@@ -508,7 +508,11 @@ def test_recoverable_scope_error_does_not_starve_independent_queries(pipeline):
 def policy_job(monkeypatch, tmp_path, *, calls, rare=False, selected_calls=None):
     from monitor.backfill_collection import plan_job_definition
     cfg = load_config(Path("config.yaml"))
-    if rare:
+    if rare == "special-events-v1":
+        from tests.test_special_events_search import enabled_config
+
+        cfg = enabled_config(tmp_path)
+    elif rare:
         from tests.test_rare_type_cycle import _enable
         monkeypatch.setattr("x_monitor.rare_type_extra_search.RARE_TYPE_EXTRA_SEARCH_GROUPS",
                             ('("we are hiring" OR 招聘) (AI OR LLM)',))

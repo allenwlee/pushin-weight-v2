@@ -33,6 +33,7 @@ from core.collection_state import (
     import_scope_checkpoints,
     x_scope_ownership,
 )
+from core.discovery import PAID_DISCOVERY_CALL_IDS
 from core.measurement_taxonomy import require
 from core.models import (
     CollectionJob,
@@ -60,6 +61,7 @@ from x_monitor.twitterapi_credentials import (
 ADAPTER_VERSION = "x-backfill/v1"
 POLICY_ADAPTER_VERSION = "x-backfill/v2"
 CALL_IDS = frozenset({"B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"})
+CURRENT_POLICY_CALL_IDS = CALL_IDS | {"A"} | PAID_DISCOVERY_CALL_IDS
 BLOCKED_REASONS = frozenset({
     "invalid_primary_window", "invalid_continuation", "clipped_page", "nonprogressing_cursor",
 })
@@ -137,7 +139,7 @@ def validate_scope(job, cfg):
                 "fixed scope bounds required")
         require(scope["since_epoch"] <= lower < upper <= scope["until_epoch"],
                 "scope outside campaign bounds")
-        admitted = CALL_IDS | {"A", "RARE_EXTRA"} if version == POLICY_ADAPTER_VERSION else CALL_IDS
+        admitted = CURRENT_POLICY_CALL_IDS if version == POLICY_ADAPTER_VERSION else CALL_IDS
         require(owner.get("call_id") in admitted, "unsupported historical collection call")
         query = owner.get("query")
         require(isinstance(query, str) and bool(query.strip()), "frozen query required")
@@ -190,7 +192,7 @@ def plan_job_definition(*, cfg, since_epoch, until_epoch, brands, requests, mode
     with _brand_scope(selected):
         calls = plan_calls_for_cycle(cfg, scheduled_exclusions=True)
     require(bool(calls) and any(c.call_id == "A" for c in calls), "required Call A missing")
-    require(all(call.call_id in CALL_IDS | {"A", "RARE_EXTRA"} for call in calls),
+    require(all(call.call_id in CURRENT_POLICY_CALL_IDS for call in calls),
             "enabled discovery route lacks historical adapter")
     if call_ids is not None:
         require(isinstance(call_ids, list) and bool(call_ids)
@@ -709,7 +711,13 @@ def _drain_historical_rare(claim, job, cfg, budget):
 
     rows = list(CollectionScopeRun.objects.filter(run_id=claim.run_id, scope_kind="x_query"))
     owned_hits = _rare_scope_memberships(rows, job.pk)
-    hit_ids = set().union(*owned_hits.values()) if owned_hits else set()
+    call_ids = {unit["scope_key"]: unit["ownership"]["call_id"] for unit in job.scope["units"]}
+    hit_call_ids = {
+        hit_id: call_ids[scope_key]
+        for scope_key, hits in owned_hits.items()
+        for hit_id in hits
+    }
+    hit_ids = set(hit_call_ids)
     if not hit_ids:
         return
     gate = build_jev_decision_gate(
@@ -745,7 +753,7 @@ def _drain_historical_rare(claim, job, cfg, budget):
             # inbox to progress; this never visits the global pending queue.
             while True:
                 result = runner._ingest_kept_rare_type_hits(
-                    run_id=str(claim.run_id), hit_ids=hit_ids,
+                    run_id=str(claim.run_id), hit_ids=hit_ids, hit_call_ids=hit_call_ids,
                     index=_build_brand_index(job.scope["brands"]),
                     search_terms=_load_brand_search_terms(),
                 )
