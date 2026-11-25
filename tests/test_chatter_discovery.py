@@ -77,6 +77,26 @@ def test_selector_accounts_for_six_pools_without_borrowing_a_lead():
         validate_selection(result, [row], {}, "giants:test")
 
 
+def test_ranked_history_references_can_cite_only_editions_supplied_for_that_candidate():
+    from monitor.editorial.chatter_discovery import validate_selection
+
+    row = candidate()
+    edition = str(uuid4())
+    row["event_history"] = {"editions": [{"edition_id": edition}], "dossiers": []}
+    result = selection(row)
+    result["event_comparisons"] = []
+    rank = next(
+        group["ranked_candidates"][0]
+        for group in result["group_decisions"] if group["ranked_candidates"]
+    )
+    rank["history_refs"] = [edition, "history:" + row["candidate_ref"]]
+    assert validate_selection(result, [row], {}, "giants:test") == result
+
+    rank["history_refs"] = [str(uuid4())]
+    with pytest.raises(ValueError, match="unknown selection evidence"):
+        validate_selection(result, [row], {}, "giants:test")
+
+
 def test_selector_must_explain_every_passed_over_candidate_and_classify_all():
     from monitor.editorial.chatter_discovery import validate_selection
 

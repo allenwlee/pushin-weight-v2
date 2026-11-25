@@ -227,9 +227,12 @@ def validate_selection(raw, candidates, incumbents, group_policy_ref):
         for row in ranked:
             if not row["reason"].strip():
                 raise ValueError("every candidate requires an editorial reason")
+            candidate_ref = row["candidate_ref"]
+            history = by_ref[candidate_ref].get("event_history", {})
             allowed = {
-                "measurement_refs": {"measurement:" + row["candidate_ref"]},
-                "history_refs": {"history:" + row["candidate_ref"]},
+                "measurement_refs": {"measurement:" + candidate_ref},
+                "history_refs": {"history:" + candidate_ref}
+                | {edition["edition_id"] for edition in history.get("editions", [])},
                 "asset_refs": set(),
             }
             if any(not set(row[key]) <= allowed[key] for key in allowed):
