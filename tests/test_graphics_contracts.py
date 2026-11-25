@@ -159,3 +159,18 @@ def test_chatter_reconstructs_the_saved_poster_instructions(marker, expected_dig
     assert ('original_artwork_ref' in schema['required']) == bool(marker)
     rebound = bind_copy_contract(bound, handoff)
     assert rebound == bound
+
+
+def test_headline_craft_instruction_belongs_only_to_new_writer_assignments():
+    from monitor.editorial.graphics_contracts import WRITER_LED, bind_copy_contract
+
+    path = Path(__file__).resolve().parents[1] / 'config/editorial_prompts/editorial-creative-roles-v1.json'
+    handoff = {'copy_contract': WRITER_LED, 'poster_treatment': 'original-artwork/v1'}
+    def instructions(handoff):
+        bound = bind_copy_contract(load_pack(path), handoff)
+        return {call['id']: call['user'] for call in bound['model_call_plan']['calls'] if call['id'] in ('C1', 'G1')}
+    before = instructions(handoff)
+    after = instructions({**handoff, 'headline_craft': 'wordplay/v1'})
+    assert after['C1'].startswith(before['C1'])
+    assert 'a stock expression' in after['C1'][len(before['C1']):]
+    assert after['G1'] == before['G1']

@@ -77,6 +77,14 @@ def bind_copy_contract(pack, handoff):
             tasks = json.loads(path.with_name('chatter-original-artwork-v1.json').read_text())
             for stage, instruction in tasks.items():
                 overrides[stage]['user'] = instruction
+        if handoff.get('headline_craft') == 'wordplay/v1':
+            overrides['C1']['user'] += (
+                ' Make the wordplay work on the printed page. A reader should hear the familiar'
+                ' phrase change, or see a word carry two distinct meanings that both matter to'
+                ' this story. Putting a name in front of a stock expression that describes the'
+                ' news gives you a summary. If a straight line is sharper, own it as a straight'
+                ' line in the explanation. The headline itself has to land.'
+            )
         for item in result['model_call_plan']['calls']:
             stage = item['id']
             if stage not in overrides:

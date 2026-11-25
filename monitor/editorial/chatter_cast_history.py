@@ -82,7 +82,7 @@ def _matches_role(name, org, group, passage):
         if group != "executive":
             continue
         actor = rf"(?i:{phrase(org)})(?: \$?[A-Z]{{2,6}})?(?i:(?:['’]s)?(?: board(?: of directors)?)?)"
-        action = r"(?:officially |unanimously )?(?:reinstated|appointed|named|reappointed|voted (?:unanimously )?to (?:reinstate|appoint|bring))"
+        action = r"(?:officially |unanimously )?(?:reinstated|reinstates|appointed|appoints|named|names|reappointed|reappoints|voted (?:unanimously )?to (?:reinstate|appoint|bring))"
         if re.search(
             actor
             + rf"(?i: {action} {phrase(name)}(?: back)? as (?:its |the |an? )?{_EXECUTIVE}\b)",
@@ -122,7 +122,7 @@ def confirmed_appearances(people, cutoff):
             and event.get("person_id") == pid
             and event.get("sha256") == sha
             and event.get("source_reference")
-            and _observed_by(event.get("confirmed_at"), cutoff)
+            and _observed_by(event.get("confirmed_at") or event.get("recorded_at"), cutoff)
             for event in reviews
         )
         source_verified = (

@@ -225,6 +225,8 @@ def prepare_selected_story(*, content_id, run_id, locale, per_story_usd=None, da
         if coverage := selection.get('event_coverage'):
             from .chatter_coverage import continuation_handoff
             request['handoff']['poster_treatment'] = 'original-artwork/v1'
+            if coverage.get('headline_craft') == 'wordplay/v1':
+                request['handoff']['headline_craft'] = coverage['headline_craft']
             if assignment := continuation_handoff(coverage, facts, locale):
                 request['handoff']['continuation_assignment'] = assignment
         request['chatter'] = chatter

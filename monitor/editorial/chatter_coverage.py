@@ -364,6 +364,7 @@ def decisions_for(raw, candidates, locales):
             normalized_headline(compare.occasion),
         ]
         result[ref] = {
+            "headline_craft": "wordplay/v1",
             "kind": compare.kind,
             "identity": identity_key("chatter-event-v1", digest(event_identity)),
             "same_dossier": next(iter(event_ids), None),
@@ -621,6 +622,24 @@ def continuation_handoff(coverage, facts, locale):
     )
 
 
+def _carries_new_detail(text, markers, source_detail, earlier):
+    text = normalized_headline(text)
+    if any(marker and marker in text for marker in markers):
+        return True
+    # The writer may quote the source more precisely than the selector described it.
+    # Count a distinctive, uninterrupted source phrase only if earlier copy lacked it.
+    words = normalized_headline(source_detail).split()
+    marker_words = {word for marker in markers for word in marker.split() if len(word) >= 3}
+    for start in range(len(words) - 4):
+        phrase = words[start:start + 5]
+        if marker_words.isdisjoint(phrase):
+            continue
+        needle = " " + " ".join(phrase) + " "
+        if needle in f" {text} " and all(needle not in f" {old} " for old in earlier):
+            return True
+    return False
+
+
 def repeat_reason(coverage, canonical, locale, copy, c1, facts):
     if coverage["prior"] and not coverage["assignment"]:
         return "no_continuation_assignment"
@@ -633,9 +652,11 @@ def repeat_reason(coverage, canonical, locale, copy, c1, facts):
         public_id__isnull=False,
     )
     prior_ids = {p["edition_id"] for p in coverage["prior"]}
-    for edition_id, headline, selection in previous.values_list(
-        "public_id", "headline", "narrative__selection"
+    earlier_copy = []
+    for edition_id, headline, byline, article, selection in previous.values_list(
+        "public_id", "headline", "secondary", "body", "narrative__selection"
     ):
+        earlier_copy.append(normalized_headline(" ".join((headline, byline, article))))
         if normalized_headline(copy["headline"]) == normalized_headline(headline):
             return "same_headline"
         if str(edition_id) not in prior_ids:
@@ -659,6 +680,6 @@ def repeat_reason(coverage, canonical, locale, copy, c1, facts):
             normalized_headline(word) for word in assignment["detail_words"][locale]
         ]
         for part in (copy["headline"] + " " + copy["byline"], copy["article"]):
-            if not any(word and word in normalized_headline(part) for word in markers):
+            if not _carries_new_detail(part, markers, assignment["source_detail"], earlier_copy):
                 return "assignment_missing_from_copy"
     return None

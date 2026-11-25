@@ -255,3 +255,18 @@ def test_translated_followup_checks_source_detail_in_its_original_language(sourc
     assert decisions_for([compare], [candidate], ["en"])["candidate"]["assignment"]["source_detail"] == source_detail
     assignment.update(source_detail="meme", reader_gets="There is an AI meme.", detail_words={"en": ["meme"]})
     assert decisions_for([compare], [candidate], ["en"])["candidate"]["assignment"] is None
+
+
+def test_continuation_can_use_a_distinctive_new_source_quote_in_both_parts():
+    from monitor.editorial.chatter_coverage import _carries_new_detail
+    from monitor.editorial.chatter_gathering import normalized_headline
+
+    detail = "The board reinstates its co-founder as President, CEO and Board Director."
+    markers = ["ceo return", "investigation still underway"]
+    earlier = [normalized_headline("The board had not discussed bringing its co-founder back as CEO.")]
+    deck = "The co-founder returns as president, CEO and board director."
+    body = "The company announced he was again its president, CEO and board director."
+    assert all(_carries_new_detail(part, markers, detail, earlier) for part in (deck, body))
+    assert not _carries_new_detail(earlier[0], markers, detail, earlier)
+    assert not _carries_new_detail(body, markers, detail, earlier + [normalized_headline(body)])
+    assert not _carries_new_detail("The board reinstates its co-founder at noon.", markers, detail, earlier)

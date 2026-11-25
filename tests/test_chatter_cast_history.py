@@ -91,16 +91,24 @@ def published_cast(name, passage, observed):
     return media
 
 
-def test_prior_selected_cast_identifies_current_subject_across_namesakes():
+@pytest.mark.parametrize("review_date,passage", [
+    ("confirmed_at", LATER),
+    ("recorded_at", "Nvidia Board reinstates Jensen Huang as President, CEO and Board Director."),
+])
+def test_prior_selected_cast_identifies_current_subject_across_namesakes(review_date, passage):
     started = timezone.now()
     photo = published_cast(NAME, EARLIER, started - timedelta(days=1))
+    if review_date != "confirmed_at":
+        review = photo.review_history[0]
+        review[review_date] = review.pop("confirmed_at")
+        photo.save(update_fields=["review_history"])
     person_with_name(NAME)
     saved = {
         "facts_as_of": (started - timedelta(minutes=2)).isoformat(),
         "handoff": {
             "subject": "Jensen Huang’s Nvidia comeback becomes an AI meme",
             "fact_items": [
-                fact(LATER, started - timedelta(seconds=10), "F05"),
+                fact(passage, started - timedelta(seconds=10), "F05"),
                 fact(
                     "Jensen Huang reported on unrelated news.",
                     started - timedelta(seconds=30),
