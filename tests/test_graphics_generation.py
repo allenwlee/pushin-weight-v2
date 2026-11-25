@@ -342,3 +342,26 @@ def test_video_decode_rejects_non_mp4_container_even_when_decodable(tmp_path):
     sent = {'image': {'url': 'data:image/jpeg;base64,' + base64.b64encode(b'still').decode()}}
     with pytest.raises(ValueError, match='container'):
         video_decode_receipt(path.read_bytes(), run_id=42, producer_call_id=17, input_still_sha256=hashlib.sha256(b'still').hexdigest(), sent_request=sent)
+
+
+def test_poster_edit_keeps_both_artwork_and_face_when_inputs_are_full(monkeypatch):
+    from types import SimpleNamespace
+    from monitor.editorial import graphics_pipeline as pipeline
+
+    people = [{'asset_ref': f'person:{i}', 'role': 'identity_reference'} for i in range(6)]
+    poster = {'asset_ref': 'source:1', 'role': 'source_artwork'}
+    assets = [{**ref, 'storage_alias': 'staff_media', 'storage_name': ref['asset_ref'],
+               'sha256': str(i), 'mime': 'image/jpeg'} for i, ref in enumerate([*people, poster])]
+    monkeypatch.setattr(pipeline, '_asset_inputs', lambda *args, **kw: assets)
+    monkeypatch.setattr(pipeline, 'build_image_request', lambda pack, stage, treatment, assets: treatment)
+    treatment = {'candidate_id': 'A', 'aspect_ratio': '3:4', 'original_artwork_ref': 'source:1',
+                 'input_asset_refs': [poster, people[-1]], 'still_prompt': '', 'motion_prompt': ''}
+    g1 = SimpleNamespace(response_payload={'treatments': [treatment]})
+    saved = {'handoff': {'poster_treatment': 'original-artwork/v1'}}
+    request, _ = pipeline._image_request(PACK, saved, {}, g1, 'I-A', cast={'assets': people})
+    assert poster in request['input_asset_refs'] and people[-1] in request['input_asset_refs']
+    assert len(request['input_asset_refs']) <= PACK['media_capabilities']['max_image_inputs']
+    treatment['input_asset_refs'] = []
+    treatment['original_artwork_ref'] = 'unavailable'
+    with pytest.raises(ValueError, match='poster'):
+        pipeline._image_request(PACK, saved, {}, g1, 'I-A', cast={'assets': people})

@@ -348,7 +348,7 @@ def test_unpublished_failed_or_finished_admissions_can_reopen(monkeypatch):
 
     cutoff = BOUNDARY + timedelta(hours=1)
     previous = SimpleNamespace(interval=BOUNDARY, outcome={"window_result": {"history": {
-        "admitted": [{"episode_id": value} for value in ("failed", "failed2", "passed", "published", "active", "unknown")]
+        "admitted": [{"episode_id": value} for value in ("failed", "failed2", "passed", "published", "active", "unknown", "evidence-only")]
     }}})
     def owner(identity, phase, execution, lease):
         return SimpleNamespace(pk=identity, outcome={"phase": phase, "window_result": {
@@ -361,6 +361,8 @@ def test_unpublished_failed_or_finished_admissions_can_reopen(monkeypatch):
     published_query.values_list.return_value = ["published"]
     monkeypatch.setattr("monitor.editorial.chatter_window_runs.OriginalContent.objects.filter", Mock(return_value=published_query))
     owners[0].outcome["window_result"]["admissions"].append({"episode_id": "failed2"})
+    owners[1].outcome["window_result"]["admissions"].append({"episode_id": "evidence-only"})
+    owners[1].outcome["covered_episode_ids"] = ["evidence-only"]
     unresolved = Mock(return_value=False)
     monkeypatch.setattr("monitor.editorial.chatter_window_runs._admission_has_unresolved_work", unresolved)
     run_query = Mock()

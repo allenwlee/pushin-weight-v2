@@ -92,9 +92,9 @@ def materialize_package(request):
                       'selection': deepcopy(source.selection), 'status': 'prepared',
                       'attempted_at': source.attempted_at, 'provenance': provenance},
         )
-        if not made and (output.story_id != source.story_id or output.provenance != provenance
+        from .graphics_chatter import same_publication_story
+        if not made and (not same_publication_story(output, source) or output.provenance != provenance
                          or output.selection != source.selection
-                         or output.development_id != source.development_id
                          or output.source_locale_id != source.source_locale_id
                          or output.editorial_group != source.editorial_group):
             raise ValueError('existing Graphics output differs from selected story')

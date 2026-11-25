@@ -135,3 +135,27 @@ def test_copy_fact_references_must_belong_to_the_handoff():
     copy['candidates'][1]['used_fact_ids'] = ['F99']
     with pytest.raises(ValueError, match='Unknown fact reference'):
         validate_copy_fact_ids(copy, [{'fact_id': 'F01'}, {'fact_id': 'F02'}])
+
+
+@pytest.mark.parametrize(('marker', 'expected_digest'), [
+    (None, '4ad7f37f3b379b327cb190135903d95557f0fde8fd095b32df92ac7e55d0c561'),
+    ('original-artwork/v1', 'd2f5632c788e6d4f713dc20171d169581f6330b8b0d1da1d5d440fa1d569b777'),
+])
+def test_chatter_reconstructs_the_saved_poster_instructions(marker, expected_digest):
+    import hashlib
+
+    from monitor.editorial.graphics_contracts import WRITER_LED, bind_copy_contract
+
+    path = Path(__file__).resolve().parents[1] / 'config/editorial_prompts/editorial-creative-roles-v1.json'
+    handoff = {'copy_contract': WRITER_LED}
+    if marker:
+        handoff['poster_treatment'] = marker
+    bound = bind_copy_contract(load_pack(path), handoff)
+    tasks = {stage['id']: stage['user'] for stage in bound['model_call_plan']['calls'] if stage['id'] in ('C1', 'G1')}
+    encoded = json.dumps([tasks['C1'], tasks['G1']], ensure_ascii=False).encode()
+    assert hashlib.sha256(encoded).hexdigest() == expected_digest
+    g1 = next(stage for stage in bound['model_call_plan']['calls'] if stage['id'] == 'G1')
+    schema = g1['response_schema']['properties']['treatments']['items']
+    assert ('original_artwork_ref' in schema['required']) == bool(marker)
+    rebound = bind_copy_contract(bound, handoff)
+    assert rebound == bound

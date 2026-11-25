@@ -11,7 +11,7 @@ from django.utils import timezone
 from core.models import EditorialStory, OriginalContent, OriginalContentRun
 from monitor.original_content import digest
 
-from .chatter_discovery import attention, request
+from .chatter_discovery import attention, prompts, request
 from .chatter_history import (
     WORKFLOW,
     appearance_history,
@@ -29,6 +29,7 @@ _SELECTION_V1 = "chatter-selection-v1"
 _SELECTION_V2 = "chatter-selection-v2"
 _SELECTION_V3 = "chatter-selection-v3"
 _SELECTION_V4 = "chatter-selection-v4"
+_SELECTION_V5 = "chatter-selection-v5"
 _SELECTOR_EXCERPT_BYTES = 1200
 
 # Personalized Trends already performs discovery and ranking. Keep this selector
@@ -48,6 +49,10 @@ _ROLLING_SELECTOR_SYSTEM = (
 
 
 def _selector_request(rendered, cfg, builder):
+    if builder == _SELECTION_V5:
+        from .chatter_coverage import SELECTOR_INSTRUCTION, event_schema
+        return request("selection", rendered, cfg, system_override=_ROLLING_SELECTOR_SYSTEM + SELECTOR_INSTRUCTION,
+                       schema_override=event_schema(prompts()["selection"]["schema"]))
     system = _ROLLING_SELECTOR_SYSTEM if builder in {_SELECTION_V3, _SELECTION_V4} else None
     return request("selection", rendered, cfg, system_override=system)
 
@@ -86,7 +91,7 @@ def _selection_packet(run, cfg):
 
     rows = list(
         OriginalContent.objects.filter(run=run)
-        .select_related("development")
+        .select_related("development__event_dossier__event_kind_reference")
         .prefetch_related("consideration_sources")
     )
     sources = resolved_sources(run.snapshot)
@@ -123,7 +128,7 @@ def _selection_packet(run, cfg):
                 "post_ids": identities,
                 "eligible": any(s.usage == "consideration" for s in row.consideration_sources.all()),
                 "required_release_refs": [str(row.development.event_dossier_id)]
-                if row.development.event_dossier_id
+                if row.development.event_dossier_id and row.development.event_dossier.event_kind_reference.code == "product_release"
                 else [],
                 "evidence": evidence,
                 **({"original_headlines": row.selection.get("original_headlines", []),
@@ -137,6 +142,10 @@ def _selection_packet(run, cfg):
                 ),
             }
         )
+        if run.outcome.get("event_coverage_version") == 1:
+            from .chatter_coverage import previous_coverage
+            candidates[-1]["event_history"] = previous_coverage(row, current_evidence)
+            candidates[-1]["writer_locales"] = [binding.split(":")[1] for binding in cfg.voices if binding.startswith("chatter:")]
         measurements.append(
             {
                 "measurement_ref": "measurement:" + ref,
@@ -196,6 +205,65 @@ def _selection_packet(run, cfg):
     return payload
 
 
+def _bound_event_history(run, stage, stored, cfg):
+    """Share the actual remaining wire bytes among candidates in closest-first rounds."""
+    ref = {"run_id": run.pk, "stage": stage, "builder": _SELECTION_V5}
+    _, rendered = _render_selection_input(run, stage, stored, ref)
+    ceiling = cfg.max_packet_bytes + cfg.max_schema_bytes + 30000
+    def wire_bytes():
+        request = _selector_request(rendered, cfg, _SELECTION_V5)
+        body = request_payload(cfg.chatter.selector, request)
+        return len(request_fingerprint(body)[0])
+
+    if wire_bytes() <= ceiling:
+        return
+    candidates = [c for c in rendered["candidates"] if "event_history" in c]
+    histories = [c["event_history"] for c in candidates]
+    # Pin each edition with the descriptor of its dossier. Independent dossiers
+    # then compete for the remaining space after every candidate's closest edition.
+    ordered = []
+    for field in ("editions", "dossiers"):
+        for index in range(max(len(h[field]) for h in histories)):
+            for pos, history in enumerate(histories):
+                if index < len(history[field]):
+                    ordered.append((pos, field, history[field][index]))
+    def retain(count):
+        selected = [{"editions": [], "dossiers": []} for _ in histories]
+        for pos, field, item in ordered[:count]:
+            if item not in selected[pos][field]:
+                selected[pos][field].append(item)
+            if field == "editions" and item["dossier_id"]:
+                for event in histories[pos]["dossiers"]:
+                    if event["dossier_id"] == item["dossier_id"] and event not in selected[pos]["dossiers"]:
+                        selected[pos]["dossiers"].append(event)
+        for candidate, history, current in zip(candidates, histories, selected, strict=True):
+            for field in ("editions", "dossiers"):
+                current["omitted_" + field] = history.get("omitted_" + field, 0) + len(history[field]) - len(current[field])
+            candidate["event_history"] = current
+    def fit():
+        lower, upper = 0, len(ordered)
+        while lower < upper:
+            middle = (lower + upper + 1) // 2
+            retain(middle)
+            if wire_bytes() <= ceiling:
+                lower = middle
+            else:
+                upper = middle - 1
+        retain(lower)
+        return lower
+
+    closest_count = sum(bool(h["editions"]) for h in histories)
+    if fit() < closest_count:
+        # Prefer a headline and its published angle for every candidate over
+        # spending the last bytes on one long historical article.
+        ordered = [(pos, field, {**item, "article": "", "cited_passages": [], "excerpt_omitted": True})
+                   if field == "editions" else (pos, field, item) for pos, field, item in ordered]
+        fit()
+    compact = [c for c in stored["payload"]["candidates"] if "event_history" in c]
+    for target, candidate in zip(compact, candidates, strict=True):
+        target["event_history"] = candidate["event_history"]
+
+
 def _selection_request(run, stage, payload, cfg):
     """Save comparison metadata once; render source passages from the frozen run packet."""
     with transaction.atomic():
@@ -207,6 +275,8 @@ def _selection_request(run, stage, payload, cfg):
                 for candidate in payload["candidates"]
             ]})
             stored = {"schema_version": 1, "payload": compact}
+            if any("event_history" in candidate for candidate in compact["candidates"]):
+                _bound_event_history(current, stage, stored, cfg)
             current.outcome = {
                 **current.outcome,
                 "selection_inputs": {
@@ -221,7 +291,8 @@ def _selection_request(run, stage, payload, cfg):
     prior = run.provider_calls.filter(stage=stage, batch_key="").only("request_packet").first()
     reference = prior.request_packet["input_reference"] if prior else {
         "run_id": run.pk, "stage": stage,
-        "builder": _SELECTION_V4 if run.scope_key == DECISION_SCOPE else _SELECTION_V2,
+        "builder": (_SELECTION_V5 if any("event_history" in c for c in stored["payload"]["candidates"])
+                    else _SELECTION_V4 if run.scope_key == DECISION_SCOPE else _SELECTION_V2),
     }
     full, rendered = _render_selection_input(current, stage, stored, reference)
     built = _selector_request(rendered, cfg, reference["builder"])
@@ -231,7 +302,7 @@ def _selection_request(run, stage, payload, cfg):
 
 def _render_selection_input(run, stage, stored, reference):
     builder = reference.get("builder")
-    if (builder not in {_SELECTION_V1, _SELECTION_V2, _SELECTION_V3, _SELECTION_V4}
+    if (builder not in {_SELECTION_V1, _SELECTION_V2, _SELECTION_V3, _SELECTION_V4, _SELECTION_V5}
             or reference != {"run_id": run.pk, "stage": stage, "builder": builder}):
         raise ValueError("unknown selection input builder")
     if set(stored) != {"schema_version", "payload"} or stored["schema_version"] != 1:
@@ -241,7 +312,7 @@ def _render_selection_input(run, stage, stored, reference):
     for candidate in payload["candidates"]:
         candidate["evidence"] = [sources[identity] for identity in candidate["post_ids"]]
     rendered = payload
-    if builder in {_SELECTION_V2, _SELECTION_V3, _SELECTION_V4} and payload["coverage"].get("gathering") is not None:
+    if builder in {_SELECTION_V2, _SELECTION_V3, _SELECTION_V4, _SELECTION_V5} and payload["coverage"].get("gathering") is not None:
         gathering = payload["coverage"]["gathering"]
         # Execution receipts remain in the immutable projection, outside model context.
         summary = {
@@ -259,7 +330,7 @@ def _render_selection_input(run, stage, stored, reference):
             } for lead in gathering["leads"]],
         }
         rendered = {**payload, "coverage": {**payload["coverage"], "gathering": summary}}
-    if builder == _SELECTION_V4:
+    if builder in {_SELECTION_V4, _SELECTION_V5}:
         # The immutable source packet stays complete for the writer and audit.
         # Only selector excerpts are bounded; every post and identity remains.
         rendered = deepcopy(rendered)

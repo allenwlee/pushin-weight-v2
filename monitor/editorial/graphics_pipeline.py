@@ -323,12 +323,23 @@ def _image_request(pack, saved, source_record, g1, stage, *, cast=None):
     treatments, _ = normalize_treatments(pack, g1.response_payload)
     treatment = next(item for item in treatments['treatments'] if item['candidate_id'] == stage[-1])
     assets = _asset_inputs(saved, source_record, cast=cast)
-    if cast is not None:
-        # A verified cast portrait accompanies the still even when the treatment
-        # mentions the subject but omits its transport reference.
-        identities = [{'asset_ref': asset['asset_ref'], 'role': asset['role']} for asset in cast['assets']]
-        remaining = [ref for ref in treatment['input_asset_refs'] if ref not in identities]
-        treatment['input_asset_refs'] = (identities + remaining)[:pack['media_capabilities']['max_image_inputs']]
+    references = treatment['input_asset_refs']
+    identities = [{'asset_ref': asset['asset_ref'], 'role': asset['role']} for asset in (cast or {}).get('assets', [])]
+    limit = pack['media_capabilities']['max_image_inputs']
+    poster = treatment.get('original_artwork_ref') if saved.get('handoff', {}).get('poster_treatment') == 'original-artwork/v1' else None
+    if poster:
+        artwork = {'asset_ref': poster, 'role': 'source_artwork'}
+        if not any(asset['asset_ref'] == poster and asset['role'] == 'source_artwork' for asset in assets):
+            raise ValueError('The original poster artwork is unavailable')
+        # Keep the exact face the editor chose alongside the artwork even when
+        # several other confirmed portraits are available for the same story.
+        chosen = [ref for ref in references if ref in identities]
+        essential = [artwork, *(chosen[:1] or identities[:1])]
+        ordered = essential + [ref for ref in references if ref not in essential]
+        treatment['input_asset_refs'] = (ordered + [ref for ref in identities if ref not in ordered])[:limit]
+    elif cast is not None:
+        remaining = [ref for ref in references if ref not in identities]
+        treatment['input_asset_refs'] = (identities + remaining)[:limit]
     by_ref = {asset['asset_ref']: asset for asset in assets}
     selected = []
     for ref in treatment['input_asset_refs']:
@@ -384,6 +395,9 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
         run = OriginalContentRun.objects.get(pk=run_id)
         content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
         saved = run.snapshot['request']
+        if run.decisions.get('chatter_repeat'):
+            from .graphics_chatter import record_repeat
+            return {'state': record_repeat(run), 'stage': 'C1', 'next_action': None}
         early_copy = accounting_config(run) is not None
         single = writer_led(saved['handoff'])
         cast = run.decisions.get('writer_cast') if single else None
@@ -396,6 +410,8 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                 else min(Decimal(str(config.daily_usd)), Decimal(str(configured_daily_limit))))
         c1 = _stage_call(run_id, 'C1')
         if c1 is None:
+            if content.selection.get('event_coverage') and (disposition := _already_covered(run, content, claim)):
+                return {'state': disposition, 'stage': 'C1', 'next_action': None}
             if 'C1' in run.decisions.get('graphics_skipped_stages', {}):
                 return {'state': 'unavailable', 'stage': 'C1', 'next_action': None}
             key = credentials.get(route['key_env'] if route else 'OPENROUTER_API_KEY', '')
@@ -443,7 +459,11 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                     return verified[(alias, name)]
                 handoff = {**handoff, 'cast_gaps': cast['gaps'], 'cast_manifest': [
                     {k: v for k, v in ref.items() if k not in {'storage_alias', 'storage_name'}} for ref in cast['assets']]}
-            request = build_text_request(pack, 'C1', handoff, writer_route=route, attachments=assets)
+            instruction = None
+            if assignment := handoff.get('continuation_assignment'):
+                standing = next(call['user'] for call in pack['model_call_plan']['calls'] if call['id'] == 'C1')
+                instruction = assignment + '\n\n' + standing
+            request = build_text_request(pack, 'C1', handoff, writer_route=route, attachments=assets, instruction=instruction)
             try:
                 outcome = _run_text_stage(run, content, claim, 'C1', request, key, pack,
                                           transport=transport, configured_daily_limit=configured_daily_limit, references=recipe_refs(assets),
@@ -457,6 +477,9 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
                       'next_action': 'advance' if outcome['state'] == 'completed' else None}
             if outcome['state'] == 'completed' and early_copy:
                 text = _publish_chatter_copy(run, content, claim, pack)
+                if text is None:
+                    return {'state': 'reconsider' if run.decisions.get('chatter_repeat') == 'coverage_changed' else 'repeat',
+                            'stage': 'C1', 'next_action': None}
                 result['text_id'] = text.pk
             return result
         if c1.state != 'completed':
@@ -470,7 +493,9 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
             return _invalid_saved(run, claim, 'C1', 'invalid_saved_response')
         if early_copy:
             if content.status == 'prepared':
-                _publish_chatter_copy(run, content, claim, pack)
+                if _publish_chatter_copy(run, content, claim, pack) is None:
+                    return {'state': 'reconsider' if run.decisions.get('chatter_repeat') == 'coverage_changed' else 'repeat',
+                            'stage': 'C1', 'next_action': None}
                 content.refresh_from_db()
             else:
                 record_ready(content.localized_texts.get(locale=saved['locale']))
@@ -666,6 +691,27 @@ def advance_step(run_id, *, owner=None, keys=None, transport=None,
         release_package(run_id, owner=claim.owner, fence=claim.fence)
 
 
+def _already_covered(run, content, claim):
+    """Another package may have published since this selector's comparison."""
+    from .chatter_coverage import admission_reason, record_event
+    from .graphics_chatter import record_repeat
+
+    coverage = content.selection['event_coverage']
+    saved = run.snapshot['request']
+    with transaction.atomic():
+        current = OriginalContentRun.objects.select_for_update().get(pk=run.pk)
+        if not _owned(current, claim.owner, claim.fence):
+            raise ValueError('stale Chatter publication')
+        reason = admission_reason(content, coverage, saved['locale'])
+        if reason is None:
+            return None
+        if reason != 'coverage_changed' and record_event(content, coverage, saved['sources']) is None:
+            reason = 'coverage_changed'
+        current.decisions = {**current.decisions, 'chatter_repeat': reason}
+        current.save(update_fields=['decisions'])
+    return record_repeat(run)
+
+
 def _publish_chatter_copy(run, content, claim, pack):
     source_for_run(run)
     producer = _stage_call(run.pk, 'C1')
@@ -680,7 +726,11 @@ def _publish_chatter_copy(run, content, claim, pack):
         # the newer pool pointer when this package completes late.
         text = publish_primary(content=content, producer=producer, pack=pack,
             sources=run.snapshot['request']['sources'], fence=claim.fence)
-    record_ready(text)
+    if text is None:
+        from .graphics_chatter import record_repeat
+        record_repeat(run)
+    else:
+        record_ready(text)
     return text
 
 
@@ -752,7 +802,7 @@ def review_step(run_id, *, owner=None, keys=None, transport=None, configured_dai
 def pending_action(run_id):
     """Classify saved work without contacting the broker or a provider."""
     run = OriginalContentRun.objects.get(pk=run_id)
-    if 'attention' in run.decisions.get('graphics_skipped_stages', {}):
+    if run.decisions.get('chatter_repeat') or 'attention' in run.decisions.get('graphics_skipped_stages', {}):
         return None
     content = OriginalContent.objects.get(run=run, output_key='graphics-primary/v1')
     text = published_text(run, content)
@@ -815,7 +865,7 @@ def finalize_if_done(run_id):
         uncertain = OriginalContentCall.objects.filter(run=run, state__in=['reserved', 'sent', 'ambiguous']).exists()
         pending_video = ContentPicture.objects.filter(run=run, provenance__schema_version='graphics-video-job/v1', state='pending').exists()
         no_copy = not OriginalContent.objects.filter(run=run, output_key='graphics-primary/v1', status='approved').exists()
-        needs_attention = uncertain or pending_video or no_copy or 'attention' in run.decisions.get('graphics_skipped_stages', {})
+        needs_attention = uncertain or pending_video or (no_copy and not run.decisions.get('chatter_repeat')) or 'attention' in run.decisions.get('graphics_skipped_stages', {})
         run.execution_state = 'suspended' if needs_attention else 'complete'
         run.outcome = {**run.outcome, 'graphics_state': 'attention_required' if needs_attention else 'finished'}
         if expired:

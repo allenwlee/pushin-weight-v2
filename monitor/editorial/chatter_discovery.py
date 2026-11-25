@@ -28,14 +28,16 @@ def prompts():
     )
 
 
-def request(stage, payload, cfg, *, system_override=None):
+def request(stage, payload, cfg, *, system_override=None, schema_override=None):
     book = prompts()
     entry = book[stage]
     selected_entry = entry if system_override is None else {**entry, "system": system_override}
+    if schema_override is not None:
+        selected_entry = {**selected_entry, "schema": schema_override}
     return {
         "system": selected_entry["system"],
         "user": json.dumps(
-            {**payload, "output_schema": entry["schema"]},
+            {**payload, "output_schema": selected_entry["schema"]},
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
@@ -178,7 +180,11 @@ def validate_semantic(reply, history_ids):
 
 
 def validate_selection(raw, candidates, incumbents, group_policy_ref):
-    if list(Draft202012Validator(prompts()["selection"]["schema"]).iter_errors(raw)):
+    schema = prompts()["selection"]["schema"]
+    if any("event_history" in candidate for candidate in candidates):
+        from .chatter_coverage import event_schema
+        schema = event_schema(schema)
+    if list(Draft202012Validator(schema).iter_errors(raw)):
         raise ValueError("invalid selector schema or reason")
     by_ref = {row["candidate_ref"]: row for row in candidates}
     tags = {row["candidate_ref"]: row for row in raw["candidate_tags"]}
@@ -348,6 +354,7 @@ def keep_fingerprint(payload):
                 "angle": candidate["discovery_note"],
                 "evidence": evidence,
                 "release_refs": candidate["required_release_refs"],
+                **({"event_history": candidate["event_history"]} if "event_history" in candidate else {}),
                 "persistence": {
                     key: persistence[key]
                     for key in (

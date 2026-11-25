@@ -73,6 +73,10 @@ def bind_copy_contract(pack, handoff):
     if writer_led(handoff):
         path = Path(__file__).resolve().parents[2] / 'config/editorial_prompts/chatter-writer-led-v1.json'
         overrides = json.loads(path.read_text())
+        if handoff.get('poster_treatment') == 'original-artwork/v1':
+            tasks = json.loads(path.with_name('chatter-original-artwork-v1.json').read_text())
+            for stage, instruction in tasks.items():
+                overrides[stage]['user'] = instruction
         for item in result['model_call_plan']['calls']:
             stage = item['id']
             if stage not in overrides:
@@ -83,6 +87,15 @@ def bind_copy_contract(pack, handoff):
             entries.update(minItems=1, maxItems=1)
             schema = entries['items']
             schema['properties']['id' if stage == 'C1' else 'candidate_id'] = {'const': 'A'}
+            if stage == 'G1' and handoff.get('poster_treatment') == 'original-artwork/v1':
+                schema['properties']['original_artwork_ref'] = {
+                    'type': ['string', 'null'],
+                    'description': "For an edit of a recognizable original poster or cover, name its supplied "
+                                   "source_artwork asset_ref, or 'unavailable' if the artwork was not supplied. "
+                                   "Use null for an original scene or other treatment.",
+                }
+                if 'original_artwork_ref' not in schema['required']:
+                    schema['required'].append('original_artwork_ref')
             if stage == 'C1':
                 props['schema_version'] = {'const': WRITER_LED}
                 for field in ('still_pitch', 'motion_prompt'):

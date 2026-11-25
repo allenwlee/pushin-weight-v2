@@ -772,7 +772,14 @@ def select_chatter(run_id, *, cfg=None, transport=None, enqueue=enqueue):
             for group in result["group_decisions"]
             if group["lead_ref"] is not None
         }
+        comparisons = {}
+        by_ref = {candidate["candidate_ref"]: candidate for candidate in payload["candidates"]}
+        if any("event_history" in candidate for candidate in payload["candidates"]):
+            from .chatter_coverage import decisions_for, record_event
+            locales = [binding.split(":")[1] for binding in cfg.voices if binding.startswith("chatter:")]
+            comparisons = decisions_for(result["event_comparisons"], payload["candidates"], locales)
         selected = []
+        covered_episodes = set()
         with transaction.atomic():
             current = locked_run(run.pk, run.fence)
             for row in OriginalContent.objects.select_for_update().filter(run=run):
@@ -797,6 +804,17 @@ def select_chatter(run_id, *, cfg=None, transport=None, enqueue=enqueue):
                 if ref in leads and leads[ref]["lead_action"] == "keep":
                     row.consideration_state = "kept"
                     row.consideration_reason = leads[ref]["reason"]
+                if coverage := comparisons.get(ref):
+                    row.selection = {**row.selection, "event_coverage": coverage}
+                    changed = False
+                    if coverage["prior"] and coverage["passages"]:
+                        changed = record_event(row, coverage, by_ref[ref]["evidence"]) is None
+                    repeat = coverage["prior"] and not coverage["assignment"] and not changed
+                    if repeat and row.selection.get("episode_id"):
+                        covered_episodes.add(row.selection["episode_id"])
+                    if row.consideration_state == "selected" and (not coverage["passages"] or repeat or changed):
+                        row.consideration_state = "passed_over"
+                        row.consideration_reason = "The gathered passages do not support a fresh Chatter edition."
                 row.decision_call = decision_call
                 row.save(
                     update_fields=[
@@ -804,6 +822,7 @@ def select_chatter(run_id, *, cfg=None, transport=None, enqueue=enqueue):
                         "editorial_group",
                         "consideration_state",
                         "consideration_reason",
+                        "selection",
                         "decision_call",
                     ]
                 )
@@ -835,6 +854,7 @@ def select_chatter(run_id, *, cfg=None, transport=None, enqueue=enqueue):
                 **current.outcome,
                 "phase": "selected",
                 "selected": len(selected),
+                **({"covered_episode_ids": sorted(covered_episodes)} if covered_episodes else {}),
                 "comparison_fingerprint": fingerprint,
                 "decision_call_id": decision_call.pk,
                 "decision_mode": "audited_code_keep" if reuse else "model",
@@ -908,9 +928,12 @@ def _complete(run):
 def reconcile_chatter_graphics(run):
     """Observe terminal saved packages without dispatching or retrying C1."""
     from .chatter_accounting import linked_graphics_runs
-    from .graphics_chatter import published_text, record_ready
+    from .graphics_chatter import published_text, record_ready, record_repeat
 
     for package in linked_graphics_runs(run):
+        if package.decisions.get("chatter_repeat"):
+            record_repeat(package)
+            continue
         output = OriginalContent.objects.get(run=package, output_key="graphics-primary/v1")
         text = published_text(package, output)
         if text:
@@ -952,6 +975,9 @@ def write_chatter(content_id, locale, *, cfg=None, transport=None, enqueue=enque
 
         try:
             if reconcile_chatter_graphics(run):
+                disposition = run.outcome.get("writers", {}).get(f"{row.pk}:{locale}")
+                if disposition in {"repeat", "reconsider"}:
+                    return {"status": disposition, "run_id": run.pk}
                 return {"status": "held" if run.outcome.get("phase") == "held" else "already_published", "run_id": run.pk}
             result = run_selected_story(content_id=row.pk, run_id=run.pk, locale=locale)
             output = OriginalContent.objects.get(pk=result["content_id"])

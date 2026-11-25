@@ -11,8 +11,8 @@ ollija:
   delivery_target: staging
   delivery_selected_by_user: true
   delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_route_selected_by_user: true
+  staging_transport: commit
 ---
 ## Plain-English Summary
 
@@ -46,20 +46,30 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
+4. Inspect staging service/database occupancy. Do not interrupt another release.
+5. Use the project's deployment interface to deploy the exact candidate commit to staging without moving its branch. Account for automatic deployment races.
+6. Verify the staging service reports that candidate SHA.
+7. Run the applicable, unwaived staging checks. Diagnose a failure before retrying.
 
 Occupied staging: if a staged route finds `staging` in use by an unrelated release while production is authorized, follow the occupied-staging default in `AGENTS.md`.
 <!-- END OLLIJA DELIVERY GUIDE -->
 
 ## Delivery Exceptions
 
-None.
+Continue the Chatter amendment's exact-commit staging route approved November 23. All five staging Chatter services were still on the same previous Chatter build on November 25. The staging branch carries separate Pulse work. Preserve that ref and the suspended staging harvest schedule. Use the existing staged-trial budget and a single saved or live discovery example.
 
 ## Acceptance
 
 - Resolve the principal person from the source and check portrait bytes in the writer and renderer on archived examples. A conflicting namesake remains unresolved.
 - Use the existing evidence and editorial tables to group one real-world event. A fresh angle uses an existing story and a new edition. A repeat adds evidence without publishing. Keep existing story and edition URLs.
 - Use the normal staging worker on a real discovery record. Inspect the resulting article, referenced still, motion and video duration. Record any missing proof explicitly.
+
+## November 25 implementation
+
+Rolling discovery uses its existing selector call to compare the candidate with earlier editions and cite what is new. Selection saves the assignment, source-language excerpt and earlier edition identities. The writer receives the assignment before the first draft. Duplicate suppression runs before writing and again under a publication lock. A new attributed human-interest event uses the existing dossier, source and claim tables. Pulse still requires a release. Existing edition URLs remain readable.
+
+The cast lookup can use an earlier published cast with corroborated employer and role, or an independently identified principal with a verified native mention. It preserves pending account links. The replay recovered Musk from staging run 31 using today's registered portrait, independently identified Mensch without a registered image, and recovered all three previously empty Jensen portraits. The new poster contract uses the exact two approved editorial instructions. It pins the original artwork and chosen portrait in the renderer. Old packages retain their original prompt bytes.
+
+The staging input is the four original official X responses at 01:45, 02:00, 02:15 and 02:30 JST on November 24. The receipt IDs, observation times and response hashes were verified at both ends. The staging collector stays dormant. Only a single English publication is enabled for this one replay. No new X access token is needed for archived snapshots.
+
+Local regression checks include disjoint sources, original-language support, simultaneous writers, document evidence shared by separate events, and exact request reconstruction under the selector's byte limit. One older test simulated a keep by choosing whichever story happened to be first for a shared post. Its transport now identifies the actual incumbent explicitly.

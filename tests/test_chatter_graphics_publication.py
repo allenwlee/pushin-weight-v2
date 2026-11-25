@@ -615,3 +615,333 @@ def test_rolling_edition_owns_one_writer_pitch_and_its_video_inputs(
     assets = graphics_assets(edition)
     assert assets.video.text_id == assets.still.text_id == text.pk
     assert assets.video.provenance["decode_receipt"]["input_still_sha256"] == assets.still.generated_sha256
+
+
+def test_same_event_lookup_finds_old_editions_across_disjoint_sources_and_story_ids(frozen_chatter):
+    from uuid import uuid4
+
+    from core.models import OriginalContentText
+    from monitor.editorial.chatter_coverage import previous_coverage
+    from tests.test_original_content_consideration import consideration
+
+    row, _, sources = frozen_chatter
+    row.selection = {"people": ["Jensen Huang"], "subject": "Nvidia board reinstates Jensen Huang"}
+    earlier = row.run.facts_as_of - timedelta(days=2)
+    for title, angle in [
+        ("HUANG IN THERE!", "Jensen Huang was reinstated by the Nvidia board."),
+        ("PARDON MY FRENCH, MENSCH!", "Jensen Huang sparred with Arthur Mensch at GTC."),
+    ]:
+        old = consideration(consideration_state="selected", selection={"subject": angle},
+                            status="approved", published_at=earlier, verified_at=earlier)
+        OriginalContentText.objects.create(narrative=old, public_id=uuid4(), locale="en",
+                                          headline=title, secondary=angle, body=angle)
+    coverage = previous_coverage(row, sources)
+    assert {edition["headline"] for edition in coverage["editions"]} == {
+        "HUANG IN THERE!", "PARDON MY FRENCH, MENSCH!"}
+    assert all(edition["story_id"] != str(row.development_id) for edition in coverage["editions"])
+
+
+@pytest.mark.parametrize("scenario", ["recap", "recap_passed", "recap_kept", "first_different_event", "followup", "same_headline",
+                                       "resume_same_headline", "cited_but_missing"])
+def test_rolling_selector_and_writer_replay_jensen(frozen_chatter, monkeypatch, scenario):
+    from datetime import datetime
+    from pathlib import Path
+    from uuid import UUID
+
+    from core.models import EventDossier, EventDossierClaim, OriginalContentText, Post
+    from monitor.editorial import chatter_history, graphics_pipeline
+    from monitor.editorial.chatter_chain import (
+        reconcile_chatter_graphics,
+        select_chatter,
+    )
+    from monitor.editorial.chatter_inputs import reconstruct_selection_request
+    from monitor.editorial.chatter_trends import DECISION_SCOPE, ROLLING_LANE
+    from monitor.editorial.graphics_contracts import WRITER_LED
+    from monitor.editorial.graphics_packages import materialize_package
+    from monitor.editorial.readers import find_saved_edition
+    from tests.test_chatter_chain import wire
+    from tests.test_chatter_discovery import selection
+    from tests.test_original_content_consideration import consideration
+
+    fixture = json.loads((Path(__file__).parent / "fixtures/chatter_jensen_continuation.json").read_text())
+    row, _, _ = frozen_chatter
+    cfg = personalized(row)
+    cfg = cfg.model_copy(update={"chatter": cfg.chatter.model_copy(update={"discovery_lane": ROLLING_LANE})})
+    run = row.run
+    run.scope_key, run.workflow_version = DECISION_SCOPE, workflow_version(ROLLING_LANE)
+    run.config_snapshot["editorial"] = cfg.model_dump(mode="json")
+    cutoff = datetime.fromisoformat("2026-11-25T04:32:00+00:00")
+    run.facts_as_of = cutoff
+    recap = scenario.startswith("recap")
+    run.outcome = {"event_coverage_version": 1, "incumbent_refs": {"en-rest": str(row.development_id)} if scenario == "recap_kept" else {}}
+    run.save(update_fields=["scope_key", "workflow_version", "config_snapshot", "outcome", "facts_as_of"])
+    old = []
+    for edition in fixture["prior"]:
+        when = datetime.fromisoformat(edition["published"])
+        # An older filing used another story ID. Both pinned URLs must survive.
+        parent = consideration(consideration_state="selected", selection={"subject": edition["secondary"]},
+            status="approved", published_at=when, verified_at=when)
+        original = OriginalContentText.objects.create(narrative=parent, locale="en", headline=edition["headline"],
+            secondary=edition["secondary"], body=edition["body"], public_id=UUID(edition["public_id"]))
+        old.append(original)
+    different = scenario == "first_different_event"
+    if recap:
+        subject = fixture["meme_pitch"]
+        item = fixture["recap"]
+        passage = item["text"].split("\n")[-1].removeprefix("- ")
+    elif different:
+        subject = "Jensen Huang and Arthur Mensch trade barbs at GTC"
+        item = {"source_id": "2125048000000000000", "speaker": "reporter", "created_at": cutoff.isoformat(),
+                "text": "At the GTC panel Jensen Huang asked Arthur Mensch about his answer in French."}
+        passage = item["text"]
+    else:
+        subject = "Employees cheer Jensen Huang at Nvidia headquarters"
+        reaction = fixture["reaction"]
+        item = {"source_id": reaction["id"], "speaker": reaction["handle"], "text": reaction["text"],
+                "created_at": reaction["created_at"]}
+        passage = item["text"].split("\n")[0]
+    post = Post.objects.create(tweet_id=item["source_id"], text=item["text"], created_at=datetime.fromisoformat(item["created_at"]),
+                               author_handle=item["speaker"], lang="en")
+    if recap:
+        from core.event_dossiers import create_dossier, identity_key
+        from core.models import EventDossierSource
+        release = create_dossier(event_kind="product_release", identity_key=identity_key("test", "GLM-5.4"),
+                                 first_seen_at=cutoff - timedelta(hours=1))
+        EventDossierSource.objects.create(event_dossier=release, post=post, linked_at=cutoff - timedelta(minutes=5))
+    source = chatter_history.project_post(post)
+    if recap:
+        source["source_language"] = "und"  # Source-language grounding is still required.
+    chatter_history.freeze_sources(run, [source], fence=run.fence)
+    chatter_history.attach_sources(row, [post.pk], fence=run.fence)
+    row.selection = {"subject": subject, "people": ["Jensen Huang"], "angle": subject, "episode_id": "this-event"}
+    row.save(update_fields=["selection"])
+    transports = []
+    def selector(endpoint, key, body, **kwargs):
+        transports.append(body)
+        payload = json.loads(body["input"][1]["content"])
+        candidate, = payload["candidates"]
+        assert "What can we tell a reader" in body["input"][0]["content"]
+        editions = candidate["event_history"]["editions"]
+        assert {e["headline"] for e in editions} == {t.headline for t in old}
+        if recap:
+            assert [d["dossier_id"] for d in candidate["event_history"]["dossiers"]] == [str(release.pk)]
+        reply = selection(candidate)
+        reply["candidate_tags"][0].update(group_policy_ref=payload["giant_group_policy"]["policy_ref"],
+                                           group_evidence_post_ids=[post.pk])
+        evidence = {"source_id": post.pk, "excerpt": passage}
+        assignment = {"reader_gets": "CNN-News18 reports cheers and Huang's promise to be a better CEO.",
+                      "support": evidence, "source_detail": "better CEO", "detail_words": {"en": ["cheer", "apolog", "better CEO"]}}
+        if recap:  # A real citation cannot make this market estimate evidence of a meme.
+            assignment.update(reader_gets="A new AI meme about Huang is spreading.", source_detail="meme",
+                              detail_words={"en": ["meme", "parody"]})
+        if scenario in {"recap_passed", "recap_kept"}:
+            group = next(g for g in reply["group_decisions"] if g["scope_ref"] == "en-rest")
+            group["ranked_candidates"][0]["outcome"] = "passed_over"
+            incumbent = candidate["candidate_ref"] if scenario == "recap_kept" else None
+            group.update(lead_action="keep" if incumbent else "none", incumbent_ref=incumbent, lead_ref=incumbent)
+        reply["event_comparisons"] = [{"candidate_ref": candidate["candidate_ref"],
+            "kind": "human_interest" if different else "personnel_change", "participants": ["Jensen Huang", "Nvidia"],
+            "action": "GTC panel exchange" if different else "reinstate CEO", "occasion": "2026-11-23",
+            "same_editions": [] if different else [e["edition_id"] for e in editions],
+            "same_dossier": None, "passages": [evidence], "assignment": None if different else assignment}]
+        return wire(reply, cfg.chatter.selector.model)
+
+    monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", "shared")
+    monkeypatch.setenv(cfg.chatter.selector.key_env, "fixture-only")
+    dispatches = []
+    monkeypatch.setattr("monitor.editorial.graphics_dispatch.dispatch_creation", lambda **kw: dispatches.append(kw) or True)
+    monkeypatch.setattr(graphics_pipeline, "prepare_person_cast", lambda _saved, _selection, started, **_kw:
+                        {"subjects": [], "gaps": [], "started_at": started.isoformat()})
+    selected = select_chatter(run.pk, cfg=cfg, transport=selector, enqueue=lambda *args: None)
+    assert selected.get("selected") == (0 if recap else 1), selected
+    run.refresh_from_db()
+    assert len(transports) == 1 and reconstruct_selection_request(run.provider_calls.get(stage="selector:0")) == transports[0]
+    if recap:
+        assert not dispatches and not OriginalContent.objects.filter(output_key="graphics-primary/v1").exists()
+        claim = EventDossierClaim.objects.get(source_excerpt=passage)
+        assert claim.effective_at == post.created_at and item["speaker"] in claim.assertion_text
+        assert run.outcome["covered_episode_ids"] == ["this-event"]
+        assert claim.event_dossier_source.event_dossier_id != release.pk
+        assert not release.sources.get().claims.exists()
+        assert claim.event_dossier_source.event_dossier.current_review is None
+        assert claim.event_dossier_source.event_dossier.editorial_development.pk == old[0].narrative.development_id
+        return
+    package = OriginalContent.objects.get(output_key="graphics-primary/v1")
+    assert package.run.snapshot["request"]["handoff"]["poster_treatment"] == "original-artwork/v1"
+    sent = []
+    def writer(endpoint, key, body, **kwargs):
+        sent.append(body)
+        message = body["messages"][1]["content"]
+        if different:
+            assert "You're writing the next" not in message
+            fact_id, title, byline, article = "F03", "PARDON MY FRENCH, MENSCH!", "A question in French.", passage
+        else:
+            assert message.startswith("You're writing the next Chatter piece")
+            assert "HUANG IN THERE!" in message and "RETURN OF THE JENSEN?" in message and passage in message
+            handoff = json.JSONDecoder().raw_decode(message.split("\n\nSUPPLIED INPUTS:\n")[1])[0]
+            lead = handoff["fact_items"][0]
+            assert lead["supporting_passage"] == passage and lead["speaker"] == "CNNnews18"
+            assert all(f["edition_role"] == "background" for f in handoff["fact_items"][1:])
+            fact_id = lead["fact_id"]
+            positive = fixture["positive_copy"]
+            title = "  huang IN there?" if "same_headline" in scenario else positive["headline"]
+            byline, article = positive["byline"], positive["article"]
+            if scenario == "cited_but_missing":
+                byline, article = old[0].secondary, old[0].body
+        response = copy_result(used=[fact_id])
+        response.update(schema_version=WRITER_LED, article=article, candidates=[{
+            **response["candidates"][0], "headline": title, "byline": byline, "still_pitch": "One scene.",
+            "motion_prompt": "One movement."}])
+        return 200, json.dumps({"model": body["model"], "usage": {}, "choices": [
+            {"finish_reason": "stop", "message": {"content": json.dumps(response)}}]}).encode()
+
+    if scenario == "resume_same_headline":
+        with monkeypatch.context() as paused:
+            def interruption(*_args):
+                raise RuntimeError("worker interrupted after C1")
+            paused.setattr(graphics_pipeline, "_publish_chatter_copy", interruption)
+            with pytest.raises(RuntimeError, match="interrupted"):
+                advance_step(package.run_id, keys={"OPENAI_API_KEY": "fixture"}, transport=writer)
+    result = advance_step(package.run_id, keys={"OPENAI_API_KEY": "fixture"}, transport=writer)
+    row.refresh_from_db()
+    run.refresh_from_db()
+    assert all("article" not in prior and "cited_passages" not in prior for prior in row.selection["event_coverage"]["prior"])
+    assert len(sent) == 1
+    assert list(package.run.provider_calls.values_list("stage", flat=True)) == [f"gfx:{package.run_id}:C1"]
+    if scenario in {"followup", "first_different_event"}:
+        edition = package.localized_texts.get()
+        package.refresh_from_db()
+        assert result["text_id"] == edition.pk
+        assert package.development.event_dossier.event_kind_reference.code == ("human_interest" if different else "personnel_change")
+        assert find_saved_edition(package.story_id, "chatter", locale="en", pinned=edition.public_id).pk == edition.public_id
+        assert package.story_id == (row.story_id if different else old[0].narrative.story_id)
+        assert materialize_package(prepared(row))[0].pk == package.run_id
+        assert edition.sources.get().post_id == post.pk
+    else:
+        assert result["state"] == "repeat" and not package.localized_texts.exists()
+        assert pending_action(package.run_id) is None and run.outcome["writers"][f"{row.pk}:en"] == "repeat"
+        assert reconcile_chatter_graphics(run)
+    for original in old:
+        assert find_saved_edition(original.narrative.story_id, "chatter", locale="en", pinned=original.public_id).pk == original.public_id
+    assert EventDossier.objects.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("same_episode", [True, False])
+def test_two_workers_publishing_first_chatter_event_converge(frozen_chatter, monkeypatch, same_episode):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from django.db import connections
+
+    from core.event_dossiers import identity_key
+    from core.models import EventDossier, OriginalContentText, Post
+    from monitor.editorial import chatter_history
+    from monitor.editorial.graphics_packages import materialize_package
+    from tests.test_original_content_consideration import consideration
+
+    first, _, sources = frozen_chatter
+    personalized(first)
+    second = consideration(consideration_state="selected")
+    second.run.config_snapshot = first.run.config_snapshot
+    second.run.scope_key, second.run.workflow_version = first.run.scope_key, first.run.workflow_version
+    second.run.save(update_fields=["config_snapshot", "scope_key", "workflow_version"])
+    text = "A second source reports the same panel exchange."
+    post = Post.objects.create(tweet_id="98003", text=text, created_at=second.run.facts_as_of, author_handle="other")
+    chatter_history.freeze_sources(second.run, [chatter_history.project_post(post)], fence=second.run.fence)
+    chatter_history.attach_sources(second, [post.pk], fence=second.run.fence)
+    episode = "ranked-gtc-panel-episode"
+    packages = []
+    for row, identity, excerpt in [(first, "98001", sources[0]["original_text"]), (second, post.pk, text)]:
+        row.selection = {**row.selection, "episode_id": episode if same_episode or row == first else "other-event", "people": ["Jensen Huang"],
+                         "event_coverage": {"kind": "human_interest",
+            "identity": identity_key("test", "GTC audience Q&A" if row == first else "conference panel exchange"),
+            "same_dossier": None, "prior": [], "assignment": None, "passages": [{"source_id": identity, "excerpt": excerpt}]}}
+        row.save(update_fields=["selection"])
+        packages.append(materialize_package(prepared(row))[0].pk)
+    monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", "shared")
+    both_sent = Barrier(2)
+    def publish(package_id):
+        try:
+            def writer(endpoint, key, body, **kw):
+                both_sent.wait(timeout=10)
+                copy = copy_result(used=["F01"])
+                # Different words for the same first admission must still converge.
+                copy["candidates"][0]["headline"] += str(package_id)
+                return 200, json.dumps({"model": body["model"], "usage": {}, "choices": [
+                    {"finish_reason": "stop", "message": {"content": json.dumps(copy)}}]}).encode()
+            return advance_step(package_id, keys={"OPENAI_API_KEY": "fixture"}, transport=writer)
+        finally:
+            connections.close_all()
+    with ThreadPoolExecutor(max_workers=2) as threads:
+        results = list(threads.map(publish, packages))
+    assert sorted(result["state"] for result in results) == ["completed", "repeat" if same_episode else "reconsider"]
+    winner = first if results[0]["state"] == "completed" else second
+    event = EventDossier.objects.get(identity_key=identity_key("chatter-episode-v1", winner.selection["episode_id"]))
+    if not same_episode:
+        deferred = second if winner == first else first
+        deferred.run.refresh_from_db()
+        assert deferred.run.outcome["writers"][f"{deferred.pk}:en"] == "reconsider"
+        assert not deferred.run.outcome.get("covered_episode_ids")
+        assert event.sources.count() == 1 and EventDossier.objects.count() == 1
+        return
+    assert event.sources.count() == 2
+    assert OriginalContentText.objects.filter(narrative__development__event_dossier=event).count() == 1
+    assert event.current_review is None
+    # A third selector made its decision before publication, but its C1 has not
+    # been sent. The same guard records its distinct evidence without a writer.
+    third = consideration(consideration_state="selected")
+    third.run.config_snapshot = first.run.config_snapshot
+    third.run.scope_key, third.run.workflow_version = first.run.scope_key, first.run.workflow_version
+    third.run.save(update_fields=["config_snapshot", "scope_key", "workflow_version"])
+    another = Post.objects.create(tweet_id="98004", text="Another account describes the same exchange.",
+                                  created_at=third.run.facts_as_of, author_handle="witness")
+    chatter_history.freeze_sources(third.run, [chatter_history.project_post(another)], fence=third.run.fence)
+    chatter_history.attach_sources(third, [another.pk], fence=third.run.fence)
+    third.selection = {"episode_id": episode, "people": ["Jensen Huang"], "event_coverage": {**second.selection["event_coverage"],
+                                          "passages": [{"source_id": another.pk, "excerpt": another.text}]}}
+    third.save(update_fields=["selection"])
+    late, _ = materialize_package(prepared(third))
+    assert advance_step(late.pk, keys={}, transport=lambda *_: pytest.fail("writer sent"))["state"] == "repeat"
+    assert not late.provider_calls.exists() and event.sources.count() == 3
+
+
+def test_cross_event_roundup_document_reuses_observation_for_its_own_new_claim(frozen_chatter, tmp_path):
+    from core.event_dossiers import identity_key
+    from monitor.editorial.chatter_coverage import record_event
+    from monitor.editorial.chatter_history import read_sources
+
+    row, _, _ = frozen_chatter
+    original, _ = add_document(row, tmp_path)
+    document = next(source for source in read_sources(row) if source["kind"] == "dossier_source")
+    coverage = {"prior": [], "same_dossier": None, "identity": identity_key("test", "second event"),
+                "kind": "human_interest", "passages": [{"source_id": document["id"], "excerpt": document["original_text"]}]}
+    event = record_event(row, coverage, [document]).event_dossier
+    assert event.pk != original.event_dossier_id
+    attached = event.sources.get()
+    assert attached.collection_observation_id == original.collection_observation_id
+    assert attached.claims.get().source_excerpt == document["original_text"]
+    assert not original.claims.exists()
+
+
+def test_matched_dossier_merged_after_selection_uses_canonical_target(frozen_chatter):
+    from core.event_dossiers import create_dossier, identity_key
+    from core.models import EditorialStory, EventDossier
+    from monitor.editorial.chatter_coverage import record_event
+    from monitor.editorial.chatter_history import read_sources
+
+    row, _, _ = frozen_chatter
+    original, target = [create_dossier(event_kind="human_interest", identity_key=identity_key("test", key))
+                        for key in ("old subject link", "canonical event")]
+    row.development.event_dossier = original
+    row.development.save(update_fields=["event_dossier"])
+    canonical = EditorialStory.objects.create(event_dossier=target, development_key="canonical")
+    EventDossier.objects.filter(pk=original.pk).update(merged_into=target)
+    support = read_sources(row, usage="consideration")
+    coverage = {"prior": [{"story_id": str(row.development_id), "published": "2026-11-24", "edition_id": "older"}],
+                "same_dossier": str(original.pk), "identity": identity_key("test", "frozen event"), "kind": "human_interest",
+                "passages": [{"source_id": support[0]["id"], "excerpt": support[0]["original_text"]}]}
+    assert record_event(row, coverage, support) == canonical
+    assert target.sources.get().claims.count() == 1 and not original.sources.exists()
+    row.development.refresh_from_db()
+    assert row.development.event_dossier_id == original.pk

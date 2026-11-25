@@ -898,6 +898,8 @@ def gather_trends(run_id, resume=False, *, cfg=None, x_client=None, enqueue=None
                 "original_headlines": entry["recipe"]["original_headlines"], "headline_ids": lead["headline_ids"],
                 "gathered_identity": identity, "query_sha256": entry["recipe"]["query_sha256"],
                 "source_identities": [_source_identity(post) for post in posts]}
+            if run.scope_key == DECISION_SCOPE:
+                pitch["event_aliases"] = entry["recipe"]["clauses"][0][0][:12]
             if lead.get("people"):
                 pitch["people"] = lead["people"]
             if "episode_id" in lead:
@@ -936,6 +938,7 @@ def gather_trends(run_id, resume=False, *, cfg=None, x_client=None, enqueue=None
             if background:
                 attach_sources(carried, background, fence=run.fence, usage="background")
         _finish_gathering(run, enqueue=enqueue,
+            **({"event_coverage_version": 1} if run.scope_key == DECISION_SCOPE else {}),
             incumbent_refs={pool: str(row.development_id) for pool, row in incumbents.items()},
             history_coverage={"board_may_be_capped": history["board_may_be_capped"], "history_requests": []},
             history_context={"matched_count": history_total, "admitted_count": history_admitted,

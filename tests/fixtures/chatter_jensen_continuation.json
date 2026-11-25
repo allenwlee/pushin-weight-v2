@@ -1,0 +1,40 @@
+{
+  "origin": "Nov 25 saved C1 F05; Nov 24 published English editions and the CNN-News18 report in the local Nov 25 continuation replay. Excerpts only.",
+  "meme_pitch": "Jensen Huang’s Nvidia comeback becomes an AI meme",
+  "recap": {
+    "source_id": "2125103575906812102",
+    "speaker": "timoassi",
+    "created_at": "2026-11-24T05:45:49Z",
+    "text": "- Nvidia NVDA officially reinstated Jensen Huang as CEO, president and board member, and the stock surged over 30%.\n\n- Nvidia's market cap jumped $950 billion in one day, by far the largest single day increase for any company in history, making it the world's 2nd most valuable company again at $4.1 trillion."
+  },
+  "prior": [
+    {
+      "body": "Jensen Huang is back in Nvidia’s CEO chair less than two weeks after leaving it. Accounts of the chipmaker’s November 23 announcement say its board voted unanimously to reinstate him as president, chief executive and a director, 11 days after his resignation. The reversal followed a November 17 statement that the board had no plans to bring him back.\n\nHuang co-founded Nvidia, whose graphics chips and CUDA software have become important tools for artificial-intelligence computing. Chief Financial Officer Colette Kress served as interim CEO during his absence and has returned to her finance role, according to an account of the announcement.\n\nThe board said input from senior U.S. officials left it confident Huang’s return posed no national-security risk, according to accounts of its decision. That is the board’s assessment, not the end of the matter: an independent investigation into reports that he was targeted by foreign intelligence remains open. Nvidia shares rose more than 30% in early trading after the reinstatement, according to a market report. The rally answers how investors reacted that morning, not what the investigation will find.",
+      "headline": "HUANG IN THERE!",
+      "public_id": "48742704-0434-41d1-a2d6-e50b6f8bdf1e",
+      "published": "2026-11-24T02:03:18.191306+00:00",
+      "secondary": "Nvidia’s board reportedly voted unanimously to restore Jensen Huang as CEO 11 days after he resigned; its investigation continues."
+    },
+    {
+      "body": "Is Jensen Huang back in charge at NVIDIA? Social-media posts on Nov. 23 say the chip company’s board reinstated him as president, CEO and a director.\n\nBellwetherFCF, citing an NVIDIA newsroom item, said the board voted unanimously and made the reinstatement effective immediately. An AI news roundup posted by TraffAlex described the decision as a reversal six days after the board ruled Huang out. Those accounts are the basis for the reported return; the board’s statement is not among the material available for this story.\n\nThe question matters beyond the title on Huang’s door. BellwetherFCF argued that his decades of technical judgment and institutional knowledge would be difficult for NVIDIA to replace. That is the poster’s assessment, not an independently established measure of his value to the company.",
+      "headline": "RETURN OF THE JENSEN?",
+      "public_id": "49f7f9ec-cb29-43bb-a2ab-0e09acf2660f",
+      "published": "2026-11-24T08:04:49.310865+00:00",
+      "secondary": "Posts say NVIDIA’s board reinstated Jensen Huang as CEO and director just six days after ruling him out."
+    }
+  ],
+  "reaction": {
+    "id": "2125048416157733268",
+    "lang": "en",
+    "text": "Jensen Huang returned to Nvidia’s Santa Clara HQ to cheers of “Jensen! Jensen!” less than two weeks after his stunning ouster. “This is my first day at work,” he told employees, apologising for the ordeal. “I’m gonna be a better CEO the second time around.”\n\n@_pallavighosh with more | @shreyasharma_SS \n\n#Jensenhuang #ClaraHQ #Nvidia",
+    "handle": "CNNnews18",
+    "author_id": "6509832",
+    "created_at": "2026-11-24T02:06:38+00:00",
+    "fetched_at": "2026-11-24T02:19:58.863754+00:00"
+  },
+  "positive_copy": {
+    "headline": "HUANG 2.0!",
+    "byline": "CNN-News18 says Nvidia staff cheered Jensen Huang at headquarters as he apologized and pledged to be “a better CEO the second time around.”",
+    "article": "Jensen Huang’s return to Nvidia now has a first-day scene. CNN-News18 reports that employees greeted him at the chipmaker’s Santa Clara headquarters with cheers of “Jensen! Jensen!” Huang told them, “This is my first day at work,” apologized for the ordeal and added, “I’m gonna be a better CEO the second time around.”\n\nOur earlier coverage addressed the Nov. 23 announcement that Nvidia’s board had voted unanimously to reinstate its co-founder as CEO, president and a director, 11 days after he resigned. The new report describes his reception inside the company and his promise to employees. It does not resolve the independent investigation that remained open when the board announced his return."
+  }
+}

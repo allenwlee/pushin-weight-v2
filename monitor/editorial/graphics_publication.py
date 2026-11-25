@@ -120,11 +120,38 @@ def _used_citations(sources, facts, used_fact_ids):
 def publish_primary(*, content, producer, pack, sources, selected_scope=None, fence=None):
     """Publish saved A copy and source snapshots, without a review gate."""
     with transaction.atomic():
-        OriginalContentRun.objects.select_for_update().get(pk=content.run_id)
+        run = OriginalContentRun.objects.select_for_update().get(pk=content.run_id)
         row = OriginalContent.objects.select_for_update().get(pk=content.pk)
         if row.run_id != content.run_id or row.workflow_key not in WORKFLOWS.values():
             raise ValueError('invalid Graphics content identity')
         call, copy, facts = _saved_c1(row, producer, pack)
+        if coverage := row.selection.get('event_coverage'):
+            from django.utils import timezone
+
+            from .chatter_coverage import admission_reason, record_event, repeat_reason
+            from .graphics_chatter import source_for_run
+            if source_for_run(run) is None or fence != run.fence or run.execution_state != 'running' or not run.lease_until or run.lease_until <= timezone.now():
+                raise ValueError('stale Chatter publication')
+            if existing := row.localized_texts.filter(locale=copy['locale'], producing_call=call).first():
+                return existing
+            reason = admission_reason(row, coverage, copy['locale'])
+            if reason != 'coverage_changed':
+                canonical = record_event(row, coverage, sources)
+                if canonical is None:
+                    reason = 'coverage_changed'
+                elif reason is None:
+                    reason = repeat_reason(coverage, canonical, copy['locale'], copy, call.response_payload, facts)
+            if reason:
+                run.decisions = {**run.decisions, 'chatter_repeat': reason}
+                run.save(update_fields=['decisions'])
+                return None
+            if row.development_id != canonical.pk:
+                from django.db.models import Max
+                row.development = canonical
+                row.story_id = canonical.pk
+                row.subject_key = canonical.development_key
+                row.revision = (OriginalContent.objects.filter(story_id=canonical.pk).aggregate(n=Max('revision'))['n'] or 0) + 1
+                row.save(update_fields=['development', 'story_id', 'subject_key', 'revision'])
         citations = _used_citations(sources, facts, copy['used_fact_ids'])
         (text,) = publish_content(row, [{
             'locale': copy['locale'], 'headline': copy['headline'],

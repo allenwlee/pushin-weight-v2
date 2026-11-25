@@ -217,7 +217,13 @@ def test_discovery_to_pool_publication_uses_real_storage_and_no_duplicate_send(
                     search=True,
                 )
             candidates = payload["candidates"]
-            chosen = next(row for row in candidates if "123" in row["post_ids"])
+            # Both the lawsuit and the model announcement cite post 123. The
+            # follow-up transport explicitly claims to keep the existing lead.
+            incumbent = payload["incumbents"].get("en-rest")
+            chosen = next(
+                row for row in candidates if "123" in row["post_ids"]
+                and (row["candidate_ref"] == incumbent if incumbent else row["subject_label"] == story["subject"])
+            )
             result = selection(chosen)
             result["candidate_tags"][0]["group_policy_ref"] = payload[
                 "giant_group_policy"

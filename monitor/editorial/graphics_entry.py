@@ -222,6 +222,11 @@ def prepare_selected_story(*, content_id, run_id, locale, per_story_usd=None, da
         if run.config_snapshot['editorial'].get('chatter', {}).get('discovery_lane') == 'personalized-trends-v2':
             from .graphics_contracts import WRITER_LED
             request['handoff']['copy_contract'] = WRITER_LED
+        if coverage := selection.get('event_coverage'):
+            from .chatter_coverage import continuation_handoff
+            request['handoff']['poster_treatment'] = 'original-artwork/v1'
+            if assignment := continuation_handoff(coverage, facts, locale):
+                request['handoff']['continuation_assignment'] = assignment
         request['chatter'] = chatter
         request['writer_route'] = route.model_dump(mode='json')
         request['handoff'].update(voice=voice.model_dump(mode='json'), voice_hash=voice.digest)

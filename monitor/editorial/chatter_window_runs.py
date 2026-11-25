@@ -171,6 +171,8 @@ def _reopen_unpublished_episodes(previous, cutoff):
     unresolved = {}
     for identity in unpublished:
         prior = owner.get(identity)
+        if prior and identity in prior.outcome.get("covered_episode_ids", []):
+            continue
         if prior and (prior.outcome.get("phase") == "held"
                       or prior.execution_state in {"completed", "failed"}):
             if prior.pk not in unresolved:
