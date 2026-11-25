@@ -14,16 +14,22 @@ from django.db.models.functions import Collate, Lower, StrIndex, Trim
 from django.utils import timezone
 
 from core.models import PersonAccount, PersonMedia, PersonName
-from core.staff_assets.person_roles import named_employers, sourced_role
 from core.staff_assets.graphics_references import (
     read_graphics_references,
     read_staff_object_before,
 )
+from core.staff_assets.person_roles import named_employers, sourced_role
 
+from .chatter_cast_history import (
+    confirmed_appearances,
+    current_primary_fact,
+    matching_appearances,
+    verified_subject_mentions,
+)
 from .graphics_generation import MAX_INPUT_BYTES, MIME_TYPES
 
 
-def story_subjects(saved, selection):
+def _subject_candidates(saved, selection):
     """Match the subject against saved source passages and existing person identities."""
     facts = saved['handoff']['fact_items']
     headlines = [saved['handoff']['subject'], *selection.get('original_headlines', [])]
@@ -107,7 +113,67 @@ def story_subjects(saved, selection):
             supporting = [f for f in facts if f.get("source_post_id") in linked[pid]]
         if not supporting:
             continue
+        yield name, pid, supporting, set(identities)
+
+
+def story_subjects(saved, selection):
+    for name, pid, supporting, _ in _subject_candidates(saved, selection):
         yield name, pid, supporting
+
+
+def _competing_source_identity(name, pid, facts, supporting, saved, observed_by):
+    """Look for a second identity explicitly attributed in the same edition."""
+    from core.staff_assets.person_intake import create_or_update_person
+
+    for fact in facts:
+        if not current_primary_fact(fact, observed_by):
+            continue
+        evidence = fact_evidence(name, fact, None, saved)
+        named_account = evidence.get("personal_account")
+        if not named_account and (fact in supporting or not named_employers(name, evidence["passage"])):
+            continue
+        check = create_or_update_person(name, evidence, apply=False, collect=False, require_source_match=True)
+        if check["person_id"] and check["person_id"] != pid:
+            return True
+        if named_account and "person_account_conflict" in check["gaps"]:
+            return True
+    return False
+
+
+def _cast_subjects(saved, selection, observed_by):
+    subjects = list(_subject_candidates(saved, selection))
+    candidates = {person for _, pid, _, namesakes in subjects if not pid for person in namesakes}
+    appearances = confirmed_appearances(candidates, saved.get("facts_as_of"))
+    all_facts = saved["handoff"]["fact_items"]
+    mentions, conflicts = verified_subject_mentions(candidates, all_facts, observed_by)
+    named_by_selector = {n.casefold() for n in selection.get("people") or [] if isinstance(n, str)}
+    for name, pid, facts, namesakes in subjects:
+        if pid:
+            yield name, pid, facts, None
+            continue
+        history = matching_appearances(name, namesakes, facts, appearances, observed_by)
+        # The entity belongs to this story only when the pitch names this person
+        # and a primary passage independently names them, including older rankings.
+        principal = re.search(rf"(?<!\w){re.escape(name)}(?!\w)", saved["handoff"]["subject"], re.IGNORECASE)
+        if named_by_selector and name.casefold() not in named_by_selector:
+            principal = False
+        named_facts = [f for f in facts if current_primary_fact(f, observed_by)] if principal else []
+        cited = namesakes & mentions.keys() if named_facts else set()
+        bound = history.keys() | cited
+        contested = named_facts and namesakes & conflicts
+        if not bound and not contested:
+            yield name, pid, facts, None
+            continue
+        if len(bound) == 1 and not contested:
+            pid = next(iter(bound))
+            supporting, media_ids = history.get(pid, ([], None))
+            if not _competing_source_identity(name, pid, facts, supporting, saved, observed_by):
+                if pid in cited:
+                    fact_ids = mentions[pid] | {f["fact_id"] for f in named_facts + supporting}
+                    supporting = [f for f in all_facts if f["fact_id"] in fact_ids]
+                yield name, pid, supporting, media_ids
+                continue
+        yield name, None, [], None
 
 
 PORTRAIT_WAIT_SECONDS = 20
@@ -154,11 +220,15 @@ def cast_manifest(saved, selection):
     from core.staff_assets.person_intake import create_or_update_person
 
     assets, gaps = [], []
-    for name, pid, facts in story_subjects(saved, selection):
+    for name, pid, facts, media_ids in _cast_subjects(saved, selection, timezone.now()):
+        if not facts:
+            gaps.append(f"{name}: ambiguous_subject_name")
+            continue
         evidence = fact_evidence(name, facts[0], pid, saved)
-        identity = create_or_update_person(name, evidence, needs={'portrait'}, apply=False, collect=False)
+        identity = create_or_update_person(name, evidence, needs={'portrait'}, apply=False, collect=False,
+                                           require_source_match=True)
         person = identity.get('person_id')
-        ref = portrait_asset(person, name, [f['fact_id'] for f in facts]) if person else None
+        ref = portrait_asset(person, name, [f['fact_id'] for f in facts], media_ids=media_ids) if person else None
         if ref and ref['sha256'] not in {a['sha256'] for a in assets}:
             assets.append(ref)
         else:
@@ -212,7 +282,10 @@ def recipe_refs(assets):
 
 def prepare_person_cast(saved, selection, started, *, foreground=None):
     """Reconcile every sourced observation before choosing or requesting a portrait."""
-    from core.staff_assets.person_intake import create_or_update_person, personal_accounts_named
+    from core.staff_assets.person_intake import (
+        create_or_update_person,
+        personal_accounts_named,
+    )
     from core.staff_assets.person_research import collect_missing
 
     foreground = foreground or ForegroundPortraits(started)
@@ -220,14 +293,17 @@ def prepare_person_cast(saved, selection, started, *, foreground=None):
     # The same name may appear in dozens of posts. Check the account directory
     # once per subject, while validating role and affiliation on every passage.
     accounts_for_story = lru_cache(maxsize=3)(personal_accounts_named)
-    for name, known_id, facts in story_subjects(saved, selection):
+    for name, known_id, facts, media_ids in _cast_subjects(saved, selection, started):
+        if not facts:
+            gaps.append(f"{name}: ambiguous_subject_name")
+            continue
         matches = {}
         links = defaultdict(list)
         unresolved = set()
         for fact in facts:
             evidence = fact_evidence(name, fact, known_id, saved)
             identity = create_or_update_person(name, evidence, needs={'portrait'}, collect=False,
-                                               account_lookup=accounts_for_story)
+                                               account_lookup=accounts_for_story, require_source_match=True)
             if identity.get('person_id'):
                 key = str(identity['person_id'])
                 links[key].extend(evidence['source_urls'])
@@ -246,7 +322,7 @@ def prepare_person_cast(saved, selection, started, *, foreground=None):
             continue
         evidence = {**evidence, 'source_urls': list(dict.fromkeys([*evidence['source_urls'], *links[pid]]))}
         resolved = collect_missing(identity, name, evidence, {'portrait'},
-                                   portrait_reader=partial(portrait_asset, foreground=foreground))
+                                   portrait_reader=partial(portrait_asset, foreground=foreground, media_ids=media_ids))
         ids = [f['fact_id'] for f in facts]
         asset = resolved['asset']
         if asset:

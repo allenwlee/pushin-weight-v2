@@ -44,7 +44,12 @@ from core.staff_assets.arrivals import without_collection_registration
 from core.staff_assets.intake import observed_time, validate_record
 from core.staff_assets.job_history import normalized
 from core.staff_assets.job_history_identity import IdentityHold, validate_x_identity
-from core.staff_assets.person_roles import KNOWN_TITLES, named_employers, phrase, sourced_role
+from core.staff_assets.person_roles import (
+    KNOWN_TITLES,
+    named_employers,
+    phrase,
+    sourced_role,
+)
 from core.staff_assets.population import is_official
 from core.staff_assets.queue import _lock
 
@@ -438,6 +443,7 @@ def _resolve(
     account_candidates,
     occupation,
     account_lookup,
+    require_source_match,
 ):
     named = PersonName.objects.filter(full_name__iexact=subject).exclude(
         review_status="rejected"
@@ -530,7 +536,7 @@ def _resolve(
             family.update((pk, family[parent]) for pk, parent in children.items())
             frontier = set(children)
         matched = _stored_subject_matches(
-            family, subject, evidence, unique=len(candidates) == 1
+            family, subject, evidence, unique=len(candidates) == 1 and not require_source_match
         )
         if brand:
             matched.update(
@@ -761,13 +767,14 @@ def _account_roles(account, brand, company, result, apply):
 
 def create_or_update_person(
     subject, evidence, needs=frozenset({"portrait"}), *, apply=True, collect=True,
-    account_lookup=personal_accounts_named,
+    account_lookup=personal_accounts_named, require_source_match=False,
 ):
     """Preview or reconcile one attributed subject. Author/reporter fields are never identity inputs.
 
     Supply passage, source_url or source_id and observed_at. personal_account refers
     to the subject, and person_id is a known identity. identity_supported is a
     source assessment that distinguishes the person, not a name-only match.
+    require_source_match needs independent source evidence even for a unique directory name.
     """
     if (
         not isinstance(subject, str)
@@ -779,7 +786,7 @@ def create_or_update_person(
     if needs - {"portrait", "jobs"}:
         raise ValueError("Unsupported person intake need")
     subject = subject.strip()
-    identity = _reconcile_person(subject, evidence, needs, apply, account_lookup)
+    identity = _reconcile_person(subject, evidence, needs, apply, account_lookup, require_source_match)
     if collect and apply:
         from core.staff_assets.person_research import collect_missing
 
@@ -787,7 +794,7 @@ def create_or_update_person(
     return identity
 
 
-def _reconcile_person(subject, evidence, needs, apply, account_lookup):
+def _reconcile_person(subject, evidence, needs, apply, account_lookup, require_source_match):
     passage = evidence.get("passage") or ""
     reference = evidence.get("source_url") or str(evidence.get("source_id") or "")
     when = evidence.get("observed_at")
@@ -841,6 +848,7 @@ def _reconcile_person(subject, evidence, needs, apply, account_lookup):
                     account_candidates,
                     occupation,
                     account_lookup,
+                    require_source_match,
                 )
         except (IdentityConflict, Person.DoesNotExist, ValidationError) as exc:
             person, account, native, creating, read_only_identity = (
