@@ -318,17 +318,24 @@ def complete_review(
         raise ValueError("A claim may occur only once in a review")
     if (significance_score is None) != (not ranking_method):
         raise ValueError("A ranking score requires its ranking method")
-    if event.event_kind_reference.code == "product_release":
+    kind = event.event_kind_reference.code
+    if kind == "product_release":
         if (
             not isinstance(product_release, ProductReleaseInput)
             or personnel_change is not None
         ):
-            raise ValueError("Model release kind requires only model details")
-    elif (
-        not isinstance(personnel_change, PersonnelChangeInput)
-        or product_release is not None
-    ):
-        raise ValueError("Personnel kind requires only personnel details")
+            raise ValueError("Product release kind requires only product release details")
+    elif kind == "personnel_change":
+        if (
+            not isinstance(personnel_change, PersonnelChangeInput)
+            or product_release is not None
+        ):
+            raise ValueError("Personnel kind requires only personnel details")
+    elif kind == "human_interest":
+        if product_release is not None or personnel_change is not None:
+            raise ValueError("Human-interest reviews use claims without typed details")
+    else:
+        raise ValueError(f"Unsupported dossier review kind: {kind}")
     decisions = sorted((asdict(c) for c in claims), key=lambda c: str(c["claim_id"]))
     decision = {
         "display_title": display_title,
@@ -419,7 +426,7 @@ def complete_review(
             code=detail.pop("availability_state")
         )
         _insert(ProductReleaseDetail(review=saved, **detail))
-    else:
+    elif personnel_change is not None:
         detail = asdict(personnel_change)
         detail["change_type_reference"] = PersonnelChangeType.objects.get(
             code=detail.pop("change_kind")

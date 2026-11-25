@@ -19,8 +19,10 @@ from core.event_dossiers import (
     complete_review,
     create_dossier,
     identity_key,
+    read_current_evidence,
     read_dossier,
 )
+from core.pulse_readers import release_page, release_sources
 from tests.person_factory import person_with_name
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -74,6 +76,61 @@ def review(event, evidence, **kwargs):
     }
     values.update(kwargs)
     return complete_review(event.pk, **values)
+
+
+def test_human_interest_evidence_stays_attributed_until_explicit_review():
+    event = dossier("onstage-exchange", kind="human_interest")
+    said_at = timezone.now() - timedelta(days=1)
+    passage = "She joked about the empty chair."
+    source = attach_source(event.pk, post_id=post("witness", passage).pk)
+    evidence = add_claim(
+        source.pk, claim_kind="attributed_statement", scope_key="witness",
+        assertion_text="A witness described a joke about an empty chair.",
+        source_excerpt=passage, effective_precision="datetime", effective_at=said_at,
+        extraction_version="test-v1",
+    )
+    pending = read_current_evidence(event.pk)
+    assert pending["current_review_id"] is None
+    assert pending["claims"][0]["source_excerpt"] == passage
+    assert pending["claims"][0]["claim_kind"] == "attributed_statement"
+    assert evidence.effective_at == said_at
+    assert evidence.recorded_at > said_at
+    assert not event.reviews.exists()
+
+    for detail in [
+        {"product_release": ProductReleaseInput(observed_name="A")},
+        {
+            "product_release": None,
+            "personnel_change": PersonnelChangeInput(observed_person_name="A", change_kind="move"),
+        },
+    ]:
+        with pytest.raises(ValueError, match="detail"):
+            review(event, evidence, **detail)
+    assert not event.reviews.exists()
+    saved = review(
+        event, evidence, product_release=None, display_title="Onstage exchange",
+        claims=[ClaimDecision(evidence.pk, "uncertain", "Single witness")],
+    )
+    current = read_dossier(event.pk)
+    assert current["review"]["id"] == str(saved.pk)
+    assert current["claims"][0]["disposition"] == "uncertain"
+    assert current["product_release"] is None
+    assert current["personnel_change"] is None
+
+
+def test_pulse_lists_only_release_dossiers_even_when_each_has_an_editorial_story():
+    release = dossier()
+    personnel = dossier("person:move", kind="personnel_change")
+    exchange = dossier("onstage-exchange", kind="human_interest")
+    for event in (release, personnel, exchange):
+        models.EditorialStory.objects.create(
+            development_key=f"chatter:{event.pk}", event_dossier=event,
+        )
+    assert [entry["id"] for entry in release_page()["entries"]] == [str(release.pk)]
+    assert release_sources(release.pk)["event_id"] == str(release.pk)
+    for event in (personnel, exchange):
+        with pytest.raises(models.EventDossier.DoesNotExist):
+            release_sources(event.pk)
 
 
 def test_atomic_variants_share_source_without_sharing_identity():
@@ -476,13 +533,19 @@ def test_raw_malformed_time_and_canonical_post_membership():
         models.EventDossierSource.objects.create(event_dossier=event, post=source_post)
 
 
-def test_raw_review_with_foreign_claim_or_wrong_detail_cannot_commit():
-    event, other = dossier(), dossier("other")
+@pytest.mark.parametrize("kind", ["product_release", "personnel_change", "human_interest"])
+def test_raw_review_with_foreign_claim_or_wrong_detail_cannot_commit(kind):
+    event, other = dossier(kind=kind), dossier("other")
     own, foreign = claim(event), claim(other, key="foreign")
-    for used, wrong_kind in [(foreign, False), (own, True)]:
+    valid_detail = None if kind == "human_interest" else kind
+    cases = [(foreign, valid_detail, "same-dossier claims")]
+    for detail_kind in (None, "product_release", "personnel_change"):
+        if detail_kind != valid_detail:
+            cases.append((own, detail_kind, "matching typed detail"))
+    for used, detail_kind, error_message in cases:
         cutoff = timezone.now()
         reviewed_at = cutoff + timedelta(microseconds=1)
-        with pytest.raises(IntegrityError), transaction.atomic():
+        with pytest.raises(IntegrityError, match=error_message), transaction.atomic():
             saved = models.EventDossierReview.objects.create(
                 event_dossier=event,
                 revision=1,
@@ -498,14 +561,14 @@ def test_raw_review_with_foreign_claim_or_wrong_detail_cannot_commit():
             models.EventDossierReviewClaim.objects.create(
                 review=saved, claim=used, disposition="accepted", reason="test"
             )
-            if wrong_kind:
+            if detail_kind == "personnel_change":
                 models.PersonnelChangeDetail.objects.create(
                     review=saved, observed_person_name="A",
                     change_type_reference=models.PersonnelChangeType.objects.get(
                         code="move"
                     ),
                 )
-            else:
+            elif detail_kind == "product_release":
                 models.ProductReleaseDetail.objects.create(
                     review=saved, observed_name="A", native_identifier="test/a",
                     release_maturity_reference=models.ReleaseMaturity.objects.get(

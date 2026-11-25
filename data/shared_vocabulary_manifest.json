@@ -84,14 +84,14 @@
       "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
     },
     "shared_event_kinds.csv": {
-      "rows": 2,
-      "sha256": "5cc59f3fcba6ebb886a5774d9fe4b479bb5483b206411e0ced1db70a73057dce",
-      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+      "rows": 3,
+      "sha256": "36637b1569ebac91073fd30aed35dab5253af2d192ad41792241346a61c2a9d9",
+      "provenance": "RG4 dossier kinds, RG7 product release and the November 25 Chatter human-interest amendment"
     },
     "shared_event_claim_kinds.csv": {
-      "rows": 11,
-      "sha256": "646dbbe59f8875709e3bdacc04d7a56e63770f98060a78480cb28f1b71dc3828",
-      "provenance": "RG4 dossier claims; RG7 pending release reports; product-release study adds unverified signals, distinct milestones and source-backed publisher/context claims"
+      "rows": 12,
+      "sha256": "73e4a4462e2b4214a820b6d484bec091037b922cd48901766eb4ad3faf2b66ee",
+      "provenance": "RG4 dossier claims, RG7 pending release reports, product-release signals, milestones and publisher/context claims, and source-attributed statements from the November 25 Chatter amendment"
     },
     "shared_release_maturities.csv": {
       "rows": 5,
