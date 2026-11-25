@@ -258,3 +258,19 @@ def test_live_feed_catalog_mode_defaults_to_compact_with_full_catalog_rollback(m
     assert load_config(CONFIG_PATH).llm.feed_catalog_mode == "compact_baseline"
     monkeypatch.setenv("X_MONITOR_FEED_CATALOG_MODE", "baseline")
     assert load_config(CONFIG_PATH).llm.feed_catalog_mode == "baseline"
+
+
+def test_backfill_catalog_override_keeps_baseline_configuration_serialization(monkeypatch):
+    from monitor.backfill_enrichment import configuration_pin
+    from x_monitor.config import load_config
+
+    monkeypatch.delenv("X_MONITOR_BACKFILL_CATALOG_MODE", raising=False)
+    baseline = load_config(CONFIG_PATH)
+    assert baseline.llm.backfill_catalog_mode == "baseline"
+
+    monkeypatch.setenv("X_MONITOR_BACKFILL_CATALOG_MODE", "compact_baseline")
+    compact = load_config(CONFIG_PATH)
+    assert compact.llm.backfill_catalog_mode == "compact_baseline"
+    assert compact.llm.feed_catalog_mode == baseline.llm.feed_catalog_mode
+    assert compact.model_dump() == baseline.model_dump()
+    assert configuration_pin(compact) != configuration_pin(baseline)

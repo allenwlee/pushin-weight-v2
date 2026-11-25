@@ -4318,7 +4318,10 @@ def _filter_passing_hardware_release(content, brand, tweet, catalog, brand_id):
         _target_claims,
     )
 
-    entries = catalog.get("brands", [])
+    # A backfill replay uses the paid compact prompt for request identity and
+    # the original full catalog for decisions that rely on untrimmed aliases.
+    validation_catalog = tweet.get("_classification_validation_catalog", catalog)
+    entries = validation_catalog.get("brands", [])
     entry = next((item for item in entries if item.get("brand_id") == brand_id), {})
     visible = str(tweet.get("text") or "")
     terms = [entry.get("display_name", ""), *entry.get("aliases", [])]

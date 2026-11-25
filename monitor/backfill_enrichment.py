@@ -86,9 +86,12 @@ def configuration_pin(cfg):
     from x_monitor import attribution, literal_translation
     from x_monitor.classifier_0731_prompts import BRAND_PROMPT, CONTENT_PROMPT
 
+    llm_config = cfg.llm.model_dump(mode="json")
+    if cfg.llm.backfill_catalog_mode != "baseline":
+        llm_config["backfill_catalog_mode"] = cfg.llm.backfill_catalog_mode
     return digest(
         {
-            "llm": cfg.llm.model_dump(mode="json"),
+            "llm": llm_config,
             "literal_source": inspect.getsource(literal_translation),
             "classifier_source": inspect.getsource(
                 attribution.classify_batch_pragmatics_full
@@ -447,6 +450,8 @@ def replay_rejected_classifier_packet(
             or calls[0].provenance["context"]["post_ids"] != calls[1].provenance["context"]["post_ids"]
             or user_packet(calls[0]) != user_packet(calls[1])
             or calls[0].provenance["post_snapshots"] != calls[1].provenance["post_snapshots"]
+            or calls[0].provenance["context"].get("validation_catalog")
+            != calls[1].provenance["context"].get("validation_catalog")
         ):
             raise BatchAdmissionError("classifier_revalidation_packet_mismatch")
         states = list(PostEnrichmentState.objects.select_for_update().filter(pk__in=members))
@@ -816,12 +821,33 @@ def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot
     required_stages = ("translation",) if translation_only else ("translation", "classification")
     if any(delegates.get(stage) is None for stage in required_stages):
         raise BatchAdmissionError("enrichment_role_credentials_missing")
+    validation_catalog = (classification_input_snapshot or {}).get("validation_catalog")
+    capture_catalog = (
+        classification_input_snapshot is None and not translation_only
+        and cfg.llm.backfill_catalog_mode == "compact_baseline"
+    )
+
+    def freeze_validation_catalog(catalog):
+        nonlocal validation_catalog
+        validation_catalog = catalog
+
+    def transform_classifier_context(body, context):
+        transform = getattr(delegates["classification"], "context_for_request", None)
+        if transform is not None:
+            context = transform(body, context)
+        if validation_catalog is not None:
+            context = {**context, "validation_catalog": validation_catalog}
+        return context
+
     clients = {
         stage: DeferredInferenceClient(
             delegates[stage],
             resolve=resolve,
             reply_transport=lambda identity: cached[identity].provider_batch.transport,
-            context_transform=getattr(delegates[stage], "context_for_request", None),
+            context_transform=(
+                transform_classifier_context if stage == "classification" and (capture_catalog or validation_catalog is not None)
+                else getattr(delegates[stage], "context_for_request", None)
+            ),
         )
         for stage in required_stages
     }
@@ -841,6 +867,8 @@ def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot
             post_ids=set(ids),
             source_collection_job_id=job.pk,
             classification_input_snapshot=classification_input_snapshot,
+            classification_validation_catalog=validation_catalog,
+            capture_classification_validation_catalog=freeze_validation_catalog if capture_catalog else None,
             translation_only=translation_only,
         )
         snapshot_ids = set(ids) | {
@@ -1049,7 +1077,11 @@ def saved_classifier_input(call, *, post_ids=None):
     }
     if current != snapshots:
         raise BatchAdmissionError("saved_classifier_packet_source_changed")
-    return {"catalog": catalog, "inputs": inputs}
+    snapshot = {"catalog": catalog, "inputs": inputs}
+    validation_catalog = call.provenance["context"].get("validation_catalog")
+    if validation_catalog is not None:
+        snapshot["validation_catalog"] = _validated_tracked_brand_catalog_snapshot(validation_catalog)
+    return snapshot
 
 
 def _replay_pending_classifier_packets(

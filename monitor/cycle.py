@@ -36,6 +36,7 @@ import threading
 import time
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta, timezone
@@ -4319,6 +4320,8 @@ class CycleRunner:
         repair_manifest: dict[str, dict[str, Any]] | None = None,
         source_collection_job_id: Any | None = None,
         classification_input_snapshot: dict[str, Any] | None = None,
+        classification_validation_catalog: dict[str, Any] | None = None,
+        capture_classification_validation_catalog: Callable[[dict[str, Any]], None] | None = None,
         translation_only: bool = False,
         pulse_backfill: bool = False,
         fair_queue: bool = False,
@@ -4686,14 +4689,22 @@ class CycleRunner:
         classification_publish_ids = {str(t["tweet_id"]) for t in classification_tweets}
         classifier_profile = getattr(classifier_client, "request_profile", None)
         feed_catalog_kwargs = {}
+        compact_backfill = (
+            classifier_profile == "deepseek_0731" and self.cycle_kind == "backfill"
+            and source_collection_job_id is not None
+            and capture_classification_validation_catalog is not None
+        )
+        live_feed = (
+            self.cycle_kind in {"scheduled", "enrichment"} and source_collection_job_id is None
+        )
         if (
-            classifier_profile == "deepseek_0731" and self.cycle_kind in {"scheduled", "enrichment"}
-            and source_collection_job_id is None and classification_input_snapshot is None
-            and repair_manifest is None and not pulse_backfill
+            classifier_profile == "deepseek_0731" and (live_feed or compact_backfill)
+            and classification_input_snapshot is None and repair_manifest is None and not pulse_backfill
         ):
-            catalog_mode = self.cfg.llm.feed_catalog_mode
-            # Deferred replies must retain the exact packet used for submission.
-            if getattr(classifier_client, "deferred_requests", False) is True:
+            catalog_mode = (
+                self.cfg.llm.backfill_catalog_mode if compact_backfill else self.cfg.llm.feed_catalog_mode
+            )
+            if live_feed and getattr(classifier_client, "deferred_requests", False) is True:
                 catalog_mode = "baseline"
             if catalog_mode != "baseline":
                 feed_catalog_kwargs["feed_catalog_mode"] = catalog_mode
@@ -4717,11 +4728,17 @@ class CycleRunner:
                     pending_tweets.get(post_id, {"tweet_id": post_id, **saved})
                     for post_id, saved in classification_input_snapshot["inputs"].items()
                 ]
-            catalog_source = (
-                _validated_tracked_brand_catalog_snapshot(
-                    classification_input_snapshot["catalog"]
-                )["brands"]
-                if classification_input_snapshot is not None
+            saved_catalog = (
+                _validated_tracked_brand_catalog_snapshot(classification_input_snapshot["catalog"])
+                if classification_input_snapshot is not None else None
+            )
+            validation_catalog = (
+                _validated_tracked_brand_catalog_snapshot(classification_validation_catalog)
+                if classification_validation_catalog is not None else None
+            )
+            catalog_source = validation_catalog or saved_catalog
+            source_brands = (
+                catalog_source["brands"] if catalog_source is not None
                 else _classification_tracked_brand_catalog()
             )
             for tweet in classification_tweets + release_retry_tweets:
@@ -4730,17 +4747,19 @@ class CycleRunner:
                     if saved["text"] != tweet["text"] or set(saved["brand_ids"]) != set(tweet["brand_ids"]):
                         raise ValueError("classification_snapshot_source_changed")
                     tweet.update(saved)
-                tweet["tracked_brand_catalog"] = catalog_source
-            classification_catalog = (
-                _validated_tracked_brand_catalog_snapshot(classification_input_snapshot["catalog"])
-                if classification_input_snapshot is not None
-                else _tracked_brand_catalog(brand_registry, classification_tweets + release_retry_tweets)
+                tweet["tracked_brand_catalog"] = source_brands
+            classification_catalog = saved_catalog or validation_catalog or _tracked_brand_catalog(
+                brand_registry, classification_tweets + release_retry_tweets,
             )
+            if compact_backfill:
+                validation_catalog = classification_catalog
+                capture_classification_validation_catalog(validation_catalog)
+            publication_catalog = validation_catalog or classification_catalog
             for tweet in classification_tweets + release_retry_tweets:
-                tweet["tracked_brand_catalog"] = classification_catalog["brands"]
-                tweet["_classification_catalog_revision"] = classification_catalog[
-                    "revision"
-                ]
+                tweet["tracked_brand_catalog"] = publication_catalog["brands"]
+                tweet["_classification_catalog_revision"] = publication_catalog["revision"]
+                if validation_catalog is not None:
+                    tweet["_classification_validation_catalog"] = validation_catalog
 
             if classifier_profile == "compressed8_pulse_v1" and repair_manifest is None:
                 prior_by_post = {}
@@ -4789,6 +4808,9 @@ class CycleRunner:
             tid = str(tweet["tweet_id"])
             if tid not in classification_publish_ids:
                 return
+            if classification_input_snapshot is not None and classification_validation_catalog is not None:
+                # The publisher fingerprints the paid prompt, not its validation catalog.
+                tweet["_feed_prompt_catalog"] = classification_catalog
             removed_subjects = 0
             try:
                 if dispatch_guard is not None:

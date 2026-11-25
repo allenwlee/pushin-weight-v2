@@ -191,9 +191,30 @@ def advance(native, *, initial=False):
     )
 
 
-def test_native_submit_restart_import_and_publish_without_duplicate_model_calls(native):
+@pytest.mark.parametrize("catalog_mode", ["baseline", "compact_baseline"])
+def test_native_submit_restart_import_and_publish_without_duplicate_model_calls(
+    native, monkeypatch, catalog_mode,
+):
+    from monitor import cycle
+
+    _, cfg, _, _ = native
+    if catalog_mode != "baseline":
+        cfg.llm.backfill_catalog_mode = catalog_mode
+    monkeypatch.setattr(cycle, "_classification_tracked_brand_catalog", lambda: [
+        {"brand_id": "qwen", "products": ["unused product"]},
+    ])
     first = advance(native, initial=True)
     assert first["model_requests_sent"] == 6 and first["active_batches"] == 2
+    catalogs = []
+    for submitted in NativeProvider.files.values():
+        for request in submitted:
+            body = request["body"]
+            if body["model"] != DEEPSEEK_0731_MODEL:
+                continue
+            packet = json.loads(next(m["content"] for m in body["messages"] if m["role"] == "user"))
+            catalogs.append({brand["brand_id"]: brand for brand in packet["tracked_brands"]["brands"]})
+    expected_products = [] if catalog_mode == "compact_baseline" else ["unused product"]
+    assert [catalog["qwen"]["products"] for catalog in catalogs] == [expected_products] * 2
     assert not Post.objects.exclude(text_en=None).exists()
     assert not PostEnrichmentState.objects.exclude(claim_owner="").exists()
     second = advance(native)

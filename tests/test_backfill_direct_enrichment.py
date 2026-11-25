@@ -123,7 +123,7 @@ def test_live_and_backfill_classifier_wire_budget_covers_multibrand_packets(nati
             tweet_id=identifier, text="I tried Qwen and DeepSeek today.", lang="en"
         )
         PostBrand.objects.create(post=post, brand_id="qwen")
-        PostEnrichmentState.objects.create(post=post)
+        PostEnrichmentState.objects.create(post=post, translation_requested=True)
     if path == "backfill":
         with transaction.atomic():
             record_post_membership(CollectionRun.objects.get(job=job), None, identifiers)
@@ -209,7 +209,7 @@ def test_completed_classifier_packets_survive_changed_pending_page(native, monke
                 tweet_id=identifier, text="I tried Qwen today.", lang="en"
             )
             PostBrand.objects.create(post=post, brand_id="qwen")
-            PostEnrichmentState.objects.create(post=post)
+            PostEnrichmentState.objects.create(post=post, translation_requested=True)
         with transaction.atomic():
             record_post_membership(run, None, ids)
 
@@ -434,7 +434,7 @@ def test_direct_32_requests_overlap_without_worker_database_connections(native):
             tweet_id=f"direct-wide-{index}", text="I tried Qwen today.", lang="en"
         )
         PostBrand.objects.create(post=post, brand_id="qwen")
-        PostEnrichmentState.objects.create(post=post)
+        PostEnrichmentState.objects.create(post=post, translation_requested=True)
         ids.append(post.pk)
     from django.db import transaction
 
@@ -492,7 +492,7 @@ def test_direct_advancement_still_bounds_total_waves_and_persists_unstarted_call
         [PostBrand(post_id=identifier, brand_id="qwen") for identifier in ids]
     )
     PostEnrichmentState.objects.bulk_create(
-        [PostEnrichmentState(post_id=identifier) for identifier in ids]
+        [PostEnrichmentState(post_id=identifier, translation_requested=True) for identifier in ids]
     )
     with transaction.atomic():
         record_post_membership(job.runs.get(), None, ids)
@@ -577,7 +577,7 @@ def test_exhausted_translation_defers_its_packet_but_healthy_posts_finish(native
             tweet_id=identifier, text="I tried Qwen today.", lang="en"
         )
         PostBrand.objects.create(post=post, brand_id="qwen")
-        PostEnrichmentState.objects.create(post=post)
+        PostEnrichmentState.objects.create(post=post, translation_requested=True)
     with transaction.atomic():
         record_post_membership(job.runs.get(), None, ids)
     provider = DirectProvider()
@@ -726,10 +726,13 @@ def test_final_assessment_records_incomplete_without_changing_source_receipt(nat
     assert report["backfill_campaign"]["latest"]["status"] == "failed"
 
 
-def test_saved_packet_replays_exact_submitted_catalog_after_catalog_changes(native):
+@pytest.mark.parametrize("catalog_mode", ["baseline", "compact_baseline"])
+def test_saved_packet_replays_exact_submitted_catalog_after_catalog_changes(native, catalog_mode):
     from core.models import Brand, BrandSearchTerm
     from monitor.cycle import _classification_tracked_brand_catalog
 
+    _, cfg, _, _ = native
+    cfg.llm.backfill_catalog_mode = catalog_mode
     provider = DirectProvider()
     run_direct(native, provider, initial=True)
     saved = list(
@@ -745,6 +748,12 @@ def test_saved_packet_replays_exact_submitted_catalog_after_catalog_changes(nati
             if m["role"] == "user"
         )
     )["tracked_brands"]["revision"]
+    full_catalogs = [call.provenance["context"].get("validation_catalog") for call in saved]
+    assert full_catalogs[0] == full_catalogs[1]
+    if catalog_mode == "compact_baseline":
+        assert full_catalogs[0]["revision"] != original_revision
+    else:
+        assert full_catalogs == [None, None]
     BrandSearchTerm.objects.create(brand_id="qwen", term="fresh-catalog-alias")
     Brand.objects.create(nickname="catalog-added", display_name="A later brand")
     from x_monitor.attribution import _tracked_brand_catalog
@@ -938,7 +947,7 @@ def test_unknown_group_does_not_block_new_independent_members(native):
         tweet_id="independent", text="I tried Qwen today.", lang="en"
     )
     PostBrand.objects.create(post=post, brand_id="qwen")
-    PostEnrichmentState.objects.create(post=post)
+    PostEnrichmentState.objects.create(post=post, translation_requested=True)
     with transaction.atomic():
         record_post_membership(native[0].runs.get(), None, [post.pk])
     provider.transport = normal

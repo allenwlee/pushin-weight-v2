@@ -670,6 +670,11 @@ class LlmConfig(BaseModel):
     )
     classifier_provider: Literal["anthropic", "openrouter", "deepinfra"] = "anthropic"
     feed_catalog_mode: Literal["baseline", "compact_baseline"] = "compact_baseline"
+    # The enrichment pin accounts for opt-in mode separately so baseline
+    # campaigns retain their serialized configuration and existing pins.
+    backfill_catalog_mode: Literal["baseline", "compact_baseline"] = Field(
+        default="baseline", exclude=True,
+    )
     classifier_pipeline: Literal["two_role", "compressed8_pulse_v1"] = "two_role"
     classifier_deepinfra_request_profile: Literal["deepseek_0731"] | None = None
     classifier_openrouter_provider: str | None = None
@@ -1297,6 +1302,7 @@ def load_config(path: Path) -> Config:
             "classifier_model": os.environ.get("X_MONITOR_CLASSIFIER_MODEL"),
             "classifier_provider": os.environ.get("X_MONITOR_CLASSIFIER_PROVIDER"),
             "feed_catalog_mode": os.environ.get("X_MONITOR_FEED_CATALOG_MODE"),
+            "backfill_catalog_mode": os.environ.get("X_MONITOR_BACKFILL_CATALOG_MODE"),
             "classifier_pipeline": os.environ.get("X_MONITOR_CLASSIFIER_PIPELINE"),
             "classifier_deepinfra_request_profile": os.environ.get(
                 "X_MONITOR_CLASSIFIER_DEEPINFRA_REQUEST_PROFILE"

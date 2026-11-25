@@ -124,6 +124,21 @@ def test_post_level_launch_candidate_survives_correct_passing_mention():
     assert result["by_brand"]["nemo_megatron"]["post_types"] == ["other"]
 
 
+def test_passing_hardware_filter_uses_frozen_validation_catalog_on_replay():
+    from x_monitor.attribution import _filter_passing_hardware_release
+
+    content = {"post_types": ["releases_updates"]}
+    brand = {"sentiment": "positive"}
+    compact = {"brands": [{"brand_id": "nvidia", "aliases": ["Nvidia"]}]}
+    full = {"brands": [{"brand_id": "nvidia", "aliases": ["Nvidia", "Nvidex"]}]}
+    tweet = {"text": "Example v1.2 is out. runs on Nvidia GPUs. Nvidex4 launches today."}
+    assert _filter_passing_hardware_release(content, brand, tweet, compact, "nvidia") == (
+        {"post_types": ["other"]}, {"sentiment": "neutral"},
+    )
+    tweet["_classification_validation_catalog"] = full
+    assert _filter_passing_hardware_release(content, brand, tweet, compact, "nvidia") == (content, brand)
+
+
 @pytest.mark.parametrize("name", ["CUDA", "Triton Inference Server"])
 def test_passing_hardware_filter_keeps_a_known_brand_product_release(name):
     from x_monitor.attribution import _filter_passing_hardware_release
