@@ -166,6 +166,24 @@ def test_all_tabs_windows_and_timezones_equal_reference(fact_brand, publication,
 
 
 @pytest.mark.requires_postgres
+def test_live_fact_tail_starts_with_the_bounded_post_window(fact_brand):
+    from django.test.utils import CaptureQueriesContext
+
+    from monitor.each_chart_facts import read_each_fact_groups
+
+    populate()
+    with CaptureQueriesContext(connection) as queries:
+        rows = read_each_fact_groups(
+            fact_brand.pk, "post_types", NOW - timedelta(days=7), NOW, "day", "UTC", NOW,
+        )
+    assert rows
+    sql = next(q["sql"] for q in queries if "CROSS JOIN LATERAL" in q["sql"])
+    assert "FROM posts p CROSS JOIN LATERAL" in sql
+    assert "post_id=p.tweet_id" in sql and "p.created_at >=" in sql and "p.created_at <" in sql
+    assert "OFFSET 0" in sql
+
+
+@pytest.mark.requires_postgres
 def test_grouped_reader_count_does_not_scale_with_posts(fact_brand):
     from django.test.utils import CaptureQueriesContext
 

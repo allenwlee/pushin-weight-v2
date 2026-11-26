@@ -92,8 +92,10 @@ def _read_groups(brand_id, tab, start, end, bucket, tz, at):
     projected = ", ".join(("created_at", *columns))
     live = (
         "SELECT "
-        + projected
-        + " FROM each_brand_post_facts_source WHERE brand_id=%s AND created_at >= %s AND created_at < %s"
+        + ", ".join("f." + column for column in ("created_at", *columns))
+        + " FROM posts p CROSS JOIN LATERAL (SELECT " + projected
+        + " FROM each_brand_post_facts_source WHERE post_id=p.tweet_id AND brand_id=%s OFFSET 0) f"
+        + " WHERE p.created_at >= %s AND p.created_at < %s"
     )
     data_params = [brand_id, boundary, end]
     if boundary > start:
