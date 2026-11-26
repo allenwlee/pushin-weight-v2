@@ -90,14 +90,55 @@ def _read_groups(brand_id, tab, start, end, bucket, tz, at):
     with connection.cursor() as cursor:
         boundary = each_publication_boundary(cursor, start, end, at)
     projected = ", ".join(("created_at", *columns))
-    live = (
-        "SELECT "
-        + ", ".join("f." + column for column in ("created_at", *columns))
-        + " FROM posts p CROSS JOIN LATERAL (SELECT " + projected
-        + " FROM each_brand_post_facts_source WHERE post_id=p.tweet_id AND brand_id=%s OFFSET 0) f"
-        + " WHERE p.created_at >= %s AND p.created_at < %s"
-    )
-    data_params = [brand_id, boundary, end]
+    if tab == "sentiment":
+        # The source view looks the Post up again and always reads legacy
+        # signals. The category reader only consults those signals when there
+        # is no state for the exact requested brand spelling.
+        live = """
+            SELECT p.created_at, s.post_id IS NOT NULL AS state_present,
+                   s.brand_id::text AS state_brand_id,
+                   s.contract_version AS state_contract_version,
+                   s.taxonomy_version AS state_taxonomy_version,
+                   s.outcome AS state_outcome, s.sentiment::text AS state_sentiment,
+                   COALESCE(legacy.brand_ids, ARRAY[]::text[]) AS legacy_sentiment_brand_ids,
+                   COALESCE(legacy.sentiments, ARRAY[]::text[]) AS legacy_sentiment_values
+            FROM posts p
+            CROSS JOIN LATERAL (
+                SELECT post_id, brand_id FROM posts_brands
+                WHERE post_id=p.tweet_id AND brand_id=%s OFFSET 0
+            ) pb
+            LEFT JOIN posts_brands_classification_states s
+              ON s.post_id=pb.post_id AND s.brand_id=pb.brand_id
+            LEFT JOIN LATERAL (
+                SELECT array_agg(v.brand_id ORDER BY v.brand_id COLLATE "C") AS brand_ids,
+                       array_agg(v.sentiment ORDER BY v.brand_id COLLATE "C") AS sentiments
+                FROM (
+                    SELECT g.brand_id::text COLLATE "C" AS brand_id,
+                           CASE WHEN count(DISTINCT NULLIF(g.sentiment::text, '') COLLATE "C")=1
+                                THEN min(NULLIF(g.sentiment::text, '') COLLATE "C") END AS sentiment
+                    FROM posts_brands_signals g
+                    WHERE (s.post_id IS NULL OR s.brand_id::text COLLATE "C" <> %s COLLATE "C")
+                      AND g.post_id=pb.post_id AND g.brand_id=pb.brand_id
+                    GROUP BY g.brand_id::text COLLATE "C"
+                ) v
+            ) legacy ON true
+            WHERE p.created_at >= %s AND p.created_at < %s
+        """
+        live_brand_params = [brand_id, brand_id]
+    else:
+        live = (
+            "SELECT "
+            + ", ".join("f." + column for column in ("created_at", *columns))
+            + " FROM posts p CROSS JOIN LATERAL (SELECT " + projected
+            + " FROM each_brand_post_facts_source WHERE post_id=p.tweet_id AND brand_id=%s OFFSET 0) f"
+            + " WHERE p.created_at >= %s AND p.created_at < %s"
+        )
+        live_brand_params = [brand_id]
+
+    def live_params(lower):
+        return [*live_brand_params, lower, end]
+
+    data_params = live_params(boundary)
     if boundary > start:
         sources = (
             "SELECT "
@@ -207,7 +248,7 @@ def _read_groups(brand_id, tab, start, end, bucket, tz, at):
             with connection.cursor() as cursor:
                 cursor.execute(
                     fallback,
-                    [brand_id, start, end, bucket_value, *signature_params]
+                    [*live_params(start), bucket_value, *signature_params]
                     + ([brand_id] if tab == "role" else []),
                 )
                 return [

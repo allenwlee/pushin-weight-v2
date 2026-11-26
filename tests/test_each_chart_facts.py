@@ -183,6 +183,62 @@ def test_live_fact_tail_starts_with_the_bounded_post_window(fact_brand):
     assert "OFFSET 0" in sql
 
 
+@pytest.mark.parametrize("publication", ["unpopulated", "saved", "dirty"])
+@pytest.mark.requires_postgres
+def test_sentiment_live_reader_matches_reference_for_exact_and_legacy_brand_spelling(
+    fact_brand, publication
+):
+    # Database brand identity is case-insensitive, while the historical
+    # sentiment fallback selects the exact stored brand spelling.
+    PostBrandClassificationState.objects.filter(post_id="each-facts-0").update(
+        brand_id=fact_brand.pk.upper()
+    )
+    PostBrandSignal.objects.filter(post_id="each-facts-2").update(
+        brand_id=fact_brand.pk.upper()
+    )
+    if publication != "unpopulated":
+        populate()
+    if publication == "dirty":
+        PostBrandSignal.objects.filter(post_id="each-facts-2").update(
+            brand_id=fact_brand.pk, sentiment_id="negative"
+        )
+    options = {"now": NOW, "bucket_timezone": "Asia/Tokyo", "_rank": False}
+    for days in (7, 365):
+        assert _each_chart_payload(
+            fact_brand.pk, "sentiment", days, "en", **options
+        ) == reference_each_chart_payload(
+            fact_brand.pk, "sentiment", days, "en", **options
+        )
+
+
+@pytest.mark.requires_postgres
+def test_sentiment_falls_back_to_live_after_saved_relation_disappears(fact_brand):
+    populate()
+    options = {"now": NOW, "bucket_timezone": "Asia/Tokyo", "_rank": False}
+    expected = reference_each_chart_payload(
+        fact_brand.pk, "sentiment", 365, "en", **options
+    )
+    failed = False
+
+    def remove_saved_relation_once(execute, sql, params, many, context):
+        nonlocal failed
+        if not failed and sql.lstrip().startswith("WITH facts AS") and "UNION ALL" in sql:
+            failed = True
+            # Rename inside the reader's savepoint: the real missing-relation
+            # error rolls the rename back before the live-only retry.
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "ALTER MATERIALIZED VIEW each_brand_post_facts "
+                    "RENAME TO each_brand_post_facts_test_missing"
+                )
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(remove_saved_relation_once):
+        actual = _each_chart_payload(fact_brand.pk, "sentiment", 365, "en", **options)
+    assert failed
+    assert actual == expected
+
+
 @pytest.mark.requires_postgres
 def test_grouped_reader_count_does_not_scale_with_posts(fact_brand):
     from django.test.utils import CaptureQueriesContext
