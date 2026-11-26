@@ -25,6 +25,7 @@ EVIDENCE_RELATIVE_PATH = Path(".ollija/tmp/ui-assurance-evidence.json")
 EVIDENCE_PATH = ROOT / EVIDENCE_RELATIVE_PATH
 FOCUSED_TESTS = [
     "tests/test_general_readers.py",
+    "tests/test_general_recent_index.py",
     "tests/test_general_timing.py",
     "tests/test_general_jobs_people.py",
     "tests/test_general_views.py",

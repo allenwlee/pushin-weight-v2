@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from urllib.parse import quote, urlsplit
 
 from django.core import signing
+from django.core.exceptions import EmptyResultSet
+from django.db import connection, transaction
 from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.db.models.functions import Collate
 from django.utils import timezone
@@ -26,8 +28,8 @@ from core.intelligence_readers import (
     event_lifecycle,
     opportunity_lifecycle,
 )
-from core.job_vocabulary import classification_prefetches, classification_text
 from core.job_locations import canonical_job_locations, location_prefetch
+from core.job_vocabulary import classification_prefetches, classification_text
 from core.models import (
     Event,
     EventEvidence,
@@ -390,7 +392,89 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
     return {pk: list(rows.values()) for pk, rows in result.items()}
 
 
-def general_feed(
+def _bounded_temporal_candidates(section, signals, eligible, brands, at, last, limit):
+    """Keep linked posts plus a bounded, ordered page of posts without facts.
+
+    If the recent window does not contain a full page, fall back to the
+    original complete reader: a rare brand may have older matches.
+    """
+    if connection.vendor != "postgresql":
+        return None
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW transaction_isolation")
+        if cursor.fetchone()[0] not in {"repeatable read", "serializable"}:
+            # A caller-owned READ COMMITTED transaction cannot keep the
+            # linked and unlinked queries on the same snapshot.
+            return None
+    if brands == []:
+        return {}, set()
+    recent_limit = 5000
+    try:
+        public_sql, public_params = public_posts().order_by().values("pk", "fetched_at").query.sql_with_params()
+        signal_sql, signal_params = signals.order_by().values("post_id").query.sql_with_params()
+    except EmptyResultSet:
+        return {}, set()
+    params = [*public_params, at]
+    cursor_filter = ""
+    if last and len(last) == 4 and last[0] == 2 and last[1] == 0:
+        try:
+            last_fetch = datetime.fromtimestamp(-last[2], tz=UTC)
+        except (ValueError, OverflowError, TypeError):
+            return None
+        cursor_filter = (
+            ' AND p.fetched_at <= %s AND (p.fetched_at < %s OR (p.fetched_at = %s AND p.pk COLLATE "C" > %s COLLATE "C"))'
+        )
+        params += [last_fetch, last_fetch, last_fetch, last[3]]
+    elif last and (len(last) != 4 or last[0] not in (0, 1, 2)):
+        return None
+
+    if section == "calendar":
+        link_queries = [
+            Event.objects.exclude(review_status="rejected"),
+            EventEvidence.objects.exclude(event__review_status="rejected"),
+        ]
+    else:
+        link_queries = [Opportunity.objects.exclude(review_status="rejected")]
+    linked = Q()
+    no_facts = []
+    params.append(recent_limit)
+    for link_query in link_queries:
+        posts = link_query.filter(source_post_id__isnull=False).order_by().values("source_post_id")
+        linked |= Q(pk__in=posts)
+        link_sql, link_params = posts.query.sql_with_params()
+        no_facts.append(f"r.pk NOT IN ({link_sql})")
+        params.extend(link_params)
+    params.extend(signal_params)
+    params.append(limit + 1)
+    query = f"""
+        WITH recent AS MATERIALIZED (
+            SELECT p.pk, p.fetched_at FROM ({public_sql}) p
+            WHERE p.fetched_at <= %s {cursor_filter}
+            ORDER BY p.fetched_at DESC, p.pk COLLATE "C" LIMIT %s
+        ), window_size AS (SELECT count(*) AS scanned FROM recent)
+        SELECT matching.pk, matching.fetched_at, window_size.scanned
+        FROM window_size LEFT JOIN LATERAL (
+            SELECT r.pk, r.fetched_at FROM recent r
+            WHERE {' AND '.join(no_facts)} AND EXISTS (
+                SELECT 1 FROM ({signal_sql}) matched WHERE matched.post_id=r.pk OFFSET 0
+            )
+            ORDER BY r.fetched_at DESC, r.pk COLLATE "C" LIMIT %s
+        ) matching ON true
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+    unknown = [(pk, fetched) for pk, fetched, _ in rows if pk is not None]
+    scanned = rows[0][2]
+    if len(unknown) <= limit and scanned == recent_limit:
+        return None
+    candidates = dict(eligible.filter(linked).order_by().values_list("pk", "fetched_at"))
+    linked_ids = set(candidates)
+    candidates.update(unknown)
+    return candidates, linked_ids
+
+
+def _general_feed(
     section, *, locale="en", brands=None, limit=20, cursor=None, as_of=None
 ):
     """Return a bounded page, ordered against the first request's fixed clock."""
@@ -417,12 +501,23 @@ def general_feed(
                 | Q(fetched_at=last_fetch, _sort_id__gt=last[1])
             )
         eligible = eligible.order_by("-fetched_at", "_sort_id")[: limit + 1]
-    candidates = dict(eligible.values_list("pk", "fetched_at"))
+    bounded = (
+        _bounded_temporal_candidates(section, signals, eligible, brands, at, last, limit)
+        if section in {"calendar", "free"}
+        else None
+    )
+    if bounded is None:
+        candidates = dict(eligible.values_list("pk", "fetched_at"))
+        fact_ids = list(candidates)
+    else:
+        candidates, fact_ids = bounded
     facts = (
-        temporal_facts(list(candidates), section, as_of=at)
+        temporal_facts(list(fact_ids), section, as_of=at)
         if section in {"calendar", "free"}
         else {}
     )
+    if bounded is not None:
+        facts.update({pk: [] for pk in candidates if pk not in facts})
     timing = {pk: timing_anchor(rows) for pk, rows in facts.items()}
     ordered = []
     for pk, fetched in candidates.items():
@@ -463,3 +558,19 @@ def general_feed(
         "items": [documents[pk] for _, pk in page],
         "next_cursor": next_cursor,
     }
+
+
+def general_feed(section, *, locale="en", brands=None, limit=20, cursor=None, as_of=None):
+    """Read one page against a consistent snapshot when this call owns it."""
+    options = {"locale": locale, "brands": brands, "limit": limit, "cursor": cursor, "as_of": as_of}
+    if (
+        section not in {"calendar", "free"}
+        or connection.vendor != "postgresql"
+        or connection.in_atomic_block
+        or not connection.get_autocommit()
+    ):
+        return _general_feed(section, **options)
+    with transaction.atomic():
+        with connection.cursor() as db_cursor:
+            db_cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        return _general_feed(section, **options)

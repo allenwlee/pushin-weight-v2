@@ -37,7 +37,7 @@ from urllib.parse import urlparse
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.indexes import GinIndex, GistIndex, OpClass
 from django.db import IntegrityError, models, router, transaction
-from django.db.models.functions import MD5, Coalesce, Upper
+from django.db.models.functions import MD5, Coalesce, Collate, Upper
 from django.db.models.lookups import Exact, IsNull, LessThanOrEqual
 from django.utils import timezone
 
@@ -2085,6 +2085,10 @@ class Post(models.Model):
                 name="idx_posts_editorial_context",
             ),
             models.Index(fields=["author"], name="idx_posts_author_id"),
+            models.Index(
+                models.F("fetched_at").desc(), Collate("tweet_id", "C"),
+                name="idx_posts_fetched_id_c",
+            ),
             models.Index(fields=["created_at"], name="idx_posts_created_at"),
             models.Index(
                 fields=["created_at"],
