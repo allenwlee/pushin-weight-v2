@@ -574,7 +574,48 @@ def test_pulse_deadline_is_shared_by_multiple_statements(chart_context):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_seven_day_chart_and_pulse_count_concurrently(chart_context):
+def test_pulse_deadline_allows_savepoint_rollback_after_database_error(chart_context):
+    from time import monotonic
+
+    from django.db import DatabaseError, transaction
+
+    from monitor.home_count_summary import pulse_count_deadline
+
+    with pulse_count_deadline(monotonic() + 5):
+        with pytest.raises(DatabaseError), transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute("SELECT 1 / 0")
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            assert cursor.fetchone() == (1,)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_pulse_deadline_recovers_after_real_statement_timeout(chart_context):
+    from time import monotonic
+
+    from django.db import DatabaseError, transaction
+
+    from core.materializations import sqlstate
+    from monitor.home_count_summary import pulse_count_deadline
+
+    def force_timeout(execute, sql, params, many, context):
+        if sql == "SELECT 42":
+            execute("SET LOCAL statement_timeout = '1ms'", None, False, context)
+            return execute("SELECT pg_sleep(0.3)", None, False, context)
+        return execute(sql, params, many, context)
+
+    with pulse_count_deadline(monotonic() + 5), connection.execute_wrapper(force_timeout):
+        with pytest.raises(DatabaseError) as error, transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute("SELECT 42")
+        assert sqlstate(error.value) == "57014"
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            assert cursor.fetchone() == (1,)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("window", [7, 30, 365])
+def test_long_window_chart_and_pulse_count_concurrently(chart_context, window):
     from threading import Barrier, get_ident
 
     from monitor.home_count_summary import read_home_counts, refresh_home_counts
@@ -593,7 +634,7 @@ def test_seven_day_chart_and_pulse_count_concurrently(chart_context):
     _clear_home_pulse_cache()
     with patch("monitor.home_count_summary.read_home_counts", side_effect=coordinated_count):
         payload = _payload(client.get(
-            "/chart.html", {"window": 7, "locale": "en", "timezone": "UTC"}, secure=True,
+            "/chart.html", {"window": window, "locale": "en", "timezone": "UTC"}, secure=True,
         ))
     assert set(callers) == {"pulse", "chart"}
     assert callers["pulse"] != callers["chart"]

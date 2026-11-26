@@ -30,11 +30,11 @@ EACH_FACTS = MaterializationDefinition(
     ),
     lock_id=726_514_095,
     cutoff_sql="date_trunc('day', transaction_timestamp(), 'UTC') - interval '1 day'",
-    # The source SELECT alone has taken 83 seconds on the serving database;
-    # concurrent refresh also needs to reconcile and index the saved rows.
-    # Keep the bounded attempt within the 15-minute maintenance interval.
-    refresh_timeout="180s",
-    bootstrap_timeout="180s",
+    # Concurrent refresh includes the source SELECT, diff, and index updates.
+    # A three-minute attempt timed out under live load. The five-minute bound
+    # can leave little room for the other work in the 15-minute interval.
+    refresh_timeout="300s",
+    bootstrap_timeout="300s",
     refresh_work_mem="8MB",
     advance_barrier=True,
     online_refresh=True,

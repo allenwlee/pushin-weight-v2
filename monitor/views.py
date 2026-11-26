@@ -3623,7 +3623,7 @@ def _build_home_chart_payload(
 
     pulse_future = None
     if (
-        window_days == 7 and connection.vendor == "postgresql"
+        window_days in (7, 30, 365) and connection.vendor == "postgresql"
         and not connection.in_atomic_block and _HOME_PULSE_WORKER_SLOT.acquire(blocking=False)
     ):
         try:

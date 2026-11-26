@@ -63,6 +63,10 @@ def pulse_count_deadline(deadline: float):
         )
         previous, previous_ms = cursor.fetchone()
         def enforce_deadline(execute, sql, params, many, context):
+            # PostgreSQL must be allowed to roll back an aborted savepoint
+            # before any further SET or SELECT can run on the connection.
+            if sql.lstrip().upper().startswith(("SAVEPOINT ", "RELEASE SAVEPOINT ", "ROLLBACK TO SAVEPOINT ")):
+                return execute(sql, params, many, context)
             remaining_ms = int((deadline - monotonic()) * 1000)
             if remaining_ms <= 0:
                 raise DatabaseError("Pulse count deadline expired")

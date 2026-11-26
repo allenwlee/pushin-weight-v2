@@ -192,7 +192,7 @@ def test_each_online_refresh_preserves_concurrent_brand_identity_change():
 
     with connection.execute_wrapper(after_refresh):
         assert refresh_materialization(EACH_FACTS, force=True)['status'] == 'refreshed'
-    assert timeouts == ['3min']
+    assert timeouts == ['5min']
     state = MaterializationState.objects.get(pk='each.brand_post_facts.v1')
     assert state.source_generation > state.published_generation
     assert state.dirty_since.year == 1
