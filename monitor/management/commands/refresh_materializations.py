@@ -27,6 +27,15 @@ class Command(BaseCommand):
         for definition in registered_definitions():
             try:
                 results[definition.dataset_key] = refresh_materialization(definition)
+                if (definition.dataset_key == 'home.post_sentiment_facts.v2'
+                        and results[definition.dataset_key]['status'] == 'unavailable'):
+                    # A rollback may remove v2 before all new workers stop.
+                    from monitor.home_sentiment_counts import HOME_SENTIMENT_V1
+
+                    results[definition.dataset_key] = {
+                        **refresh_materialization(HOME_SENTIMENT_V1),
+                        'fallback_dataset': HOME_SENTIMENT_V1.dataset_key,
+                    }
             except Exception as error:  # noqa: BLE001 -- report failure, then attempt the next dataset.
                 failures.append(definition.dataset_key)
                 results[definition.dataset_key] = {

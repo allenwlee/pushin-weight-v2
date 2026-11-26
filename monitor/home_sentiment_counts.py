@@ -1,5 +1,7 @@
 """Daily sentiment counts from valid saved facts and live changes."""
 
+from dataclasses import replace
+
 from django.db import DatabaseError, connection, transaction
 
 from core.classification_contract import COMPATIBLE_TAXONOMY_VERSIONS, CONTRACT_VERSION
@@ -13,21 +15,29 @@ _MASK_TAXONOMIES = (
 )
 _MASK_KEYS = frozenset({"positive", "negative", "neutral", "mixed", _UNCLASSIFIED})
 HOME_SENTIMENT = MaterializationDefinition(
-    dataset_key="home.post_sentiment_facts.v1",
-    relation="home_post_sentiment_facts",
+    dataset_key="home.post_sentiment_facts.v2",
+    relation="home_post_sentiment_facts_v2",
     source_tables=(
         "brands", "posts", "posts_brands", "posts_brands_classification_states",
         "posts_brands_signals", "posts_untracked_brand_promotions", "posts_unsanctioned_flags",
     ),
     lock_id=726_514_097,
-    cutoff_sql="date_trunc('day', transaction_timestamp(), 'UTC') - interval '1 day'",
+    cutoff_sql=("date_bin('2 hours', transaction_timestamp(), "
+                "'2000-01-01 00:00:00+00'::timestamptz) - interval '15 minutes'"),
     refresh_timeout="300s", bootstrap_timeout="300s", refresh_work_mem="16MB",
     advance_barrier=True, online_refresh=True, online_barrier_attempts=61,
-    online_capability="home_sentiment_masks_v1",
+    online_capability="home_sentiment_masks_v2",
     online_dirty_ids_capability="each_facts_dirty_post_ids_v1",
     # A bounded number of changed Posts is cheaper to overlay live than to
     # rebuild the full summary every 15 minutes.
     dirty_refresh_threshold=384,
+)
+HOME_SENTIMENT_V1 = replace(
+    HOME_SENTIMENT,
+    dataset_key="home.post_sentiment_facts.v1",
+    relation="home_post_sentiment_facts",
+    cutoff_sql="date_trunc('day', transaction_timestamp(), 'UTC') - interval '1 day'",
+    online_capability="home_sentiment_masks_v1",
 )
 _MASK_FIELDS = "post_id,created_at,brands,unclassified,positive,negative,neutral,mixed,promotion_flag,legacy_flag"
 _FIELDS = (
@@ -136,17 +146,17 @@ def read_home_sentiment_counts(*, brand, sentiments, start, end, at, timezone_na
         raise
 
 
-def _mask_publication_details(cursor, start, end, at):
+def _mask_publication_details(cursor, start, end, at, definition):
     """Read the summary and its dirty IDs from the caller's stable snapshot."""
     # Reading the state table before checking the capability also prevents a
     # concurrent reverse migration from removing its columns mid-request.
     cursor.execute(
         """SELECT source_generation,published_generation,cutoff,dirty_since,dirty_post_ids,
                   COALESCE((SELECT relispopulated FROM pg_class
-                            WHERE oid=to_regclass('home_post_sentiment_facts')), FALSE),
-                  to_regprocedure('home_sentiment_masks_v1()') IS NOT NULL
+                            WHERE oid=to_regclass(%s)), FALSE),
+                  to_regprocedure(%s) IS NOT NULL
            FROM materialization_state WHERE dataset_key=%s""",
-        [HOME_SENTIMENT.dataset_key],
+        [definition.relation, definition.online_capability + '()', definition.dataset_key],
     )
     state = cursor.fetchone()
     if not state:
@@ -156,14 +166,15 @@ def _mask_publication_details(cursor, start, end, at):
         return start, None
     if source != published and dirty_since is None:
         return start, None
-    day = _publication_day(at)
     if dirty_ids is None and source != published:
         cutoff = min(cutoff, dirty_since)
-    return max(start, min(cutoff, day, end)), dirty_ids
+    boundary_limit = _publication_day(at) if definition == HOME_SENTIMENT_V1 else at
+    return max(start, min(cutoff, boundary_limit, end)), dirty_ids
 
 
 def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, start, end,
-                                         at, timezone_name, promotion_mode, legacy_mode):
+                                         at, timezone_name, promotion_mode, legacy_mode,
+                                         _prefer_v1=False):
     """Count associated brands after a Post matches any selected-brand sentiment.
 
     A versioned compact projection preserves current, legacy, orphan and
@@ -199,12 +210,29 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
             flag_predicates.append(f'NOT f.{column}')
         elif mode == 'only':
             flag_predicates.append(f'f.{column}')
+    used_v2 = False
     try:
         with transaction.atomic(), connection.cursor() as cursor:
             cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
-            boundary, dirty_ids = _mask_publication_details(cursor, start, end, at)
+            # This aggregate otherwise spills a large intermediate sort to
+            # disk on production-sized multi-brand windows. The setting is
+            # local to this read-only transaction.
+            cursor.execute("SET LOCAL work_mem = '32MB'")
+            definition = HOME_SENTIMENT_V1 if _prefer_v1 else HOME_SENTIMENT
+            boundary, dirty_ids = _mask_publication_details(cursor, start, end, at, definition)
+            if boundary <= start and not _prefer_v1:
+                definition = HOME_SENTIMENT_V1
+                boundary, dirty_ids = _mask_publication_details(cursor, start, end, at, definition)
+            elif not _prefer_v1 and dirty_ids is None:
+                # Overflow can make v2's exact saved prefix older than v1's.
+                old_boundary, old_dirty = _mask_publication_details(
+                    cursor, start, end, at, HOME_SENTIMENT_V1,
+                )
+                if old_boundary > boundary:
+                    definition, boundary, dirty_ids = HOME_SENTIMENT_V1, old_boundary, old_dirty
             if boundary <= start:
                 return None
+            used_v2 = definition == HOME_SENTIMENT
             dirty_cte = ''
             saved_filter = ''
             live = f'''SELECT {_MASK_FIELDS} FROM home_post_sentiment_facts_source
@@ -228,16 +256,21 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
                     SELECT %s::text[] COLLATE case_insensitive AS scope,
                            %s::varchar[] COLLATE case_insensitive AS outputs
                 ){dirty_cte}, facts AS (
-                    SELECT {_MASK_FIELDS} FROM home_post_sentiment_facts saved
+                    SELECT {_MASK_FIELDS} FROM {connection.ops.quote_name(definition.relation)} saved
                     WHERE saved.created_at >= %s AND saved.created_at < %s {saved_filter}
                     UNION ALL {live} {dirty}
                 )
-                SELECT b.nickname,(f.created_at AT TIME ZONE %s)::date,count(*)::bigint
-                FROM facts f CROSS JOIN cfg CROSS JOIN LATERAL unnest(f.brands) associated(brand_id)
+                SELECT b.nickname,g.day,sum(g.n)::bigint
+                FROM (
+                    SELECT (f.created_at AT TIME ZONE %s)::date AS day,
+                           f.brands COLLATE "C" AS brands,count(*) AS n
+                    FROM facts f CROSS JOIN cfg
+                    WHERE ({' OR '.join(predicates)})
+                      {''.join(' AND ' + p for p in flag_predicates)}
+                    GROUP BY 1,2
+                ) g CROSS JOIN cfg CROSS JOIN LATERAL unnest(g.brands) associated(brand_id)
                 JOIN brands b ON b.nickname=associated.brand_id COLLATE case_insensitive
                 WHERE NOT b.is_sentinel AND b.nickname=ANY(cfg.outputs)
-                  AND ({' OR '.join(predicates)})
-                  {''.join(' AND ' + p for p in flag_predicates)}
                 GROUP BY 1,2
             '''
             cursor.execute(sql, [brands or [], output_brands, *([dirty_ids] if dirty_ids else []),
@@ -249,6 +282,12 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
     except DatabaseError as error:
         # An older service can temporarily reconcile grants without knowing
         # these new views during a rolling deployment. Use the complete reader.
+        if sqlstate(error) in {'42501', '42P01', '55000'} and used_v2 and not _prefer_v1:
+            return read_home_multibrand_sentiment_counts(
+                brands=brands, output_brands=output_brands, sentiments=sentiments,
+                start=start, end=end, at=at, timezone_name=timezone_name,
+                promotion_mode=promotion_mode, legacy_mode=legacy_mode, _prefer_v1=True,
+            )
         if sqlstate(error) in {'42501', '42P01', '42703', '42883', '55000', '55P03'}:
             return None
         raise

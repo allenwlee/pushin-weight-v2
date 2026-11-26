@@ -16,6 +16,7 @@ def product_identity():
         ROOT / "core/models.py",
         ROOT / "core/materializations.py",
         ROOT / "core/migrations/0244_home_sentiment_masks.py",
+        ROOT / "core/migrations/0245_home_sentiment_recent_boundary.py",
         ROOT / "core/migrations/_home_sentiment_masks_v1.py",
         ROOT / "core/chart_engine.py",
         ROOT / "core/chart_engine_view.py",

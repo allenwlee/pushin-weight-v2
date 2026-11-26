@@ -10,7 +10,7 @@ from monitor.management.commands import refresh_materializations
 
 HOME = 'home.brand_time_counts.v1'
 EACH = 'each.brand_post_facts.v1'
-SENTIMENT = 'home.post_sentiment_facts.v1'
+SENTIMENT = 'home.post_sentiment_facts.v2'
 
 
 @pytest.mark.parametrize('failure', [None, HOME, EACH, SENTIMENT])

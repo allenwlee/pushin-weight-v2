@@ -120,19 +120,43 @@ def test_home_sentiment_falls_back_when_old_deploy_revokes_new_views(serving_log
 
     from django.utils import timezone
 
+    from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
     from core.materializations import refresh_materialization
-    from monitor.home_sentiment_counts import HOME_SENTIMENT, read_home_multibrand_sentiment_counts
-
-    assert refresh_materialization(HOME_SENTIMENT)['status'] == 'refreshed'
-    serving, role, _owner, _report = serving_login
-    now = timezone.now()
-    args = dict(
-        brands=['a', 'b'], output_brands=['a', 'b'], sentiments=['positive'],
-        start=now-timedelta(days=365), end=now, at=now, timezone_name='UTC',
-        promotion_mode='any', legacy_mode='any',
+    from core.models import Brand, PostBrand, PostBrandClassificationState, SentimentKey
+    from monitor.home_sentiment_counts import (
+        HOME_SENTIMENT,
+        HOME_SENTIMENT_V1,
+        read_home_multibrand_sentiment_counts,
     )
+
+    now = timezone.now()
+    brand = Brand.objects.create(nickname='a', accent_color='#001100')
+    Brand.objects.create(nickname='b', accent_color='#002200')
+    SentimentKey.objects.get_or_create(key='positive')
+    post = Post.objects.create(tweet_id='summary-grant-fixture', created_at=now-timedelta(days=3))
+    PostBrand.objects.create(post=post, brand=brand)
+    PostBrandClassificationState.objects.create(
+        post=post, brand=brand, contract_version=CONTRACT_VERSION,
+        taxonomy_version=TAXONOMY_VERSION, prompt_version='fixture', model='fixture',
+        input_context_fingerprint='a'*64, outcome='classified', sentiment_id='positive',
+    )
+    assert refresh_materialization(HOME_SENTIMENT)['status'] == 'refreshed'
+    assert refresh_materialization(HOME_SENTIMENT_V1)['status'] == 'refreshed'
+    serving, role, _owner, _report = serving_login
+    args = {
+        'brands': ['a', 'b'], 'output_brands': ['a', 'b'], 'sentiments': ['positive'],
+        'start': now-timedelta(days=365), 'end': now, 'at': now, 'timezone_name': 'UTC',
+        'promotion_mode': 'any', 'legacy_mode': 'any',
+    }
     with patch.object(connections['default'], 'connection', serving):
-        assert read_home_multibrand_sentiment_counts(**args) is not None
+        expected = read_home_multibrand_sentiment_counts(**args)
+        assert expected is not None and sum(row['count'] for row in expected) > 0
+    with connection.cursor() as cursor:
+        cursor.execute(sql.SQL('REVOKE ALL ON {} FROM {}').format(
+            sql.Identifier('home_post_sentiment_facts_v2'), sql.Identifier(role)))
+    with patch.object(connections['default'], 'connection', serving):
+        # Losing only the new grant still uses the retained v1 summary.
+        assert read_home_multibrand_sentiment_counts(**args) == expected
     with connection.cursor() as cursor:
         for name in ('home_post_sentiment_facts', 'home_post_sentiment_facts_source'):
             cursor.execute(sql.SQL('REVOKE ALL ON {} FROM {}').format(sql.Identifier(name), sql.Identifier(role)))

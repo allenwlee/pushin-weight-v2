@@ -33,6 +33,7 @@ SOURCE_PATHS = (
     "project/settings.py",
     "core/models.py", "core/classification_readers.py", "core/materializations.py",
     "core/migrations/0244_home_sentiment_masks.py", "core/migrations/_home_sentiment_masks_v1.py",
+    "core/migrations/0245_home_sentiment_recent_boundary.py",
     "monitor/views.py", "monitor/urls.py", "monitor/each_chart_facts.py",
     "x_monitor/translator.py",
     "monitor/each_headline.py", "monitor/each_request_budget.py",

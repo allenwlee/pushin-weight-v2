@@ -42,10 +42,11 @@ def test_reverse_guard_rejects_an_in_flight_online_refresh():
     assert observed == ["55P03"]
 
 
-def test_new_online_refresher_refuses_reversed_tracking_migration():
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0245_home_sentiment_recent_boundary")], indirect=True)
+def test_new_online_refresher_refuses_reversed_tracking_migration(migration_rehearsal_schema):
     executor = MigrationExecutor(connection)
     executor.migrate([("core", PREVIOUS)])
     try:
         assert refresh_materialization(EACH_FACTS, force=True) == {"status": "unavailable"}
     finally:
-        MigrationExecutor(connection).migrate([("core", "0244_home_sentiment_masks")])
+        MigrationExecutor(connection).migrate([("core", "0245_home_sentiment_recent_boundary")])
