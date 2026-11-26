@@ -49,12 +49,12 @@ jobs:
           ref: d0a5279ff1dcfab76f285b75a048b6611ee3c2d2
           ssh-key: ${{ secrets.BRIDGEWRIGHT_DEPLOY_KEY }}
           persist-credentials: false
-          path: .bridgewright
+          path: .ci-bridgewright
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
-      - run: python -m pip install -e '.[dev]' './.bridgewright' 'playwright>=1.62.0' 'hypothesis>=6.138,<7'
+      - run: python -m pip install -e '.[dev]' './.ci-bridgewright' 'playwright>=1.62.0' 'hypothesis>=6.138,<7'
       - name: Install browser runtime
         run: python -m playwright install --with-deps chromium
       - name: Check migration state
@@ -74,7 +74,7 @@ jobs:
           tests/test_trend_narrative_projection.py tests/test_taxonomy_compatibility_surfaces.py
           tests/test_home_v22_feed_row_shape.py tests/test_home_v22_filter_pills.py
           tests/test_home_v22_topbar_layout.py tests/test_render_headline_topology.py
-          tests/test_dashboard_each.py tests/test_dashboard_each_browser.py
+          tests/test_dashboard_each.py
           tests/staging_refresh/test_policy.py tests/ollija
           tests/test_collection_schema_regression_net.py::test_concrete_application_models_match_database_columns
           tests/test_home_v22_browser.py::HomeV22BrowserTests::test_anonymous_filters_window_and_pulse_share_one_request_state

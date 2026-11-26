@@ -743,6 +743,15 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
                     browser, self.live_server_url,
                     viewport={"width": 1440, "height": 960}, reduced_motion="reduce",
                 )
+                # The feed has its own 60-second refresh. Keep the chart's
+                # zero-request assertion independent of that unrelated timer.
+                run.context.add_init_script("""(() => {
+                  const original = window.setInterval;
+                  window.setInterval = function(callback, delay, ...args) {
+                    if (delay === 60000 && callback.name === 'refreshFirstPage') return 0;
+                    return original.call(this, callback, delay, ...args);
+                  };
+                })();""")
                 page = run.page
                 received = []
                 requests = []
@@ -934,7 +943,7 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
                                         "tooltip_keys": tooltip_keys, "tooltip": tooltip,
                                         "request_count": request_count, "traces": [],
                                     }
-                                    def observe(category=category, other=other):
+                                    def observe(category=category, other=other, request_count=request_count):
                                         observed = page.evaluate(emphasis_state)
                                         controls = page.evaluate("""() => ({
                                           pin: document.querySelector('[data-each-category][aria-pressed="true"]')?.dataset.eachCategory || null,
@@ -948,6 +957,7 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
                                             "mode": controls["mode"],
                                         }
                                         observed["request_count"] = len(requests)
+                                        self.assertEqual(len(requests), request_count, requests[request_count:])
                                         return observed
 
                                     def move_hover(value, button=button, other_button=other_button):

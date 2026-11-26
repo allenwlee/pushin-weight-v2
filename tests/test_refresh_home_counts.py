@@ -477,6 +477,84 @@ def test_home_online_refresh_does_not_queue_behind_inflight_brand_writer(monkeyp
     assert refresh_home_counts()["status"] == "refreshed"
 
 
+def test_online_marker_commits_with_writer_barrier_before_refresh():
+    from monitor.home_count_summary import refresh_home_counts
+
+    post = history()
+    assert refresh_home_counts()["status"] == "refreshed"
+    Post.objects.filter(pk=post.pk).update(created_at=timezone.now() - timedelta(days=3))
+    transactions = {}
+
+    def capture(execute, sql, params, many, context):
+        result = execute(sql, params, many, context)
+        if sql.startswith((
+            "LOCK TABLE", "UPDATE materialization_state SET refresh_generation = %s",
+        )):
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT txid_current()")
+                transactions["barrier" if sql.startswith("LOCK TABLE") else "marker"] = cursor.fetchone()[0]
+        if sql.startswith("REFRESH MATERIALIZED VIEW"):
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT txid_current()")
+                transactions["refresh"] = cursor.fetchone()[0]
+        return result
+
+    with connection.execute_wrapper(capture):
+        assert refresh_home_counts()["status"] == "refreshed"
+    assert transactions["barrier"] == transactions["marker"]
+    assert transactions["refresh"] != transactions["marker"]
+
+
+def test_online_barrier_releases_source_locks_when_state_row_is_busy(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from django.db import connections, transaction
+
+    from core import materializations
+    from monitor.home_count_summary import refresh_home_counts
+
+    history()
+    assert refresh_home_counts()["status"] == "refreshed"
+    entered, release = Event(), Event()
+    attempts = []
+
+    def hold_state():
+        db = connections["default"]
+        try:
+            with transaction.atomic(), db.cursor() as cursor:
+                cursor.execute(
+                    "SELECT 1 FROM materialization_state WHERE dataset_key = %s FOR UPDATE",
+                    ["home.brand_time_counts.v1"],
+                )
+                entered.set()
+                assert release.wait(10)
+        finally:
+            db.close()
+
+    def check_no_source_locks(delay):
+        assert delay == 0.2
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT count(*) FROM pg_locks WHERE pid = pg_backend_pid() "
+                "AND mode = 'ShareLock' AND relation IN "
+                "(to_regclass('posts'), to_regclass('posts_brands'))"
+            )
+            assert cursor.fetchone()[0] == 0
+        attempts.append(delay)
+
+    monkeypatch.setattr(materializations.time, "sleep", check_no_source_locks)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        writer = pool.submit(hold_state)
+        try:
+            assert entered.wait(5)
+            assert refresh_home_counts()["status"] == "busy"
+        finally:
+            release.set()
+        writer.result(timeout=5)
+    assert len(attempts) == 9
+
+
 def test_a_second_maintenance_process_reports_busy_without_refreshing():
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event

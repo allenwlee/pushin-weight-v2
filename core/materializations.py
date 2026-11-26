@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 
 from django.db import DatabaseError, connection, transaction
@@ -243,45 +243,60 @@ def _refresh_materialization_online(
     try:
         if not _initialize(definition):
             return {"status": "busy"}
-        ready, barrier_target = _prepare_advance(replace(definition, advance_barrier=True))
-        if not ready:
-            return {"status": "busy"}
-
-        # This transaction commits before the refresh statement takes its
-        # snapshot. Source writers record a second dirty boundary from here on.
-        with transaction.atomic(), connection.cursor() as cursor:
-            cursor.execute("SET LOCAL lock_timeout = '2s'")
-            populated = is_populated(cursor, definition)
-            target_sql = "%s::timestamptz" if barrier_target is not None else definition.cutoff_sql
-            parameters = (
-                [barrier_target, definition.dataset_key]
-                if barrier_target is not None else [definition.dataset_key]
-            )
+        # Freeze the view cutoff before the short source-writer barrier.
+        with connection.cursor() as cursor:
             cursor.execute(
-                f"SELECT source_generation, {HISTORY_CLEAN_SQL}, cutoff, "
-                f"{target_sql} FROM materialization_state WHERE dataset_key = %s FOR UPDATE",
-                parameters,
+                f"SELECT {definition.cutoff_sql} FROM materialization_state "
+                "WHERE dataset_key = %s",
+                [definition.dataset_key],
             )
             state = cursor.fetchone()
-            if state is None:
-                return {"status": "unavailable"}
-            generation, clean, cutoff, target = state
-            if barrier_target is not None and cutoff is not None and cutoff > target:
-                return {"status": "busy"}
-            if populated and clean and cutoff == target and not force:
-                # A crashed refresher may have left its marker behind. The
-                # advisory lock proves no other refresh is still using it.
-                cursor.execute(
-                    "UPDATE materialization_state SET refresh_generation = NULL, "
-                    "refresh_dirty_since = NULL WHERE dataset_key = %s",
-                    [definition.dataset_key],
-                )
-                return {"status": "skipped", "cutoff": cutoff.isoformat()}
-            cursor.execute(
-                "UPDATE materialization_state SET refresh_generation = %s, "
-                "refresh_dirty_since = NULL WHERE dataset_key = %s",
-                [generation, definition.dataset_key],
-            )
+        if state is None:
+            return {"status": "unavailable"}
+        barrier_target = state[0]
+        tables = ", ".join(
+            connection.ops.quote_name(table) for table in definition.source_tables
+        )
+
+        # The marker and the writer barrier must commit together. A writer
+        # starting after this commit will see the marker in its trigger.
+        for attempt in range(10):
+            try:
+                with transaction.atomic(), connection.cursor() as cursor:
+                    cursor.execute(f"LOCK TABLE {tables} IN SHARE MODE NOWAIT")
+                    populated = is_populated(cursor, definition)
+                    cursor.execute(
+                        f"SELECT source_generation, {HISTORY_CLEAN_SQL}, cutoff "
+                        "FROM materialization_state WHERE dataset_key = %s FOR UPDATE NOWAIT",
+                        [definition.dataset_key],
+                    )
+                    state = cursor.fetchone()
+                    if state is None:
+                        return {"status": "unavailable"}
+                    generation, clean, cutoff = state
+                    target = barrier_target
+                    if cutoff is not None and cutoff > target:
+                        return {"status": "busy"}
+                    if populated and clean and cutoff == target and not force:
+                        # A crashed refresher may have left its marker behind.
+                        cursor.execute(
+                            "UPDATE materialization_state SET refresh_generation = NULL, "
+                            "refresh_dirty_since = NULL WHERE dataset_key = %s",
+                            [definition.dataset_key],
+                        )
+                        return {"status": "skipped", "cutoff": cutoff.isoformat()}
+                    cursor.execute(
+                        "UPDATE materialization_state SET refresh_generation = %s, "
+                        "refresh_dirty_since = NULL WHERE dataset_key = %s",
+                        [generation, definition.dataset_key],
+                    )
+                break
+            except DatabaseError as error:
+                if sqlstate(error) != "55P03":
+                    raise
+                if attempt == 9:
+                    return {"status": "busy"}
+                time.sleep(0.2)
         marker_set = True
 
         with transaction.atomic(), connection.cursor() as cursor:
