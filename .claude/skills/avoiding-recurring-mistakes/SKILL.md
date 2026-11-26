@@ -128,6 +128,8 @@ Definition of Done:
   - Rate metric returns to baseline (query: …)
 ```
 
+For backend changes that affect an interactive view, use [Verify affected selections](../fix-ui/SKILL.md#verify-affected-selections) to choose the browser action and workload.
+
 Public templates/static assets contain product content only; put implementation notes in plans/docs. For UI, trace URL → view → template → static assets → runtime endpoint and assert rendered output/DOM; source/structural/screenshot checks complement it. Prod queries go through Render CLI, not direct psql — see `reference_pushinweight_prod_db_via_render_cli.md`.
 
 ---
@@ -485,7 +487,7 @@ authorize retiring tables or migrating business data without task scope.
 | M2 | Volunteering unrequested deliverables | Don't offer extras; reuse and refactor work is part of the task |
 | M3 | Scope ambiguity | Repeat keep/revert list back BEFORE acting |
 | M4 | Parallel-session collision | `git fetch` + check `feat/*` branches before merging |
-| M5 | Verification as retrofit | Name risk-specific proof; public UI needs real rendered route/DOM evidence |
+| M5 | Verification as retrofit | Name risk-specific proof and exercise the affected UI selection under the changed workload |
 | M6 | False choice | Recommend the right option; don't ask permission for the obvious |
 | M7 | Re-inventing harvest/cycle | Refactor shared code; don't write parallel pipelines |
 | M8 | Missing shared-resource concurrency guards | Cap API work; test multi-runner DB/deploy behavior; never block advisory-lock waiters around concurrent DDL |

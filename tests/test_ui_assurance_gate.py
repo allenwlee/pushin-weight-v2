@@ -40,7 +40,13 @@ def candidate_args(mode="candidate", target=SOURCE):
 @pytest.fixture
 def runners(monkeypatch, tmp_path):
     calls = []
+    monkeypatch.setattr(gate, "ROOT", tmp_path)
     monkeypatch.setattr(gate, "EVIDENCE_PATH", tmp_path / "evidence.json")
+    monkeypatch.setattr(gate, "EACH_EVIDENCE_PATH", tmp_path / "each-evidence.json")
+    monkeypatch.setattr(gate, "EACH_RUNTIME_PATH", tmp_path / "each-runtime.json")
+    monkeypatch.setattr(gate, "candidate_declaration", lambda root, revision: "bound.json")
+    monkeypatch.setattr(gate, "require_candidate_checkout", lambda root, revision: None)
+    monkeypatch.setattr(gate, "assess_each_runtime", lambda: SimpleNamespace(status="clean"))
     monkeypatch.setattr(
         gate,
         "build_evidence",

@@ -1,11 +1,19 @@
 ---
 name: fix-ui
-description: Use when fixing a visible UI defect, mockup mismatch, layout or style regression, broken browser interaction, locale-visible copy issue, or staging/production visual discrepancy in pushin-weight-v2.
+description: Use when fixing a visible UI defect, mockup mismatch, layout or style regression, broken browser interaction, locale-visible copy issue, or staging/production visual discrepancy in pushin-weight-v2. Also use the affected-selection guidance for backend changes that alter the data or workload behind an interactive view.
 ---
 
 # Fix UI — pushin-weight-v2
 
 Turn a reported visible defect into a minimal, verified fix that cannot silently regress.
+
+## Verify affected selections
+
+Trace the changed data or workload to the page that reads it. Pick a representative action involving time range, subject (brand, product or release), or classification. Exercise the affected combination when the risk depends on two controls together. Use the existing browser case for that page where possible.
+
+Reproduce the condition the change introduces, such as a historical correction, an uncached read or concurrent writes. Compare the current and proposed behavior under comparable conditions. Measure from the first user action until the correct result is visible. Check the selected values, resulting data, elapsed time against the page’s target, and agreement among the outputs that follow that control. Keep the other selections in place. When requests can overlap, check that the latest selection wins. When a refresh fails, the page must identify the result still on screen.
+
+If the proposed workload makes a user action fail or materially slower, the backend change owns coordinating the repair before or alongside rollout. Record an equally reproducible, independent defect separately. Keep the expected data and timing assertions in PushinWeight’s tests. Reuse the existing Bridgewright coverage for the affected interactions.
 
 ## Help the user report the right thing
 

@@ -220,8 +220,11 @@ def test_shared_state_migration_preserves_publication_and_guards_other_datasets(
         "refreshed_at": timezone.now(),
     }
     old_state.objects.update_or_create(pk=1, defaults=values)
-    MigrationExecutor(connection).migrate([new_target])
-    from core.models import MaterializationState
+    executor = MigrationExecutor(connection)
+    executor.migrate([new_target])
+    MaterializationState = executor.loader.project_state([new_target]).apps.get_model(
+        "core", "MaterializationState"
+    )
 
     row = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
     assert {name: getattr(row, name) for name in values} == values

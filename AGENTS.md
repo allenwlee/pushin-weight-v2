@@ -70,6 +70,15 @@ locale-visible copy, or visual regression, read and follow
 `.claude/skills/fix-ui/SKILL.md`. This applies to every agent working in this
 repository, including Claude Code and Codex.
 
+When backend work changes the data, freshness, volume or concurrency behind
+an interactive view, follow [Verify affected selections](.claude/skills/fix-ui/SKILL.md#verify-affected-selections)
+even when the change touches only backend files.
+
+For a direct production release affecting homepage counts or their data, run
+the Homepage counts regression net workflow on the candidate branch before
+promotion and verify the successful run belongs to the candidate commit. Pull
+requests run the same workflow automatically when matching paths change.
+
 ## Harvester changes
 
 **Live-operation continuity is a release invariant.** Do not pause, suspend,

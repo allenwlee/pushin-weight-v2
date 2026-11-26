@@ -11,7 +11,11 @@ from pathlib import Path
 
 from tests.ui_assurance.each import (
     EVIDENCE_PATH as EACH_EVIDENCE_PATH,
+)
+from tests.ui_assurance.each import (
     RUNTIME_PATH as EACH_RUNTIME_PATH,
+)
+from tests.ui_assurance.each import (
     assess_each_runtime,
 )
 from tests.ui_assurance.evidence import build_evidence
@@ -52,6 +56,9 @@ FOCUSED_TESTS = [
     "tests/test_views.py",
     "tests/test_home_v22_filter_pills.py",
     "tests/test_home_v22_feed_row_shape.py",
+    "tests/test_home_v22_browser.py::PublicTrackedBrandsBrowserTests::test_descending_windows_and_timeout_feedback_use_one_click",
+    "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_long_window_switches_commit_before_the_client_timeout",
+    "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_anonymous_filters_window_and_pulse_share_one_request_state",
     "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_stage1_taxonomy_filters_round_trip_without_cross_brand_product_matches",
     "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_multibrand_product_filter_and_brand_page_keep_brand_provenance",
     "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_classification_states_render_without_fabricated_taxonomy",
@@ -84,7 +91,6 @@ FULL_ADDITIONAL_TESTS = [
     "tests/test_home_chart_pulse.py",
     "tests/test_home_v22_topbar_layout.py",
     "tests/test_ui_assurance_brand_inventory.py",
-    "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_anonymous_filters_window_and_pulse_share_one_request_state",
     "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_locale_autonyms_footer_and_legacy_original_normalization",
     "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_v24_locale_and_window_controls_keep_geometry_and_copy",
     "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_mobile_locale_toggle_stays_inside_title_row",

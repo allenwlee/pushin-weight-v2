@@ -33,6 +33,7 @@ HOME_COUNTS = MaterializationDefinition(
     ),
     lock_id=REFRESH_LOCK,
     cutoff_sql="date_trunc('day', transaction_timestamp(), 'UTC')",
+    online_refresh=True,
 )
 
 
@@ -61,7 +62,7 @@ def read_home_counts(
     """Read one SQL snapshot of valid history plus its exact live tail.
 
     Reuse the unchanged prefix and recount the first dirty bucket onward live.
-    Return None without a usable publication/prefix, distinct from an empty result.
+    Return None without a usable publication, distinct from an empty result.
     Comparisons count partial first/midpoint buckets from source, keeping their
     rolling boundaries exact. Daily chart callers validate local midnights.
     """
@@ -95,9 +96,9 @@ def read_home_counts(
             WHERE dataset_key = %s AND cutoff >= %s
             AND published_generation IS NOT NULL
             AND (source_generation = published_generation OR dirty_since IS NOT NULL)
-        ) publication WHERE clean OR boundary > %s
+        ) publication WHERE clean OR boundary > TIMESTAMPTZ '0001-01-01 00:00:00+00'
     """
-    health_params = [day, HOME_COUNTS.dataset_key, day, start]
+    health_params = [day, HOME_COUNTS.dataset_key, day]
     try:
         # A catalog/lifecycle preflight avoids taking a read lock on an initially
         # unpopulated view while its first ordinary REFRESH is running.
@@ -129,21 +130,22 @@ def read_home_counts(
             else:
                 group_sql = "(bucket_start >= %s)"
                 group_params = [midpoint]
-            partial = saved_start != start or split_end != split_start
+            # Give PostgreSQL a bounded timestamp scan for each uncovered range.
+            # A full rolling-window predicate can drive the join from every post-brand link.
+            live_ranges = [(max(start, boundary), end)]
+            if saved_start != start:
+                live_ranges.append((start, min(saved_start, end)))
             saved_edge_sql = ""
             saved_edge_params = []
-            live_edge_sql = ""
-            live_edge_params = []
-            if partial:
+            if split_start != split_end:
                 saved_edge_sql = "AND NOT (bucket_start >= %s AND bucket_start < %s)"
                 saved_edge_params = [split_start, split_end]
-                live_edge_sql = (
-                    "AND (p.created_at >= %s OR p.created_at < %s "
-                    "OR (p.created_at >= %s AND p.created_at < %s))"
-                )
-                live_edge_params = [boundary, saved_start, split_start, split_end]
-            # Supply a concrete date for the planner's live-tail selectivity.
-            # Recheck its validity in the count statement's MVCC snapshot: an
+                live_ranges.append((max(start, split_start), min(split_end, end)))
+            live_range_sql = " OR ".join(
+                "(p.created_at >= %s AND p.created_at < %s)" for _ in live_ranges
+            )
+            live_range_params = [timestamp for interval in live_ranges for timestamp in interval]
+            # Recheck the publication boundary in the count statement's MVCC snapshot: an
             # earlier concurrent correction forces the exact-source fallback.
             cursor.execute(
                 f"""
@@ -159,14 +161,19 @@ def read_home_counts(
                     {flag_sql}
                     UNION ALL
                     SELECT b.nickname, p.created_at, 1::bigint
-                    FROM health, posts_brands pb
-                    JOIN posts p ON p.tweet_id = pb.post_id
+                    FROM health, posts p
+                    -- Keep the indexed link lookup per post even after historical corrections
+                    -- widen the live tail. OFFSET 0 prevents flattening this lateral join.
+                    CROSS JOIN LATERAL (
+                        SELECT brand_id FROM posts_brands
+                        WHERE post_id = p.tweet_id
+                        OFFSET 0
+                    ) pb
                     JOIN brands b ON b.nickname = pb.brand_id
                     LEFT JOIN posts_unsanctioned_flags f ON f.post_id = p.tweet_id
                     LEFT JOIN posts_untracked_brand_promotions u ON u.post_id = p.tweet_id
                     WHERE b.nickname = ANY(%s::varchar[] COLLATE case_insensitive)
-                    AND p.created_at >= %s AND p.created_at < %s
-                    {live_edge_sql}
+                    AND ({live_range_sql})
                     {raw_flag_sql}
                 ), grouped AS (
                     SELECT brand_id, {group_sql} AS bucket, sum(n)::bigint AS count
@@ -183,9 +190,7 @@ def read_home_counts(
                     min(boundary, end),
                     *saved_edge_params,
                     brand_ids,
-                    start if partial else max(start, boundary),
-                    end,
-                    *live_edge_params,
+                    *live_range_params,
                     *group_params,
                 ],
             )

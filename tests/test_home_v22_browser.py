@@ -3314,6 +3314,19 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         "fixture feed IDs and chart totals must change together",
                     )
 
+                    feed_response, _ = act(page.locator("[data-pw-window-btn='7']").click)
+                    filters, window = request_state(feed_response.url)
+                    self.assertEqual(window, 7)
+                    self.assertNotIn("positive", filters["sentiment"])
+                    page.wait_for_function(
+                        "() => { const chart = JSON.parse(document.querySelector('canvas.home-chart').dataset.home); return chart.window_days === 7 && !chart.applied_filters.sentiment.includes('positive') && Number(document.querySelector('[data-pw-pulse]').dataset.pwWindow) === 7; }"
+                    )
+                    chart_payload = page.evaluate(
+                        "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home)"
+                    )
+                    self.assertEqual(sum(chart_payload["totals"].values()), len(feed_response.json()["rows"]))
+                    act(page.locator("[data-pw-window-btn='1']").click)
+
                     sentiment_pill.press("Escape")
                     residuals_by_group = {
                         "sentiment": ["__unclassified__"],
@@ -3348,6 +3361,11 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         self.assertEqual(selected[group], [])
                         page.locator(f'[data-group="{group}"]').press("Escape")
 
+                    for group in residuals_by_group:
+                        page.locator(f'[data-group="{group}"]').press("Enter")
+                        act(dropdown.locator('[data-dd-action="all"]').click)
+                        page.locator(f'[data-group="{group}"]').press("Escape")
+
                     pulse = page.locator("[data-pw-pulse-entry]").first
                     self.assertEqual(pulse.evaluate("element => element.parentElement.tagName"), "LI")
                     self.assertEqual(pulse.get_attribute("aria-pressed"), "false")
@@ -3363,6 +3381,21 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     checked_brands = page.locator('[data-pw-filter-group="brands"]:checked')
                     self.assertEqual(checked_brands.count(), 1)
                     self.assertEqual(checked_brands.first.get_attribute("value"), nickname)
+
+                    feed_response, _ = act(page.locator("[data-pw-window-btn='7']").click)
+                    filters, window = request_state(feed_response.url)
+                    self.assertEqual(window, 7)
+                    self.assertEqual(filters["brands"], [nickname])
+                    page.wait_for_function(
+                        "nickname => { const chart = JSON.parse(document.querySelector('canvas.home-chart').dataset.home); return chart.window_days === 7 && chart.applied_filters.brands.includes(nickname) && Number(document.querySelector('[data-pw-pulse]').dataset.pwWindow) === 7; }",
+                        arg=nickname,
+                    )
+                    chart_payload = page.evaluate(
+                        "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home)"
+                    )
+                    self.assertGreater(sum(chart_payload["totals"].values()), 0)
+                    self.assertEqual(sum(chart_payload["totals"].values()), len(feed_response.json()["rows"]))
+                    act(page.locator("[data-pw-window-btn='1']").click)
 
                     act(lambda: page.locator(f'[data-pw-pulse-entry="{nickname}"]').press("Enter"))
                     self.assertEqual(page.evaluate("() => window.pwFilter.get().brands"), "__all__")

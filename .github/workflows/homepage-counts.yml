@@ -23,7 +23,7 @@ concurrency:
 jobs:
   postgres-regressions:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:18
@@ -42,11 +42,19 @@ jobs:
       STAFF_COLLECTION_NETWORK_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
+      - name: Check out Bridgewright
+        uses: actions/checkout@v4
+        with:
+          repository: allenwlee/bridgewright
+          ref: d0a5279ff1dcfab76f285b75a048b6611ee3c2d2
+          ssh-key: ${{ secrets.BRIDGEWRIGHT_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .bridgewright
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
-      - run: python -m pip install -e '.[dev]' 'playwright>=1.62.0'
+      - run: python -m pip install -e '.[dev]' './.bridgewright' 'playwright>=1.62.0'
       - name: Install browser runtime
         run: python -m playwright install --with-deps chromium
       - name: Check migration state
@@ -60,6 +68,8 @@ jobs:
           tests/test_home_count_render_config.py tests/test_public_home_window_cookie.py
           tests/test_reader_stylesheets.py
           tests/test_home_v22_browser.py::PublicTrackedBrandsBrowserTests::test_one_meta_deselection_recovers_from_script_and_chart_gateway_errors
+          tests/test_home_v22_browser.py::PublicTrackedBrandsBrowserTests::test_descending_windows_and_timeout_feedback_use_one_click
+          tests/test_home_v22_browser.py::HomeV22BrowserTests::test_long_window_switches_commit_before_the_client_timeout
           tests/test_enrichment_worker.py::test_claim_allows_visible_synthesis_demand_to_commit
           tests/test_trend_narrative_projection.py tests/test_taxonomy_compatibility_surfaces.py
           tests/test_home_v22_feed_row_shape.py tests/test_home_v22_filter_pills.py
@@ -69,6 +79,13 @@ jobs:
           tests/test_collection_schema_regression_net.py::test_concrete_application_models_match_database_columns
           tests/test_home_v22_browser.py::HomeV22BrowserTests::test_anonymous_filters_window_and_pulse_share_one_request_state
           tests/test_home_v22_browser.py::HomeV22BrowserTests::test_per_brand_narratives_render_bilingually_as_semantic_cards
+          tests/test_ui_assurance_gate.py
+      - name: Bridgewright candidate interaction assurance
+        run: >-
+          python -m tests.ui_assurance.gate --scope candidate
+          --candidate-revision "$GITHUB_SHA"
+          --performance-mode not-required
+          --performance-rationale "Candidate performance is measured separately against representative data before production."
       - name: Browser projection and timezone regressions
         run: |
           node tests/test_pw_chart_filter.js

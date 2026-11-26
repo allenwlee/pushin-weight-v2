@@ -202,7 +202,8 @@ def test_live_day_write_does_not_dirty_history_or_force_an_extra_refresh():
     assert rows is not None and sum(row["count"] for row in rows) == 2
 
 
-def test_concurrent_historical_commit_cannot_publish_clean_and_does_not_wait_for_counting():
+@pytest.mark.parametrize("write_kind", ["recent", "historic", "global"])
+def test_concurrent_write_is_preserved_after_publication_without_blocking(write_kind):
     from concurrent.futures import ThreadPoolExecutor
 
     from django.db import connections
@@ -211,6 +212,7 @@ def test_concurrent_historical_commit_cannot_publish_clean_and_does_not_wait_for
 
     post = history()
     assert run_refresh()["status"] == "refreshed"
+    global_brand = Brand.objects.create(nickname="global-invalidation")
     old = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
     Post.objects.filter(pk=post.pk).update(
         created_at=timezone.now() - timedelta(days=3)
@@ -227,11 +229,14 @@ def test_concurrent_historical_commit_cannot_publish_clean_and_does_not_wait_for
                 )
                 observed.append(cursor.fetchone()[0])
             # This commit must finish while REFRESH's transaction remains open.
-            extra = Post.objects.create(
-                tweet_id="concurrent-history",
-                created_at=timezone.now() - timedelta(days=2),
-            )
-            PostBrand.objects.create(post=extra, brand_id="refresh-test")
+            if write_kind == "global":
+                Brand.objects.filter(pk=global_brand.pk).update(nickname="GLOBAL-INVALIDATION")
+            else:
+                extra = Post.objects.create(
+                    tweet_id="concurrent-" + write_kind,
+                    created_at=timezone.now() - timedelta(days=2 if write_kind == "historic" else 0),
+                )
+                PostBrand.objects.create(post=extra, brand_id="refresh-test")
         finally:
             db.close()
 
@@ -243,15 +248,23 @@ def test_concurrent_historical_commit_cannot_publish_clean_and_does_not_wait_for
         return result
 
     with connection.execute_wrapper(after_refresh):
-        assert refresh_home_counts()["status"] == "changed"
+        assert refresh_home_counts()["status"] == "refreshed"
     assert observed == [1], (
         "reader must see the previous committed view without blocking"
     )
     state = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
-    assert state.published_generation == old.published_generation
+    assert state.published_generation > old.published_generation
     assert state.source_generation > state.published_generation
     assert state.cutoff == old.cutoff
-    assert run_refresh()["status"] == "refreshed"
+    assert state.refresh_generation is None
+    assert state.refresh_dirty_since is None
+    if write_kind == "global":
+        assert state.dirty_since.year == 1
+    elif write_kind == "historic":
+        assert state.dirty_since < state.cutoff
+    else:
+        assert state.dirty_since >= state.cutoff
+    assert run_refresh()["status"] == ("skipped" if write_kind == "recent" else "refreshed")
     assert (
         MaterializationState.objects.get(
             pk="home.brand_time_counts.v1"
@@ -278,6 +291,10 @@ def test_publication_exception_rolls_back_the_refresh_and_leaves_source_rows():
     ):
         run_refresh()
     assert Post.objects.filter(pk=post.pk).exists()
+    failed_state = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
+    assert failed_state.refresh_generation is None
+    assert failed_state.refresh_dirty_since is None
+    assert failed_state.dirty_since is not None
     assert (
         MaterializationState.objects.get(
             pk="home.brand_time_counts.v1"
@@ -290,6 +307,174 @@ def test_publication_exception_rolls_back_the_refresh_and_leaves_source_rows():
         )
         assert cursor.fetchone()[0] == 1
     assert run_refresh()["status"] == "refreshed"
+
+
+def test_failed_refresh_preserves_concurrent_writer_and_original_dirty_boundary():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import connections
+
+    post = history()
+    assert run_refresh()["status"] == "refreshed"
+    Post.objects.filter(pk=post.pk).update(created_at=timezone.now() - timedelta(days=4))
+    before = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
+
+    def writer():
+        db = connections["default"]
+        try:
+            extra = Post.objects.create(
+                tweet_id="failed-refresh-writer", created_at=timezone.now() - timedelta(days=8)
+            )
+            PostBrand.objects.create(post=extra, brand_id="refresh-test")
+        finally:
+            db.close()
+
+    def crash(execute, sql, params, many, context):
+        result = execute(sql, params, many, context)
+        if sql.startswith("REFRESH MATERIALIZED VIEW") and "home_brand_time_counts" in sql:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(writer).result(timeout=5)
+            raise RuntimeError("publication fault after concurrent commit")
+        return result
+
+    with connection.execute_wrapper(crash), pytest.raises(CommandError):
+        run_refresh()
+    state = MaterializationState.objects.get(pk=before.pk)
+    assert Post.objects.filter(pk="failed-refresh-writer").exists()
+    assert state.published_generation == before.published_generation
+    assert state.dirty_since < before.dirty_since
+    assert state.refresh_generation is None
+    assert state.refresh_dirty_since is None
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT sum(post_count) FROM home_brand_time_counts WHERE brand_id = 'refresh-test'"
+        )
+        assert cursor.fetchone()[0] == 1
+    assert run_refresh()["status"] == "refreshed"
+
+
+def test_stale_refresh_marker_is_recovered_before_publication():
+    post = history()
+    assert run_refresh()["status"] == "refreshed"
+    Post.objects.filter(pk=post.pk).update(created_at=timezone.now() - timedelta(days=4))
+    state = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
+    original_dirty_since = state.dirty_since
+    MaterializationState.objects.filter(pk=state.pk).update(
+        refresh_generation=state.source_generation,
+        refresh_dirty_since=timezone.now() - timedelta(days=8),
+    )
+
+    assert run_refresh()["status"] == "refreshed"
+    state.refresh_from_db()
+    assert state.refresh_generation is None
+    assert state.refresh_dirty_since is None
+    assert state.published_generation == state.source_generation
+    assert state.dirty_since is None
+    assert original_dirty_since is not None
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT sum(post_count) FROM home_brand_time_counts WHERE brand_id = 'refresh-test'"
+        )
+        assert cursor.fetchone()[0] == 1
+
+
+def test_write_after_marker_before_counting_is_conservatively_dirty():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import connections
+
+    post = history()
+    assert run_refresh()["status"] == "refreshed"
+    Post.objects.filter(pk=post.pk).update(created_at=timezone.now() - timedelta(days=3))
+
+    def writer():
+        db = connections["default"]
+        try:
+            with db.cursor() as cursor:
+                cursor.execute("SET statement_timeout = '2s'")
+            added = Post.objects.create(
+                tweet_id="before-counting", created_at=timezone.now() - timedelta(days=2)
+            )
+            PostBrand.objects.create(post=added, brand_id="refresh-test")
+        finally:
+            db.close()
+
+    def before_refresh(execute, sql, params, many, context):
+        if sql.startswith("REFRESH MATERIALIZED VIEW") and "home_brand_time_counts" in sql:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(writer).result(timeout=5)
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(before_refresh):
+        assert run_refresh()["status"] == "refreshed"
+    state = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
+    assert state.source_generation > state.published_generation
+    assert state.dirty_since < state.cutoff
+    assert state.refresh_generation is None
+    assert state.refresh_dirty_since is None
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT sum(post_count) FROM home_brand_time_counts WHERE brand_id = 'refresh-test'"
+        )
+        assert cursor.fetchone()[0] == 2
+
+
+def test_online_refresh_with_older_frozen_cutoff_does_not_double_count():
+    from dataclasses import replace
+
+    from core.materializations import refresh_materialization
+    from monitor.home_count_summary import HOME_COUNTS, read_home_counts
+
+    today = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    brand = Brand.objects.create(nickname="midnight-boundary")
+    post = Post.objects.create(tweet_id="midnight-boundary", created_at=today - timedelta(hours=12))
+    PostBrand.objects.create(post=post, brand=brand)
+    # Simulate a marker taken before midnight and a view built after midnight.
+    definition = replace(
+        HOME_COUNTS,
+        cutoff_sql="date_trunc('day', transaction_timestamp(), 'UTC') - interval '1 day'",
+    )
+    assert refresh_materialization(definition)["status"] == "refreshed"
+    end = today - timedelta(hours=6)
+    rows = read_home_counts(start=end - timedelta(days=7), end=end, brand_ids=[brand.pk])
+    assert rows is not None
+    assert sum(row["count"] for row in rows) == 1
+
+
+def test_home_online_refresh_does_not_queue_behind_inflight_brand_writer(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from django.db import connections, transaction
+
+    from core import materializations
+    from monitor.home_count_summary import refresh_home_counts
+
+    post = history()
+    assert run_refresh()["status"] == "refreshed"
+    entered, release = Event(), Event()
+
+    def hold_brand_writer():
+        db = connections["default"]
+        try:
+            with transaction.atomic(), db.cursor() as cursor:
+                cursor.execute("LOCK TABLE posts_brands IN ROW EXCLUSIVE MODE")
+                entered.set()
+                assert release.wait(10)
+        finally:
+            db.close()
+
+    monkeypatch.setattr(materializations.time, "sleep", lambda _: None)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        writer = pool.submit(hold_brand_writer)
+        try:
+            assert entered.wait(5)
+            Post.objects.filter(pk=post.pk).update(created_at=timezone.now() - timedelta(days=3))
+            assert refresh_home_counts()["status"] == "busy"
+        finally:
+            release.set()
+        writer.result(timeout=5)
+    assert refresh_home_counts()["status"] == "refreshed"
 
 
 def test_a_second_maintenance_process_reports_busy_without_refreshing():

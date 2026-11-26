@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
 from unittest.mock import patch
@@ -145,6 +146,14 @@ def test_short_comparison_keeps_exact_rolling_boundaries(chart_context, window):
     assert payload["computed_at"] == NOW.isoformat()
 
 
+def _raw_time_ranges(sql, params):
+    ranges = []
+    for bound in re.finditer(r"p\.created_at >= %s AND p\.created_at < %s", sql):
+        offset = sql[:bound.start()].count("%s")
+        ranges.append(tuple(params[offset:offset + 2]))
+    return ranges
+
+
 @pytest.mark.parametrize("path", ["/", "/chart.html", "/chart/"])
 @pytest.mark.parametrize("correct_history", [False, True])
 def test_seven_day_comparison_reuses_history_at_exact_partial_bucket_boundaries(
@@ -167,7 +176,17 @@ def test_seven_day_comparison_reuses_history_at_exact_partial_bucket_boundaries(
         posts[2].created_at = midpoint + timedelta(seconds=1)
         posts[2].save(update_fields=["created_at"])
     params = {"window": 7, "locale": "en", "timezone": "Asia/Tokyo"}
+    comparison_ranges = []
+    comparison_statements = []
+
+    def observe(execute, sql, params, many, context):
+        if "FROM home_brand_time_counts" in sql and "(bucket_start >= %s) AS bucket" in sql:
+            comparison_ranges.extend(_raw_time_ranges(sql, params))
+            comparison_statements.append((sql, params))
+        return execute(sql, params, many, context)
+
     with (
+        connection.execute_wrapper(observe),
         patch("monitor.views._dashboard_now", return_value=anchor),
         patch("monitor.home_count_summary.read_home_counts", wraps=read_home_counts) as reader,
     ):
@@ -175,6 +194,20 @@ def test_seven_day_comparison_reuses_history_at_exact_partial_bucket_boundaries(
     assert any(
         call.kwargs.get("midpoint") == midpoint for call in reader.call_args_list
     ), "the rolling Pulse comparison must reuse saved history, not rescan fourteen days"
+    if not correct_history:
+        # A wide outer range can send PostgreSQL through the entire post-brand table.
+        assert sorted(comparison_ranges) == [
+            (start, (NOW - timedelta(days=14)) + timedelta(minutes=15)),
+            (NOW - timedelta(days=7), (NOW - timedelta(days=7)) + timedelta(minutes=15)),
+            (DAY, anchor),
+        ]
+    if correct_history and path == "/chart.html":
+        # Even with several days to recount, look up links for the selected posts.
+        sql, parameters = comparison_statements[0]
+        with connection.cursor() as cursor:
+            cursor.execute("EXPLAIN (FORMAT TEXT) " + sql, parameters)
+            plan = "\n".join(row[0] for row in cursor.fetchall())
+        assert re.search(r"(Index Cond|Filter): .*post_id.* = .*p\.tweet_id", plan), plan
     _clear_home_pulse_cache()
     with (
         patch("monitor.views._dashboard_now", return_value=anchor),
@@ -196,12 +229,11 @@ def test_aligned_summary_keeps_source_scan_after_publication_boundary(chart_cont
     _, brand = chart_context
     _post(brand, "saved-prefix-only", DAY - timedelta(days=5))
     assert refresh_home_counts()["status"] == "refreshed"
-    source_lower_bounds = []
+    source_ranges = []
 
     def observe(execute, sql, params, many, context):
         if "FROM home_brand_time_counts" in sql:
-            before_source_bound = sql.split("AND p.created_at >= %s", 1)[0]
-            source_lower_bounds.append(params[before_source_bound.count("%s")])
+            source_ranges.extend(_raw_time_ranges(sql, params))
         return execute(sql, params, many, context)
 
     with connection.execute_wrapper(observe):
@@ -211,7 +243,7 @@ def test_aligned_summary_keeps_source_scan_after_publication_boundary(chart_cont
         )
     assert counts is not None
     assert sum(row["count"] for row in counts) == 1
-    assert source_lower_bounds == [DAY], "aligned reads must not rescan saved history"
+    assert source_ranges == [(DAY, NOW)], "aligned reads must not rescan saved history"
 
 
 @pytest.mark.parametrize("locale", ["en", "zh_cn", "ja"])
@@ -346,6 +378,27 @@ def test_historical_correction_recounts_its_whole_bucket_and_reuses_earlier_hist
     assert refresh_home_counts()["status"] == "refreshed"
     recovered = _payload(client.get(path, params, secure=True))
     assert recovered["series"] == dirty["series"]
+
+
+def test_correction_before_window_uses_bounded_source_query(chart_context):
+    from monitor.home_count_summary import read_home_counts, refresh_home_counts
+
+    client, brand = chart_context
+    _post(brand, "fully-dirty-current", NOW - timedelta(days=2))
+    _post(brand, "fully-dirty-previous", NOW - timedelta(days=10))
+    assert refresh_home_counts()["status"] == "refreshed"
+    _post(brand, "fully-dirty-older", NOW - timedelta(days=20))
+    start = NOW - timedelta(days=14)
+    midpoint = NOW - timedelta(days=7)
+    counts = read_home_counts(start=start, midpoint=midpoint, end=NOW, brand_ids=[brand.pk])
+    assert counts is not None
+    assert {(row["bucket"], row["count"]) for row in counts} == {(False, 1), (True, 1)}
+    actual = _payload(client.get("/chart.html", {"window": 7}, secure=True))
+    _clear_home_pulse_cache()
+    with patch("monitor.home_count_summary.read_home_counts", return_value=None):
+        expected = _payload(client.get("/chart.html", {"window": 7}, secure=True))
+    assert actual["series"] == expected["series"]
+    assert actual["pulse"] == expected["pulse"]
 
 
 @pytest.mark.parametrize(

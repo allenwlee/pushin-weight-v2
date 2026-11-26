@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from django.db import DatabaseError, connection, transaction
@@ -36,6 +36,7 @@ class MaterializationDefinition:
     advance_barrier: bool = False
     bootstrap_timeout: str | None = None
     refresh_work_mem: str | None = None
+    online_refresh: bool = False
 
     def __post_init__(self) -> None:
         if len(self.dataset_key) > 160 or not _DATASET_KEY.fullmatch(self.dataset_key):
@@ -167,6 +168,8 @@ def refresh_materialization(
     force: bool = False,
 ) -> dict[str, str | int]:
     """Atomically rebuild/publish one dataset, independently of other datasets."""
+    if definition.online_refresh and not connection.in_atomic_block:
+        return _refresh_materialization_online(definition, force=force)
     try:
         if not _initialize(definition):
             return {"status": "busy"}
@@ -225,3 +228,101 @@ def refresh_materialization(
         if sqlstate(error) == "55P03":
             return {"status": "busy"}
         raise
+
+
+def _refresh_materialization_online(
+    definition: MaterializationDefinition, *, force: bool,
+) -> dict[str, str | int]:
+    """Publish a snapshot while preserving invalidations from active writers."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", [definition.lock_id])
+        if not cursor.fetchone()[0]:
+            return {"status": "busy"}
+
+    marker_set = False
+    try:
+        if not _initialize(definition):
+            return {"status": "busy"}
+        ready, barrier_target = _prepare_advance(replace(definition, advance_barrier=True))
+        if not ready:
+            return {"status": "busy"}
+
+        # This transaction commits before the refresh statement takes its
+        # snapshot. Source writers record a second dirty boundary from here on.
+        with transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '2s'")
+            populated = is_populated(cursor, definition)
+            target_sql = "%s::timestamptz" if barrier_target is not None else definition.cutoff_sql
+            parameters = (
+                [barrier_target, definition.dataset_key]
+                if barrier_target is not None else [definition.dataset_key]
+            )
+            cursor.execute(
+                f"SELECT source_generation, {HISTORY_CLEAN_SQL}, cutoff, "
+                f"{target_sql} FROM materialization_state WHERE dataset_key = %s FOR UPDATE",
+                parameters,
+            )
+            state = cursor.fetchone()
+            if state is None:
+                return {"status": "unavailable"}
+            generation, clean, cutoff, target = state
+            if barrier_target is not None and cutoff is not None and cutoff > target:
+                return {"status": "busy"}
+            if populated and clean and cutoff == target and not force:
+                # A crashed refresher may have left its marker behind. The
+                # advisory lock proves no other refresh is still using it.
+                cursor.execute(
+                    "UPDATE materialization_state SET refresh_generation = NULL, "
+                    "refresh_dirty_since = NULL WHERE dataset_key = %s",
+                    [definition.dataset_key],
+                )
+                return {"status": "skipped", "cutoff": cutoff.isoformat()}
+            cursor.execute(
+                "UPDATE materialization_state SET refresh_generation = %s, "
+                "refresh_dirty_since = NULL WHERE dataset_key = %s",
+                [generation, definition.dataset_key],
+            )
+        marker_set = True
+
+        with transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '2s'")
+            with _refresh_settings(cursor, definition, populated):
+                cursor.execute(
+                    "REFRESH MATERIALIZED VIEW "
+                    + ("CONCURRENTLY " if populated else "")
+                    + connection.ops.quote_name(definition.relation)
+                )
+                cursor.execute(
+                    "UPDATE materialization_state SET published_generation = refresh_generation, "
+                    "cutoff = %s, refreshed_at = clock_timestamp(), "
+                    "dirty_since = refresh_dirty_since, refresh_generation = NULL, "
+                    "refresh_dirty_since = NULL WHERE dataset_key = %s "
+                    "AND refresh_generation = %s "
+                    "AND (source_generation = refresh_generation OR refresh_dirty_since IS NOT NULL)",
+                    [target, definition.dataset_key, generation],
+                )
+                if cursor.rowcount != 1:
+                    raise _SourceChanged
+        marker_set = False
+        return {"status": "refreshed", "cutoff": target.isoformat(), "generation": generation}
+    except _SourceChanged:
+        return {"status": "changed"}
+    except DatabaseError as error:
+        if sqlstate(error) == "55P03":
+            return {"status": "busy"}
+        raise
+    finally:
+        try:
+            if marker_set:
+                # The view refresh rolled back. Keep the original dirty
+                # boundary, including every source write made meanwhile.
+                with transaction.atomic(), connection.cursor() as cursor:
+                    cursor.execute(
+                        "UPDATE materialization_state SET refresh_generation = NULL, "
+                        "refresh_dirty_since = NULL WHERE dataset_key = %s "
+                        "AND refresh_generation = %s",
+                        [definition.dataset_key, generation],
+                    )
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_unlock(%s)", [definition.lock_id])

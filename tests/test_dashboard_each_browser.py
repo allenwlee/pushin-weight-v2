@@ -374,6 +374,9 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
 
     def test_sparse_one_day_uses_exact_hourly_areas_in_both_modes_and_locales(self):
         from datetime import datetime, timedelta
+        from unittest.mock import patch
+
+        from django.utils import timezone
 
         from core.classification_contract import (
             CONTRACT_VERSION,
@@ -389,6 +392,8 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
         )
 
         Brand.objects.get_or_create(nickname='llama', defaults={'display_name': 'Meta Llama', 'accent_color': '#0089f4'})
+        # Keep the same 24 hours while the browser visits each tab and locale.
+        self.enterContext(patch("monitor.views._dashboard_now", return_value=timezone.now()))
         # Derive the request's real 24-hour coverage boundary; authored counts
         # below are the independent oracle, not values read from a live page.
         raw = self.client.get('/dashboard/each/chart/', {
@@ -1018,7 +1023,9 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
 
     def test_language_chart_keeps_unspecified_chinese_separate_from_detected_scripts(self):
         from datetime import timedelta
+
         from django.utils import timezone
+
         from core.models import Post, PostBrand
 
         # This disposable database contains four DeepSeek language observations.

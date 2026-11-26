@@ -934,6 +934,8 @@ class MaterializationState(models.Model):
     source_generation = models.PositiveBigIntegerField(default=0)
     published_generation = models.PositiveBigIntegerField(null=True)
     dirty_since = models.DateTimeField(null=True)
+    refresh_generation = models.PositiveBigIntegerField(null=True)
+    refresh_dirty_since = models.DateTimeField(null=True)
     cutoff = models.DateTimeField(null=True)
     refreshed_at = models.DateTimeField(null=True)
 
