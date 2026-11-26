@@ -3144,6 +3144,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             self.assertTrue(secondary.is_hidden())
                             self.assertEqual(detail.inner_text(), expected_more)
                             detail.click()
+                            old_card = cards.nth(0).element_handle()
                             with page.expect_response(
                                 lambda response: "/chart.html" in response.url
                                 and response.status == 200
@@ -3151,6 +3152,9 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 page.evaluate(
                                     "() => document.dispatchEvent(new CustomEvent('pw:filter-change'))"
                                 )
+                            page.wait_for_function(
+                                "card => !card.isConnected", arg=old_card
+                            )
                             refreshed_secondary = cards.nth(0).locator(
                                 "[data-pw-headline-item-secondary]"
                             )
