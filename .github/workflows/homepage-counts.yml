@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   postgres-regressions:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     services:
       postgres:
@@ -50,13 +50,26 @@ jobs:
           ssh-key: ${{ secrets.BRIDGEWRIGHT_DEPLOY_KEY }}
           persist-credentials: false
           path: .ci-bridgewright
+      - name: Check out production visual baseline
+        uses: actions/checkout@v4
+        with:
+          # Fixed pre-change production revision. Update only with a reviewed visual change.
+          ref: 260a5c068d1da59ef78b36c5152de2a39f0487fd
+          persist-credentials: false
+          path: .ci-visual-baseline
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
-      - run: python -m pip install -e '.[dev]' './.ci-bridgewright' 'playwright>=1.62.0' 'hypothesis>=6.138,<7'
+      - run: python -m pip install -e '.[dev]' './.ci-bridgewright' 'playwright==1.62.0' 'hypothesis>=6.138,<7'
       - name: Install browser runtime
         run: python -m playwright install --with-deps chromium
+      - name: Capture production visual baseline on this runner
+        working-directory: .ci-visual-baseline
+        env:
+          CYBER_QUAN_CAPTURE_ONLY: candidate
+          CYBER_QUAN_CAPTURE_DIR: ${{ runner.temp }}/cyber-quan-reference
+        run: python -m pytest -q tests/test_cyber_quan_visual_regression.py
       - name: Check migration state
         run: python manage.py makemigrations --check --dry-run
       - name: Native counts, caller parity and compatibility (required skips fail)
@@ -81,6 +94,8 @@ jobs:
           tests/test_home_v22_browser.py::HomeV22BrowserTests::test_per_brand_narratives_render_bilingually_as_semantic_cards
           tests/test_ui_assurance_gate.py
       - name: Bridgewright candidate interaction assurance
+        env:
+          CYBER_QUAN_REFERENCE_DIR: ${{ runner.temp }}/cyber-quan-reference
         run: >-
           python -m tests.ui_assurance.gate --scope candidate
           --candidate-revision "$GITHUB_SHA"

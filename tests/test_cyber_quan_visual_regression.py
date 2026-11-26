@@ -197,7 +197,7 @@ class CyberQuanVisualRegressionTests(StaticLiveServerTestCase):
                         context = self._context(browser, viewport)
                         page_errors: list[str] = []
                         page = context.new_page()
-                        page.on("pageerror", lambda error: page_errors.append(str(error)))
+                        page.on("pageerror", lambda error, errors=page_errors: errors.append(str(error)))
                         try:
                             page.goto(f"{self.live_server_url}/?locale={locale}", wait_until="networkidle")
                             actual = page.screenshot()
@@ -207,7 +207,8 @@ class CyberQuanVisualRegressionTests(StaticLiveServerTestCase):
                                 (capture_root / f"{stem}.png").write_bytes(actual)
                                 continue
 
-                            candidate_path = GOLDEN_ROOT / f"{stem}.png"
+                            reference_root = Path(os.environ.get("CYBER_QUAN_REFERENCE_DIR", GOLDEN_ROOT))
+                            candidate_path = reference_root / f"{stem}.png"
                             candidate_report = _outside_mask_report(
                                 page, candidate_path.read_bytes(), actual, _data_surface_mask(page)
                             )

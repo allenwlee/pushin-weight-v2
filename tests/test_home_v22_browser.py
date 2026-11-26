@@ -3203,6 +3203,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 context = browser.new_context(viewport=VIEWPORTS["desktop"], timezone_id="Asia/Tokyo")
                 _freeze_clock(context)
                 page = context.new_page()
+                # Synthesis polls are unrelated to this filter-state test and
+                # may otherwise outlive the page while its database is flushed.
+                page.route(
+                    "**/api/v2/post-synthesis-demands/",
+                    lambda route: route.fulfill(json={"results": []}),
+                )
                 requests: list[str] = []
                 page.on(
                     "request",
@@ -3417,6 +3423,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     page.wait_for_function(
                         "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home).window_days === 7"
                     )
+                    page.wait_for_load_state("networkidle")
                 finally:
                     context.close()
             finally:
