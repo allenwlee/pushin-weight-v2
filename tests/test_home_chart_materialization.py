@@ -573,6 +573,120 @@ def test_pulse_deadline_is_shared_by_multiple_statements(chart_context):
         assert cursor.fetchone() == (1,)
 
 
+@pytest.mark.django_db(transaction=True)
+def test_seven_day_chart_and_pulse_count_concurrently(chart_context):
+    from threading import Barrier, get_ident
+
+    from monitor.home_count_summary import read_home_counts, refresh_home_counts
+
+    client, brand = chart_context
+    _post(brand, "parallel-count", NOW - timedelta(days=2))
+    assert refresh_home_counts()["status"] == "refreshed"
+    barrier = Barrier(2, timeout=8)
+    callers = {}
+
+    def coordinated_count(**kwargs):
+        callers["pulse" if kwargs.get("midpoint") is not None else "chart"] = get_ident()
+        barrier.wait()
+        return read_home_counts(**kwargs)
+
+    _clear_home_pulse_cache()
+    with patch("monitor.home_count_summary.read_home_counts", side_effect=coordinated_count):
+        payload = _payload(client.get(
+            "/chart.html", {"window": 7, "locale": "en", "timezone": "UTC"}, secure=True,
+        ))
+    assert set(callers) == {"pulse", "chart"}
+    assert callers["pulse"] != callers["chart"]
+    assert payload["totals"][brand.pk] == 1
+    entry = next(row for row in payload["pulse"]["entries"] if row["nickname"] == brand.pk)
+    assert entry["current_count"] == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_parallel_pulse_error_propagates_and_releases_worker(chart_context):
+    from django.db import connections
+
+    from monitor.views import _HOME_PULSE_WORKER_SLOT
+
+    client, _ = chart_context
+    with (
+        patch("monitor.views._build_home_pulse_payload", side_effect=RuntimeError("pulse failed")),
+        patch("monitor.views.connections.close_all", wraps=connections.close_all) as close,
+        pytest.raises(RuntimeError, match="pulse failed"),
+    ):
+        client.get("/chart.html", {"window": 7, "locale": "en"}, secure=True)
+    assert close.call_count >= 1
+    assert _HOME_PULSE_WORKER_SLOT.acquire(timeout=5)
+    _HOME_PULSE_WORKER_SLOT.release()
+
+
+def test_atomic_chart_uses_synchronous_pulse(chart_context):
+    client, _ = chart_context
+    assert connection.in_atomic_block
+    with patch("monitor.views._HOME_PULSE_WORKER.submit") as submit:
+        _payload(client.get("/chart.html", {"window": 7, "locale": "en"}, secure=True))
+    submit.assert_not_called()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_busy_worker_uses_synchronous_pulse(chart_context):
+    from monitor.views import _HOME_PULSE_WORKER_SLOT
+
+    client, _ = chart_context
+    assert _HOME_PULSE_WORKER_SLOT.acquire(timeout=5)
+    try:
+        with patch("monitor.views._HOME_PULSE_WORKER.submit") as submit:
+            _payload(client.get("/chart.html", {"window": 7, "locale": "en"}, secure=True))
+        submit.assert_not_called()
+    finally:
+        _HOME_PULSE_WORKER_SLOT.release()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_chart_failure_does_not_strand_the_pulse_worker(chart_context):
+    from threading import Event
+
+    from monitor.views import _HOME_PULSE_WORKER_SLOT
+
+    client, _ = chart_context
+    started, release = Event(), Event()
+
+    def blocked_pulse(*args, **kwargs):
+        started.set()
+        assert release.wait(timeout=8)
+        return {"computed_at": NOW.isoformat(), "entries": []}
+
+    def failed_chart(**kwargs):
+        assert started.wait(timeout=8)
+        raise RuntimeError("chart failed")
+
+    try:
+        with (
+            patch("monitor.views._build_home_pulse_payload", side_effect=blocked_pulse),
+            patch("monitor.home_count_summary.read_home_counts", side_effect=failed_chart),
+            pytest.raises(RuntimeError, match="chart failed"),
+        ):
+            client.get("/chart.html", {"window": 7, "locale": "en"}, secure=True)
+    finally:
+        release.set()
+    assert _HOME_PULSE_WORKER_SLOT.acquire(timeout=8)
+    _HOME_PULSE_WORKER_SLOT.release()
+
+
+def test_pulse_worker_releases_slot_even_if_connection_cleanup_fails():
+    from monitor.views import _HOME_PULSE_WORKER_SLOT, _background_home_pulse
+
+    assert _HOME_PULSE_WORKER_SLOT.acquire(timeout=5)
+    with (
+        patch("monitor.views._build_home_pulse_payload", return_value={}),
+        patch("monitor.views.connections.close_all", side_effect=RuntimeError("cleanup failed")),
+        pytest.raises(RuntimeError, match="cleanup failed"),
+    ):
+        _background_home_pulse(7, NOW, None)
+    assert _HOME_PULSE_WORKER_SLOT.acquire(timeout=5)
+    _HOME_PULSE_WORKER_SLOT.release()
+
+
 @pytest.mark.parametrize("mutation", ["move_earlier", "move_later", "flag", "delete"])
 def test_dirty_prefix_matches_exact_chart_after_existing_history_changes(
     chart_context, mutation

@@ -18,10 +18,11 @@ import ipaddress
 import logging
 import re
 from collections import OrderedDict, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
-from threading import Lock
+from threading import BoundedSemaphore, Lock
 from time import monotonic
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -32,7 +33,7 @@ from monitor.each_request_budget import bounded_each_request
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.signing import salted_hmac
-from django.db import DatabaseError, connection, transaction
+from django.db import DatabaseError, connection, connections, transaction
 from django.db.models import (
     Case,
     CharField,
@@ -436,6 +437,8 @@ _HOME_CHART_CACHE: OrderedDict[
     tuple[Any, ...], tuple[float, dict[str, Any]]
 ] = OrderedDict()
 _HOME_PULSE_CACHE_LOCK = Lock()
+_HOME_PULSE_WORKER = ThreadPoolExecutor(max_workers=1, thread_name_prefix="home-pulse")
+_HOME_PULSE_WORKER_SLOT = BoundedSemaphore(1)
 _STAGING_REVIEW_CLOCK_CACHE: tuple[float, datetime] | None = None
 _STAGING_REFRESH_RECEIPT_MARKER = "staging-refresh/v1"
 _STAGING_REFRESH_POST_HORIZON = "posts.created_at"
@@ -3540,6 +3543,18 @@ def _home_chart_sidecars(
     return trend_narrative, top_voices
 
 
+def _background_home_pulse(window_days, requested_at, tracked_brands):
+    try:
+        return _build_home_pulse_payload(
+            window_days, now=requested_at, brand_nicknames=tracked_brands,
+        )
+    finally:
+        try:
+            connections.close_all()
+        finally:
+            _HOME_PULSE_WORKER_SLOT.release()
+
+
 def _build_home_chart_payload(
     window_days: int,
     filters: dict[str, Any],
@@ -3606,9 +3621,22 @@ def _build_home_chart_payload(
                 result[name]["computed_at"] = stamp
             return result
 
-    pulse = _build_home_pulse_payload(
-        window_days, now=requested_at, brand_nicknames=tracked_brands,
-    )
+    pulse_future = None
+    if (
+        window_days == 7 and connection.vendor == "postgresql"
+        and not connection.in_atomic_block and _HOME_PULSE_WORKER_SLOT.acquire(blocking=False)
+    ):
+        try:
+            pulse_future = _HOME_PULSE_WORKER.submit(
+                _background_home_pulse, window_days, requested_at, tracked_brands,
+            )
+        except BaseException:
+            _HOME_PULSE_WORKER_SLOT.release()
+            raise
+    else:
+        pulse = _build_home_pulse_payload(
+            window_days, now=requested_at, brand_nicknames=tracked_brands,
+        )
     now = chart_end
     local_today = now.astimezone(bucket_tzinfo).date()
     if window_days == 1:
@@ -3842,6 +3870,8 @@ def _build_home_chart_payload(
                 if partial and values[index] == 0:
                     values[index] = None
 
+    if pulse_future is not None:
+        pulse = pulse_future.result()
     computed_at = pulse["computed_at"]
     trend_narrative, top_voices = _home_chart_sidecars(
         window_days, normalized_filters, brand_nicknames, locale, requested_at, computed_at,
