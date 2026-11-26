@@ -21,12 +21,15 @@ pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 @pytest.mark.parametrize("sort", ["created_at", "like_count"])
 @pytest.mark.parametrize("order", ["asc", "desc"])
-def test_multi_brand_classification_pages_match_distinct_reference(request, sort, order):
+@pytest.mark.parametrize("sentiments", [
+    ["positive", "__unclassified__"], ["positive"], ["__unclassified__"], ["neutral"],
+])
+def test_multi_brand_classification_pages_match_distinct_reference(request, sort, order, sentiments):
     brand = request.getfixturevalue("each_brand_fixture")
     other = Brand.objects.create(nickname="feed-membership-other")
     for post in Post.objects.filter(tweet_id__in=["each-facts-0", "each-facts-1"]):
         PostBrand.objects.create(post=post, brand=other)
-    filters = {"brands": [brand.pk, other.pk], "sentiment": ["positive", "__unclassified__"],
+    filters = {"brands": [brand.pk, other.pk], "sentiment": sentiments,
                "untracked_brand_promotions": "any"}
     normalized = _normalize_home_filters(filters)
     reference = _filter_home_posts_queryset(
@@ -56,3 +59,4 @@ def test_multi_brand_classification_pages_match_distinct_reference(request, sort
     assert actual == expected
     first_page_sql = next(row["sql"] for row in queries.captured_queries if 'FROM "posts"' in row["sql"])
     assert "SELECT DISTINCT" not in first_page_sql
+    assert "OFFSET 0" in first_page_sql

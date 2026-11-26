@@ -47,6 +47,17 @@ from monitor.views import (
 )
 from tests.v22_support import PostgreSQLV22TestCase
 
+
+def _data_reads(queries):
+    """Count data reads separately from deadline and relation-health checks."""
+    return [
+        row["sql"] for row in queries
+        if row["sql"].lstrip().upper().startswith("SELECT")
+        and "current_setting('statement_timeout')" not in row["sql"]
+        and "set_config('statement_timeout'" not in row["sql"]
+        and "SELECT relispopulated FROM pg_class" not in row["sql"]
+    ]
+
 pytestmark = pytest.mark.requires_postgres
 
 ANCHOR = datetime(2026, 8, 11, 12, 0, tzinfo=UTC)
@@ -126,8 +137,9 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         _clear_home_pulse_cache()
 
     def test_ae11_exact_equal_window_projection_and_bounded_query_cache(self):
-        with self.assertNumQueries(2):
+        with CaptureQueriesContext(connection) as queries:
             pulse = _build_home_pulse_payload(1, now=ANCHOR)
+        self.assertEqual(len(_data_reads(queries)), 2)
 
         by_nickname = {entry["nickname"]: entry for entry in pulse["entries"]}
         self.assertEqual(list(by_nickname), sorted(("up", "down", "flat", "new", "absent")))
@@ -162,13 +174,14 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         with CaptureQueriesContext(connection) as queries:
             pulse = _build_home_pulse_payload(1, now=ANCHOR)
 
-        self.assertEqual(len(queries), 2)
+        data_reads = _data_reads(queries)
+        self.assertEqual(len(data_reads), 2)
         self.assertEqual(
             [entry["nickname"] for entry in pulse["entries"]],
             ["absent", "down", "flat", "new", "up"],
         )
         self.assertEqual(len(pulse["entries"]), 5)
-        sql = queries.captured_queries[1]["sql"].upper()
+        sql = data_reads[1].upper()
         self.assertEqual(sql.count("SELECT"), 1)
         self.assertIn("GROUP BY", sql)
         self.assertEqual(sql.count("FILTER (WHERE"), 2)
@@ -350,8 +363,9 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         }
         # Pulse (two queries), brand inventory, and chart aggregate. No ranking.
         # Three bounded reads for run/target/scope coverage plus four aggregates.
-        with self.assertNumQueries(7):
+        with CaptureQueriesContext(connection) as queries:
             payload = _build_home_chart_payload(1, active, now=ANCHOR)
+        self.assertEqual(len(_data_reads(queries)), 7)
         self.assertEqual(payload["totals"], {"up": 1})
         self.assertEqual(payload["computed_at"], payload["pulse"]["computed_at"])
         self.assertEqual(payload["window_days"], payload["pulse"]["window_days"])

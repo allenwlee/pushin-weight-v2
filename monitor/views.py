@@ -3122,6 +3122,12 @@ def _scoped_classification_pairs(brand_scope: Any) -> QuerySet:
     return pairs.annotate(_is_classified=Exists(classified_state))
 
 
+class _FeedCorrelatedExists(Exists):
+    """Keep a feed-page predicate tied to its post instead of hashing all history."""
+
+    template = "EXISTS(%(subquery)s OFFSET 0)"
+
+
 def _filter_home_posts_queryset(
     window_days: int,
     normalized_filters: dict[str, Any],
@@ -3363,6 +3369,11 @@ def _filter_home_posts_queryset(
             value for value in active if value != _FILTER_UNCLASSIFIED
         ]
         axis_condition = Q()
+        existence = (
+            _FeedCorrelatedExists
+            if not deduplicate and axis == "sentiment" and brand_scope not in (None, "__all__")
+            else Exists
+        )
         if selected_values:
             current_rows = PostBrandClassificationState.objects.filter(
                 post_id=OuterRef("tweet_id"),
@@ -3397,9 +3408,9 @@ def _filter_home_posts_queryset(
                 )
                 .filter(_distinct_values=1, _selected_values=1)
             )
-            axis_condition |= Q(Exists(current_rows)) | Q(Exists(historical_rows))
+            axis_condition |= Q(existence(current_rows)) | Q(existence(historical_rows))
         if axis == "sentiment" and _FILTER_UNCLASSIFIED in active:
-            axis_condition |= Q(Exists(
+            axis_condition |= Q(existence(
                 scoped_classification_pairs.filter(
                     _is_classified=False
                 )
@@ -3407,7 +3418,7 @@ def _filter_home_posts_queryset(
         if not deduplicate and axis == "sentiment" and brand_scope not in (None, "__all__"):
             # The feed orders by time and stops after one page. Reject posts
             # outside the selected brands before checking classification.
-            brand_match = Exists(PostBrand.objects.filter(
+            brand_match = _FeedCorrelatedExists(PostBrand.objects.filter(
                 post_id=OuterRef("tweet_id"), brand_id__in=brand_scope,
             ))
             axis_condition = Case(
@@ -3905,8 +3916,11 @@ def _build_home_pulse_payload(
     cache_now = monotonic()
     deadline = cache_now + 10.0
     cache_key = window_days if brand_nicknames is None else (window_days, brand_nicknames)
-    with pulse_count_deadline(deadline):
-        token = home_count_cache_token() if window_days in (30, 365) else None
+    if window_days in (30, 365):
+        with pulse_count_deadline(deadline):
+            token = home_count_cache_token()
+    else:
+        token = None
     with _HOME_PULSE_CACHE_LOCK:
         cached = _HOME_PULSE_CACHE.get(cache_key)
         if (cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS
