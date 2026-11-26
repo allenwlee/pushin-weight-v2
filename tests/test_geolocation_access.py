@@ -115,6 +115,36 @@ def test_web_build_waits_for_grants_after_migration_ledger_is_complete(serving_l
         verify_serving_schema(connections["default"], wait_seconds=0)
 
 
+def test_home_sentiment_falls_back_when_old_deploy_revokes_new_views(serving_login):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.materializations import refresh_materialization
+    from monitor.home_sentiment_counts import HOME_SENTIMENT, read_home_multibrand_sentiment_counts
+
+    assert refresh_materialization(HOME_SENTIMENT)['status'] == 'refreshed'
+    serving, role, _owner, _report = serving_login
+    now = timezone.now()
+    args = dict(
+        brands=['a', 'b'], output_brands=['a', 'b'], sentiments=['positive'],
+        start=now-timedelta(days=365), end=now, at=now, timezone_name='UTC',
+        promotion_mode='any', legacy_mode='any',
+    )
+    with patch.object(connections['default'], 'connection', serving):
+        assert read_home_multibrand_sentiment_counts(**args) is not None
+    with connection.cursor() as cursor:
+        for name in ('home_post_sentiment_facts', 'home_post_sentiment_facts_source'):
+            cursor.execute(sql.SQL('REVOKE ALL ON {} FROM {}').format(sql.Identifier(name), sql.Identifier(role)))
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        serving.execute('SELECT * FROM home_post_sentiment_facts LIMIT 1')
+    with patch.object(connections['default'], 'connection', serving):
+        result = read_home_multibrand_sentiment_counts(**args)
+        assert result is None
+        # The failed summary read rolled back its transaction before fallback.
+        assert Post.objects.count() >= 0
+
+
 def test_reconciliation_refuses_to_repurpose_owner():
     with connection.cursor() as cursor:
         cursor.execute("SELECT current_user")

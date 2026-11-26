@@ -3793,6 +3793,26 @@ def _build_home_chart_payload(
                 timezone_name=bucket_timezone, promotion_mode=promotion_mode,
                 legacy_mode=legacy_mode,
             )
+        elif (
+            (brands_filter in (None, "__all__") or isinstance(brands_filter, list))
+            and isinstance(sentiment, list)
+            and all(
+                normalized_filters.get(axis) in (None, "__all__")
+                for axis in _HOME_MULTI_VALUE_FILTERS
+                if axis not in {"brands", "sentiment"}
+            )
+        ):
+            from monitor.home_sentiment_counts import (
+                read_home_multibrand_sentiment_counts,
+            )
+
+            agg_rows = read_home_multibrand_sentiment_counts(
+                brands=None if brands_filter in (None, "__all__") else brands_filter,
+                output_brands=brand_nicknames, sentiments=sentiment,
+                start=window_start, end=now, at=requested_at,
+                timezone_name=bucket_timezone, promotion_mode=promotion_mode,
+                legacy_mode=legacy_mode,
+            )
         aligned_midnights = all(
             datetime.combine(
                 local_today - timedelta(days=i), datetime.min.time(), tzinfo=bucket_tzinfo

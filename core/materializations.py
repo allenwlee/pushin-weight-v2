@@ -44,6 +44,7 @@ class MaterializationDefinition:
     online_barrier_attempts: int | None = None
     online_capability: str | None = None
     online_dirty_ids_capability: str | None = None
+    dirty_refresh_threshold: int | None = None
 
     def __post_init__(self) -> None:
         if len(self.dataset_key) > 160 or not _DATASET_KEY.fullmatch(self.dataset_key):
@@ -68,6 +69,10 @@ class MaterializationDefinition:
             not self.online_refresh or not _IDENTIFIER.fullmatch(self.online_dirty_ids_capability)
         ):
             raise ValueError("Dirty ID capability must be an explicit local function name")
+        if self.dirty_refresh_threshold is not None and (
+            not self.online_dirty_ids_capability or not 1 <= self.dirty_refresh_threshold <= 512
+        ):
+            raise ValueError("Dirty ID refresh threshold must fit the bounded tracker")
 
 
 def sqlstate(error: BaseException) -> str | None:
@@ -297,18 +302,24 @@ def _refresh_materialization_online(
                     populated = is_populated(cursor, definition)
                     cursor.execute(
                         f"SELECT source_generation, {HISTORY_CLEAN_SQL}, cutoff "
-                        + (", dirty_post_ids IS NOT NULL " if track_dirty_ids else ", TRUE ")
+                        + (", dirty_post_ids IS NOT NULL, cardinality(dirty_post_ids), published_generation IS NOT NULL "
+                           if track_dirty_ids else ", TRUE, NULL, published_generation IS NOT NULL ")
                         + "FROM materialization_state WHERE dataset_key = %s FOR UPDATE NOWAIT",
                         [definition.dataset_key],
                     )
                     state = cursor.fetchone()
                     if state is None:
                         return {"status": "unavailable"}
-                    generation, clean, cutoff, tracked = state
+                    generation, clean, cutoff, tracked, dirty_count, published = state
                     target = barrier_target
                     if cutoff is not None and cutoff > target:
                         return {"status": "busy"}
-                    if populated and clean and cutoff == target and tracked and not force:
+                    bounded_dirty = (
+                        definition.dirty_refresh_threshold is not None
+                        and tracked and published and dirty_count is not None
+                        and 0 < dirty_count < definition.dirty_refresh_threshold
+                    )
+                    if populated and (clean or bounded_dirty) and cutoff == target and tracked and not force:
                         # A crashed refresher may have left its marker behind.
                         cursor.execute(
                             "UPDATE materialization_state SET refresh_generation = NULL, "
@@ -317,7 +328,10 @@ def _refresh_materialization_online(
                             + "WHERE dataset_key = %s",
                             [definition.dataset_key],
                         )
-                        return {"status": "skipped", "cutoff": cutoff.isoformat()}
+                        result = {"status": "skipped", "cutoff": cutoff.isoformat()}
+                        if bounded_dirty and not clean:
+                            result.update({"reason": "bounded_dirty", "dirty_ids": dirty_count})
+                        return result
                     cursor.execute(
                         "UPDATE materialization_state SET refresh_generation = %s, "
                         "refresh_dirty_since = NULL "

@@ -48,4 +48,4 @@ def test_new_online_refresher_refuses_reversed_tracking_migration():
     try:
         assert refresh_materialization(EACH_FACTS, force=True) == {"status": "unavailable"}
     finally:
-        MigrationExecutor(connection).migrate([("core", "0243_each_dirty_post_ids")])
+        MigrationExecutor(connection).migrate([("core", "0244_home_sentiment_masks")])

@@ -15,6 +15,8 @@ def product_identity():
     paths = [
         ROOT / "core/models.py",
         ROOT / "core/materializations.py",
+        ROOT / "core/migrations/0244_home_sentiment_masks.py",
+        ROOT / "core/migrations/_home_sentiment_masks_v1.py",
         ROOT / "core/chart_engine.py",
         ROOT / "core/chart_engine_view.py",
         ROOT / "core/benchmark_forecast_inputs.py",
@@ -26,6 +28,7 @@ def product_identity():
         ROOT / "monitor/views.py",
         ROOT / "monitor/home_count_summary.py",
         ROOT / "monitor/home_sentiment_counts.py",
+        ROOT / "monitor/management/commands/refresh_materializations.py",
         ROOT / "monitor/each_chart_facts.py",
         ROOT / "monitor/templates/monitor/home.html",
         ROOT / "monitor/templates/monitor/_cyber_quan_sprite.html",

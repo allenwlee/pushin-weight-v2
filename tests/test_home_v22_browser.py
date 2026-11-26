@@ -3192,13 +3192,27 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         """One V22 action emits one immutable state to feed and chart."""
         from core.materializations import refresh_materialization
         from monitor.each_chart_facts import EACH_FACTS
-        from monitor.home_sentiment_counts import read_home_sentiment_counts
+        from monitor.home_sentiment_counts import (
+            HOME_SENTIMENT, read_home_multibrand_sentiment_counts, read_home_sentiment_counts,
+        )
         from tests.test_chart_harvest_coverage import record_harvest
 
         now = datetime.now(UTC)
         record_harvest(now, finished_at=now, staggered=False)
         self.assertEqual(refresh_materialization(EACH_FACTS, force=True)["status"], "refreshed")
+        self.assertEqual(refresh_materialization(HOME_SENTIMENT, force=True)["status"], "refreshed")
         saved_reads = []
+        multibrand_reads = []
+
+        def capture_multibrand_read(**kwargs):
+            result = read_home_multibrand_sentiment_counts(**kwargs)
+            if result is not None:
+                multibrand_reads.append(kwargs)
+            return result
+
+        multibrand_patch = patch("monitor.home_sentiment_counts.read_home_multibrand_sentiment_counts", side_effect=capture_multibrand_read)
+        multibrand_patch.start()
+        self.addCleanup(multibrand_patch.stop)
 
         def capture_saved_read(**kwargs):
             result = read_home_sentiment_counts(**kwargs)
@@ -3361,6 +3375,11 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         self.assertEqual(
                             sum(chart_payload["totals"].values()), len(feed_response.json()["rows"])
                         )
+                    self.assertTrue(any(
+                        read['brands'] is None and 'positive' not in read['sentiments']
+                        and read['end'] - read['start'] >= timedelta(days=364)
+                        for read in multibrand_reads
+                    ))
                     act(page.locator("[data-pw-window-btn='1']").click)
 
                     sentiment_pill.press("Escape")

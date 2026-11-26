@@ -10,8 +10,9 @@ from core.materializations import refresh_materialization, sqlstate
 def registered_definitions():
     from monitor.each_chart_facts import EACH_FACTS
     from monitor.home_count_summary import HOME_COUNTS
+    from monitor.home_sentiment_counts import HOME_SENTIMENT
 
-    return HOME_COUNTS, EACH_FACTS
+    return HOME_COUNTS, EACH_FACTS, HOME_SENTIMENT
 
 
 class Command(BaseCommand):

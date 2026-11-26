@@ -952,6 +952,7 @@ def test_candidate_accepts_exact_declared_forward_migration_count_deltas(
         ("table_policy", "candidate_table_policy_mismatch"),
         ("invalid_view", "candidate_view_invalid"),
         ("missing_each_view", "candidate_view_invalid"),
+        ("missing_home_sentiment_view", "candidate_view_invalid"),
         ("stale_timestamp", "candidate_latest_timestamp_mismatch:posts.created_at"),
         ("count_drift", "candidate_count_mismatch:posts"),
         ("orphan", "candidate_foreign_key_invalid:fk_orphan"),
@@ -977,6 +978,9 @@ def test_candidate_validation_blocks_every_unsafe_shape(
         elif change == "missing_each_view":
             assert 'each_brand_post_facts_source' in census.views
             census = replace(census, views=census.views - {'each_brand_post_facts_source'})
+        elif change == "missing_home_sentiment_view":
+            assert 'home_post_sentiment_facts_source' in census.views
+            census = replace(census, views=census.views - {'home_post_sentiment_facts_source'})
         elif change == "stale_timestamp":
             census = replace(
                 census,

@@ -777,7 +777,8 @@ def test_one_failed_dataset_does_not_skip_the_other(monkeypatch):
     assert result['status'] == 'unavailable'
     assert result['error'] == 'RuntimeError'
     assert result['materializations'] == {
-        calls[0]: {"status": "unavailable", "error": "RuntimeError"}, calls[1]: {"status": "busy"},
+        calls[0]: {"status": "unavailable", "error": "RuntimeError"},
+        **{key: {"status": "busy"} for key in calls[1:]},
     }
 
 
@@ -803,7 +804,7 @@ def test_database_failure_reports_sqlstate_without_skipping_other_dataset(monkey
     assert result['materializations'][calls[0]] == {
         'status': 'unavailable', 'error': 'OperationalError', 'sqlstate': '57014',
     }
-    assert result['materializations'][calls[1]] == {'status': 'busy'}
+    assert all(result['materializations'][key] == {'status': 'busy'} for key in calls[1:])
 
 
 def test_each_advance_barrier_busy_does_not_queue_a_later_source_writer(
