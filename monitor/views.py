@@ -3125,8 +3125,8 @@ def _scoped_classification_pairs(brand_scope: Any) -> QuerySet:
     return pairs.annotate(_is_classified=Exists(classified_state))
 
 
-class _FeedCorrelatedExists(Exists):
-    """Keep a feed-page predicate tied to its post instead of hashing all history."""
+class _PostCorrelatedExists(Exists):
+    """Keep a bounded post predicate tied to its post instead of hashing all history."""
 
     template = "EXISTS(%(subquery)s OFFSET 0)"
 
@@ -3373,7 +3373,7 @@ def _filter_home_posts_queryset(
         ]
         axis_condition = Q()
         existence = (
-            _FeedCorrelatedExists
+            _PostCorrelatedExists
             if not deduplicate and axis == "sentiment" and brand_scope not in (None, "__all__")
             else Exists
         )
@@ -3419,9 +3419,9 @@ def _filter_home_posts_queryset(
                 )
             ))
         if not deduplicate and axis == "sentiment" and brand_scope not in (None, "__all__"):
-            # The feed orders by time and stops after one page. Reject posts
-            # outside the selected brands before checking classification.
-            brand_match = _FeedCorrelatedExists(PostBrand.objects.filter(
+            # Reject posts outside the selected brands before checking
+            # classification in the bounded feed or chart source query.
+            brand_match = _PostCorrelatedExists(PostBrand.objects.filter(
                 post_id=OuterRef("tweet_id"), brand_id__in=brand_scope,
             ))
             axis_condition = Case(
@@ -3687,6 +3687,8 @@ def _build_home_chart_payload(
             now=now,
             created_at_start=window_start,
             created_at_end=now,
+            queryset=Post.objects.all(),
+            deduplicate=False,
         ).order_by().values("tweet_id")
         links = PostBrand.objects.filter(
             brand_id__in=brand_nicknames,

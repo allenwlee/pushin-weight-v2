@@ -100,6 +100,32 @@ def test_chart_uses_saved_reader_and_matches_existing_query(request):
     assert actual["totals"] == expected["totals"]
 
 
+@pytest.mark.parametrize("selection", [
+    {"sentiment": ["positive"]},
+    {"sentiment": ["negative", "__unclassified__"]},
+    {"sentiment": ["__unclassified__"]},
+    {"sentiment": ["positive"], "post_types": ["releases_updates"]},
+])
+def test_one_day_bounded_chart_matches_distinct_reference(request, selection):
+    from tests.test_chart_harvest_coverage import record_harvest
+
+    brand = request.getfixturevalue("each_brand_fixture")
+    record_harvest(NOW, finished_at=NOW, staggered=False)
+    filters = {"brands": [brand.pk], "untracked_brand_promotions": "any", **selection}
+    projection = [{"nickname": brand.pk, "accent_color": brand.accent_color}]
+    actual = _build_home_chart_payload(1, filters, now=NOW, brand_projection=projection)
+
+    def distinct_reference(*args, **kwargs):
+        kwargs["deduplicate"] = True
+        return _filter_home_posts_queryset(*args, **kwargs)
+
+    with patch("monitor.views._filter_home_posts_queryset", side_effect=distinct_reference):
+        expected = _build_home_chart_payload(1, filters, now=NOW, brand_projection=projection)
+    assert actual["days"] == expected["days"]
+    assert actual["series"] == expected["series"]
+    assert actual["totals"] == expected["totals"]
+
+
 def test_reader_snapshot_keeps_a_concurrent_historical_change_visible_on_next_read(request):
     from django.db import connection, connections
 
