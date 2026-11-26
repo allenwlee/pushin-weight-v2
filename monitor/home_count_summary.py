@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+from time import monotonic
 from typing import Any
 
 from django.db import DatabaseError, connection, transaction
@@ -43,6 +45,35 @@ def utc_day(at: datetime) -> datetime:
 
 def _populated(cursor: CursorWrapper) -> bool:
     return is_populated(cursor, HOME_COUNTS)
+
+
+@contextmanager
+def pulse_count_deadline(deadline: float):
+    """Limit every statement in an attempt to the remaining Pulse allowance."""
+    remaining_ms = int((deadline - monotonic()) * 1000)
+    if remaining_ms <= 0:
+        raise DatabaseError("Pulse count deadline expired")
+    if connection.vendor != "postgresql":
+        yield
+        return
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT current_setting('statement_timeout'), setting::bigint "
+            "FROM pg_settings WHERE name='statement_timeout'"
+        )
+        previous, previous_ms = cursor.fetchone()
+        def enforce_deadline(execute, sql, params, many, context):
+            remaining_ms = int((deadline - monotonic()) * 1000)
+            if remaining_ms <= 0:
+                raise DatabaseError("Pulse count deadline expired")
+            limit_ms = min(remaining_ms, previous_ms) if previous_ms else remaining_ms
+            execute("SELECT set_config('statement_timeout', %s, true)", [f"{limit_ms}ms"], False, context)
+            return execute(sql, params, many, context)
+
+        # On error the surrounding transaction/savepoint restores the setting.
+        with connection.execute_wrapper(enforce_deadline):
+            yield
+        cursor.execute("SELECT set_config('statement_timeout', %s, true)", [previous])
 
 
 def refresh_home_counts() -> dict[str, str | int]:
@@ -145,6 +176,8 @@ def read_home_counts(
                 "(p.created_at >= %s AND p.created_at < %s)" for _ in live_ranges
             )
             live_range_params = [timestamp for interval in live_ranges for timestamp in interval]
+            # Keep the time-bounded posts as the driver even for short tails;
+            # a brand-first plan can scan all links and probe the large posts table.
             # Recheck the publication boundary in the count statement's MVCC snapshot: an
             # earlier concurrent correction forces the exact-source fallback.
             cursor.execute(
@@ -162,8 +195,6 @@ def read_home_counts(
                     UNION ALL
                     SELECT b.nickname, p.created_at, 1::bigint
                     FROM health, posts p
-                    -- Keep the indexed link lookup per post even after historical corrections
-                    -- widen the live tail. OFFSET 0 prevents flattening this lateral join.
                     CROSS JOIN LATERAL (
                         SELECT brand_id FROM posts_brands
                         WHERE post_id = p.tweet_id

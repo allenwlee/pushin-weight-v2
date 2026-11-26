@@ -3130,6 +3130,7 @@ def _filter_home_posts_queryset(
     queryset: QuerySet | None = None,
     created_at_start: datetime | None = None,
     created_at_end: datetime | None = None,
+    deduplicate: bool = True,
 ) -> QuerySet:
     """Return the bounded, set-based Post queryset shared by chart aggregation."""
     queryset = queryset if queryset is not None else Post.objects.all()
@@ -3144,11 +3145,7 @@ def _filter_home_posts_queryset(
             created_at__lt=now,
         )
 
-    relation_filters = {
-        "brands": "brands__brand_id__in",
-        "lang": "lang_detected__in",
-    }
-    for axis, lookup in relation_filters.items():
+    for axis in ("brands", "lang"):
         active = normalized_filters.get(axis)
         if active is None or active == "__all__":
             continue
@@ -3171,7 +3168,9 @@ def _filter_home_posts_queryset(
                 )
             queryset = queryset.filter(condition)
         else:
-            queryset = queryset.filter(**{lookup: active})
+            queryset = queryset.filter(Exists(PostBrand.objects.filter(
+                post_id=OuterRef("tweet_id"), brand_id__in=active,
+            )))
 
     brand_scope = normalized_filters.get("brands")
     scoped_classification_pairs = _scoped_classification_pairs(brand_scope)
@@ -3405,6 +3404,18 @@ def _filter_home_posts_queryset(
                     _is_classified=False
                 )
             ))
+        if not deduplicate and axis == "sentiment" and brand_scope not in (None, "__all__"):
+            # The feed orders by time and stops after one page. Reject posts
+            # outside the selected brands before checking classification.
+            brand_match = Exists(PostBrand.objects.filter(
+                post_id=OuterRef("tweet_id"), brand_id__in=brand_scope,
+            ))
+            axis_condition = Case(
+                When(brand_match, then=Case(
+                    When(axis_condition, then=Value(True)), default=Value(False),
+                )),
+                default=Value(False),
+            )
         queryset = queryset.filter(axis_condition)
 
     active_roles = normalized_filters.get("role")
@@ -3464,7 +3475,7 @@ def _filter_home_posts_queryset(
             queryset = queryset.filter(unsanctioned_flags__isnull=True)
     elif promotion_mode == "only":
         queryset = queryset.filter(untracked_brand_promotion__isnull=False)
-    return queryset.distinct()
+    return queryset.distinct() if deduplicate else queryset
 
 
 # ============================================================================
@@ -3637,7 +3648,7 @@ def _build_home_chart_payload(
             now=now,
             created_at_start=window_start,
             created_at_end=now,
-        ).values("tweet_id")
+        ).order_by().values("tweet_id")
         links = PostBrand.objects.filter(
             brand_id__in=brand_nicknames,
             post_id__in=Subquery(eligible_posts),
@@ -3723,6 +3734,24 @@ def _build_home_chart_payload(
         agg_rows = None
         promotion_mode = normalized_filters.get(_HOME_PROMOTION_FILTER)
         legacy_mode = normalized_filters.get("unsanctioned")
+        sentiment = normalized_filters.get("sentiment")
+        if (
+            isinstance(brands_filter, list) and len(brands_filter) == 1
+            and len(brand_nicknames) == 1 and isinstance(sentiment, list)
+            and all(
+                normalized_filters.get(axis) in (None, "__all__")
+                for axis in _HOME_MULTI_VALUE_FILTERS
+                if axis not in {"brands", "sentiment"}
+            )
+        ):
+            from monitor.home_sentiment_counts import read_home_sentiment_counts
+
+            agg_rows = read_home_sentiment_counts(
+                brand=brand_nicknames[0], sentiments=sentiment,
+                start=window_start, end=now, at=requested_at,
+                timezone_name=bucket_timezone, promotion_mode=promotion_mode,
+                legacy_mode=legacy_mode,
+            )
         aligned_midnights = all(
             datetime.combine(
                 local_today - timedelta(days=i), datetime.min.time(), tzinfo=bucket_tzinfo
@@ -3867,14 +3896,17 @@ def _build_home_pulse_payload(
     now = now or _dashboard_now()
     from monitor.home_count_summary import (
         home_count_cache_token,
+        pulse_count_deadline,
         read_home_counts,
         utc_day,
     )
 
     comparison_end = utc_day(now) if window_days in (30, 365) else now
     cache_now = monotonic()
+    deadline = cache_now + 10.0
     cache_key = window_days if brand_nicknames is None else (window_days, brand_nicknames)
-    token = home_count_cache_token() if window_days in (30, 365) else None
+    with pulse_count_deadline(deadline):
+        token = home_count_cache_token() if window_days in (30, 365) else None
     with _HOME_PULSE_CACHE_LOCK:
         cached = _HOME_PULSE_CACHE.get(cache_key)
         if (cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS
@@ -3893,25 +3925,28 @@ def _build_home_pulse_payload(
     brands = Brand.objects.filter(is_sentinel=False)
     if brand_nicknames is not None:
         brands = brands.filter(nickname__in=brand_nicknames)
-    rows = list(brands.values(
-        "nickname", "display_name", "display_name_en", "display_name_zh_cn", "accent_color",
-    ))
-    saved = None
-    if window_days in (7, 30, 365):
+    with pulse_count_deadline(deadline):
+        rows = list(brands.values(
+            "nickname", "display_name", "display_name_en", "display_name_zh_cn", "accent_color",
+        ))
+    # Keep a shared allowance for the saved attempt and any exact fallback;
+    # otherwise a timed-out saved read can trigger a second full timeout.
+    with pulse_count_deadline(deadline):
         saved = read_home_counts(
             start=start, end=comparison_end, midpoint=midpoint,
             brand_ids=[row["nickname"] for row in rows],
         )
     if saved is None:
-        counts = {
-            row["nickname"]: row for row in brands.filter(
-                posts__post__created_at__gte=start,
-                posts__post__created_at__lt=comparison_end,
-            ).order_by().values("nickname").annotate(
-                current_count=Count("posts__post_id", filter=Q(posts__post__created_at__gte=midpoint)),
-                prior_count=Count("posts__post_id", filter=Q(posts__post__created_at__lt=midpoint)),
-            )
-        }
+        with pulse_count_deadline(deadline):
+            counts = {
+                row["nickname"]: row for row in brands.filter(
+                    posts__post__created_at__gte=start,
+                    posts__post__created_at__lt=comparison_end,
+                ).order_by().values("nickname").annotate(
+                    current_count=Count("posts__post_id", filter=Q(posts__post__created_at__gte=midpoint)),
+                    prior_count=Count("posts__post_id", filter=Q(posts__post__created_at__lt=midpoint)),
+                )
+            }
     else:
         counts = {}
         for row in saved:
@@ -4946,6 +4981,8 @@ def _feed_page_posts(
     if brand_nickname:
         normalized["brands"] = [brand_nickname]
     current = now or _dashboard_now()
+    # Cursor pagination requires one row per post. This base queryset has
+    # only single-valued joins; multi-valued filters use EXISTS.
     queryset = _filter_home_posts_queryset(
         window_days,
         normalized,
@@ -4953,6 +4990,7 @@ def _feed_page_posts(
         queryset=Post.objects.all(),
         created_at_start=created_at_start,
         created_at_end=created_at_end,
+        deduplicate=False,
     )
 
     sort_field = "created_at"

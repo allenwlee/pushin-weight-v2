@@ -58,8 +58,21 @@ def historical_product(**values):
         category, _ = ProductType.objects.get_or_create(code="model")
         product = Product.objects.create(product_type=category, **values)
     finally:
-        MigrationExecutor(connection).migrate([("core", "0234_pulse_category_evidence_guard")])
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
     return product
+
+
+def test_historical_product_restores_latest_schema():
+    from django.db.migrations.executor import MigrationExecutor
+
+    product = historical_product(display_name="Legacy schema fixture")
+    executor = MigrationExecutor(connection)
+    assert set(executor.loader.graph.leaf_nodes()) <= set(executor.loader.applied_migrations)
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT to_regclass('each_brand_post_facts_source')")
+        assert cursor.fetchone()[0] == "each_brand_post_facts_source"
+    assert Product.objects.filter(pk=product.pk, display_name="Legacy schema fixture").exists()
 
 
 def pending_release(key, name="Observed model"):

@@ -23,6 +23,10 @@ _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 _TIMEOUT = re.compile(r"^[1-9][0-9]*(?:ms|s|min)$")
 _WORK_MEM = re.compile(r"^[1-9][0-9]*(?:kB|MB|GB)$")
 _DATASET_KEY = re.compile(r"^[a-z][a-z0-9_.-]*\.v[1-9][0-9]*$")
+# The refresh is scheduled during the harvest window. Retry without waiting
+# on source locks until the harvester has a chance to finish its write batch.
+_ONLINE_BARRIER_ATTEMPTS = 361
+_ONLINE_BARRIER_RETRY_SECONDS = 1
 
 
 @dataclass(frozen=True)
@@ -37,6 +41,8 @@ class MaterializationDefinition:
     bootstrap_timeout: str | None = None
     refresh_work_mem: str | None = None
     online_refresh: bool = False
+    online_barrier_attempts: int | None = None
+    online_capability: str | None = None
 
     def __post_init__(self) -> None:
         if len(self.dataset_key) > 160 or not _DATASET_KEY.fullmatch(self.dataset_key):
@@ -51,6 +57,12 @@ class MaterializationDefinition:
             raise ValueError("Materialization requires a positive explicit bootstrap timeout")
         if self.refresh_work_mem is not None and not _WORK_MEM.fullmatch(self.refresh_work_mem):
             raise ValueError("Materialization requires positive explicit work_mem units")
+        if self.online_barrier_attempts is not None and self.online_barrier_attempts < 1:
+            raise ValueError("Materialization requires a positive barrier attempt count")
+        if self.online_capability is not None and (
+            not self.online_refresh or not _IDENTIFIER.fullmatch(self.online_capability)
+        ):
+            raise ValueError("Online capability must be an explicit local function name")
 
 
 def sqlstate(error: BaseException) -> str | None:
@@ -241,6 +253,13 @@ def _refresh_materialization_online(
 
     marker_set = False
     try:
+        if definition.online_capability:
+            # The migration's reverse path takes this same lock before
+            # removing the capability and restoring older trigger functions.
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT to_regprocedure(%s) IS NOT NULL", [definition.online_capability + "()"])
+                if not cursor.fetchone()[0]:
+                    return {"status": "unavailable"}
         if not _initialize(definition):
             return {"status": "busy"}
         # Freeze the view cutoff before the short source-writer barrier.
@@ -260,7 +279,8 @@ def _refresh_materialization_online(
 
         # The marker and the writer barrier must commit together. A writer
         # starting after this commit will see the marker in its trigger.
-        for attempt in range(10):
+        attempts = definition.online_barrier_attempts or _ONLINE_BARRIER_ATTEMPTS
+        for attempt in range(attempts):
             try:
                 with transaction.atomic(), connection.cursor() as cursor:
                     cursor.execute(f"LOCK TABLE {tables} IN SHARE MODE NOWAIT")
@@ -294,9 +314,9 @@ def _refresh_materialization_online(
             except DatabaseError as error:
                 if sqlstate(error) != "55P03":
                     raise
-                if attempt == 9:
+                if attempt == attempts - 1:
                     return {"status": "busy"}
-                time.sleep(0.2)
+                time.sleep(_ONLINE_BARRIER_RETRY_SECONDS)
         marker_set = True
 
         with transaction.atomic(), connection.cursor() as cursor:

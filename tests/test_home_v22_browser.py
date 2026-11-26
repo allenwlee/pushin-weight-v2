@@ -3186,10 +3186,25 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
     def test_anonymous_filters_window_and_pulse_share_one_request_state(self) -> None:
         """One V22 action emits one immutable state to feed and chart."""
+        from core.materializations import refresh_materialization
+        from monitor.each_chart_facts import EACH_FACTS
+        from monitor.home_sentiment_counts import read_home_sentiment_counts
         from tests.test_chart_harvest_coverage import record_harvest
 
         now = datetime.now(UTC)
         record_harvest(now, finished_at=now, staggered=False)
+        self.assertEqual(refresh_materialization(EACH_FACTS, force=True)["status"], "refreshed")
+        saved_reads = []
+
+        def capture_saved_read(**kwargs):
+            result = read_home_sentiment_counts(**kwargs)
+            if result is not None:
+                saved_reads.append(kwargs)
+            return result
+
+        reader_patch = patch("monitor.home_sentiment_counts.read_home_sentiment_counts", side_effect=capture_saved_read)
+        reader_patch.start()
+        self.addCleanup(reader_patch.stop)
 
         def request_state(url: str) -> tuple[dict[str, object], int]:
             query = parse_qs(urlparse(url).query)
@@ -3324,13 +3339,24 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     filters, window = request_state(feed_response.url)
                     self.assertEqual(window, 7)
                     self.assertNotIn("positive", filters["sentiment"])
-                    page.wait_for_function(
-                        "() => { const chart = JSON.parse(document.querySelector('canvas.home-chart').dataset.home); return chart.window_days === 7 && !chart.applied_filters.sentiment.includes('positive') && Number(document.querySelector('[data-pw-pulse]').dataset.pwWindow) === 7; }"
-                    )
-                    chart_payload = page.evaluate(
-                        "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home)"
-                    )
-                    self.assertEqual(sum(chart_payload["totals"].values()), len(feed_response.json()["rows"]))
+                    for selected_window in (7, 30, 365):
+                        if selected_window != 7:
+                            feed_response, _ = act(
+                                page.locator(f"[data-pw-window-btn='{selected_window}']").click
+                            )
+                        page.wait_for_function(
+                            """days => { const chart = JSON.parse(document.querySelector('canvas.home-chart').dataset.home);
+                              return chart.window_days === days && Array.isArray(chart.applied_filters.sentiment)
+                                && !chart.applied_filters.sentiment.includes('positive')
+                                && Number(document.querySelector('[data-pw-pulse]').dataset.pwWindow) === days; }""",
+                            arg=selected_window,
+                        )
+                        chart_payload = page.evaluate(
+                            "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home)"
+                        )
+                        self.assertEqual(
+                            sum(chart_payload["totals"].values()), len(feed_response.json()["rows"])
+                        )
                     act(page.locator("[data-pw-window-btn='1']").click)
 
                     sentiment_pill.press("Escape")
@@ -3388,19 +3414,34 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(checked_brands.count(), 1)
                     self.assertEqual(checked_brands.first.get_attribute("value"), nickname)
 
+                    sentiment_pill.press("Enter")
+                    positive = dropdown.locator('input[value="positive"]')
+                    act(positive.uncheck)
+                    sentiment_pill.press("Escape")
                     feed_response, _ = act(page.locator("[data-pw-window-btn='7']").click)
                     filters, window = request_state(feed_response.url)
                     self.assertEqual(window, 7)
                     self.assertEqual(filters["brands"], [nickname])
-                    page.wait_for_function(
-                        "nickname => { const chart = JSON.parse(document.querySelector('canvas.home-chart').dataset.home); return chart.window_days === 7 && chart.applied_filters.brands.includes(nickname) && Number(document.querySelector('[data-pw-pulse]').dataset.pwWindow) === 7; }",
-                        arg=nickname,
-                    )
-                    chart_payload = page.evaluate(
-                        "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home)"
-                    )
-                    self.assertGreater(sum(chart_payload["totals"].values()), 0)
-                    self.assertEqual(sum(chart_payload["totals"].values()), len(feed_response.json()["rows"]))
+                    for selected_window in (7, 30, 365):
+                        if selected_window != 7:
+                            feed_response, _ = act(
+                                page.locator(f"[data-pw-window-btn='{selected_window}']").click
+                            )
+                        page.wait_for_function(
+                            """([nickname, days]) => { const chart = JSON.parse(document.querySelector('canvas.home-chart').dataset.home);
+                              return chart.window_days === days && chart.applied_filters.brands.includes(nickname)
+                                && Array.isArray(chart.applied_filters.sentiment) && !chart.applied_filters.sentiment.includes('positive')
+                                && Number(document.querySelector('[data-pw-pulse]').dataset.pwWindow) === days; }""",
+                            arg=[nickname, selected_window],
+                        )
+                        chart_payload = page.evaluate(
+                            "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home)"
+                        )
+                        self.assertGreater(sum(chart_payload["totals"].values()), 0)
+                        self.assertEqual(
+                            sum(chart_payload["totals"].values()), len(feed_response.json()["rows"])
+                        )
+                    self.assertGreaterEqual(len(saved_reads), 3)
                     act(page.locator("[data-pw-window-btn='1']").click)
 
                     act(lambda: page.locator(f'[data-pw-pulse-entry="{nickname}"]').press("Enter"))

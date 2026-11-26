@@ -12,7 +12,7 @@ from core.materializations import MaterializationDefinition, sqlstate
 from monitor.each_request_budget import EachChartUnavailable, EachRequestBudget
 from x_monitor.translator import SOURCE_SCRIPT_TAGS, TRUSTED_SOURCE_LANGS
 
-__all__ = ["EACH_FACTS", "EachChartUnavailable", "read_each_fact_groups"]
+__all__ = ["EACH_FACTS", "EachChartUnavailable", "each_publication_boundary", "read_each_fact_groups"]
 
 EACH_FACTS = MaterializationDefinition(
     dataset_key="each.brand_post_facts.v1",
@@ -30,10 +30,16 @@ EACH_FACTS = MaterializationDefinition(
     ),
     lock_id=726_514_095,
     cutoff_sql="date_trunc('day', transaction_timestamp(), 'UTC') - interval '1 day'",
-    refresh_timeout="90s",
-    bootstrap_timeout="120s",
+    # The source SELECT alone has taken 83 seconds on the serving database;
+    # concurrent refresh also needs to reconcile and index the saved rows.
+    # Keep the bounded attempt within the 15-minute maintenance interval.
+    refresh_timeout="180s",
+    bootstrap_timeout="180s",
     refresh_work_mem="8MB",
     advance_barrier=True,
+    online_refresh=True,
+    online_barrier_attempts=61,
+    online_capability="each_facts_online_tracking_v1",
 )
 STATE_COLUMNS = ("state_contract_version", "state_taxonomy_version", "state_outcome")
 SIGNATURE_COLUMNS = {
@@ -55,28 +61,34 @@ SIGNATURE_COLUMNS = {
 }
 
 
-def _read_groups(brand_id, tab, start, end, bucket, tz, at):
-    columns = SIGNATURE_COLUMNS[tab]
+def each_publication_boundary(cursor, start, end, at):
+    """Return the prefix whose saved facts are valid in the current snapshot."""
     day = at.astimezone(UTC).replace(
         hour=0, minute=0, second=0, microsecond=0
     ) - timedelta(days=1)
-    with connection.cursor() as cursor:
-        cursor.execute(
-            """
+    cursor.execute(
+        """
             SELECT CASE WHEN COALESCE((SELECT relispopulated FROM pg_class
                          WHERE oid=to_regclass('each_brand_post_facts')), FALSE)
                          AND published_generation IS NOT NULL
+                         AND cutoff IS NOT NULL
                          AND (source_generation=published_generation OR dirty_since IS NOT NULL)
                     THEN least(cutoff,%s::timestamptz,
                          CASE WHEN source_generation=published_generation THEN cutoff ELSE dirty_since END)
                     END
             FROM materialization_state WHERE dataset_key=%s
         """,
-            [day, EACH_FACTS.dataset_key],
-        )
-        publication = cursor.fetchone()
+        [day, EACH_FACTS.dataset_key],
+    )
+    publication = cursor.fetchone()
     boundary = publication[0] if publication and publication[0] is not None else start
-    boundary = max(start, min(boundary, end))
+    return max(start, min(boundary, end))
+
+
+def _read_groups(brand_id, tab, start, end, bucket, tz, at):
+    columns = SIGNATURE_COLUMNS[tab]
+    with connection.cursor() as cursor:
+        boundary = each_publication_boundary(cursor, start, end, at)
     projected = ", ".join(("created_at", *columns))
     live = (
         "SELECT "

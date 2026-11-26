@@ -465,6 +465,7 @@ def test_home_online_refresh_does_not_queue_behind_inflight_brand_writer(monkeyp
             db.close()
 
     monkeypatch.setattr(materializations.time, "sleep", lambda _: None)
+    monkeypatch.setattr(materializations, "_ONLINE_BARRIER_ATTEMPTS", 10)
     with ThreadPoolExecutor(max_workers=1) as pool:
         writer = pool.submit(hold_brand_writer)
         try:
@@ -505,6 +506,46 @@ def test_online_marker_commits_with_writer_barrier_before_refresh():
     assert transactions["refresh"] != transactions["marker"]
 
 
+def test_online_refresh_retries_until_inflight_writer_finishes(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from django.db import connections, transaction
+
+    from core import materializations
+    from monitor.home_count_summary import refresh_home_counts
+
+    post = history()
+    assert refresh_home_counts()["status"] == "refreshed"
+    Post.objects.filter(pk=post.pk).update(created_at=timezone.now() - timedelta(days=3))
+    entered, release = Event(), Event()
+
+    def hold_writer():
+        db = connections["default"]
+        try:
+            with transaction.atomic(), db.cursor() as cursor:
+                cursor.execute("LOCK TABLE posts_brands IN ROW EXCLUSIVE MODE")
+                entered.set()
+                assert release.wait(10)
+        finally:
+            db.close()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        writer = pool.submit(hold_writer)
+        try:
+            assert entered.wait(5)
+
+            def finish_writer(delay):
+                assert delay == 1
+                release.set()
+                writer.result(timeout=5)
+
+            monkeypatch.setattr(materializations.time, "sleep", finish_writer)
+            assert refresh_home_counts()["status"] == "refreshed"
+        finally:
+            release.set()
+
+
 def test_online_barrier_releases_source_locks_when_state_row_is_busy(monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
@@ -533,7 +574,7 @@ def test_online_barrier_releases_source_locks_when_state_row_is_busy(monkeypatch
             db.close()
 
     def check_no_source_locks(delay):
-        assert delay == 0.2
+        assert delay == 1
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT count(*) FROM pg_locks WHERE pid = pg_backend_pid() "
@@ -544,6 +585,7 @@ def test_online_barrier_releases_source_locks_when_state_row_is_busy(monkeypatch
         attempts.append(delay)
 
     monkeypatch.setattr(materializations.time, "sleep", check_no_source_locks)
+    monkeypatch.setattr(materializations, "_ONLINE_BARRIER_ATTEMPTS", 10)
     with ThreadPoolExecutor(max_workers=1) as pool:
         writer = pool.submit(hold_state)
         try:
@@ -737,6 +779,31 @@ def test_one_failed_dataset_does_not_skip_the_other(monkeypatch):
     assert result['materializations'] == {
         calls[0]: {"status": "unavailable", "error": "RuntimeError"}, calls[1]: {"status": "busy"},
     }
+
+
+def test_database_failure_reports_sqlstate_without_skipping_other_dataset(monkeypatch):
+    from django.db import OperationalError
+    from psycopg.errors import QueryCanceled
+
+    from monitor.management.commands import refresh_materializations
+
+    calls = []
+
+    def fail_first(definition):
+        calls.append(definition.dataset_key)
+        if len(calls) == 1:
+            raise OperationalError('query failed') from QueryCanceled('timeout')
+        return {'status': 'busy'}
+
+    monkeypatch.setattr(refresh_materializations, 'refresh_materialization', fail_first)
+    output = StringIO()
+    with pytest.raises(CommandError):
+        call_command('refresh_home_counts', stdout=output)
+    result = json.loads(output.getvalue())
+    assert result['materializations'][calls[0]] == {
+        'status': 'unavailable', 'error': 'OperationalError', 'sqlstate': '57014',
+    }
+    assert result['materializations'][calls[1]] == {'status': 'busy'}
 
 
 def test_each_advance_barrier_busy_does_not_queue_a_later_source_writer(

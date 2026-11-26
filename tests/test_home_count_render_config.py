@@ -33,3 +33,15 @@ def test_schema_integration_does_not_provision_staging_count_maintenance():
         and service.get("startCommand") != "python manage.py refresh_home_counts"
         for service in blueprint["services"]
     ), "staging count-cron provisioning is excluded from this delivery"
+
+
+def test_homepage_regressions_run_for_direct_production_releases():
+    workflow = yaml.safe_load(Path(".github/workflows/homepage-counts.yml").read_text())
+    # PyYAML interprets the unquoted GitHub Actions key "on" as a boolean.
+    triggers = workflow.get("on", workflow.get(True))
+    assert triggers["push"]["branches"] == ["main"]
+    assert triggers["push"]["paths"] == triggers["pull_request"]["paths"]
+    assert {"x_monitor/**", "config/**", "config.yaml", "uv.lock", "bridgewright.yaml"} <= set(
+        triggers["push"]["paths"]
+    )
+    assert "workflow_dispatch" in triggers

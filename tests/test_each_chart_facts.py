@@ -19,7 +19,8 @@ from core.models import (
 from monitor.views import _each_chart_payload, _each_tab_entries
 from tests.each_reference import reference_each_chart_payload
 
-NOW = datetime(2026, 11, 19, 12, tzinfo=UTC)
+# The materialized view uses PostgreSQL's current date for its cutoff.
+NOW = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
 DATASET = "each.brand_post_facts.v1"
 
 

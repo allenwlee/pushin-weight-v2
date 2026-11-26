@@ -33,6 +33,7 @@ SOURCE_PATHS = (
     "project/settings.py",
     "core/models.py", "core/classification_readers.py", "core/materializations.py",
     "monitor/views.py", "monitor/urls.py", "monitor/each_chart_facts.py",
+    "x_monitor/translator.py",
     "monitor/each_headline.py", "monitor/each_request_budget.py",
     "monitor/templates/monitor/dashboard_each.html", "monitor/templates/monitor/_each_headline.html",
     "monitor/static/pw-each-chart.js", "monitor/static/pw-each-chart.css",

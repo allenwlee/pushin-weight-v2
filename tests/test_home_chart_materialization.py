@@ -123,7 +123,8 @@ def test_long_comparison_uses_midnight_but_chart_clock_stays_live(
 
 
 @pytest.mark.parametrize("window", [1, 7])
-def test_short_comparison_keeps_exact_rolling_boundaries(chart_context, window):
+@pytest.mark.parametrize("materialized", [False, True])
+def test_short_comparison_keeps_exact_rolling_boundaries(chart_context, window, materialized):
     client, brand = chart_context
     dates = [
         NOW - timedelta(days=2 * window, microseconds=1),
@@ -136,9 +137,16 @@ def test_short_comparison_keeps_exact_rolling_boundaries(chart_context, window):
     ]
     for index, at in enumerate(dates):
         _post(brand, f"rolling-{window}-{index}", at)
-    payload = _payload(
-        client.get("/chart.html", {"window": window, "locale": "en"}, secure=True)
-    )
+    if materialized:
+        from monitor.home_count_summary import refresh_home_counts
+
+        assert refresh_home_counts()["status"] == "refreshed"
+    with CaptureQueriesContext(connection) as queries:
+        payload = _payload(
+            client.get("/chart.html", {"window": window, "locale": "en"}, secure=True)
+        )
+    if materialized:
+        assert any("FROM home_brand_time_counts" in row["sql"] for row in queries.captured_queries)
     entry = next(
         row for row in payload["pulse"]["entries"] if row["nickname"] == brand.pk
     )
@@ -401,6 +409,25 @@ def test_correction_before_window_uses_bounded_source_query(chart_context):
     assert actual["pulse"] == expected["pulse"]
 
 
+@pytest.mark.parametrize("dirty_days", [2, 4])
+def test_dirty_tail_join_preserves_exact_counts(chart_context, dirty_days):
+    from monitor.home_count_summary import read_home_counts, refresh_home_counts
+
+    _, brand = chart_context
+    _post(brand, "tail-current", NOW - timedelta(days=1))
+    assert refresh_home_counts()["status"] == "refreshed"
+    _post(brand, "tail-correction", NOW - timedelta(days=dirty_days))
+    with CaptureQueriesContext(connection) as queries:
+        rows = read_home_counts(
+            start=NOW - timedelta(days=14), midpoint=NOW - timedelta(days=7),
+            end=NOW, brand_ids=[brand.pk],
+        )
+    assert rows is not None
+    assert sum(row["count"] for row in rows) == 2
+    statement = next(q["sql"] for q in queries.captured_queries if "FROM home_brand_time_counts" in q["sql"])
+    assert "CROSS JOIN LATERAL" in statement
+
+
 @pytest.mark.parametrize(
     "unavailable",
     ["missing_state", "missing_view", "timeout", "unknown_boundary", "global_change"],
@@ -455,6 +482,95 @@ def test_real_chart_falls_back_without_broken_transaction_when_summary_is_unavai
         assert actual["pulse"] == expected["pulse"]
         assert Post.objects.filter(pk="fallback-history").exists()
         raise RestoreFixture
+
+
+def test_slow_count_timeout_does_not_start_a_second_full_pulse_query(chart_context):
+    from django.db import DatabaseError
+
+    from monitor.home_count_summary import refresh_home_counts
+    from monitor.views import _build_home_pulse_payload
+
+    _, brand = chart_context
+    _post(brand, "slow-timeout-history", NOW - timedelta(days=2))
+    assert refresh_home_counts()["status"] == "refreshed"
+    _clear_home_pulse_cache()
+    attempted = []
+    clock = [0.0]
+
+    def cancel_summary(execute, sql, params, many, context):
+        attempted.append(sql)
+        if "FROM home_brand_time_counts" in sql:
+            clock[0] = 12.0
+            execute("SET LOCAL statement_timeout = '1ms'", None, False, context)
+            execute("SELECT pg_sleep(0.05)", None, False, context)
+        return execute(sql, params, many, context)
+
+    with (
+        patch("monitor.views.monotonic", return_value=0.0),
+        patch("monitor.home_count_summary.monotonic", side_effect=lambda: clock[0]),
+        connection.execute_wrapper(cancel_summary),
+        pytest.raises(DatabaseError),
+    ):
+        _build_home_pulse_payload(7, now=NOW, brand_nicknames=(brand.pk,))
+    assert not any('COUNT("posts_brands"."post_id")' in sql for sql in attempted)
+    assert any("FROM home_brand_time_counts" in sql for sql in attempted)
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1")
+        assert cursor.fetchone() == (1,)
+
+
+def test_raw_pulse_fallback_uses_remaining_deadline_and_restores_connection(chart_context):
+    from django.db import DatabaseError
+
+    from monitor.views import _build_home_pulse_payload
+
+    _, brand = chart_context
+    _post(brand, "bounded-fallback", NOW - timedelta(hours=2))
+    _clear_home_pulse_cache()
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT current_setting('statement_timeout')")
+        previous = cursor.fetchone()[0]
+
+    def slow_raw(execute, sql, params, many, context):
+        if 'COUNT("posts_brands"."post_id")' in sql:
+            execute("SELECT pg_sleep(0.3)", None, False, context)
+        return execute(sql, params, many, context)
+
+    clock = [0.0]
+
+    def unavailable(**kwargs):
+        clock[0] = 9.9
+
+    with (
+        patch("monitor.home_count_summary.read_home_counts", side_effect=unavailable),
+        patch("monitor.views.monotonic", return_value=0.0),
+        patch("monitor.home_count_summary.monotonic", side_effect=lambda: clock[0]),
+        connection.execute_wrapper(slow_raw),
+        pytest.raises(DatabaseError),
+    ):
+        _build_home_pulse_payload(7, now=NOW, brand_nicknames=(brand.pk,))
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT current_setting('statement_timeout')")
+        assert cursor.fetchone()[0] == previous
+
+
+def test_pulse_deadline_is_shared_by_multiple_statements(chart_context):
+    from time import monotonic
+
+    from django.db import DatabaseError
+
+    from monitor.home_count_summary import pulse_count_deadline
+
+    with (
+        pytest.raises(DatabaseError),
+        pulse_count_deadline(monotonic() + 0.6),
+        connection.cursor() as cursor,
+    ):
+        cursor.execute("SELECT pg_sleep(0.4)")
+        cursor.execute("SELECT pg_sleep(0.5)")
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1")
+        assert cursor.fetchone() == (1,)
 
 
 @pytest.mark.parametrize("mutation", ["move_earlier", "move_later", "flag", "delete"])

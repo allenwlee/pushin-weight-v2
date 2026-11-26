@@ -4,7 +4,7 @@ import json
 
 from django.core.management.base import BaseCommand, CommandError
 
-from core.materializations import refresh_materialization
+from core.materializations import refresh_materialization, sqlstate
 
 
 def registered_definitions():
@@ -31,6 +31,8 @@ class Command(BaseCommand):
                 results[definition.dataset_key] = {
                     "status": "unavailable", "error": type(error).__name__,
                 }
+                if code := sqlstate(error):
+                    results[definition.dataset_key]["sqlstate"] = code
         self.stdout.write(json.dumps(self.format_results(results), sort_keys=True))
         if failures:
             raise CommandError("Materialization refresh failed for: " + ", ".join(failures))

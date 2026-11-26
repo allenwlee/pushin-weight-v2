@@ -150,6 +150,11 @@ def test_not_required_keeps_product_checks_and_never_measures(runners, capsys):
     )
     assert any("assurance-assess" in command for command in runners)
     assert any("pytest" in command for command in runners)
+    assert any(
+        "tests/test_pulse_browser.py" in command
+        and "tests/test_pulse_pipeline_browser.py" in command
+        for command in runners
+    )
     assert not any(
         any(arg.startswith("performance-") for arg in command) for command in runners
     )
