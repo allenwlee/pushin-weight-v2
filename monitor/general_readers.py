@@ -51,6 +51,7 @@ SECTIONS = {
     "moving": "personnel_changes",
 }
 CURSOR_SALT = "monitor.general.v1"
+_RECENT_CLASSIFIED_SCAN_LIMIT = 100_000
 
 
 def safe_external_url(value):
@@ -392,7 +393,7 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
     return {pk: list(rows.values()) for pk, rows in result.items()}
 
 
-def _bounded_temporal_candidates(section, signals, eligible, brands, at, last, limit):
+def _bounded_temporal_candidates(section, signals, brands, at, last, limit):
     """Keep linked posts plus a bounded, ordered page of posts without facts.
 
     If the recent window does not contain a full page, fall back to the
@@ -435,13 +436,15 @@ def _bounded_temporal_candidates(section, signals, eligible, brands, at, last, l
         ]
     else:
         link_queries = [Opportunity.objects.exclude(review_status="rejected")]
-    linked = Q()
+    linked_queries = []
+    linked_params = []
     no_facts = []
     params.append(recent_limit)
     for link_query in link_queries:
         posts = link_query.filter(source_post_id__isnull=False).order_by().values("source_post_id")
-        linked |= Q(pk__in=posts)
         link_sql, link_params = posts.query.sql_with_params()
+        linked_queries.append(link_sql)
+        linked_params.extend(link_params)
         no_facts.append(f"r.pk NOT IN ({link_sql})")
         params.extend(link_params)
     params.extend(signal_params)
@@ -468,10 +471,72 @@ def _bounded_temporal_candidates(section, signals, eligible, brands, at, last, l
     scanned = rows[0][2]
     if len(unknown) <= limit and scanned == recent_limit:
         return None
-    candidates = dict(eligible.filter(linked).order_by().values_list("pk", "fetched_at"))
+    # Drive the lookup from the comparatively small set of linked fact IDs.
+    # A single ORM IN/OR expression can make PostgreSQL scan the complete
+    # classified-post set first, even though only a few posts have dates.
+    linked_sql = " UNION ALL ".join(linked_queries)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"""
+            WITH linked AS MATERIALIZED (
+                SELECT DISTINCT source_post_id FROM ({linked_sql}) linked_sources
+            )
+            SELECT p.pk, p.fetched_at FROM linked l
+            CROSS JOIN LATERAL (
+                SELECT p.pk, p.fetched_at FROM ({public_sql}) p
+                WHERE p.pk=l.source_post_id AND p.fetched_at <= %s
+                  AND EXISTS (SELECT 1 FROM ({signal_sql}) matched
+                              WHERE matched.post_id=p.pk OFFSET 0)
+                OFFSET 0
+            ) p
+            """,
+            [*linked_params, *public_params, at, *signal_params],
+        )
+        candidates = dict(cursor.fetchall())
     linked_ids = set(candidates)
     candidates.update(unknown)
     return candidates, linked_ids
+
+
+def _recent_classified_candidates(signals, brands, at, last, limit):
+    """Read a time-ordered page while probing the exact classification by Post."""
+    if connection.vendor != "postgresql":
+        return None
+    try:
+        public_sql, public_params = public_posts().order_by().values("pk", "fetched_at").query.sql_with_params()
+        signal_sql, signal_params = signals.order_by().values("post_id").query.sql_with_params()
+    except EmptyResultSet:
+        return {}
+    cursor_filter = ""
+    cursor_params = []
+    if last is not None:
+        last_fetch = datetime.fromtimestamp(-last[0], tz=UTC)
+        cursor_filter = (
+            ' AND p.fetched_at <= %s AND (p.fetched_at < %s OR '
+            '(p.fetched_at = %s AND p.pk COLLATE "C" > %s COLLATE "C"))'
+        )
+        cursor_params = [last_fetch, last_fetch, last_fetch, last[1]]
+    scan_limit = (
+        min(_RECENT_CLASSIFIED_SCAN_LIMIT, 5_000)
+        if brands is not None and len(brands) <= 2 else _RECENT_CLASSIFIED_SCAN_LIMIT
+    )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT r.pk,r.fetched_at FROM (
+                SELECT p.pk,p.fetched_at FROM ({public_sql}) p
+                WHERE p.fetched_at <= %s {cursor_filter}
+                ORDER BY p.fetched_at DESC,p.pk COLLATE "C" LIMIT %s OFFSET 0
+            ) r
+            WHERE EXISTS (SELECT 1 FROM ({signal_sql}) matched
+                          WHERE matched.post_id=r.pk OFFSET 0)
+            ORDER BY r.fetched_at DESC,r.pk COLLATE "C" LIMIT %s
+            """,
+            [*public_params, at, *cursor_params, scan_limit, *signal_params, limit + 1],
+        )
+        rows = cursor.fetchall()
+    # An incomplete recent page may hide older matches for a sparse brand.
+    return dict(rows) if len(rows) > limit else None
 
 
 def _general_feed(
@@ -487,26 +552,32 @@ def _general_feed(
     signals = current_signals().filter(post_type_id=SECTIONS[section])
     if brands is not None:
         signals = signals.filter(brand_id__in=brands)
-    eligible = public_posts().filter(
-        pk__in=signals.values("post_id"), fetched_at__lte=at
-    )
-    if section in {"jobs", "moving"}:
-        # C collation keeps the database tie-break identical to Python's string
-        # order, including nonnumeric source IDs.
-        eligible = eligible.annotate(_sort_id=Collate("tweet_id", "C"))
-        if last is not None:
-            last_fetch = datetime.fromtimestamp(-last[0], tz=UTC)
-            eligible = eligible.filter(
-                Q(fetched_at__lt=last_fetch)
-                | Q(fetched_at=last_fetch, _sort_id__gt=last[1])
-            )
-        eligible = eligible.order_by("-fetched_at", "_sort_id")[: limit + 1]
     bounded = (
-        _bounded_temporal_candidates(section, signals, eligible, brands, at, last, limit)
+        _bounded_temporal_candidates(section, signals, brands, at, last, limit)
         if section in {"calendar", "free"}
         else None
     )
-    if bounded is None:
+    recent_candidates = (
+        _recent_classified_candidates(signals, brands, at, last, limit)
+        if section in {"jobs", "moving"} else None
+    )
+    if recent_candidates is not None:
+        candidates = recent_candidates
+        fact_ids = []
+    elif bounded is None:
+        eligible = public_posts().filter(
+            pk__in=signals.values("post_id"), fetched_at__lte=at
+        )
+        if section in {"jobs", "moving"}:
+            # Preserve the exact C-collated ordering in the sparse fallback.
+            eligible = eligible.annotate(_sort_id=Collate("tweet_id", "C"))
+            if last is not None:
+                last_fetch = datetime.fromtimestamp(-last[0], tz=UTC)
+                eligible = eligible.filter(
+                    Q(fetched_at__lt=last_fetch)
+                    | Q(fetched_at=last_fetch, _sort_id__gt=last[1])
+                )
+            eligible = eligible.order_by("-fetched_at", "_sort_id")[: limit + 1]
         candidates = dict(eligible.values_list("pk", "fetched_at"))
         fact_ids = list(candidates)
     else:

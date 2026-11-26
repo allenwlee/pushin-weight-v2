@@ -936,6 +936,8 @@ class MaterializationState(models.Model):
     dirty_since = models.DateTimeField(null=True)
     refresh_generation = models.PositiveBigIntegerField(null=True)
     refresh_dirty_since = models.DateTimeField(null=True)
+    dirty_post_ids = ArrayField(models.TextField(db_collation="C"), null=True)
+    refresh_dirty_post_ids = ArrayField(models.TextField(db_collation="C"), null=True)
     cutoff = models.DateTimeField(null=True)
     refreshed_at = models.DateTimeField(null=True)
 

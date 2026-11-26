@@ -187,6 +187,31 @@ def test_calendar_pages_bound_unknown_posts_without_losing_dated_items(monkeypat
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("section", ["calendar", "free"])
+def test_linked_candidate_lookup_drives_from_fact_ids_and_deduplicates(section):
+    post = classified_post("linked-fact-first", "events" if section == "calendar" else "opportunities", age=1000)
+    if section == "calendar":
+        event(post, 2, 3)
+        event(post, 3, 4)
+    else:
+        for index in range(2):
+            Opportunity.objects.create(
+                brand_id="qwen", source_post=post, sponsor_name="Qwen",
+                opportunity_type_reference=OpportunityType.objects.get(code="free_credits"),
+                action_type="apply", benefit_type="credits", first_seen_at=NOW,
+                last_seen_at=NOW, opportunity_identity=f"linked-{index}",
+            )
+    classified_post("unrelated-classification", "job_listings")
+    with CaptureQueriesContext(connection) as queries:
+        page = general_feed(section, as_of=NOW, limit=7)
+    assert [item["id"] for item in page["items"]] == [post.pk]
+    linked_queries = [query["sql"] for query in queries if "WITH linked AS MATERIALIZED" in query["sql"]]
+    assert len(linked_queries) == 1
+    assert "CROSS JOIN LATERAL" in linked_queries[0]
+    assert "SELECT DISTINCT source_post_id" in linked_queries[0]
+
+
+@pytest.mark.django_db(transaction=True)
 def test_calendar_sparse_recent_window_falls_back_to_older_matches():
     from core.models import Post
 

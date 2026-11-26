@@ -61,6 +61,27 @@ def test_saved_and_live_sentiment_matches_existing_filter_for_windows_and_correc
                 )
 
 
+def test_tracked_historical_correction_matches_existing_filters(request):
+    from core.materializations import refresh_materialization
+    from monitor.each_chart_facts import EACH_FACTS
+
+    brand = request.getfixturevalue("each_brand_fixture")
+    assert refresh_materialization(EACH_FACTS)["status"] == "refreshed"
+    PostBrandClassificationState.objects.filter(post_id="each-facts-3").update(sentiment_id="negative")
+    assert MaterializationState.objects.get(pk=DATASET).dirty_post_ids == ["each-facts-3"]
+    for days in (7, 30, 365):
+        start = NOW - timedelta(days=days)
+        for sentiments in (["positive"], ["negative", "__unclassified__"], ["__unclassified__"]):
+            for mode, legacy, zone in (("any", "any", "UTC"), ("off", None, "Asia/Tokyo")):
+                actual = read_home_sentiment_counts(
+                    brand=brand.pk, sentiments=sentiments, start=start, end=NOW, at=NOW,
+                    timezone_name=zone, promotion_mode=mode, legacy_mode=legacy,
+                )
+                assert {row["day"]: row["count"] for row in actual} == _source_counts(
+                    brand, sentiments, start, NOW, mode, legacy, zone,
+                )
+
+
 @pytest.mark.parametrize("invalid", ["missing_state", "global_dirty"])
 def test_missing_or_globally_dirty_publication_falls_back(request, invalid):
     fact_brand = request.getfixturevalue("each_brand_fixture")

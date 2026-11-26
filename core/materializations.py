@@ -43,6 +43,7 @@ class MaterializationDefinition:
     online_refresh: bool = False
     online_barrier_attempts: int | None = None
     online_capability: str | None = None
+    online_dirty_ids_capability: str | None = None
 
     def __post_init__(self) -> None:
         if len(self.dataset_key) > 160 or not _DATASET_KEY.fullmatch(self.dataset_key):
@@ -63,6 +64,10 @@ class MaterializationDefinition:
             not self.online_refresh or not _IDENTIFIER.fullmatch(self.online_capability)
         ):
             raise ValueError("Online capability must be an explicit local function name")
+        if self.online_dirty_ids_capability is not None and (
+            not self.online_refresh or not _IDENTIFIER.fullmatch(self.online_dirty_ids_capability)
+        ):
+            raise ValueError("Dirty ID capability must be an explicit local function name")
 
 
 def sqlstate(error: BaseException) -> str | None:
@@ -253,6 +258,7 @@ def _refresh_materialization_online(
 
     marker_set = False
     try:
+        track_dirty_ids = False
         if definition.online_capability:
             # The migration's reverse path takes this same lock before
             # removing the capability and restoring older trigger functions.
@@ -260,6 +266,10 @@ def _refresh_materialization_online(
                 cursor.execute("SELECT to_regprocedure(%s) IS NOT NULL", [definition.online_capability + "()"])
                 if not cursor.fetchone()[0]:
                     return {"status": "unavailable"}
+        if definition.online_dirty_ids_capability:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT to_regprocedure(%s) IS NOT NULL", [definition.online_dirty_ids_capability + "()"])
+                track_dirty_ids = cursor.fetchone()[0]
         if not _initialize(definition):
             return {"status": "busy"}
         # Freeze the view cutoff before the short source-writer barrier.
@@ -287,27 +297,32 @@ def _refresh_materialization_online(
                     populated = is_populated(cursor, definition)
                     cursor.execute(
                         f"SELECT source_generation, {HISTORY_CLEAN_SQL}, cutoff "
-                        "FROM materialization_state WHERE dataset_key = %s FOR UPDATE NOWAIT",
+                        + (", dirty_post_ids IS NOT NULL " if track_dirty_ids else ", TRUE ")
+                        + "FROM materialization_state WHERE dataset_key = %s FOR UPDATE NOWAIT",
                         [definition.dataset_key],
                     )
                     state = cursor.fetchone()
                     if state is None:
                         return {"status": "unavailable"}
-                    generation, clean, cutoff = state
+                    generation, clean, cutoff, tracked = state
                     target = barrier_target
                     if cutoff is not None and cutoff > target:
                         return {"status": "busy"}
-                    if populated and clean and cutoff == target and not force:
+                    if populated and clean and cutoff == target and tracked and not force:
                         # A crashed refresher may have left its marker behind.
                         cursor.execute(
                             "UPDATE materialization_state SET refresh_generation = NULL, "
-                            "refresh_dirty_since = NULL WHERE dataset_key = %s",
+                            "refresh_dirty_since = NULL "
+                            + (", refresh_dirty_post_ids = NULL " if track_dirty_ids else "")
+                            + "WHERE dataset_key = %s",
                             [definition.dataset_key],
                         )
                         return {"status": "skipped", "cutoff": cutoff.isoformat()}
                     cursor.execute(
                         "UPDATE materialization_state SET refresh_generation = %s, "
-                        "refresh_dirty_since = NULL WHERE dataset_key = %s",
+                        "refresh_dirty_since = NULL "
+                        + (", refresh_dirty_post_ids = ARRAY[]::text[] " if track_dirty_ids else "")
+                        + "WHERE dataset_key = %s",
                         [generation, definition.dataset_key],
                     )
                 break
@@ -331,7 +346,9 @@ def _refresh_materialization_online(
                     "UPDATE materialization_state SET published_generation = refresh_generation, "
                     "cutoff = %s, refreshed_at = clock_timestamp(), "
                     "dirty_since = refresh_dirty_since, refresh_generation = NULL, "
-                    "refresh_dirty_since = NULL WHERE dataset_key = %s "
+                    "refresh_dirty_since = NULL "
+                    + (", dirty_post_ids = refresh_dirty_post_ids, refresh_dirty_post_ids = NULL " if track_dirty_ids else "")
+                    + "WHERE dataset_key = %s "
                     "AND refresh_generation = %s "
                     "AND (source_generation = refresh_generation OR refresh_dirty_since IS NOT NULL)",
                     [target, definition.dataset_key, generation],
@@ -354,7 +371,9 @@ def _refresh_materialization_online(
                 with transaction.atomic(), connection.cursor() as cursor:
                     cursor.execute(
                         "UPDATE materialization_state SET refresh_generation = NULL, "
-                        "refresh_dirty_since = NULL WHERE dataset_key = %s "
+                        "refresh_dirty_since = NULL "
+                        + (", refresh_dirty_post_ids = NULL " if track_dirty_ids else "")
+                        + "WHERE dataset_key = %s "
                         "AND refresh_generation = %s",
                         [definition.dataset_key, generation],
                     )

@@ -105,6 +105,44 @@ def test_jobs_use_fetch_age_with_exact_24_hour_boundary_and_multiple_facts():
     assert items[0]["age_seconds"] == pytest.approx(23.999 * 3600)
 
 
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("section,post_type", [("jobs", "job_listings"), ("moving", "personnel_changes")])
+def test_recent_classified_lookup_matches_existing_pagination(monkeypatch, section, post_type):
+    from monitor import general_readers
+
+    for index in range(12):
+        classified_post(f"ordered-{index:02d}", post_type, age=index // 3, brand="qwen")
+    classified_post("different-brand", post_type, brand="mistral")
+
+    def collect():
+        result, cursor = [], None
+        for _ in range(4):
+            page = general_feed(section, brands=["qwen"], limit=3, cursor=cursor, as_of=NOW)
+            result.extend(item["id"] for item in page["items"])
+            cursor = page["next_cursor"]
+            if cursor is None:
+                return result
+        pytest.fail("Pagination did not finish within the expected four pages")
+
+    actual = collect()
+    monkeypatch.setattr(general_readers, "_recent_classified_candidates", lambda *args: None)
+    assert actual == collect()
+    assert len(actual) == 12
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("section,post_type", [("jobs", "job_listings"), ("moving", "personnel_changes")])
+def test_recent_classified_lookup_falls_back_for_sparse_brand(monkeypatch, section, post_type):
+    from monitor import general_readers
+
+    older = classified_post("sparse-classified", post_type, age=50, brand="qwen")
+    for index in range(8):
+        classified_post(f"new-other-{index}", post_type, age=index + 1, brand="mistral")
+    monkeypatch.setattr(general_readers, "_RECENT_CLASSIFIED_SCAN_LIMIT", 5)
+    page = general_feed(section, brands=["qwen"], as_of=NOW, limit=2)
+    assert [item["id"] for item in page["items"]] == [older.pk]
+
+
 def test_people_require_source_linked_nonrejected_nonsuperseded_claims_and_label_uncertainty():
     post = classified_post("3201", "personnel_changes")
     confirmed = affiliation(post, "confirmed")

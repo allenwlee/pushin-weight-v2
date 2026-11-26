@@ -40,6 +40,7 @@ EACH_FACTS = MaterializationDefinition(
     online_refresh=True,
     online_barrier_attempts=61,
     online_capability="each_facts_online_tracking_v1",
+    online_dirty_ids_capability="each_facts_dirty_post_ids_v1",
 )
 STATE_COLUMNS = ("state_contract_version", "state_taxonomy_version", "state_outcome")
 SIGNATURE_COLUMNS = {
@@ -61,11 +62,15 @@ SIGNATURE_COLUMNS = {
 }
 
 
-def each_publication_boundary(cursor, start, end, at):
-    """Return the prefix whose saved facts are valid in the current snapshot."""
-    day = at.astimezone(UTC).replace(
+def _publication_day(at):
+    return at.astimezone(UTC).replace(
         hour=0, minute=0, second=0, microsecond=0
     ) - timedelta(days=1)
+
+
+def each_publication_boundary(cursor, start, end, at):
+    """Return the prefix whose saved facts are valid in the current snapshot."""
+    day = _publication_day(at)
     cursor.execute(
         """
             SELECT CASE WHEN COALESCE((SELECT relispopulated FROM pg_class
@@ -85,10 +90,34 @@ def each_publication_boundary(cursor, start, end, at):
     return max(start, min(boundary, end))
 
 
-def _read_groups(brand_id, tab, start, end, bucket, tz, at):
+def each_publication_details(cursor, start, end, at):
+    """Read bounded invalidations only inside a stable database snapshot."""
+    boundary = each_publication_boundary(cursor, start, end, at)
+    cursor.execute("SELECT to_regprocedure(%s) IS NOT NULL", [EACH_FACTS.online_dirty_ids_capability + "()"])
+    if not cursor.fetchone()[0]:
+        return boundary, None
+    cursor.execute(
+        """SELECT cutoff, dirty_post_ids FROM materialization_state
+           WHERE dataset_key=%s AND published_generation IS NOT NULL AND cutoff IS NOT NULL
+             AND dirty_post_ids IS NOT NULL
+             AND (source_generation=published_generation OR dirty_since IS NOT NULL)
+             AND COALESCE((SELECT relispopulated FROM pg_class
+                           WHERE oid=to_regclass('each_brand_post_facts')), FALSE)""",
+        [EACH_FACTS.dataset_key],
+    )
+    publication = cursor.fetchone()
+    if publication is None:
+        return boundary, None
+    return max(start, min(publication[0], _publication_day(at), end)), publication[1]
+
+
+def _read_groups(brand_id, tab, start, end, bucket, tz, at, *, stable_snapshot=False):
     columns = SIGNATURE_COLUMNS[tab]
     with connection.cursor() as cursor:
-        boundary = each_publication_boundary(cursor, start, end, at)
+        if stable_snapshot:
+            boundary, dirty_ids = each_publication_details(cursor, start, end, at)
+        else:
+            boundary, dirty_ids = each_publication_boundary(cursor, start, end, at), None
     projected = ", ".join(("created_at", *columns))
     if tab == "sentiment":
         # The source view looks the Post up again and always reads legacy
@@ -135,18 +164,29 @@ def _read_groups(brand_id, tab, start, end, bucket, tz, at):
         )
         live_brand_params = [brand_id]
 
-    def live_params(lower):
-        return [*live_brand_params, lower, end]
+    def live_params(lower, upper=end):
+        return [*live_brand_params, lower, upper]
 
     data_params = live_params(boundary)
     if boundary > start:
+        saved_filter = '' if dirty_ids is None else ' AND NOT (post_id COLLATE "C" = ANY(%s::text[] COLLATE "C"))'
         sources = (
             "SELECT "
             + projected
-            + " FROM each_brand_post_facts WHERE brand_id=%s AND created_at >= %s AND created_at < %s UNION ALL "
+            + " FROM each_brand_post_facts WHERE brand_id=%s AND created_at >= %s AND created_at < %s"
+            + saved_filter + " UNION ALL "
             + live
         )
-        data_params = [brand_id, start, boundary, *data_params]
+        data_params = [brand_id, start, boundary, *([] if dirty_ids is None else [dirty_ids]), *data_params]
+        if dirty_ids:
+            sources += ''' UNION ALL
+                SELECT changed.* FROM (
+                    SELECT DISTINCT item COLLATE "C" AS post_id FROM unnest(%s::text[]) item
+                ) dirty CROSS JOIN LATERAL (''' + live + '''
+                    AND p.tweet_id=dirty.post_id COLLATE "default"
+                    AND p.tweet_id COLLATE "C"=dirty.post_id COLLATE "C" OFFSET 0
+                ) changed'''
+            data_params += [dirty_ids, *live_params(start, boundary)]
     else:
         sources = live
     bucket_sql = (
@@ -282,6 +322,6 @@ def read_each_fact_groups(
                     cursor.execute(
                         "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
                     )
-            result = _read_groups(brand_id, tab, start, end, bucket, tz, at)
+            result = _read_groups(brand_id, tab, start, end, bucket, tz, at, stable_snapshot=owns_snapshot)
             budget.remaining_ms()
             return result

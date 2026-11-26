@@ -4,7 +4,7 @@ from django.db import DatabaseError, connection, transaction
 
 from core.classification_contract import COMPATIBLE_TAXONOMY_VERSIONS, CONTRACT_VERSION
 from core.materializations import sqlstate
-from monitor.each_chart_facts import each_publication_boundary
+from monitor.each_chart_facts import each_publication_details
 
 _UNCLASSIFIED = "__unclassified__"
 _FIELDS = (
@@ -60,19 +60,34 @@ def read_home_sentiment_counts(*, brand, sentiments, start, end, at, timezone_na
     try:
         with transaction.atomic(), connection.cursor() as cursor:
             cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-            boundary = each_publication_boundary(cursor, start, end, at)
+            boundary, dirty_ids = each_publication_details(cursor, start, end, at)
             if boundary <= start:
                 return None
+            saved_filter = '' if dirty_ids is None else ' AND NOT (post_id COLLATE "C" = ANY(%s::text[] COLLATE "C"))'
+            dirty_source = ''
+            if dirty_ids:
+                dirty_source = f'''
+                    UNION ALL
+                    SELECT changed.* FROM (
+                        SELECT DISTINCT item COLLATE "C" AS post_id FROM unnest(%s::text[]) item
+                    ) dirty CROSS JOIN LATERAL (
+                        SELECT {_FIELDS} FROM each_brand_post_facts_source
+                        WHERE brand_id=%s AND created_at >= %s AND created_at < %s
+                          AND post_id=dirty.post_id COLLATE "default"
+                          AND post_id COLLATE "C"=dirty.post_id COLLATE "C" OFFSET 0
+                    ) changed
+                '''
             sql = f"""
                 WITH cfg AS MATERIALIZED (
                     SELECT %s::text AS contract, %s::text[] AS taxonomy,
                            %s::text[] AS selected
                 ), facts AS (
                     SELECT {_FIELDS} FROM each_brand_post_facts
-                    WHERE brand_id=%s AND created_at >= %s AND created_at < %s
+                    WHERE brand_id=%s AND created_at >= %s AND created_at < %s {saved_filter}
                     UNION ALL
                     SELECT {_FIELDS} FROM each_brand_post_facts_source
                     WHERE brand_id=%s AND created_at >= %s AND created_at < %s
+                    {dirty_source}
                 ), resolved AS (
                     SELECT f.*, (f.state_contract_version=cfg.contract
                            AND f.state_taxonomy_version=ANY(cfg.taxonomy)) AS recognized
@@ -86,7 +101,9 @@ def read_home_sentiment_counts(*, brand, sentiments, start, end, at, timezone_na
             """
             cursor.execute(sql, [
                 CONTRACT_VERSION, list(COMPATIBLE_TAXONOMY_VERSIONS), selected,
-                brand, start, boundary, brand, boundary, end, timezone_name,
+                brand, start, boundary, *([] if dirty_ids is None else [dirty_ids]),
+                brand, boundary, end,
+                *([dirty_ids, brand, start, boundary] if dirty_ids else []), timezone_name,
             ])
             return [{"brand_id": brand, "day": day, "count": count}
                     for day, count in cursor.fetchall()]

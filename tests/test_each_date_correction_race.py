@@ -140,6 +140,7 @@ def test_each_online_refresh_preserves_concurrent_historical_write():
     def write():
         try:
             PostBrandProductLabel.objects.create(post_id=post.pk, brand_id=brand.pk, product_label_id='bug')
+            Post.objects.filter(pk=post.pk).update(lang='ja', lang_detected='ja')
         finally:
             connections['default'].close()
 
@@ -156,7 +157,19 @@ def test_each_online_refresh_preserves_concurrent_historical_write():
     assert state.source_generation > state.published_generation
     assert state.dirty_since <= post.created_at
     assert state.refresh_generation is None
+    assert state.dirty_post_ids == [post.pk]
+    assert state.refresh_dirty_post_ids is None
+    from monitor.views import _each_chart_payload
+    from tests.each_reference import reference_each_chart_payload
+
+    at = timezone.now()
+    options = {'now': at, 'bucket_timezone': 'UTC', '_rank': False}
+    chart = _each_chart_payload(brand.pk, 'lang', 30, 'en', **options)
+    assert chart == reference_each_chart_payload(brand.pk, 'lang', 30, 'en', **options)
+    assert sum(chart['series']['ja']) == 1
     assert refresh_materialization(EACH_FACTS)['status'] == 'refreshed'
+    state.refresh_from_db()
+    assert state.dirty_post_ids == []
     with connection.cursor() as cursor:
         cursor.execute('SELECT product_label_keys FROM each_brand_post_facts WHERE post_id=%s AND brand_id=%s', [post.pk, brand.pk])
         assert cursor.fetchone()[0] == ['bug']
@@ -197,3 +210,4 @@ def test_each_online_refresh_preserves_concurrent_brand_identity_change():
     assert state.source_generation > state.published_generation
     assert state.dirty_since.year == 1
     assert state.refresh_generation is None
+    assert state.dirty_post_ids is None
