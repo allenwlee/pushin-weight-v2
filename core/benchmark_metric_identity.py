@@ -70,6 +70,13 @@ SOURCES = {
         "exact-v1",
     ),
     "x": ("X", "social", "https://x.com", None, "exact-v1"),
+    "gdpx": (
+        "GDPx",
+        "benchmark",
+        "https://gdpx.semianalysis.com",
+        "gdpx-dataset-v1",
+        "exact-v1",
+    ),
 }
 METRIC_TYPES = [
     "downloads",
@@ -92,7 +99,34 @@ METRIC_TYPES = [
     "following",
     "repository_count",
     "observation_count",
+    "task_count",
+    "cost_per_task",
+    "tokens_per_task",
 ]
+# Per-source operation budgets; a contract's own settings take precedence.
+# GDPx polls once per UTC day; its budget covers the homepage plus every
+# referenced Next.js chunk.
+SOURCE_OPERATION_DEFAULTS = {
+    "opencode": {
+        "poll_seconds": 3600,
+        "freshness_seconds": 7200,
+        "publication_freshness_seconds": 7200,
+        "max_requests": 100,
+        "max_seconds": 120,
+        "max_bytes": 16 * 1024 * 1024,
+        "completed_day_lag": 0,
+        "recheck_days": 56,
+    },
+    "gdpx": {
+        "poll_seconds": 86400,
+        "freshness_seconds": 172800,
+        "publication_freshness_seconds": 2592000,
+        "max_requests": 100,
+        "max_seconds": 120,
+        "max_bytes": 32 * 1024 * 1024,
+        "completed_day_lag": 0,
+    },
+}
 
 
 def definition_rows():
@@ -327,6 +361,51 @@ def definition_rows():
             "score_method": "IPS",
         }
         rows.append(base)
+    # GDPx per-partner and per-model overall rows. Only the headline score is
+    # required: cost and token figures are null for some published rows.
+    for key, wire, metric_type, unit, value_kind, quantity in [
+        ("score", "score", "benchmark_score", "percent", "float", "score"),
+        ("partial_score", "partialScore", "benchmark_score", "percent", "float", "score"),
+        ("tasks", "tasks", "task_count", "tasks", "integer", "count"),
+        ("tasks_scored", "tasksScored", "task_count", "tasks", "integer", "count"),
+        ("tasks_with_partial", "tasksWithPartial", "task_count", "tasks", "integer", "count"),
+        ("cost_per_task", "costPerTask", "cost_per_task", "usd", "float", "monetary"),
+        ("tasks_with_cost", "tasksWithCost", "task_count", "tasks", "integer", "count"),
+        (
+            "tokens_per_task",
+            "tokensPerTask",
+            "tokens_per_task",
+            "output_tokens_per_task",
+            "float",
+            "ratio",
+        ),
+        ("tasks_with_tokens", "tasksWithTokens", "task_count", "tasks", "integer", "count"),
+    ]:
+        rows.append(
+            {
+                "source_id": "gdpx",
+                "metric_type_id": metric_type,
+                "metric_key": key,
+                "version": 1,
+                "name": key.replace("_", " ").title(),
+                "unit": unit,
+                "value_kind": value_kind,
+                "quantity_form": quantity,
+                "value_role": "value",
+                "measurement_kind": "state",
+                "window_mode": "none",
+                "window_amount": None,
+                "window_unit": None,
+                "window_duration_basis": "none",
+                "window_alignment": None,
+                "source_timezone_reference_id": None,
+                "required": key == "score",
+                "definition_metadata": {
+                    "wire_field": wire,
+                    "adapter_version": SOURCES["gdpx"][3],
+                },
+            }
+        )
     return rows
 
 
@@ -460,6 +539,22 @@ def validate_evidence_url(value):
     return value
 
 
+def mapping_budget_allowed(spec, config, statistics):
+    """Bounded reviewed mappings, or a source that collects unmapped by design.
+
+    A GDPx-only benchmark contract stores every published row unmapped, so it
+    never needs replacing when crosswalk admits a model (plan KTD2).
+    """
+    return (0 < len(spec.get("mappings", [])) <= 1000) or (
+        not spec.get("mappings")
+        and (
+            set(config) <= {"openrouter", "arena"}
+            if statistics
+            else set(config) == {"gdpx"}
+        )
+    )
+
+
 def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
     from core.benchmark_metric_store import safe_payload
 
@@ -476,18 +571,8 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
     for source_key, settings in config.items():
         from core.benchmark_metric_operations import validate_operations
 
-        if source_key == "opencode":
-            for key, value in {
-                "poll_seconds": 3600,
-                "freshness_seconds": 7200,
-                "publication_freshness_seconds": 7200,
-                "max_requests": 100,
-                "max_seconds": 120,
-                "max_bytes": 16 * 1024 * 1024,
-                "completed_day_lag": 0,
-                "recheck_days": 56,
-            }.items():
-                settings.setdefault(key, value)
+        for key, value in SOURCE_OPERATION_DEFAULTS.get(source_key, {}).items():
+            settings.setdefault(key, value)
         validate_operations(settings)
         if not statistics:
             require(
@@ -557,12 +642,7 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
     mappings = []
     seen = set()
     require(
-        (0 < len(spec.get("mappings", [])) <= 1000)
-        or (
-            statistics
-            and not spec.get("mappings")
-            and set(config) <= {"openrouter", "arena"}
-        ),
+        mapping_budget_allowed(spec, config, statistics),
         "mapping budget exceeded or empty",
     )
     for row in spec["mappings"]:

@@ -8859,7 +8859,14 @@ class SourceMetric(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(
-                    quantity_form__in=["count", "score", "rank", "variance", "ratio"]
+                    quantity_form__in=[
+                        "count",
+                        "score",
+                        "rank",
+                        "variance",
+                        "ratio",
+                        "monetary",
+                    ]
                 ),
                 name="ck_metric_quantity",
             ),

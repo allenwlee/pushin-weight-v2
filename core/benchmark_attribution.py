@@ -7,6 +7,15 @@ from urllib.parse import urlsplit
 from core.measurement_taxonomy import digest
 
 DEFAULTS = {
+    "gdpx": {
+        "publisher": "GDPx by SemiAnalysis",
+        "url": "https://gdpx.semianalysis.com",
+        "terms_url": "https://gdpx.semianalysis.com/terms",
+        "license": None,
+        "license_url": None,
+        "public_display": "unresolved",
+        "data_export": "unresolved",
+    },
     "opencode": {
         "publisher": "OpenCode",
         "url": "https://opencode.ai/data/llms.txt",
@@ -91,7 +100,7 @@ def comparison_attributions(contract, lines):
             credit = dict(ARCHIVES.get(dataset, DEFAULTS[source]))
             if not dataset:
                 credit.update(policy)
-            for key in ("url", "license_url"):
+            for key in ("url", "license_url", "terms_url"):
                 url = credit.get(key)
                 if url and urlsplit(url).scheme != "https":
                     credit[key] = None
@@ -133,6 +142,35 @@ USES = frozenset(
         "exchange_integration",
     }
 )
+
+
+# Owner decision recorded 2026-11-27 (GDPx plan KTD12): collection and
+# retention are allowed; the terms' commercial-use clauses are recorded facts,
+# not an application gate. The activation runbook writes this value into
+# DataSource("gdpx").metadata["use_policy"]; registration never grants it.
+GDPX_USE_POLICY = {
+    use: {
+        "status": "allowed",
+        "reviewed_by": "owner",
+        "reviewed_at": "2026-11-27",
+        "access_route": "public website",
+        "evidence_url": "https://gdpx.semianalysis.com/terms",
+        # Recorded facts from the terms effective 2026-11-11 (section 2 and 3);
+        # the owner assumed responsibility for use on 2026-11-27.
+        "restrictions": [
+            "Non-commercial license requires attribution to 'GDPx by SemiAnalysis'.",
+            "Commercial use needs a written SemiAnalysis license, including:",
+            "prediction markets, event contracts or their resolution;",
+            "gambling or wagering;",
+            "trading, investment products or investment advice;",
+            "resale or redistribution, including in datasets, feeds or APIs;",
+            "training or evaluating commercial AI models;",
+            "competing or derivative benchmarks and leaderboards;",
+            "advertising, including comparative performance claims.",
+        ],
+    }
+    for use in ("collection", "retention")
+}
 
 
 class UseNotPermitted(PermissionError):
