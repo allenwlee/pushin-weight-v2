@@ -3140,6 +3140,8 @@ def test_p2_rechecks_publisher_after_matching_ingestion_finishes(
         directory=tmp_path, state="running", actor="fixture", reason="test"
     )
     state, runner, transport = setup_cycle(monkeypatch, sentinel=True)
+    existing_companies = set(models.Company.objects.values_list("pk", flat=True))
+    existing_edges = set(models.BrandAccount.objects.values_list("pk", flat=True))
     statement = "Acme Labs released Qwen4 weights today, says reporter."
     state.post.text = statement
     state.post.save(update_fields=["text"])
@@ -3155,13 +3157,13 @@ def test_p2_rechecks_publisher_after_matching_ingestion_finishes(
     runner._run_post_fetch([], run_id="publisher-contention")
     started, looked_up = Event(), Event()
     backend = []
-    original_lookup = publisher_accounts.brand_name_candidates
+    original_lookup = publisher_accounts._release_brand_candidates
 
     def checked_lookup(*args, **kwargs):
         looked_up.set()
         return original_lookup(*args, **kwargs)
 
-    monkeypatch.setattr(publisher_accounts, "brand_name_candidates", checked_lookup)
+    monkeypatch.setattr(publisher_accounts, "_release_brand_candidates", checked_lookup)
 
     def p2_worker():
         try:
@@ -3211,8 +3213,8 @@ def test_p2_rechecks_publisher_after_matching_ingestion_finishes(
         ).count()
         == 1
     )
-    assert not models.Company.objects.exists()
-    assert not models.BrandAccount.objects.exists()
+    assert set(models.Company.objects.values_list("pk", flat=True)) == existing_companies
+    assert set(models.BrandAccount.objects.values_list("pk", flat=True)) == existing_edges
 
 def test_worker_keeps_and_records_conflicting_identity_votes(monkeypatch):
     state, runner, transport = setup_cycle(monkeypatch)

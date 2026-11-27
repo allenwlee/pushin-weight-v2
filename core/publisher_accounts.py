@@ -175,6 +175,16 @@ def resolve_release_publisher(*, post, finding, verified_account=None):
 
     if verified_account is not None and (not account or account.pk != verified_account.pk):
         return None
+    if name:
+        from django.utils.text import slugify
+
+        stable_account = account if account and str(account.author_id or "").isdecimal() else None
+        slug = registration_slug(name, stable_account) if stable_account else slugify(name)[:64] or None
+        # Ingestion may be publishing this exact organization while P2 has only
+        # a reporter's name. Read current official links and aliases after it commits.
+        acquire_writer_identity_locks(organization_lock_keys(
+            name=name, nickname=slug, account=stable_account.pk if stable_account else None,
+        ))
     owners, companies = official_organization_links(account) if account else ([], [])
     owner_ids = {link.brand_id for link in owners if not link.brand.is_sentinel}
     matches = set(_release_brand_candidates(name).values_list("pk", flat=True)[:2]) if name else set()
@@ -185,9 +195,6 @@ def resolve_release_publisher(*, post, finding, verified_account=None):
     if len(owner_ids) > 1 or len(companies) > 1:
         return None
     owner = next(iter(owner_ids), None)
-    if name and account and str(account.author_id or "").isdecimal():
-        slug = registration_slug(name, account)
-        acquire_writer_identity_locks(organization_lock_keys(name=name, nickname=slug, account=account.pk))
     if selected:
         if not Brand.objects.filter(pk=selected, is_sentinel=False).exists():
             return None
