@@ -99,7 +99,7 @@ def test_public_single_brand_uses_rolling_downloads_and_includes_unavailable(
         ]
         == "mapping_unavailable"
     )
-    assert captured == [{"source_use_override": True}]
+    assert captured == [{"source_use_override": True, "single_template": True}]
 
 
 def test_fixed_historical_week_and_trailing_smoothing_survive_crop():

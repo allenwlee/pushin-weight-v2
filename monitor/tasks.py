@@ -65,6 +65,10 @@ def recover_due_product_releases() -> dict[str, object]:
 
     if not settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
         return {"status": "disabled", "provider_calls": 0}
+    from time import monotonic
+
+    from celery.exceptions import SoftTimeLimitExceeded
+
     from core.product_release_acquisition import (
         dispatch_due_recovery,
         drain_due_hf_acquisitions,
@@ -74,7 +78,11 @@ def recover_due_product_releases() -> dict[str, object]:
         drain_mapping_reconciliations,
         drain_observations,
     )
+    from core.release_chart_collection import collect_due_release_metrics
     from core.source_metric_projection import recover_release_projection_followups
+
+    # Leave the existing task's soft limit room to report results and release locks.
+    metric_deadline = monotonic() + 100
 
     try:
         from monitor.pulse_processing import process_saved_findings
@@ -110,6 +118,17 @@ def recover_due_product_releases() -> dict[str, object]:
 
     with httpx.Client(follow_redirects=False, trust_env=False) as client:
         result = drain_due_hf_acquisitions(client=client, limit=3, execute=True)
+        remaining = min(10, int(metric_deadline - monotonic()))
+        chart_metrics = {"status": "deferred", "requests": 0}
+        if remaining >= 1 and detection.get("status") in {"running", "uncontrolled"}:
+            try:
+                chart_metrics = collect_due_release_metrics(client=client, max_seconds=remaining)
+            except SoftTimeLimitExceeded:
+                raise
+            except Exception:
+                logger.exception("Release chart metric recovery failed; next harvest can retry")
+                chart_metrics = {"status": "error", "requests": None}
+
     detection_progress = detection.get("due_remaining") and (detection.get("processed") or detection.get("failed"))
     projection_progress = projections.get("due_remaining") and (
         projections.get("queued") or projections.get("waiting") or projections.get("excluded")
@@ -123,10 +142,12 @@ def recover_due_product_releases() -> dict[str, object]:
     )
     if detection_progress or source_progress or projection_progress or mapping_progress:
         dispatch_due_recovery()
+    total_calls = (result["provider_calls"] + chart_metrics["requests"]
+                   if result.get("provider_calls") is not None and chart_metrics.get("requests") is not None else None)
     return {"status": "processed", "detection": detection, "source_detection": source_detection,
             "mapping_reconciliation": mapping_reconciliation,
             "registration_recovery": registrations,
-            "measurement_followups": projections, **result}
+            "measurement_followups": projections, "chart_metrics": chart_metrics, **result, "provider_calls": total_calls}
 
 
 @shared_task(

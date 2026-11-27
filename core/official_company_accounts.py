@@ -58,7 +58,8 @@ def x_account_identifier(account: Any, *, provider: str = "x") -> str:
 
 
 def build_evidence(
-    account: Any, posts: list[dict], profiles: list[dict] | None = None
+    account: Any, posts: list[dict], profiles: list[dict] | None = None,
+    *, include_release_display_name: bool = False,
 ) -> dict:
     """Normalize selected evidence without dates/engagement imposing eligibility."""
     sources: dict[str, dict] = {}
@@ -102,6 +103,8 @@ def build_evidence(
                 add(f"{source_id}:url:{index}", url)
 
     identifier = str(account.author_id)
+    if include_release_display_name:
+        add(f"account:{identifier}:display_name", account.display_name, getattr(account, "last_seen_at", None))
     for field in ("bio", "description", "profile_bio_text"):
         add(
             f"account:{field}",

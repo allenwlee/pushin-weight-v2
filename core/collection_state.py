@@ -269,7 +269,7 @@ def _key(job, invocation_id):
 @transaction.atomic
 def claim_job(
     job_id, *, invocation_id=None, manual_authorized=False, continue_from=None,
-    typed=False, now=None,
+    typed=False, now=None, expected_slot=None, initial_release_reading=False,
 ):
     now = now or timezone.now()
     # Campaign peers share a finite reservation ceiling. Lock in one order before
@@ -304,6 +304,14 @@ def claim_job(
         .get(pk=job_id)
     )
     validate_job(job)
+    if expected_slot is not None:
+        # A second dispatcher may have finished after our selection. Recheck
+        # eligibility while holding the same lock used to claim the job.
+        from core.collection_scheduling import due_job
+
+        decision = due_job(job, now=now, allow_initial_release=initial_release_reading)
+        if not decision["due"] or decision["slot"] != expected_slot:
+            raise BusyJob("metric schedule slot is no longer due")
     if typed:
         from core.data_source_backfill_opencode import (
             history_window,

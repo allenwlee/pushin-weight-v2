@@ -933,6 +933,7 @@ def test_rare_extra_staging_profile_reaches_shared_cycle_with_all_live_caps(
     tmp_path, monkeypatch
 ):
     from dataclasses import replace
+
     from core.discovery import plan_discovery_calls
     from monitor.cycle import CycleRunner
     from monitor.staging_acceptance import (
@@ -1313,11 +1314,13 @@ def test_command_refuses_before_writer_lock_or_provider_factory(monkeypatch):
         ),
     ],
 )
+@pytest.mark.parametrize("pulse_budget", [False, True])
 def test_command_threads_profile_and_emits_secret_free_json(
     monkeypatch,
     runner_stats: dict,
     expected_status: str,
     expected_dispatch: dict[str, str],
+    pulse_budget: bool,
 ):
     import monitor.management.commands.run_cycle as command_module
     from monitor.staging_acceptance import prepare_staging_acceptance
@@ -1342,11 +1345,25 @@ def test_command_threads_profile_and_emits_secret_free_json(
         captured["coordination_lock"] = kwargs
         yield
 
+    @contextmanager
+    def tracked_budget(window_id, _cfg):
+        assert window_id == "shared-window"
+        captured["budget_active"] = True
+        try:
+            yield
+        finally:
+            captured["budget_active"] = False
+
+    if pulse_budget:
+        monkeypatch.setenv("PULSE_STAGING_BUDGET_WINDOW_ID", "shared-window")
+        monkeypatch.setattr(command_module, "bounded_pulse_staging_budget", tracked_budget)
+
     class Runner:
         def __init__(self, **kwargs):
             captured["runner"] = kwargs
 
         def run(self):
+            assert bool(captured.get("budget_active")) == pulse_budget
             return runner_stats
 
     dispatch_calls = []
@@ -1400,7 +1417,9 @@ def test_command_threads_profile_and_emits_secret_free_json(
         payload["cycle"]["selected_call"]["n_results"]
         == runner_stats["calls"][0]["n_results"]
     )
-    assert payload["headline_dispatch"] == expected_dispatch
+    assert payload["headline_dispatch"] == (
+        {"status": "ineligible", "task_id": ""} if pulse_budget else expected_dispatch
+    )
     if expected_status == "accepted":
         assert payload["reason_codes"] == ["terminal_complete"]
         assert [row["post_id"] for row in payload["cycle"]["enrichment_posts"]] == [
@@ -1409,7 +1428,7 @@ def test_command_threads_profile_and_emits_secret_free_json(
         ]
         assert payload["cycle"]["post_fetch"]["n_enrichment_claimed_current_cycle"] == 2
         assert payload["cycle"]["post_fetch"]["n_enrichment_claimed_carryover"] == 0
-    assert len(dispatch_calls) == (1 if expected_status == "accepted" else 0)
+    assert len(dispatch_calls) == int(expected_status == "accepted" and not pulse_budget)
     assert "secret-query" not in stdout.getvalue()
     assert "DATABASE_URL" not in stdout.getvalue()
 
@@ -1517,3 +1536,108 @@ def test_ordinary_command_path_does_not_run_staging_preflight(monkeypatch):
         )
         == "ordinary"
     )
+
+
+def test_pulse_staging_prices_each_physical_send_before_transport(monkeypatch):
+    from decimal import Decimal
+
+    from monitor import enrichment_budget
+    from monitor.staging_acceptance import bounded_pulse_staging_budget
+    from x_monitor.attribution import LLMCallBudgetExhausted
+    from x_monitor.config import load_config
+    from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+
+    cfg = load_config(Path("config.yaml"))
+    cfg.llm.classifier_pipeline = "two_role"
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "staging")
+    monkeypatch.setenv("RENDER_SERVICE_NAME", "pushinweight-staging-harvest")
+    monkeypatch.setenv("X_DATA_PROVIDER_ORDER_ON_DEMAND", "twitterapi:on_demand")
+    deductions = []
+    sends = []
+
+    def reserve(**kwargs):
+        deductions.append(kwargs)
+        if len(deductions) == 3:
+            raise LLMCallBudgetExhausted("enrichment_budget_exhausted")
+
+    def transport(client, request, *, timeout):
+        sends.append(request)
+        raise TimeoutError("lost")
+
+    monkeypatch.setattr(enrichment_budget, "reserve_charge", reserve)
+    monkeypatch.setattr(DeepInfraChatCompletionsClient, "_send_request", transport)
+    request = {"model": cfg.llm.classifier_model, "max_tokens": 512,
+               "messages": [{"role": "user", "content": "release"}]}
+    request["response_format"] = {"schema": "x" * 7_000}
+    priced = {**request, "system": json.dumps({"response_format": request["response_format"]})}
+    with bounded_pulse_staging_budget("one-pilot-window", cfg):
+        with pytest.raises(TimeoutError):
+            DeepInfraChatCompletionsClient._send_request(None, request, timeout=1)
+        with pytest.raises(LLMCallBudgetExhausted):
+            DeepInfraChatCompletionsClient._send_request(None, request, timeout=1)
+    assert len(sends) == 1
+    assert [row["cost"] for row in deductions] == [
+        Decimal("0.023"), enrichment_budget.request_cost_bound(priced),
+        enrichment_budget.request_cost_bound(priced),
+    ]
+    assert all(row["window_id"] == "one-pilot-window" and row["window_ceiling"] == 20 for row in deductions)
+    assert DeepInfraChatCompletionsClient._send_request is transport
+
+
+@pytest.mark.django_db(transaction=True)
+def test_pulse_staging_reservations_survive_new_runs_and_share_the_worker_cap():
+    from datetime import timedelta
+    from decimal import Decimal
+
+    from django.utils import timezone
+
+    from core.models import EnrichmentBudgetWindow
+    from monitor.enrichment_budget import reserve_charge, reserve_request
+    from x_monitor.attribution import LLMCallBudgetExhausted
+
+    now = timezone.now()
+    window = EnrichmentBudgetWindow.objects.create(
+        enrichment_window_kind="pilot", starts_at=now, ends_at=now + timedelta(hours=1),
+        request_limit=100, usd_limit=Decimal("0.024"), config_fingerprint="f" * 64,
+    )
+    identity = {"scope": "pilot", "window_id": window.pk, "fingerprint": "f" * 64}
+    fixed = {"cost": Decimal("0.023"), "window_ceiling": Decimal(20)}
+    reserve_charge(**identity, **fixed)
+    worker_charge = reserve_request(**identity, request={
+        "model": "deepseek-ai/DeepSeek-V4-Flash-0731", "max_tokens": 16,
+        "messages": [{"role": "user", "content": "publisher"}],
+    })
+    with pytest.raises(LLMCallBudgetExhausted, match="budget_exhausted"):
+        reserve_charge(**identity, **fixed)
+    window.refresh_from_db()
+    assert window.reserved_usd == fixed["cost"] + worker_charge
+    assert window.reserved_requests == 2
+    EnrichmentBudgetWindow.objects.filter(pk=window.pk).update(usd_limit=21)
+    with pytest.raises(LLMCallBudgetExhausted, match="exceeds_cap"):
+        reserve_charge(**identity, **fixed)
+
+
+def test_pulse_staging_second_client_cannot_restart_search_allowance(monkeypatch):
+    from monitor.staging_acceptance import (
+        StagingAcceptanceError,
+        bounded_twitter_client_factory,
+    )
+    from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient
+
+    calls = []
+
+    class Delegate:
+        def run_search(self, query, **kwargs):
+            calls.append(query)
+            return [], False
+
+    monkeypatch.setattr(XClient, "from_env", classmethod(lambda cls, purpose: Delegate()))
+    monkeypatch.setenv("PULSE_STAGING_BUDGET_WINDOW_ID", "same-window")
+    with bounded_twitter_client_factory():
+        XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND).run_search("first")
+        with pytest.raises(StagingAcceptanceError, match="search_request_cap_exceeded"):
+            XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND).run_search("second")
+        with pytest.raises(StagingAcceptanceError, match="pulse_staging_route_mismatch"):
+            XClient.from_env(TwitterApiCredentialPurpose.SCHEDULED)
+    assert calls == ["first"]

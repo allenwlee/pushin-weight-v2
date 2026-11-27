@@ -72,6 +72,7 @@ def test_utc_slot_and_failure_cooldown_are_separate_from_success(settings):
     take_metric_authority(job.pk)
     job.refresh_from_db()
     assert not due_job(job, now=NOW.replace(hour=9))["due"]
+    assert not due_job(job, now=NOW.replace(hour=9), allow_initial_release=True)["due"]
     claim = claim_job(job.pk, now=NOW, typed=True)
     run = finish_run(
         claim, status="failed", retry_at=NOW + timedelta(minutes=15), now=NOW,

@@ -1,4 +1,6 @@
 """Bounded archive discovery retained as requests and typed page checkpoints."""
+import hashlib
+import json
 import re
 from datetime import UTC, timedelta
 from urllib.parse import urlsplit, urlunsplit
@@ -100,6 +102,46 @@ def validate_discovery_scope(job, key, ownership):
     validate_discovery(job)
     require(key == 'catalog' and ownership == {'dataset_id': DATASET},
             'HF archive catalog differs from frozen dataset')
+
+
+def catalog_repo_creation(subject, identifier, publisher_key):
+    """Read actual HF API bytes, a dedicated catalog match and confirmed ownership."""
+    from core.collection_identity import DEDICATED_ROLES, qualified_catalog_ownership
+    from core.models import CollectionEvidenceArchive, SourceSubjectMapping
+
+    matches = list(SourceSubjectMapping.objects.filter(subject=subject, source_id='hf', purpose='catalog',
+        source_subject_kind='repository', identifier_scope__code='model', normalized_identifier=identifier.casefold(),
+        publisher_account_id=publisher_key, identity_snapshot__role__in=DEDICATED_ROLES
+    ).select_related('publisher_account')[:2])
+    require(len(matches) == 1, 'reviewed dedicated HF catalog identity required')
+    match = matches[0]
+    require(match.publisher_account.normalized_identifier == identifier.split('/')[0].casefold()
+            and qualified_catalog_ownership(match.publisher_account, subject), 'HF publisher ownership unconfirmed')
+    receipt = match.identifier_metadata.get('release_endpoint') or {}
+    address = urlsplit(receipt.get('url', ''))
+    require(address.scheme == 'https' and address.netloc == 'huggingface.co'
+            and (address.path.rstrip('/') == '/api/models' or
+                 address.path.rstrip('/').casefold() == ('/api/models/' + identifier).casefold()),
+            'HF creation evidence must identify the Hub model metadata endpoint')
+    archive = CollectionEvidenceArchive.objects.filter(content_sha256=receipt.get('archive_sha256'),
+                                                       encoding='decoded-body-v1', byte_count__range=(1, 1024 * 1024)).first()
+    require(archive is not None and 0 < archive.byte_count <= 1024 * 1024, 'HF metadata evidence missing')
+    raw = bytes(archive.body)
+    require(hashlib.sha256(raw).hexdigest() == archive.content_sha256, 'HF metadata evidence changed')
+    selected = json.loads(raw)
+    selector = receipt.get('selector')
+    require(isinstance(selector, list) and len(selector) <= 12, 'HF metadata selector required')
+    try:
+        for part in selector:
+            selected = selected[part]
+    except (IndexError, KeyError, TypeError) as exc:
+        raise ValueError('HF metadata selector differs from source') from exc
+    require(isinstance(selected, dict) and str(selected.get('id', '')).casefold() == identifier.casefold()
+            and re.fullmatch('[0-9a-f]{24}', str(selected.get('_id', '')))
+            and selected.get('createdAt') and selected.get('private') is not True
+            and selected.get('disabled') is not True, 'verified HF repository creation metadata required')
+    return {'source': 'hf', 'native_identifier': identifier, 'at': aware_instant(selected['createdAt']).isoformat(),
+            'hf_archive_row_id': selected['_id']}
 
 
 def validate_archive_only(job):

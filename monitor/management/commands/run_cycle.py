@@ -37,6 +37,7 @@ from monitor.post_enrichment import ENRICHMENT_COUNT_KEYS
 from monitor.staging_acceptance import (
     PreparedStagingAcceptance,
     StagingAcceptanceError,
+    bounded_pulse_staging_budget,
     bounded_runtime_settings,
     bounded_twitter_client_factory,
     evaluate_staging_acceptance,
@@ -392,6 +393,11 @@ class Command(BaseCommand):
         try:
             with ExitStack() as stack:
                 if prepared is not None:
+                    window_id = os.environ.get("PULSE_STAGING_BUDGET_WINDOW_ID")
+                    if window_id:
+                        stack.enter_context(bounded_pulse_staging_budget(
+                            window_id, load_config(Path("config.yaml")),
+                        ))
                     stack.enter_context(bounded_runtime_settings(settings))
                     stack.enter_context(bounded_twitter_client_factory())
                 stats = runner.run()
@@ -417,7 +423,8 @@ class Command(BaseCommand):
             acceptance_status = evaluation.status
             if acceptance_status == "failed":
                 stats["status"] = "aborted"
-            if acceptance_status == "accepted":
+            # A Pulse-only pilot never funds an editorial/headline wake-up.
+            if acceptance_status == "accepted" and not os.environ.get("PULSE_STAGING_BUDGET_WINDOW_ID"):
                 try:
                     dispatch = dispatch_harvest_completion(stats, dry_run=False)
                 except Exception:  # noqa: BLE001 - preserve secret-free JSON boundary

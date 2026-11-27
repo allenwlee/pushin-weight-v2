@@ -10,10 +10,30 @@
   const pct = v => v == null ? '—' : `${num(v, {maximumFractionDigits: 1, signDisplay: 'always'})}%`;
   const dateLabel = value => value ? new Date(`${value}T00:00:00Z`).toLocaleDateString(locale, {month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC'}) : '—';
   const colors = ['#315ccc', '#dd734e', '#439f93', '#9e65ad', '#cfad50', '#5a769d', '#d05c69', '#8b5675', '#d89085', '#ad5962', '#6f7582', '#677e50'];
+  let releaseId = root.dataset.releaseId || new URLSearchParams(window.location.search).get('release') || '';
   let payload, chart, selected = 0, generation = 0, controller, searchController, searchTimer, searchGeneration = 0;
   let days = [], focusKey = 'discussion:posts';
-  const hidden = new Set();
-  const visiblePoints = line => line.points.filter(p => el('ce-window').value !== 'post' || p.day >= 0);
+  const hidden = new Set(), seenSeries = new Set();
+  const isArenaRank = line => line?.source === 'arena' && line.metric === 'rank';
+  const scale = el('ce-scale');
+  // The datasource details retain missing mappings; plot the product's applicable series.
+  const chartLines = () => scale ? payload.lines.filter(line =>
+    line.source === 'discussion' || line.identifier || line.observed_dates) : payload.lines;
+  let scaleChosen = false;
+  const visiblePoints = line => line.points.filter(point =>
+    (el('ce-window').value !== 'post' || point.day >= 0) &&
+    (!scale || !payload.as_of || point.date <= payload.as_of.slice(0, 10)));
+  function setScaleOptions() {
+    if (!scale) return;
+    const previous = scale.value;
+    while (scale.options.length > 1) scale.remove(1);
+    const observed = payload.lines.filter(line => visiblePoints(line).some(point => point.raw != null));
+    for (const line of observed) scale.add(new Option(line.label + ' · ' + line.unit, line.key));
+    if ((scaleChosen && previous === '') || observed.some(line => line.key === previous)) scale.value = previous;
+    else if (!observed.some(line => visiblePoints(line).some(point => pointValue(line, point) != null)) && observed.length) {
+      scale.value = observed[0].key;
+    }
+  }
   const pointValue = (line, point) => {
     if (!point) return null;
     const v = line.source === 'arena' || !el('ce-smooth').checked ? point.percent : point.smooth_percent;
@@ -33,6 +53,10 @@
   function referenceText() {
     const line = payload.lines.find(item => item.key === focusKey);
     const ref = line && line.reference;
+    if (scale?.value) {
+      el('ce-reference').textContent = '';
+      return;
+    }
     el('ce-reference').textContent = ref ? `${line.label} · ${ref.basis === 'first_observation' ? words.first : words.week}: ${dateLabel(ref.start)}${ref.end && ref.end !== ref.start ? ` – ${dateLabel(ref.end)}` : ''}` : words.noReference;
   }
   function inspect(index) {
@@ -41,19 +65,20 @@
     el('ce-day').value = selected;
     el('ce-day-label').textContent = dateLabel(days[selected]);
     el('ce-readout-date').textContent = `${dateLabel(days[selected])} · UTC`;
-    el('ce-mode-label').textContent = el('ce-smooth').checked ? words.smoothed : words.daily;
+    el('ce-mode-label').textContent = el('ce-smooth').checked && !scale?.value ? words.smoothed : words.daily;
     const box = el('ce-readout');
     box.replaceChildren();
-    payload.lines.forEach((line, index) => {
-      if (hidden.has(line.key)) return;
+    chartLines().forEach(line => {
+      const index = payload.lines.indexOf(line);
+      if (scale?.value ? scale.value !== line.key : hidden.has(line.key)) return;
       const point = visiblePoints(line)[selected];
       const row = appendText(box, 'div', '', 'ce-reading');
       const label = appendText(row, 'div', '', 'ce-reading-label');
       const dot = document.createElement('i');
       dot.style.background = lineColor(line, index);
       label.append(dot, document.createTextNode(line.label));
-      appendText(row, 'strong', pct(pointValue(line, point)));
-      const origin = point?.source_date && (point.carried || line.key === 'arena:rank') ? ` · ${dateLabel(point.source_date)}` : '';
+      appendText(row, 'strong', scale?.value ? num(point?.raw) : pct(pointValue(line, point)));
+      const origin = point?.source_date && (point.carried || isArenaRank(line)) ? ` · ${dateLabel(point.source_date)}` : '';
       const reported = point?.carried ? words.last : words.observed;
       const shown = point?.carried ? line.points.find(item => item.date === point.source_date)?.raw : point?.raw;
       appendText(row, 'small', `${reported}: ${num(shown, {maximumFractionDigits: 2})} ${line.unit || ''}${origin}`);
@@ -63,28 +88,56 @@
       } else appendText(row, 'small', line.observed_dates ? words.noReference : words.empty);
     });
   }
+  const releaseMarker = {
+    id: 'pulseReleaseDay',
+    afterDatasetsDraw(chart) {
+      const index = days.indexOf(payload.product.release_date);
+      if (index < 0) return;
+      const x = chart.scales.x.getPixelForValue(index);
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.strokeStyle = '#536984';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, chart.chartArea.top);
+      ctx.lineTo(x, chart.chartArea.bottom);
+      ctx.stroke();
+      ctx.restore();
+    }
+  };
   function draw() {
     if (!payload || !payload.lines?.length) return;
     if (!window.Chart) { el('ce-status').hidden = false; el('ce-status').textContent = words.unavailable; return; }
     days = visiblePoints(payload.lines[0]).map(point => point.date);
     selected = Math.min(selected, Math.max(days.length - 1, 0));
     if (chart) chart.destroy();
-    const datasets = payload.lines.map((line, index) => {
-      const points = visiblePoints(line), rank = line.key === 'arena:rank';
-      return {key: line.key, label: line.label, data: points.map(point => pointValue(line, point)), borderColor: lineColor(line, index), borderWidth: 2,
-        borderDash: rank ? [5, 4] : [], stepped: rank ? 'after' : false, pointRadius: rank ? points.map(p => p.raw == null ? 0 : 2) : line.source === 'arena' ? 2 : 0,
+    const raw = payload.lines.find(line => line.key === scale?.value);
+    const lines = raw ? [raw] : chartLines();
+    const tick = raw ? num : pct;
+    if (scale) {
+      el('ce-axis-label').textContent = raw ? raw.label + ' · ' + raw.unit : scale.options[0].textContent;
+      el('ce-normalization-note').hidden = Boolean(raw);
+      el('ce-smooth').disabled = Boolean(raw);
+      el('ce-legend').hidden = Boolean(raw);
+    }
+    const datasets = lines.map(line => {
+      const index = payload.lines.indexOf(line);
+      const points = visiblePoints(line), rank = isArenaRank(line);
+      return {key: line.key, label: line.label, data: points.map(point => raw ? (point.raw == null ? null : Number(point.raw)) : pointValue(line, point)), borderColor: lineColor(line, index), borderWidth: 2,
+        borderDash: rank ? [5, 4] : [], stepped: rank ? 'after' : false, pointRadius: raw ? 2 : rank ? points.map(p => p.raw == null ? 0 : 2) : line.source === 'arena' ? 2 : 0,
         pointHoverRadius: rank ? points.map(p => p.raw == null ? 0 : 4) : line.source === 'arena' ? 4 : 0,
-        spanGaps: false, tension: 0, fill: false, hidden: hidden.has(line.key)};
+        spanGaps: false, tension: 0, fill: false, hidden: !raw && hidden.has(line.key)};
     });
-    chart = new Chart(el('ce-chart'), {type: 'line', data: {labels: days, datasets}, options: {responsive: true, maintainAspectRatio: false, animation: false,
+    chart = new Chart(el('ce-chart'), {type: 'line', data: {labels: days, datasets}, plugins: scale ? [releaseMarker] : [], options: {responsive: true, maintainAspectRatio: false, animation: false,
       interaction: {mode: 'index', intersect: false}, plugins: {legend: {display: false}, tooltip: {callbacks: {title: items => items.length ? `${dateLabel(days[items[0].dataIndex])} · UTC` : '',
-        label: item => { const line = payload.lines.find(l => l.key === item.dataset.key); const p = line && visiblePoints(line)[item.dataIndex]; return `${item.dataset.label}: ${pct(item.parsed.y)}${line?.key === 'arena:rank' && p?.source_date ? ` · ${words.published} ${dateLabel(p.source_date)}` : ''}`; }}}},
-      scales: {x: {ticks: {maxTicksLimit: 6, maxRotation: 0, callback: value => dateLabel(days[value])}}, y: {ticks: {callback: v => pct(v)}}},
+        label: item => { const line = payload.lines.find(l => l.key === item.dataset.key); const p = line && visiblePoints(line)[item.dataIndex]; return `${item.dataset.label}: ${tick(item.parsed.y)}${isArenaRank(line) && p?.source_date ? ` · ${words.published} ${dateLabel(p.source_date)}` : ''}`; }}}},
+      scales: {x: {ticks: {maxTicksLimit: 6, maxRotation: 0, callback: value => dateLabel(days[value])}}, y: {ticks: {callback: v => tick(v)}}},
       onHover: (event, _items, c) => { if (c.chartArea && event.x >= c.chartArea.left && event.x <= c.chartArea.right) inspect(Math.round(c.scales.x.getValueForPixel(event.x))); }
     }});
     const legend = el('ce-legend');
     legend.replaceChildren();
-    payload.lines.forEach((line, index) => {
+    chartLines().forEach(line => {
+      const index = payload.lines.indexOf(line);
       const button = document.createElement('button');
       button.type = 'button'; button.dataset.series = line.key;
       button.setAttribute('aria-pressed', String(!hidden.has(line.key)));
@@ -113,7 +166,9 @@
       url.searchParams.set('lang', locale);
       if (refresh === true) url.searchParams.set('refresh', '1');
       const product = el('ce-product').value, release = el('ce-release').value;
-      if (product || release) {
+      if (releaseId) {
+        url.searchParams.set('release', releaseId);
+      } else if (product || release) {
         if (!product || !release) throw new Error('Product and release date required');
         url.searchParams.set('product', product);
         url.searchParams.set('release_date', release);
@@ -139,27 +194,44 @@
         });
       }
       if (response.status === 429) throw new Error(statusWords.busy);
+      if (response.status === 400 && releaseId) {
+        const failure = await response.json().catch(() => ({}));
+        if (failure.code === 'release_pending') throw new Error(words.pending);
+      }
       if (!response.ok) throw new Error('Chart request failed');
       const next = await response.json();
       if (seq !== generation) return;
       if (!next.product || !Array.isArray(next.lines) || !next.lines.length) throw new Error('Chart response is incomplete');
       payload = next;
-      selected = Math.max(0, payload.lines[0].points.length - 1);
+      for (const series of next.lines) {
+        if (series.default_visible === false && !seenSeries.has(series.key)) hidden.add(series.key);
+        seenSeries.add(series.key);
+      }
+      setScaleOptions();
+      const visibleDays = visiblePoints(payload.lines[0]);
+      selected = Math.max(0, visibleDays.length - 1);
+      if (scale) {
+        const observed = new Set(payload.lines.flatMap(line => visiblePoints(line).filter(p => p.raw != null).map(p => p.date)));
+        const latest = visibleDays.findLastIndex(p => observed.has(p.date));
+        if (latest >= 0) selected = latest;
+      }
       el('ce-title').textContent = payload.product.label;
       const selector = el('ce-product');
       if (![...selector.options].some(option => option.value === payload.product.key)) selector.add(new Option(payload.product.label, payload.product.key));
       selector.value = payload.product.key;
       el('ce-release').value = payload.product.release_date;
       el('ce-content').hidden = false; el('ce-status').hidden = true;
-      const origin = payload.product.anchor_source === 'owner-confirmed' ? words.ownerDate : words.userDate;
-      el('ce-loaded').textContent = `${words.release}: ${dateLabel(payload.product.release_date)} · ${origin} · UTC`;
+      const origin = releaseId ? (payload.product.anchor_reviewed ? words.reviewed : words.pulseDate) : payload.product.anchor_source === 'owner-confirmed' ? words.ownerDate : words.userDate;
+      const milestone = {announcement: words.announcement, release_report: words.reported, source_stated_release: words.release};
+      const dateKind = milestone[payload.product.milestone_kind] || words.release;
+      el('ce-loaded').textContent = `${dateKind}: ${dateLabel(payload.product.release_date)} · ${origin} · UTC`;
       if (payload.as_of) el('ce-loaded').textContent += ` · ${statusWords.asOf}: ${new Date(payload.as_of).toLocaleString(locale)}`;
       const sources = el('ce-sources'); sources.replaceChildren();
       (payload.notes || []).forEach(note => appendText(sources, 'p', String(note)));
       payload.lines.forEach(line => appendText(sources, 'p', `${line.label}: ${line.observed_dates || 0} · ${line.identifier || lineStatus(line)}`));
       draw();
     } catch (error) {
-      if (seq === generation) { el('ce-status').hidden = false; el('ce-status').textContent = error.message === statusWords.busy ? statusWords.busy : words.unavailable; }
+      if (seq === generation) { el('ce-status').hidden = false; el('ce-status').textContent = error.message === statusWords.busy ? statusWords.busy : error.message === words.pending ? words.pending : words.unavailable; }
     } finally {
       clearTimeout(timer);
       if (seq === generation) el('ce-refresh').disabled = false;
@@ -192,6 +264,7 @@
     }, 250);
   });
   function invalidateSelection() {
+    releaseId = '';
     ++generation;
     controller?.abort();
     el('ce-refresh').disabled = false;
@@ -204,6 +277,7 @@
     if (payload && el('ce-product').value !== payload.product.key) el('ce-release').value = '';
   });
   el('ce-release').addEventListener('input', invalidateSelection);
+  scale?.addEventListener('change', () => { scaleChosen = true; draw(); });
   el('ce-smooth').addEventListener('change', draw);
   el('ce-window').addEventListener('change', () => { selected = 0; draw(); });
   el('ce-day').addEventListener('input', () => inspect(Number(el('ce-day').value)));

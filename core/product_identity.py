@@ -166,10 +166,40 @@ def resolve_saved_release_finding(*, claim_id):
     )
     product = detail.product if detail else None
     identity_claim = None
+    disclosed_product = None
     identity_conflict = False
     # A previously verified Post/Product edge identifies this exact spelling;
     # it does not establish a release by itself. Never override a saved review.
     finding = packet["finding"]
+    # A correction belongs to this source finding. A consolidated or reviewed
+    # event can have independent launch evidence that this post cannot veto.
+    from core.product_release_dossiers import project_finding_novelty
+    from core.product_release_findings import discussion_only_reason
+    from core.product_release_pipeline import record_intake_decision
+
+    # Old publications acquire the scalar projection on their ordinary P2 visit.
+    project_finding_novelty(claim, finding)
+    reason = discussion_only_reason(finding)
+    method = "pulse-discussion-evidence-v1"
+    if (dossier.current_review_id is None and claim.event_dossier_source.event_dossier_id == dossier.pk
+            and not dossier.sources.exclude(pk=claim.event_dossier_source_id).exists()):
+        latest = dossier.intake_decisions.order_by("-recorded_at", "-pk").first()
+        if reason:
+            newest_anchor = EventDossierClaim.objects.filter(
+                event_dossier_source_id=claim.event_dossier_source_id,
+                scope_key=claim.scope_key,
+            ).order_by("-recorded_at", "-pk").values_list("pk", flat=True).first()
+            if newest_anchor == claim.pk and (latest is None or latest.outcome == "pending" or latest.method_version == method):
+                record_intake_decision(dossier.pk, claim_id=claim.pk, outcome="non_release",
+                                       actor="pulse-identity", reason=reason, method_version=method)
+        elif (latest and latest.method_version == method and latest.outcome == "non_release"
+              and latest.supporting_claim_id != claim.pk and latest.supporting_claim.recorded_at < claim.recorded_at):
+            record_intake_decision(dossier.pk, claim_id=claim.pk, outcome="pending", actor="pulse-identity",
+                                   reason="Newer source evidence supersedes the discussion-only finding.", method_version=method)
+    if reason and not accepted:
+        return {"status": "unresolved", "product_id": None, "product_key": None, "dossier_id": str(dossier.pk),
+                "anchor_claim_id": str(claim.pk), "identity_claim_id": None}
+
     name, brand_id = finding.get("observed_name"), finding.get("brand_id")
     if detail and any(
         getattr(detail, reviewed) and finding.get(reported)
@@ -200,6 +230,21 @@ def resolve_saved_release_finding(*, claim_id):
             edges = edges.filter(brand_id=brand_id)
         candidates = list(edges.select_related("product")[:2])
         if len(candidates) == 1:
+            edge = candidates[0]
+            chosen = edge.product
+            if (
+                not chosen.repo_id
+                and chosen.display_name
+                and chosen.display_name.casefold() == name.casefold()
+            ):
+                from core.product_preview_names import resolve_preview_candidates
+
+                ids = resolve_preview_candidates(edge.brand_id, name, {chosen.pk})
+                if len(ids) != 1:
+                    identity_conflict = True
+                elif chosen.pk not in ids:
+                    chosen = Product.objects.get(pk=next(iter(ids)))
+        if len(candidates) == 1 and not identity_conflict:
             linked = dossier.sources.get(post_id=claim.event_dossier_source.post_id)
             prior = EventDossierClaim.objects.filter(
                 event_dossier_source=linked,
@@ -208,8 +253,13 @@ def resolve_saved_release_finding(*, claim_id):
                 source_archive_id=claim.source_archive_id,
             )
             prior_ids = set(prior.values_list("reported_product_id", flat=True).distinct()[:2])
-            if not prior_ids or prior_ids == {candidates[0].product_id}:
-                product = candidates[0].product
+            # Keep already issued identity claims bound to their original evidence.
+            # Chart and catalog readers apply the later, dated publisher disclosure.
+            if prior_ids == {edge.product_id} and chosen.pk != edge.product_id:
+                disclosed_product = chosen
+                chosen = edge.product
+            if not prior_ids or prior_ids == {chosen.pk}:
+                product = chosen
                 # The verified edge names the exact Product even when a source
                 # reports its version separately or in quoted context.
                 identity_is_specific = True
@@ -236,13 +286,6 @@ def resolve_saved_release_finding(*, claim_id):
     # judgment. Archived older packets keep their original qualification path.
     trusted_finding = False
     trusted_publisher = False
-    attributed_name = (issuer.get("observed_name") if isinstance(issuer, dict) and (
-        issuer.get("relation") == "attributed_party"
-        or (issuer.get("relation") == "source_author" and (
-            finding.get("publisher_profile")
-            or (issuer.get("observed_name") and issuer["observed_name"] in issuer.get("source_excerpt", ""))
-        ))
-    ) else None)
     from core.classified_product_releases import TARGETED_RELEASE_REVISION
 
     if post and name and packet["extraction_version"] in {
@@ -259,6 +302,25 @@ def resolve_saved_release_finding(*, claim_id):
             trusted_finding = bool(published and any(
                 row["anchor_claim_id"] == str(claim.pk) for row in published
             ))
+    if trusted_finding and packet["extraction_version"] == TARGETED_RELEASE_REVISION:
+        from core.classified_product_releases import replay_saved_publisher
+
+        finding = replay_saved_publisher(finding, post)
+        issuer = finding.get("issuer_evidence")
+    attributed_name = (issuer.get("observed_name") if isinstance(issuer, dict) and (
+        issuer.get("relation") == "attributed_party"
+        or (issuer.get("relation") == "source_author" and (
+            finding.get("publisher_profile")
+            or (issuer.get("observed_name") and issuer["observed_name"] in issuer.get("source_excerpt", ""))
+        ))
+    ) else None)
+    upload_source = None
+    if product is None and trusted_finding and identity_is_specific and not identity_conflict and dossier.current_review_id is None:
+        from core.product_availability_identity import saved_upload_source
+
+        upload_source = saved_upload_source(post, finding, claim.pk, dossier)
+        if upload_source:
+            brand_id, issuer, original_claim_id = upload_source
     if (
         product is None and trusted_finding and identity_is_specific
         and dossier.current_review_id is None and not identity_conflict and not brand_id and not attributed_name
@@ -294,54 +356,23 @@ def resolve_saved_release_finding(*, claim_id):
                 )
             else:
                 identity_conflict = True
-    trusted_publisher = bool(trusted_finding and (brand_id or attributed_name))
-    if trusted_publisher and not brand_id:
-        from django.db import connection
-        from django.utils.text import slugify
+    if (trusted_finding and product is None and not identity_conflict and identity_is_specific
+            and dossier.current_review_id is None and (
+                upload_source or finding.get("novelty") in {"new_release", "historical_release"}
+            )):
+        from core.publisher_accounts import resolve_release_publisher
 
-        from core.measurement_taxonomy import digest
-        from core.models import Brand
-
-        slug = slugify(attributed_name)[:48] or "publisher"
-        lock_key = int(digest(["pulse-publisher-name-v1", slug])[:15], 16)
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", [lock_key])
-            if not cursor.fetchone()[0]:
-                raise ValueError("Publisher identity is busy; retry")
-        from core.organization_identity_locks import (
-            acquire_writer_identity_locks,
-            organization_lock_keys,
-        )
-        from core.publisher_accounts import brand_name_candidates
-
-        acquire_writer_identity_locks(
-            organization_lock_keys(name=attributed_name, nickname=slug)
-        )
-        matches = list(brand_name_candidates(attributed_name, include_sentinel=False)[:2])
-        if len(matches) > 1:
-            trusted_publisher = False
-        elif matches:
-            brand_id = matches[0].pk
-        else:
-            brand_key = slug
-            if Brand.objects.filter(pk=brand_key).exists():
-                brand_key = f"{slug[:47]}-{digest([attributed_name.casefold()])[:16]}"
-            brand, created_brand = Brand.objects.get_or_create(
-                pk=brand_key, defaults={"display_name": attributed_name},
-            )
-            if not created_brand and (brand.is_sentinel or (brand.display_name or "").casefold() != attributed_name.casefold()):
-                trusted_publisher = False
-            else:
-                brand_id = brand.pk
+        brand_id = (brand_id if upload_source else resolve_release_publisher(post=post, finding=finding))
+        trusted_publisher = bool(brand_id and issuer)
     if (
         product is None
         and not identity_conflict
         and dossier.current_review_id is None
         and post
-        and (finding.get("novelty") == "new_release"
+        and (upload_source or finding.get("novelty") == "new_release"
              or (trusted_publisher and finding.get("novelty") == "historical_release"))
         and (trusted_publisher or (
-        identity_is_specific
+        not trusted_finding and identity_is_specific
         and isinstance(issuer, dict)
         and issuer.get("relation") == "source_author"
         and isinstance(issuer.get("source_excerpt"), str)
@@ -371,7 +402,8 @@ def resolve_saved_release_finding(*, claim_id):
         # Preserve the historical fallback for older saved generations. New
         # selected generations use P1's saved publisher decision directly.
         statement = issuer["source_excerpt"]
-        prefix = post.text[: post.text.find(statement)]
+        post_text = post.text or ""
+        prefix = post_text[:post_text.find(statement)]
         direct_launch = re.search(
             r"\b(?:we|i|our\s+team)\s+(?:(?:have|just|are|had)\s+)*"
             r"(?:release[ds]?|releasing|launch(?:ed|ing)?|introduc(?:e|ed|ing))\b"
@@ -394,7 +426,7 @@ def resolve_saved_release_finding(*, claim_id):
         category_row = (
             ProductType.objects.filter(code=category).first() if category else None
         )
-        if trusted_publisher or (
+        if (trusted_publisher and (not upload_source or category_row)) or (
             direct_launch
             and not _FUTURE.search(statement)
             and not _NEGATED.search(statement)
@@ -441,15 +473,19 @@ def resolve_saved_release_finding(*, claim_id):
                     subject__subject_kind="product",
                     subject__product__brand_id=owner,
                     observed_name__iexact=name,
-                )
+                ).exclude(policy_version="pulse-publisher-preview-v1")
                 .values_list("subject__product__id", flat=True)
                 .distinct()[:2]
             )
             candidate_ids = edge_ids | named_ids | reviewed_ids | attributed_ids
+            from core.product_preview_names import resolve_preview_candidates
+
+            candidate_ids = resolve_preview_candidates(owner, name, candidate_ids)
             if len(candidate_ids) == 1 and (trusted_publisher or edge_ids == candidate_ids):
-                product = Product.objects.select_for_update().get(
-                    pk=next(iter(candidate_ids))
-                )
+                candidates = Product.objects.select_for_update().filter(pk=next(iter(candidate_ids)))
+                if upload_source:
+                    candidates = candidates.filter(product_type=category_row)
+                product = candidates.first()
             elif not candidate_ids:
                 product, created = find_or_create_product(
                     defaults={
@@ -482,7 +518,9 @@ def resolve_saved_release_finding(*, claim_id):
                         "observed_name": name,
                         "source_evidence": {
                             "finding_claim_id": str(claim.pk),
-                            "issuer_claim": issuer["relation"],
+                            **({"publisher_finding_claim_id": original_claim_id}
+                               if upload_source and original_claim_id != str(claim.pk)
+                               else {"issuer_claim": issuer["relation"]}),
                         },
                         "verification_policy_version": "pulse-product-identity-v1",
                     },
@@ -494,7 +532,8 @@ def resolve_saved_release_finding(*, claim_id):
                     linked.pk,
                     claim_kind="release_context",
                     scope_key="pulse-self-identity-v1:" + finding["finding_key"],
-                    assertion_text=("Classifier identified the offering's publisher" if trusted_publisher
+                    assertion_text=("Publisher lists this model in its saved upload post" if upload_source else
+                                    "Classifier identified the offering's publisher" if trusted_publisher
                                     else "Official source identifies its named offering"),
                     source_excerpt=issuer["source_excerpt"],
                     source_locator=issuer.get("source_locator"),
@@ -529,6 +568,9 @@ def resolve_saved_release_finding(*, claim_id):
             register_lineage_wakeup(parent_claim_id=claim.pk, cause_review_id=dossier.current_review_id,
                                     budgets=WAKEUP_BUDGETS, only_if_dependents=True)
     if product is not None:
+        from core.product_preview_names import register_publisher_preview
+
+        register_publisher_preview(post, product, claim, finding)
         if trusted_finding:
             _join_reported_successor_family(product, finding, claim)
         _ensure_model_family(product, finding, claim)
@@ -542,6 +584,10 @@ def resolve_saved_release_finding(*, claim_id):
                 post, [{**finding, "brand_id": product.brand_id, "brand_candidate_id": None}],
                 TARGETED_RELEASE_REVISION,
             )
+    # The stored identity claim describes what the source established at the time.
+    # Return today's publisher-supported identity to callers replaying that claim.
+    if product is not None and disclosed_product is not None:
+        product = disclosed_product
     return {
         "status": "created" if created else "matched" if product else "unresolved",
         "product_id": product.pk if product else None,
@@ -654,6 +700,26 @@ def reconcile_product_release_events(*, claim_id, candidate_limit, claim_limit, 
             )
             if compatible["merged_ids"] or compatible["more_remaining"]:
                 result = {**compatible, "merged_ids": result["merged_ids"] + compatible["merged_ids"]}
+    if result["status"] in {"matched", "merged"} and not result.get("more_remaining") and monotonic() < deadline:
+        from core.models import EventDossierClaim
+        from core.product_release_dossiers import _read_pulse_packet
+        from core.product_release_pipeline import (
+            canonical_dossier,
+            recover_prior_publisher_announcement,
+        )
+
+        anchor = EventDossierClaim.objects.select_related(
+            "event_dossier_source__post", "source_archive"
+        ).get(pk=claim_id)
+        post = anchor.event_dossier_source.post
+        if post and post.created_at:
+            event = canonical_dossier(anchor.event_dossier_source.event_dossier_id)
+            packet = _read_pulse_packet(anchor)
+            product_id = _resolved_anchor_product(anchor, event, packet=packet)
+            if product_id:
+                recover_prior_publisher_announcement(
+                    dossier=event, product=Product.objects.get(pk=product_id), finding=packet["finding"], post=post,
+                )
     if monotonic() >= deadline:
         raise TimeoutError("Release reconciliation time budget exceeded")
     with connection.cursor() as cursor:

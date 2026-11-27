@@ -1003,6 +1003,10 @@ msgid "Brand posts"
 msgstr "ブランド関連の投稿"
 
 #: core/chart_engine.py
+msgid "Verified product mentions"
+msgstr "製品への言及を確認した投稿"
+
+#: core/chart_engine.py
 msgid "posts"
 msgstr "投稿"
 
@@ -1512,3 +1516,39 @@ msgstr "大手"
 
 msgid "Chatter updates are delayed. The latest available story is shown."
 msgstr "Chatterの更新が遅れています。現在は最新の公開記事を表示しています。"
+
+msgid "Release chart"
+msgstr "リリースチャート"
+
+msgid "View chart"
+msgstr "チャートを見る"
+
+msgid "Release evidence"
+msgstr "リリースの根拠"
+
+msgid "Chart is pending product identity and a usable release date."
+msgstr "製品の特定と利用可能なリリース日を待っています。"
+
+msgid "New release"
+msgstr "新規リリース"
+
+msgid "Historical release"
+msgstr "過去のリリース"
+
+msgid "Availability update"
+msgstr "提供状況の更新"
+
+msgid "Release type pending"
+msgstr "リリース種別未確定"
+
+msgid "Supported date"
+msgstr "根拠のある日付"
+
+msgid "Reasoning setting"
+msgstr "推論設定"
+
+msgid "Confirmed in dossier review"
+msgstr "資料の審査で確認済み"
+
+msgid "Chart values"
+msgstr "グラフの値"

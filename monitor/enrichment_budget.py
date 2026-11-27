@@ -95,7 +95,19 @@ def request_cost_bound(request: dict) -> Decimal:
 def reserve_request(
     *, window_id, fingerprint: str, request: dict, scope: str, now=None
 ) -> Decimal:
-    cost = request_cost_bound(request)
+    return reserve_charge(
+        window_id=window_id, fingerprint=fingerprint, cost=request_cost_bound(request),
+        scope=scope, now=now,
+    )
+
+
+def reserve_charge(
+    *, window_id, fingerprint: str, cost: Decimal, scope: str,
+    now=None, window_ceiling: Decimal | None = None,
+) -> Decimal:
+    """Debit the same finite allowance before a provider can incur this charge."""
+    if not cost.is_finite() or cost <= 0:
+        raise LLMCallBudgetExhausted("enrichment_price_unknown")
     now = now or timezone.now()
     with transaction.atomic():
         window = (
@@ -105,6 +117,8 @@ def reserve_request(
         )
         if window is None or window.enrichment_window_kind != scope:
             raise LLMCallBudgetExhausted("enrichment_budget_missing")
+        if window_ceiling is not None and window.usd_limit > window_ceiling:
+            raise LLMCallBudgetExhausted("enrichment_budget_exceeds_cap")
         if window.config_fingerprint != fingerprint:
             raise LLMCallBudgetExhausted("enrichment_config_changed")
         if not window.starts_at <= now < window.ends_at:

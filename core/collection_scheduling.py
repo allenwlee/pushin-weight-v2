@@ -188,10 +188,11 @@ def schedule_slot(job, now):
     return slot, slot + timedelta(seconds=seconds)
 
 
-def due_job(job, *, now=None):
+def due_job(job, *, now=None, allow_initial_release=False):
     now = now or timezone.now()
     validate_job(job)
     reason, slot, following = "due", None, None
+    first_release_reading = False
     if job.mode != "recurring" or job.schedule["driver"] != "shared":
         reason = "external_or_manual_driver"
     elif job.state != "ready" or not job.source.enabled:
@@ -249,7 +250,10 @@ def due_job(job, *, now=None):
         )
         if slot > now or (job.next_due_at and job.next_due_at > now):
             reason = "before_slot"
-        elif job.last_success_id and job.last_success.started_at >= slot:
+        elif job.last_success_id and (
+            job.last_success.started_at >= slot
+            or (job.job_key.startswith("release-metric:") and job.last_success.scheduled_slot_at == slot)
+        ):
             reason = "slot_succeeded"
         elif (
             job.purpose == "metric"
@@ -261,11 +265,26 @@ def due_job(job, *, now=None):
             ).exists()
         ):
             reason = "legacy_slot_succeeded"
+    if job.job_key.startswith("release-metric:") and reason in {"due", "before_slot", "slot_succeeded", "legacy_slot_succeeded"}:
+        from core.release_chart_collection import release_metric_job_is_current
+
+        first_release_reading = bool(
+            allow_initial_release and reason == "before_slot" and slot and now < slot
+            and job.source_id == "hf" and job.schedule["kind"] == "daily_utc"
+            and not job.last_success_id and (not job.next_due_at or job.next_due_at <= now)
+        )
+        if first_release_reading and release_metric_job_is_current(job, now, require_unread=True):
+            reason = "due"
+        else:
+            first_release_reading = False
+            if not release_metric_job_is_current(job, now):
+                reason = "release_scope_unavailable"
     return {
         "job_id": str(job.pk),
         "source": job.source_id,
         "operation": job.operation,
         "due": reason == "due",
+        **({"initial_release_reading": True} if first_release_reading else {}),
         "reason": reason,
         "slot": slot.isoformat() if slot else None,
         "following_slot": following.isoformat() if following else None,
@@ -286,6 +305,7 @@ def execute_due_job(job, decision, budget):
         from core.data_source_backfill_opencode import (
             history_window,
             is_opencode_history,
+            is_release_publication_history,
         )
         now = timezone.now().astimezone(UTC)
         config = job.contract.source_configuration[job.source_id]
@@ -299,7 +319,7 @@ def execute_due_job(job, decision, budget):
             if job.source_id == "openrouter"
             else end
         )
-        if is_opencode_history(job):
+        if is_opencode_history(job) or is_release_publication_history(job):
             from datetime import date
             first, last = history_window(job)
             start, end = date.fromisoformat(first), date.fromisoformat(last)
@@ -313,12 +333,14 @@ def execute_due_job(job, decision, budget):
         try:
             call_command(
                 "collect_benchmark_metrics",
+                http_client=budget.client,
                 contract=str(job.contract_id),
                 source=job.source_id,
                 start_date=start.isoformat(),
                 end_date=end.isoformat(),
                 job=str(job.pk),
                 slot=decision["slot"],
+                **({"initial_release_reading": True} if decision.get("initial_release_reading") else {}),
                 batch_id=str(
                     uuid.uuid5(
                         uuid.NAMESPACE_URL, f"pw-job:{job.pk}:{decision['slot']}"
@@ -365,6 +387,7 @@ def dispatch_due(
     job_ids=None,
     executor=None,
     limit=100,
+    allow_initial_release=False,
 ):
     from core.collection_budgets import charge, job_budget
     from scripts.benchmark_download_collector.sources import SourceError
@@ -385,7 +408,7 @@ def dispatch_due(
             | Q(instruction_version=1, definition__schedule__driver="shared")
         )
     # Numeric work precedes catalog maintenance in a bounded invocation.
-    candidates = [(job, due_job(job, now=now)) for job in jobs]
+    candidates = [(job, due_job(job, now=now, allow_initial_release=allow_initial_release)) for job in jobs]
     candidates.sort(
         key=lambda pair: (
             not pair[1]["due"],

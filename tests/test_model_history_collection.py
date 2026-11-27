@@ -532,8 +532,7 @@ def test_each_selected_model_has_a_durable_source_gap_without_synthetic_values()
     assert MetricValue.objects.count() == 0
 
 
-@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
-def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time(migration_rehearsal_schema, monkeypatch):
+def _archive_import_fixture_at_0200(monkeypatch):
     # This rehearsal intentionally starts at 0200, before the new category
     # codes exist. Keep its historical Product while testing archive timing.
     import tests.test_benchmark_download_db_identity as identity_fixture
@@ -593,12 +592,39 @@ def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time
     )
     assert imported_scope.result_run_id == imported.pk
     assert imported_scope.phase == "typed-archive-import-v1"
+    return contract, claim, imported, imported_scope
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
+def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time(migration_rehearsal_schema, monkeypatch):
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor
 
     from core.collection_storage_migration import project_archive_import_links_batch
     from core.measurement_taxonomy import digest
     from tests.collection_fixtures import historical_fixture_models
+
+    # Project only the producer field set that actually existed at 0200.
+    # Modern collection runs also carry content-work columns introduced later.
+    producer = MigrationExecutor(connection).loader.project_state([
+        ("core", "0200_merge_rg6_enrichment_budget_contract"),
+    ]).apps
+    from core import models, source_vocabulary
+
+    for name, keys in {
+        "Product": ("product_type_code",),
+        "CollectionRun": ("source", "source_id", "purpose", "contract", "contract_id", "scope"),
+        "SourceSubjectMapping": ("identifier_scope_code",),
+        "CollectionJobTarget": ("identifier_scope_code",),
+    }.items():
+        model = producer.get_model("core", name)
+        for attr in keys:
+            if not hasattr(model, attr):
+                monkeypatch.setattr(model, attr, getattr(getattr(models, name), attr), raising=False)
+    for key, model in source_vocabulary.CATALOGUES.items():
+        monkeypatch.setitem(source_vocabulary.CATALOGUES, key, producer.get_model("core", model._meta.model_name))
+    with historical_fixture_models(producer):
+        contract, claim, imported, imported_scope = _archive_import_fixture_at_0200(monkeypatch)
 
     # The one-time copier needs its original ORM fields. Its isolated 0200
     # physical schema retains them; only this subsection binds the 0195 models.

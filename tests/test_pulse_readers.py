@@ -30,6 +30,8 @@ from core.models import (
     Company,
     CompanyLabel,
     DataSource,
+    EventDossierClaim,
+    EventDossierSource,
     Post,
     PostBrandProduct,
     Product,
@@ -53,7 +55,8 @@ def historical_product(**values):
     """Create a pre-0227 row, then read it with all current guards installed."""
     from django.db.migrations.executor import MigrationExecutor
 
-    MigrationExecutor(connection).migrate([("core", "0226_chart_native_lookup_index")])
+    executor = MigrationExecutor(connection)
+    executor.migrate([("core", "0226_chart_native_lookup_index")])
     try:
         category, _ = ProductType.objects.get_or_create(code="model")
         product = Product.objects.create(product_type=category, **values)
@@ -1137,3 +1140,127 @@ def test_meta_brand_uses_the_existing_stored_display_name():
     event = reviewed_release("meta-brand-display", product=product)
     row = next(row for row in release_page()["entries"] if row["id"] == str(event.pk))
     assert row["brand"] == {"id": "llama", "name": "Meta"}
+
+
+def test_finding_novelty_survives_publication_replay_and_later_update():
+    from core.collection_capture import read_document
+    from core.product_release_dossiers import persist_classified_release_findings
+
+    initial = category_release("novelty-fixture")
+    source = initial.sources.get()
+    fixture = read_document(source.claims.get().source_archive)
+    values = {
+        "source": fixture["source"], "content_fingerprint": fixture["content_fingerprint"],
+        "revision_id": fixture["revision_id"], "extraction_version": fixture["extraction_version"],
+    }
+    # A roundup reports a launch and an access change for two different offerings.
+    launch = fixture["finding"]
+    update = {**launch, "finding_key": "d" * 64, "observed_name": "Hy4 Flash", "novelty": "availability_update"}
+    findings = [launch, update]
+    saved = persist_classified_release_findings(**values, findings=findings)["findings"]
+    events = {row["finding_key"]: row["dossier_id"] for row in saved}
+    for index, finding in enumerate(findings):
+        event_source = EventDossierSource.objects.get(pk=saved[index]["source_id"])
+        row = event_source.claims.get(scope_key="pulse-novelty-v1:" + finding["finding_key"])
+        assert row.assertion_text == finding["novelty"]
+        assert str(row.source_archive_id) == saved[index]["archive_id"]
+    before = EventDossierClaim.objects.count()
+    persist_classified_release_findings(**values, findings=findings)
+    assert EventDossierClaim.objects.count() == before
+    rows = {entry["id"]: entry for entry in release_page()["entries"]}
+    assert rows[events[launch["finding_key"]]]["novelty"] == "new_release"
+    assert rows[events[update["finding_key"]]]["novelty"] == "availability_update"
+
+    # A later classification corrects this source's earlier subtype. Keep both records.
+    persist_classified_release_findings(**{**values, "revision_id": "e" * 64},
+                                       findings=[{**launch, "novelty": "historical_release"}])
+    rows = {entry["id"]: entry for entry in release_page()["entries"]}
+    assert rows[events[launch["finding_key"]]]["novelty"] == "historical_release"
+    assert rows[events[update["finding_key"]]]["novelty"] == "availability_update"
+    assert EventDossierClaim.objects.filter(event_dossier_source_id=saved[0]["source_id"],
+                                           scope_key="pulse-novelty-v1:" + launch["finding_key"]).count() == 2
+
+
+def test_recovered_launch_uses_event_day_across_pages_and_keeps_discovery_time():
+    from datetime import date
+
+    newer = pending_release("september-launch")
+    older = pending_release("recovered-july")
+    for event, day in [(newer, date(2025, 9, 2)), (older, date(2025, 7, 16))]:
+        add_claim(event.sources.get().pk, claim_kind="source_stated_release",
+                  scope_key="dated-release", assertion_text="Publisher gives the release date",
+                  source_excerpt=day.isoformat(), effective_precision="day", effective_date=day,
+                  extraction_version="fixture")
+    # The older launch was discovered second.
+    first = release_page(limit=1)
+    second = release_page(cursor=first["next_cursor"], limit=1)
+    assert [r["id"] for r in first["entries"] + second["entries"]] == [str(newer.pk), str(older.pk)]
+    assert second["entries"][0]["timeline_date"] == date(2025, 7, 16)
+    assert second["entries"][0]["discovered_at"].date() != date(2025, 7, 16)
+    add_claim(older.sources.get().pk, claim_kind="source_stated_release",
+              scope_key="conflicting-date", assertion_text="Different release date",
+              source_excerpt="July 17", effective_precision="day", effective_date=date(2025,7,17),
+              extraction_version="fixture")
+    rows = {r["id"]: r for r in release_page()["entries"]}
+    assert rows[str(older.pk)]["timeline_date"] is None
+    # The existing continuation remains tied to the evidence visible on page one.
+    assert release_page(cursor=first["next_cursor"], limit=1)["entries"][0]["timeline_date"] == date(2025,7,16)
+    # A review recorded after the first page cannot erase its accepted sorting day.
+    from tests.test_event_dossiers import review
+
+    correction = older.sources.get().claims.get(scope_key="conflicting-date")
+    change_product = Product.objects.create(brand=Brand.objects.create(nickname="later-review-brand"),
+                                             display_name="A different release")
+    review(older, correction, review_state="confirmed", product_release=ProductReleaseInput(
+        product_key=change_product.product_key, observed_name=change_product.display_name, disclosure_state="announced",
+    ))
+    continued = release_page(cursor=first["next_cursor"], limit=1)["entries"][0]
+    assert (continued["id"], continued["timeline_date"]) == (str(older.pk), date(2025, 7, 16))
+    assert continued["product_key"] is None and continued["review_id"] is None
+    assert continued["name"] != change_product.display_name and continued["review_state"] == "pending"
+
+
+@pytest.mark.parametrize(("name", "novelty", "excerpt", "exclude"), [
+    ("Kimi K3", "unresolved", "Cognition released SWE-2.1, trained with pure RL on Kimi K3.", True),
+    ("hy4-flash-20261116", "availability_update", "Most used LLM: tencent/hy4-flash-20261116", True),
+    ("GLM-5.4", "new_release", "ZAI unveils GLM-5.4 with a Loop Transformer architecture for coding games, video, and CAD", False),
+    ("Kimi K3", "new_release", "We released Kimi K3, trained on Qwen.", False),
+])
+def test_release_resolver_keeps_original_evidence_for_rankings_and_training_bases(name, novelty, excerpt, exclude):
+    from core.collection_capture import read_document
+    from core.product_release_dossiers import (
+        persist_classified_release_findings,
+        resolve_saved_release_finding,
+    )
+    initial = category_release("production-quote", observed_name=name)
+    source = initial.sources.get()
+    packet = read_document(source.claims.get().source_archive)
+    source.post.text = excerpt
+    source.post.save(update_fields=["text"])
+    finding = packet["finding"]
+    finding["novelty"] = novelty
+    finding["assertions"][0].update(assertion_text=excerpt, source_excerpt=excerpt)
+    saved = persist_classified_release_findings(
+        source=packet["source"], revision_id=packet["revision_id"], content_fingerprint=packet["content_fingerprint"],
+        findings=[finding], extraction_version=packet["extraction_version"],
+    )["findings"][0]
+    for _ in range(2):
+        resolve_saved_release_finding(claim_id=saved["anchor_claim_id"])
+    entry = next(row for row in release_page()["entries"] if row["id"] == saved["dossier_id"])
+    assert (entry["intake_outcome"] == "non_release") == exclude
+    anchor = EventDossierClaim.objects.get(pk=saved["anchor_claim_id"])
+    assert read_document(anchor.source_archive)["finding"]["novelty"] == novelty
+    assert anchor.event_dossier_source.event_dossier.intake_decisions.filter(outcome="non_release").count() == int(exclude)
+
+
+def test_pending_discoveries_remain_visible_after_dated_launches():
+    from datetime import date
+    dated = pending_release("old-dated")
+    claim = add_claim(dated.sources.get().pk, claim_kind="announcement", scope_key="known-day",
+                      assertion_text="Introducing Old Model", source_excerpt="Introducing Old Model",
+                      effective_precision="day", effective_date=date(2025,1,1), extraction_version="fixture")
+    pending = pending_release("new-pending")
+    first = release_page(limit=1)
+    assert first["entries"][0]["id"] == str(dated.pk) and first["entries"][0]["timeline_date"] == claim.effective_date
+    second = release_page(limit=1, cursor=first["next_cursor"])
+    assert second["entries"][0]["id"] == str(pending.pk) and second["entries"][0]["timeline_date"] is None

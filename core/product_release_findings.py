@@ -33,6 +33,25 @@ _TEMPORAL_FIELDS = {
 }
 
 
+def discussion_only_reason(finding):
+    """Recognize explicit ranking-only or training-base assertions for the named offering."""
+    name = finding.get("observed_name")
+    excerpts = {a["source_excerpt"].strip() for a in finding["assertions"]}
+    if not name or not excerpts:
+        return None
+    subject = re.escape(name)
+    ranking = re.compile(r"(?:most[ -]used|top[ -]ranked)\s+(?:model|llm)\s*:\s*(?:[\w.-]+/)?" + subject + r"[.!]?", re.IGNORECASE)
+    training = re.compile(r"\b(?:released|launched|introduced)\s+[^,;!?\n]+?,\s*"
+                          r"(?:trained|fine[- ]?tuned)\s+(?:with [^,;.!?]+? )?on\s+(?P<subject>" + subject + r")[.!]?$", re.IGNORECASE)
+    for excerpt in excerpts:
+        if ranking.fullmatch(excerpt):
+            continue
+        match = training.search(excerpt)
+        if not match or name.casefold() in excerpt[:match.start("subject")].casefold():
+            return None
+    return "The saved source identifies this offering only as a ranking entry or the training base of another release."
+
+
 @dataclass(frozen=True)
 class FindingLimits:
     """Explicit caller policy; fixture limits do not select production budgets."""
@@ -138,6 +157,16 @@ def finding_identity(source, *, observed_name, version, variant, assertions):
     packet = {"schema": SCHEMA, "source": _source(source), "observed_name": observed_name,
               "version": version, "variant": variant, "anchors": anchors}
     return hashlib.sha256(_encoded(packet).encode()).hexdigest()
+
+
+def cited_publisher_handle(name, excerpt):
+    """A handle directly paired with the cited publisher in its source passage."""
+    if not isinstance(name, str) or not name or not isinstance(excerpt, str):
+        return None
+    matches = {handle.lower() for handle in re.findall(
+        rf"(?<![\w@]){re.escape(name)}\s*\(@([A-Za-z0-9_]{{1,15}})\)", excerpt
+    )}
+    return matches.pop() if len(matches) == 1 else None
 
 
 def _issuer(value, *, passages, limits):

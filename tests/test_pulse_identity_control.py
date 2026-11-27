@@ -405,3 +405,32 @@ def test_github_owner_capture_waits_for_identity_resume(control):
     observation.refresh_from_db()
     assert recovered['provider_calls'] == 0 and observation.product_id is not None
     assert len(calls) == 2
+
+
+def test_regular_release_worker_services_due_chart_metrics_without_new_releases(monkeypatch, settings):
+    from core import release_chart_collection
+    from monitor import pulse_processing
+    from monitor.tasks import recover_due_product_releases
+
+    calls = []
+    def collect(*, client, max_seconds):
+        calls.append(max_seconds)
+        return {"status": "checked", "requests": 2}
+    monkeypatch.setattr(release_chart_collection, "collect_due_release_metrics", collect)
+    monkeypatch.setattr(pulse_processing, "process_saved_findings", lambda: {"status": "running", "processed": 0})
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    assert recover_due_product_releases()["status"] == "disabled"
+    assert calls == []
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    result = recover_due_product_releases()
+    assert result["chart_metrics"]["requests"] == result["provider_calls"] == 2
+    assert len(calls) == 1 and 0 < calls[0] <= 10
+
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    def stop_at_deadline(**kwargs):
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(release_chart_collection, "collect_due_release_metrics", stop_at_deadline)
+    with pytest.raises(SoftTimeLimitExceeded):
+        recover_due_product_releases()
