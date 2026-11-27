@@ -2239,3 +2239,57 @@ def test_collection_clock_follows_physical_request_through_cached_page_use():
         clock="collection",
     )
     assert cached == []
+
+
+@pytest.mark.parametrize("launch_text", [
+    "Introducing Qwen4: our new model.",
+    "正式发布 Qwen4：我们的新模型。",
+    "正式發布 Qwen4：我們的新模型。",
+    "Qwen4を正式にリリースしました。",
+])
+def test_pulse_uses_prior_unclassified_publisher_announcement_for_exact_version(monkeypatch, settings, tmp_path, launch_text):
+    from datetime import UTC, datetime
+
+    from core.pulse_readers import release_page
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+    from tests.test_classified_product_releases import setup_cycle
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    state, runner, transport = setup_cycle(monkeypatch, official=True)
+    author = state.post.author
+    models.Post.objects.filter(pk=state.pk).update(created_at=datetime(2026, 11, 18, tzinfo=UTC))
+    # Pre-release mentions and teasers can outnumber the per-product history budget.
+    models.Post.objects.bulk_create([
+        models.Post(tweet_id=f"prerelease-{i}", author=author, text="Testing Qwen4 internally.",
+                    created_at=datetime(2026, 7, 1, tzinfo=UTC)) for i in range(18)
+    ])
+    for i, text in enumerate(("Meet Qwen4: coming soon.", "Introducing Qwen4: not released yet.",
+                              "Announcing Qwen4 tomorrow?", "Meet Qwen4: will launch next week.")):
+        models.Post.objects.create(tweet_id=f"teaser-{i}", author=author, text=text,
+                                   created_at=datetime(2026, 7, 2, tzinfo=UTC))
+    for key, text in [
+        ("prior-launch", launch_text),
+        ("prior-namesake", "Introducing Qwen4.1: our new model."),
+        ("prior-discussion", "We tested Qwen4 today."),
+        ("prior-other-release", "Introducing Aster2, trained on Qwen4."),
+        ("prior-update", "Introducing Qwen4 API integration."),
+    ]:
+        models.Post.objects.create(tweet_id=key, author=author, text=text, created_at=datetime(2026, 7, 16, tzinfo=UTC))
+    runner._run_post_fetch([], run_id="saved-release-history")
+    process_saved_findings()
+    event = models.EventDossier.objects.get()
+    prior = event.sources.get(post_id="prior-launch")
+    claim = prior.claims.get(claim_kind_reference__code="announcement")
+    assert claim.effective_at == datetime(2026, 7, 16, tzinfo=UTC)
+    assert claim.reported_product.display_name == "Qwen4"
+    assert set(event.sources.values_list("post_id", flat=True)) == {state.pk, "prior-launch"}
+    assert not models.PostEnrichmentState.objects.filter(pk="prior-launch").exists()
+    counts = (models.EventDossierSource.objects.count(), models.EventDossierClaim.objects.count())
+    from core.product_release_detection_queue import enqueue_posts
+    enqueue_posts([state.pk])
+    process_saved_findings()
+    assert counts == (models.EventDossierSource.objects.count(), models.EventDossierClaim.objects.count())
+    assert len(transport.calls) == 2
+    assert release_page()["entries"][0]["timeline_date"] == claim.effective_at.date()

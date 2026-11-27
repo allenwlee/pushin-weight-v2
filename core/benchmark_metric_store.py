@@ -1198,9 +1198,20 @@ def persist_source(
                     run, source_details["endpoint_checks"], contract
                 )
             run.success_count = len(successful)
+            # A complete rankings/leaderboard window can legitimately contain
+            # no row for this exact product. The captured request and selected
+            # empty payload prove the completed attempt. Zero products measured
+            # remains distinct from a measured numerical zero.
+            completed_empty_window = (
+                run.job.job_key.startswith("release-history:") and run.job.mode == "historical"
+                and source in {"arena", "openrouter"} and payload.get("status") == "ok"
+                and not payload["rows"] and not errors and run.request_count > 0
+                and payload.get("coverage") in {"top_50_public_models", "publication_window"}
+                and run.selected_count == 1
+            )
             run.status = (
                 "success"
-                if not errors and run.success_count == run.selected_count
+                if (not errors and run.success_count == run.selected_count) or completed_empty_window
                 else "partial"
                 if successful
                 or (prepared and not errors)

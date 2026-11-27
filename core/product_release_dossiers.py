@@ -24,6 +24,7 @@ from core.models import (
     EventKind,
     ReleaseMaturity,
 )
+from core.product_release_findings import NOVELTIES, cited_publisher_handle
 
 CLAIM_FIELDS = frozenset(
     {
@@ -296,6 +297,27 @@ def _pulse_revision(value):
     return value
 
 
+def project_finding_novelty(anchor, finding):
+    """Expose a validated source subtype to the web role, retaining only a short excerpt."""
+    from core.event_dossiers import add_claim
+
+    if finding["novelty"] not in NOVELTIES:
+        raise ValueError("Invalid finding novelty")
+    scope = f"pulse-novelty-v1:{finding['finding_key']}"
+    existing = EventDossierClaim.objects.filter(
+        event_dossier_source_id=anchor.event_dossier_source_id, source_archive_id=anchor.source_archive_id,
+        scope_key=scope, extraction_version=anchor.extraction_version,
+    ).values_list("assertion_text", flat=True).first()
+    if existing is not None:
+        if existing != finding["novelty"]:
+            raise ValueError("Conflicting saved novelty projection")
+        return
+    add_claim(anchor.event_dossier_source_id, claim_kind="release_context", scope_key=scope,
+              assertion_text=finding["novelty"], source_excerpt=anchor.source_excerpt[:160],
+              source_locator=anchor.source_locator, extraction_version=anchor.extraction_version,
+              source_archive_id=anchor.source_archive_id)
+
+
 @transaction.atomic
 def persist_classified_release_findings(
     *, source, revision_id, content_fingerprint, findings, extraction_version
@@ -381,8 +403,13 @@ def persist_classified_release_findings(
         if issuer is not None:
             if (
                 not isinstance(issuer, dict)
-                or set(issuer)
+                or set(issuer) - {"observed_handle"}
                 != {"relation", "source_locator", "source_excerpt", "observed_name"}
+                or ("observed_handle" in issuer and (
+                    issuer["relation"] != "attributed_party" or not issuer["observed_handle"]
+                    or issuer["observed_handle"] != cited_publisher_handle(
+                        issuer["observed_name"], issuer["source_excerpt"])
+                ))
                 or issuer["relation"] not in {"source_author", "attributed_party"}
             ):
                 raise ValueError("Invalid issuer evidence")
@@ -407,12 +434,7 @@ def persist_classified_release_findings(
         keys.add(key)
         if finding["category"] is not None and finding["category"] not in TYPES:
             raise ValueError("Invalid finding category")
-        if finding["novelty"] not in {
-            "new_release",
-            "availability_update",
-            "historical_release",
-            "unresolved",
-        }:
+        if finding["novelty"] not in NOVELTIES:
             raise ValueError("Invalid finding novelty")
         for field in (
             "observed_name",
@@ -523,6 +545,7 @@ def persist_classified_release_findings(
                       assertion_text=finding["category"] or "unknown", source_excerpt=first["source_excerpt"],
                       source_locator=first["source_locator"], extraction_version=revision,
                       source_archive_id=archive.pk)
+        project_finding_novelty(anchor, finding)
         if source["kind"] == "post" and finding.get("category") in {"model-llm", "model-other"}:
             from core.product_release_acquisition import queue_after_commit
 

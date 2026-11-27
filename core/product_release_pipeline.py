@@ -192,6 +192,72 @@ def _named_announcement_dossier(source, candidate):
     return target_id, target.current_review_id
 
 
+def recover_prior_publisher_announcement(*, dossier, product, finding, post):
+    """Find a dated publisher announcement in saved posts, including unclassified ones."""
+    from django.db.models import Exists, Func, OuterRef, Q, TextField, Value
+    from django.db.models.functions import Length, Trim
+
+    from core.product_release_intake import _FUTURE, _NEGATED
+
+    name = (finding.get("observed_name") or "").strip()
+    if not (post and post.created_at and product.brand_id and len(name) >= 3
+            and name.casefold() in {(product.display_name or "").casefold(), (product.repo_id or "").rsplit("/", 1)[-1].casefold()}):
+        return
+    # A bare family name cannot pick a version or a variant.
+    if any(value and value.casefold() not in name.casefold()
+           for value in (finding.get("version"), finding.get("variant"))):
+        return
+    if dossier.current_review_id or dossier.merged_into_id:
+        return
+    official = models.BrandAccount.objects.filter(brand_id=product.brand_id, role_id="official").values("account_id")
+    candidates = (models.Post.objects.filter(author_id__in=official, created_at__lte=post.created_at,
+                                              text__icontains=name, quoted_status_id__isnull=True)
+                  .exclude(Q(is_retweet=True) | Q(is_quote=True)).order_by("created_at", "pk"))
+    if finding["novelty"] not in {"new_release", "historical_release"}:
+        candidates = candidates.exclude(pk=post.pk)
+    # Bind the product directly to the announcement verb. Text elsewhere in
+    # the post (e.g. a training base, a ranking, or a sibling model) is not a
+    # launch assertion. Punctuation separates the name from the description.
+    exact_name = re.escape(name)
+    before_name = (
+        r"(?:(?:introducing|meet|announcing|"
+        r"(?:we|i)\s+(?:are\s+|am\s+|have\s+|today\s+|just\s+)?(?:announce|introduce|release|released|launch|launched|releasing))"
+        r"\s+(?:our\s+)?|(?:我们|我們)?正式(?:发布|發布)了?\s*)"
+    )
+    boundary = r"(?=$|[,:!—，：。！]|\.(?:\s|$)|\s+(?:today|on \d{4}-\d{2}-\d{2})(?:\s|[.!]|$))"
+    statement = (r"^[^\w\s]*\s*(?:" + before_name + exact_name + boundary
+                 + "|" + exact_name + r"\s*を(?:正式に)?(?:リリース|公開)しました(?=$|[。！]))")
+    # Restrict the indexed name/author search to actual announcement subjects
+    # before applying the row budget. PostgreSQL spells a word boundary `\y`.
+    excluded = (rf"{_FUTURE.pattern}|{_NEGATED.pattern}|[?？]|"
+                r"\b(?:now (?:available|live) on|integration with|price (?:cut|drop))\b")
+    assigned_elsewhere = models.EventDossierSource.objects.filter(
+        post_id=OuterRef("pk"), event_dossier__merged_into__isnull=True,
+    ).exclude(event_dossier=dossier)
+    candidates = (candidates.alias(first_line=Func(Trim("text"), Value("\n"), Value(1),
+                                                    function="SPLIT_PART", output_field=TextField()))
+                  .alias(line_length=Length("first_line"))
+                  .filter(first_line__iregex=statement, line_length__lte=512)
+                  .exclude(first_line__iregex=excluded.replace(r"\b", r"\y"))
+                  .exclude(Exists(assigned_elsewhere)))
+    for prior in candidates.only("tweet_id", "created_at", "text", "tweet_url")[:16]:
+        line = prior.text.strip().splitlines()[0]
+        observed = extract_milestones(line, published_at=prior.created_at)
+        if any(m.kind == "rumor" for m in observed):
+            continue
+        linked = attach_source(dossier.pk, post_id=prior.pk)
+        dated = next((m for m in observed if m.kind == "source_stated_release" and m.effective_date), None)
+        add_claim(linked.pk, claim_kind="source_stated_release" if dated else "announcement",
+                  scope_key=f"pulse-history-v1:{product.product_key}", assertion_text=line,
+                  source_excerpt=line, source_locator=prior.tweet_url or None,
+                  reported_product_id=product.pk, reported_brand_id=product.brand_id,
+                  extraction_version="pulse-historical-announcement-v1",
+                  effective_precision="day" if dated else "datetime",
+                  effective_date=dated.effective_date if dated else None,
+                  effective_at=None if dated else prior.created_at)
+        return
+
+
 def _observed_publisher(source, linked, candidate):
     """Retain a source's self-attribution, separately from verification."""
     if not source.post_id:

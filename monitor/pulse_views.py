@@ -16,7 +16,11 @@ from django.views.decorators.http import require_GET, require_POST
 from core.models import EventDossier
 from core.pulse_readers import PulseReadError, release_page, release_sources
 from monitor import pulse_control
-from monitor.views import _can_review_products, _home_preferences_namespace, _resolve_locale
+from monitor.views import (
+    _can_review_products,
+    _home_preferences_namespace,
+    _resolve_locale,
+)
 
 JST = ZoneInfo("Asia/Tokyo")
 
@@ -86,7 +90,9 @@ def _card(row):
             _("Legacy category: %(code)s") % {"code": row["legacy_category"]}
             if row["legacy_category"] else _("Category pending")
         )
-    status = row["intake_outcome"] if row["intake_outcome"] in {"non_release", "scam", "superseded"} else row["review_state"]
+    status = row["review_state"]
+    if row.get("intake_is_current", True) and row["intake_outcome"] in {"non_release", "scam", "superseded"}:
+        status = row["intake_outcome"]
     for claim in row["release_dates"]:
         claim["kind_label"] = kinds.get(claim["kind"], _("Reported date"))
         claim["disposition_label"] = dispositions[claim["disposition"]]
@@ -96,7 +102,15 @@ def _card(row):
             claim["display_value"] = " / ".join(_instant(value) if value != "…" else "…" for value in claim["value"].split(" / "))
         else:
             claim["display_value"] = claim["value"]
-    return {**row, "state_label": states.get(status, _("Pending review")),
+    novelty = row.get("novelty")
+    novelty_labels = {
+        "new_release": _("New release"), "historical_release": _("Historical release"),
+        "availability_update": _("Availability update"),
+    }
+    return {**row, "novelty_label": novelty_labels.get(novelty, _("Release type pending")),
+            "timeline_kind_label": kinds.get(row.get("timeline_date_kind")),
+            "can_open_chart": (novelty != "availability_update" or row.get("has_historical_launch")) and status not in {"non_release", "scam", "superseded", "retired"},
+            "state_label": states.get(status, _("Pending review")),
             "category_label": category_label,
             "category_conflict_label": _("Sources report different categories: %(categories)s.") % {
                 "categories": " / ".join(categories[code] for code in row["reported_categories"]),
@@ -117,6 +131,7 @@ def pulse(request):
     except (DatabaseError, PulseReadError):
         context.update(read_error=True, error_message=_("Release discoveries are temporarily unavailable. Please try again."))
         return render(request, "monitor/pulse.html", context, status=503)
+    context["chart_release_id"] = request.GET.get("release", "")[:64]
     context.update(entries=[_card(row) for row in page["entries"]],
                    next_url=_next_url(reverse("pulse"), page["next_cursor"], locale))
     return render(request, "monitor/pulse.html", context)

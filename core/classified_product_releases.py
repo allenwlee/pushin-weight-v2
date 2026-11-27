@@ -20,7 +20,7 @@ from core.models import (
     PostBrandClassificationJudgment,
     PostBrandClassificationState,
 )
-from core.product_release_findings import SCHEMA, finding_identity
+from core.product_release_findings import SCHEMA, cited_publisher_handle, finding_identity
 
 OUTPUT_MANIFEST_SCHEMA = "pulse-classified-release-output-v1"
 TARGETED_RELEASE_REVISION = "model-release-extraction-v2"
@@ -405,6 +405,23 @@ def targeted_release_findings(*, post, tweet, records):
         locator = matches[0]
         relation = record.get("publisher_relation")
         organization = record.get("organization_name")
+        # An explicit subject/handle introducing this exact offering contradicts a
+        # source-author vote for the reporter. Other @mentions are irrelevant.
+        if relation == "source_author" and name and locator == "post":
+            subjects = {
+                (match.group(1), match.group(2).lower())
+                for match in re.finditer(
+                    rf"(?:^|(?<=[.!?\n]))[ \t]*([\w.-]+(?: [A-Z][\w.-]*){{0,4}}) "
+                    rf"\(@([A-Za-z0-9_]{{1,15}})\) (?:released|launched|introduced|announced) "
+                    rf"{re.escape(name)}(?![\w-])", excerpt,
+                )
+            }
+            if len(subjects) == 1:
+                named_party, handle = subjects.pop()
+                if handle != str(getattr(post, "author_handle", "") or "").lower().lstrip("@"):
+                    relation, organization = "attributed_party", named_party
+            elif subjects:
+                relation = None
         issuer = None
         if relation == "source_author" and locator == "post":
             issuer = {
@@ -541,6 +558,9 @@ def targeted_release_findings(*, post, tweet, records):
                     issuer["observed_name"] = profile["display_name"].strip()
                     finding["publisher_profile"] = profile
         else:
+            handle = cited_publisher_handle(issuer["observed_name"], issuer["source_excerpt"])
+            if handle:
+                issuer["observed_handle"] = handle
             if not isinstance(owner, str):
                 continue
             entry = next((row for row in tweet.get("tracked_brand_catalog", [])
@@ -586,6 +606,11 @@ def read_publication_findings(post_id, *, allow_pending=False):
         two_role_revisions = {row[2] for row in _TWO_ROLE_ALLOWED_REVISION_TRIPLETS
                               if row[2].startswith("stage1-two-role-merge-0731-v")}
 
+        if not allow_pending and models.TargetedExtractionState.objects.filter(
+            post_id=post_id, role="model_release_extraction", prompt_version=TARGETED_RELEASE_REVISION,
+            status__in=["pending", "failed"],
+        ).exists():
+            return None
         completed = models.ProductReleaseDetectionState.objects.filter(
             post_id=post_id, completed_at__isnull=False, completed_at__gte=F("requested_at"),
         ).exists()

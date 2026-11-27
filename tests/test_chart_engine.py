@@ -684,7 +684,7 @@ def test_github_product_repository_metric_is_not_confused_with_account_metrics()
     from tests.test_source_metric_projection import configured, evidence, project
 
     TimeZone.objects.get_or_create(pk="UTC")
-    _, raw, product, spec = configured("github", product_type="llm-model", mapped=True)
+    _, raw, product, spec = configured("github", product_type="model-llm", mapped=True)
     source = DataSource.objects.get(pk="github")
     source.metadata["use_policy"]["internal_analysis"] = decision()
     source.save(update_fields=["metadata"])
@@ -1078,3 +1078,267 @@ def test_hf_live_snapshot_uses_its_first_observation_date_when_no_archive_date(
         0,
     )
     assert result["points"][0]["value"] == "10"
+
+
+@pytest.fixture
+def chart_live_server(settings, request):
+    settings.SECURE_SSL_REDIRECT = False
+    return request.getfixturevalue("live_server")
+
+
+@pytest.mark.django_db(transaction=True)
+def test_public_release_refresh_reads_import_and_separates_mapped_and_legacy_boards(
+    monkeypatch,
+    chart_live_server,
+    tmp_path,
+):
+    import json
+    import socket
+    from urllib.parse import urlsplit
+
+    from django.core.cache.backends.locmem import LocMemCache
+    from django.test import RequestFactory
+
+    from core.benchmark_metric_store import persist_source
+    from core.event_dossiers import ProductReleaseInput
+    from core.measurement_taxonomy import digest
+    from core.models import CollectionObservation
+    from monitor import single_brand_chart
+    from tests.test_benchmark_release_response import response_contract, seed
+    from tests.test_event_dossiers import claim, dossier, review
+
+    contract = response_contract()
+    mapping = contract.mappings.get(source_id="arena")
+    product = mapping.subject.product
+    event = dossier("real-chart-fixture")
+    day = date(2026, 9, 10)
+    evidence = claim(event, effective_precision="day", effective_date=day)
+    current = review(
+        event,
+        evidence,
+        review_state="confirmed",
+        product_release=ProductReleaseInput(
+            observed_name=product.repo_id,
+            product_key=product.product_key,
+            disclosure_state="announced",
+            availability_state="available",
+        ),
+    )
+    monkeypatch.setattr(single_brand_chart, "cache", LocMemCache("u5-integration", {}))
+    monkeypatch.setattr(single_brand_chart, "_CHART_BUILD_INTERVAL_SECONDS", 0)
+
+    external_requests = []
+    connect = socket.socket.connect
+
+    def connect_locally(sock, address):
+        if isinstance(address, tuple) and address[0] not in {"localhost", "127.0.0.1", "::1"}:
+            external_requests.append(address[0])
+            raise AssertionError("Chart reads contacted an external service")
+        return connect(sock, address)
+
+    monkeypatch.setattr(socket.socket, "connect", connect_locally)
+    factory = RequestFactory()
+
+    def read(**params):
+        response = single_brand_chart.chart(
+            factory.get("/general/chart/", {"release": str(event.pk), **params})
+        )
+        assert response.status_code == 200, response.content
+        result = json.loads(response.content)
+        assert result["product"]["anchor_source"] == "dossier-reviewed"
+        assert result["product"]["dossier_id"] == str(event.pk)
+        assert result["product"]["claim_id"] == str(evidence.pk)
+        assert result["product"]["review_id"] == str(current.pk)
+        return result["lines"]
+
+    empty = read()
+    assert not any(
+        line["observed_dates"] for line in empty if line["source"] == "arena"
+    )
+    seed(contract)
+    # Imported observations from the September 12/17 publications predate this
+    # Product's metric crosswalk. Their retained typed fields identify the board.
+    # One archive collected both publication dates under a later snapshot day.
+    CollectionObservation.objects.filter(
+        run__job__source_id__in=("arena", "openrouter"), mapping__isnull=False,
+    ).update(archive_snapshot_date=date(2026, 9, 23))
+    rows = [
+        {
+            "model_name": "lab/model",
+            "leaderboard_publish_date": f"2026-09-{n:02d}",
+            "category": "overall",
+            "rating": 1300,
+            "rank": rank,
+        }
+        for n, rank in ((12, 8), (17, 6))
+    ]
+    persist_source(
+        contract,
+        "arena",
+        digest("fixture-legacy-board"),
+        {
+            "status": "ok",
+            "config": "text",
+            "coverage": "publication_window",
+            "rows": rows,
+        },
+        source_metadata={"publication_dates": ["2026-09-12", "2026-09-17"]},
+    )
+    assert (
+        CollectionObservation.objects.filter(
+            run__ingestion_key=digest("fixture-legacy-board"),
+            values__source_metric__metric_key="rank",
+        ).update(
+            mapping=None,
+            product=product,
+            config_key="text_style_control",
+            archive_snapshot_date=date(2026, 9, 23),
+        )
+        == 2
+    )
+    assert read() == empty
+    lines = read(refresh="1")
+    ranks = {
+        r["arena_scope"]["config"]: r
+        for r in lines
+        if r["source"] == "arena" and r["metric"] == "rank"
+    }
+    assert ranks.keys() == {"text", "text_style_control"}
+    assert ranks["text"]["key"] == "arena:rank"
+    assert ranks["text"]["default_visible"] is True
+    assert ranks["text_style_control"]["key"] != "arena:rank"
+    assert ranks["text_style_control"]["default_visible"] is False
+    for board, first, last, baseline in (
+        ("text", 11, 18, "1"),
+        ("text_style_control", 12, 17, "8"),
+    ):
+        series = ranks[board]
+        points = {p["date"]: p for p in series["points"]}
+        assert series["reference"]["mean"] == baseline
+        assert points[f"2026-09-{first - 1:02d}"]["percent"] is None
+        assert points["2026-09-15"]["source_date"] == f"2026-09-{first:02d}"
+        assert points[f"2026-09-{last + 1:02d}"]["percent"] is None
+        assert series["observed_dates"] == 2
+    assert read() == lines
+
+    from playwright.sync_api import sync_playwright
+
+    default_product = Product.objects.create(
+        brand=product.brand,
+        repo_id="deepseek-ai/DeepSeek-V4-Pro-0813",
+        display_name="0813 fixture",
+    )
+    with sync_playwright() as driver:
+        browser = driver.chromium.launch(headless=True)
+        page = browser.new_page(
+            viewport={"width": 1380, "height": 1000}, timezone_id="Asia/Tokyo"
+        )
+
+        def local_page_request(route):
+            if (
+                urlsplit(route.request.url).hostname
+                != urlsplit(chart_live_server.url).hostname
+            ):
+                external_requests.append(route.request.url)
+                route.abort()
+            else:
+                route.continue_()
+
+        page.route("**/*", local_page_request)
+        with page.expect_response(
+            lambda res: "/general/chart/?" in res.url and res.status == 200
+        ) as chart_response:
+            page.goto(
+                f"{chart_live_server.url}/general/?release={event.pk}&lang=en",
+                wait_until="networkidle",
+            )
+        (tmp_path / "dossier-reviewed-two-boards.json").write_text(
+            json.dumps(chart_response.value.json(), indent=2)
+        )
+        page.locator("#ce-content:not([hidden])").wait_for(timeout=15000)
+        assert "dossier review" in page.locator("#ce-loaded").text_content()
+        buttons = page.locator("#ce-legend button")
+        assert buttons.locator("text=text_style_control").count() > 0
+        style_toggle = page.locator(
+            '#ce-legend button[data-series^="arena:rank:text_style_control"]'
+        )
+        assert style_toggle.get_attribute("aria-pressed") == "false"
+        style_toggle.click()
+        page.locator("#ce-sources").evaluate("(el) => el.parentElement.open = true")
+        page.locator("#ce-chart").evaluate("el => el.scrollIntoView({block: 'center'})")
+        page.locator("#ce-chart").screenshot(
+            path=tmp_path / "dossier-reviewed-two-boards.png"
+        )
+        assert style_toggle.get_attribute("aria-pressed") == "true"
+        # The default 0813 path remains accessible when another Product is open.
+        page.goto(f"{chart_live_server.url}/general/?lang=en", wait_until="networkidle")
+        page.locator("#ce-content:not([hidden])").wait_for(timeout=15000)
+        assert "Confirmed example date" in page.locator("#ce-loaded").text_content()
+        assert page.locator("#ce-product").input_value() == str(
+            default_product.product_key
+        )
+        page.locator("#ce-chart").evaluate("el => el.scrollIntoView({block: 'center'})")
+        page.locator("#ce-chart").screenshot(path=tmp_path / "0813-default.png")
+        browser.close()
+
+    # These historical rows never recorded a separate reasoning setting. An
+    # explicit reasoning variant can still read its directly mapped snapshots.
+    mapping.identifier_metadata = {
+        "release_endpoint": {
+            "source_fields": {"reasoning": "high", "board": "Text Arena"}
+        }
+    }
+    mapping.save(update_fields=["identifier_metadata"])
+    reasoning = {
+        r["arena_scope"]["config"]: r
+        for r in read(refresh="1")
+        if r["source"] == "arena" and r["metric"] == "rank"
+    }
+    assert reasoning["text"]["observed_dates"] == 2
+    assert reasoning["text"]["arena_scope"]["reasoning"] == "high"
+    assert reasoning["text"]["arena_scope"]["board"] == "Text Arena"
+    assert reasoning["text_style_control"]["observed_dates"] == 0
+    old_points = {p["date"]: p for p in reasoning["text_style_control"]["points"]}
+    assert old_points["2026-09-12"]["coverage"] == "ambiguous_variant"
+    assert external_requests == []
+
+
+def test_selected_release_counts_only_posts_with_an_exact_product_association():
+    from django.utils import timezone as dj_timezone
+
+    from core.chart_engine import ChartRequest, ReleaseAnchor, build_single_brand_chart
+    from core.measurement_attribution import record_attribution
+    from core.measurement_taxonomy import configure_taxonomy, subject_id
+    from core.models import Post, PostBrand, PostBrandProduct
+    from core.release_chart_handoff import resolve_release
+    from tests.test_release_chart_handoff import confirmed
+
+    day = date(2026, 9, 18)
+    published = datetime.combine(day, datetime.min.time(), UTC)
+    from tests.product_factory import product_type_fields
+    brand = Brand.objects.create(nickname="verified-mentions")
+    model = Product.objects.create(brand=brand, display_name="River", **product_type_fields(Product, "model-llm"))
+    product, event, _, _ = confirmed(day, product=model)
+    sibling = Product.objects.create(brand=product.brand, display_name="River II")
+    version = configure_taxonomy({"reviewed_by": "fixture",
+                                  "subjects": [{"kind": "product", "key": str(product.product_key)}],
+                                  "affiliations": []})
+    for key in ("both", "mention", "sibling", "brand"):
+        post = Post.objects.create(tweet_id=key, text="River launch", created_at=published)
+        PostBrand.objects.create(post=post, brand=product.brand)
+        if key in {"both", "sibling"}:
+            target = product if key == "both" else sibling
+            PostBrandProduct.objects.create(post=post, brand=product.brand, product=target, observed_name=target.display_name,
+                                           source_evidence={"source": "fixture"}, verification_policy_version="test")
+        if key in {"both", "mention"}:
+            record_attribution(version, post, subject_id("product", product.product_key), observed_name="River",
+                               policy_version="fixture", evidence={"reviewed_by": "fixture","span_start": 0,"span_end": 5})
+    request = ChartRequest(target=ReleaseAnchor.from_qualified(resolve_release(event.pk)), start=published-timedelta(days=1),
+                           end=published+timedelta(days=1), cutoff=dj_timezone.now(), history_mode="hindsight")
+    lines = {line["key"]: line for line in build_single_brand_chart(request)["lines"]}
+    def by_day(key):
+        return {point["day"]: point["raw"] for point in lines[key]["points"]}
+
+    assert by_day("discussion:posts")[0] == 4
+    assert by_day("discussion:product_posts")[0] == 2
+    assert by_day("discussion:product_posts")[-1] is None

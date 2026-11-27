@@ -15,13 +15,14 @@ _deadline_fetches = ThreadPoolExecutor(
 )
 
 
-def fetch_before_deadline(url, *, max_bytes, deadline):
+def fetch_before_deadline(url, *, max_bytes, deadline, max_requests=4):
     """Bound the caller's wait including DNS and a server that drips body bytes."""
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise TimeoutError("Reference-fetch deadline exceeded")
     future = _deadline_fetches.submit(
-        fetch_public_response, url, max_bytes=max_bytes, deadline=deadline
+        fetch_public_response, url, max_bytes=max_bytes, deadline=deadline,
+        **({"max_requests": max_requests} if max_requests != 4 else {}),
     )
     try:
         return future.result(timeout=remaining)
@@ -56,14 +57,14 @@ def public_addresses(url):
     return parsed, port, addresses
 
 
-def fetch_public_response(url, *, max_bytes=MAX_BYTES, deadline=None, resolver=None):
+def fetch_public_response(url, *, max_bytes=MAX_BYTES, deadline=None, resolver=None, max_requests=4):
     deadline = (
         min(deadline, time.monotonic() + 45)
         if deadline is not None
         else time.monotonic() + 45
     )
     resolver = resolver or public_addresses
-    for _ in range(4):
+    for _ in range(min(max_requests, 4)):
         if time.monotonic() >= deadline:
             raise TimeoutError("Reference-fetch deadline exceeded")
         parsed, port, addresses = resolver(url)

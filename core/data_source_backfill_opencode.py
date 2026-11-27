@@ -10,22 +10,27 @@ def is_opencode_history(job):
         'opencode', 'metric', 'collect_metrics', 'historical')
 
 
+def is_release_publication_history(job):
+    return (job.job_key.startswith("release-history:") and job.source_id in {"openrouter", "arena"}
+            and job.purpose == "metric" and job.operation == "collect_metrics" and job.mode == "historical")
+
+
 def history_window(job):
     """Return inclusive provider days from sealed UTC [start,end) target bounds."""
-    require(is_opencode_history(job) and job.instruction_version == 2,
+    require((is_opencode_history(job) or is_release_publication_history(job)) and job.instruction_version == 2,
             'OpenCode history requires typed historical metric instructions')
     targets = list(job.targets.select_related('mapping__subject', 'subject'))
-    return validate_history_targets(job.contract, targets)
+    return validate_history_targets(job.contract, targets, source_id=job.source_id)
 
 
-def validate_history_targets(contract, targets):
+def validate_history_targets(contract, targets, *, source_id="opencode"):
     require(0 < len(targets) <= 100, 'OpenCode history requires a bounded selection')
     bounds, mappings = set(), set()
     for target in targets:
         mapping = target.mapping
         require(target.target_kind == 'metric_subject' and target.target_role == 'history'
                 and target.resolution_state == 'resolved' and mapping is not None
-                and mapping.source_id == 'opencode' and mapping.purpose == 'metric'
+                and mapping.source_id == source_id and mapping.purpose == "metric"
                 and mapping.subject_id == target.subject_id
                 and target.subject.subject_kind == 'product'
                 and target.native_identifier == mapping.external_identifier,
@@ -40,7 +45,7 @@ def validate_history_targets(contract, targets):
         mappings.add(mapping.pk)
     require(len(bounds) == 1 and len(mappings) == len(targets)
             and mappings == set(contract.mappings.filter(
-        source_id='opencode', purpose='metric').values_list('pk', flat=True)),
+        source_id=source_id, purpose="metric").values_list('pk', flat=True)),
         'OpenCode history contract and target cohort differ')
     start, end = bounds.pop()
     return start.date().isoformat(), (end.date() - timedelta(days=1)).isoformat()

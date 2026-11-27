@@ -25,6 +25,11 @@ from core.models import (
     SourceSubjectMapping,
 )
 
+RELEASE_IDENTIFIER_SCOPES = {
+    "hf": "model", "github": "repository_id", "openrouter": "rankings_permaslug",
+    "arena": "arena_model_name", "opencode": "model_id",
+}
+
 RELATION_ROLES = {
     "dedicated_model",
     "dedicated_product",
@@ -34,6 +39,11 @@ RELATION_ROLES = {
     "agent_harness",
 }
 DEDICATED_ROLES = frozenset({"dedicated_model", "dedicated_product"})
+
+
+def dedicated_product_mapping(mapping):
+    roles = {getattr(mapping, "identity_snapshot", {}).get("role"), getattr(mapping, "identifier_metadata", {}).get("role")} - {None, ""}
+    return bool(roles) and roles <= DEDICATED_ROLES
 
 
 class MappingBusy(ValueError):
@@ -100,6 +110,131 @@ def qualified_catalog_ownership(account, subject=None, *, product=None):
         and target_links[0]["ownership_confirmed"] is True
         and owner_links[0]["company_id"] == target_links[0]["company_id"]
     )
+
+
+def _catalog_identity_hash(
+    source, kind, scope, native, subject, publisher, role, version_selector
+):
+    return digest(
+        {
+            "source": source,
+            "kind": kind,
+            "scope": scope,
+            "native_id": native,
+            "subject": str(subject),
+            "publisher": str(publisher),
+            "role": role,
+            "version_selector": version_selector,
+        }
+    )
+
+
+def release_metric_catalog_state(mapping):
+    """Return None for an independent review, an empty string for a lost release match, or its current identity digest."""
+
+    marker = mapping.identifier_metadata.get("release_catalog")
+    if marker is None and not (
+        mapping.reviewed_by.startswith("pulse release ")
+        or mapping.contract.reviewed_by.startswith("pulse release ")
+    ):
+        return None
+
+    scope = RELEASE_IDENTIFIER_SCOPES.get(mapping.source_id)
+    if not (
+        scope
+        and dedicated_product_mapping(mapping)
+        and mapping.reviewed_by.strip()
+        and mapping.contract.reviewed_by.strip()
+        and mapping.evidence_url.strip()
+    ):
+        return ""
+    native = (
+        mapping.external_identifier.casefold()
+        if mapping.source_id == "hf"
+        else mapping.external_identifier
+    )
+    if native != mapping.normalized_identifier:
+        return ""
+    catalog = (
+        SourceSubjectMapping.objects.filter(
+            purpose="catalog",
+            source_id=mapping.source_id,
+            subject_id=mapping.subject_id,
+            source_subject_kind=mapping.source_subject_kind,
+            identifier_scope__code=scope,
+            normalized_identifier=native,
+        )
+        .select_related("publisher_account", "subject__product")
+        .only("publisher_account__data_source_id", "subject__subject_kind", "subject__product__brand_id",
+              "subject__product__publisher_account_id", "external_identifier", "identifier_metadata",
+              "identity_snapshot", "source_id", "source_subject_kind", "mapping_hash", "reviewed_by",
+              "reviewed_at", "evidence_url")
+        .first()
+    )
+    if (
+        catalog is None
+        or not catalog.publisher_account_id
+        or not dedicated_product_mapping(catalog)
+    ):
+        return ""
+    catalog_native = (
+        catalog.external_identifier.casefold()
+        if mapping.source_id == "hf"
+        else catalog.external_identifier
+    )
+    numeric_role = mapping.identifier_metadata.get(
+        "role"
+    ) or mapping.identity_snapshot.get("role")
+    expected_hash = _catalog_identity_hash(
+        catalog.source_id,
+        catalog.source_subject_kind,
+        scope,
+        native,
+        catalog.subject_id,
+        catalog.publisher_account_id,
+        numeric_role,
+        catalog.identity_snapshot.get("version_selector"),
+    )
+    if (
+        not catalog.reviewed_by.strip()
+        or not catalog.evidence_url.strip()
+        or catalog_native != native
+        or catalog.mapping_hash != expected_hash
+        or catalog.identity_snapshot.get("role") != numeric_role
+        or catalog.identity_snapshot.get("publisher_account_key")
+        != str(catalog.publisher_account_id)
+        or (
+            mapping.publisher_account_id
+            and mapping.publisher_account_id != catalog.publisher_account_id
+        )
+        or not qualified_catalog_ownership(catalog.publisher_account, catalog.subject)
+    ):
+        return ""
+    if marker is not None:
+        if not isinstance(marker, dict):
+            return ""
+        # Catalog and archive row IDs can differ across PostgreSQL stores.
+        # The catalog hash uses the stable native, subject and publisher identity.
+        if (marker.get("mapping_hash") != catalog.mapping_hash
+            or marker.get("publisher_account_key") != str(catalog.publisher_account_id)):
+            return ""
+    elif catalog.reviewed_at > mapping.reviewed_at:
+        # Older release-generated contracts have no hash pin. A newer catalog
+        # review or transfer cannot retroactively qualify their measurements.
+        return ""
+    if mapping.source_id == "hf":
+        # Only the collector reads the archived document. A serving-role reader
+        # can recheck the immutable capture and selector used to admit this row.
+        reference = catalog.identifier_metadata.get("release_endpoint") or {}
+        pin = marker.get("hf_receipt") if isinstance(marker, dict) else None
+        if not pin or pin != digest([reference.get("archive_sha256"), reference.get("selector"), reference.get("url")]):
+            return ""
+    return digest([mapping.mapping_hash, catalog.mapping_hash, native, numeric_role])
+
+
+def release_metric_mapping_is_current(mapping):
+    """Can the current source identity still support this numeric mapping?"""
+    return release_metric_catalog_state(mapping) != ""
 
 
 def qualified_ownership(account, subject):
@@ -228,16 +363,10 @@ def review_catalog_mapping(
         "subject_id": str(subject.pk),
     }
     # Labels and URLs can change without changing native repository identity.
-    identity = {
-        "source": source.pk,
-        "kind": source_subject_kind,
-        "scope": identifier_scope,
-        "native_id": native,
-        "subject": str(subject.pk),
-        "publisher": str(publisher_account.pk),
-        "role": role,
-        "version_selector": version_selector,
-    }
+    identity_hash = _catalog_identity_hash(
+        source.pk, source_subject_kind, identifier_scope, native, subject.pk,
+        publisher_account.pk, role, version_selector,
+    )
     key = {
         "purpose": "catalog",
         "source": source,
@@ -253,7 +382,7 @@ def review_catalog_mapping(
             external_identifier=external_identifier,
             publisher_account=publisher_account,
             identity_snapshot=snapshot,
-            mapping_hash=digest(identity),
+            mapping_hash=identity_hash,
             evidence_url=evidence_url,
             reviewed_by=reviewed_by,
             identifier_metadata=identifier_metadata or {},
@@ -281,7 +410,7 @@ def review_catalog_mapping(
             }
             mapping.publisher_account = publisher_account
             mapping.identity_snapshot = snapshot
-            mapping.mapping_hash = digest(identity)
+            mapping.mapping_hash = identity_hash
             mapping.evidence_url = evidence_url
             mapping.reviewed_by, mapping.reviewed_at = reviewed_by, timezone.now()
         additions = identifier_metadata or {}

@@ -1,0 +1,488 @@
+{
+  "account": {
+    "account_key": "4aa54be4-1172-4372-92f3-075e1354eb06",
+    "data_source_id": "x",
+    "external_identifier": "1837779676481441797",
+    "author_id": "1837779676481441797",
+    "handle": "maxilicious20ai"
+  },
+  "brand": {
+    "nickname": "mono-ai-studio",
+    "display_name": "Mono AI Studio",
+    "display_name_en": null,
+    "display_name_zh_cn": null,
+    "is_sentinel": false
+  },
+  "posts": [
+    {
+      "tweet_id": "2124339360283984000",
+      "author_handle": "Maxilicious20AI",
+      "text": "Currently uploading the following models to Huggingface:\nVelqora-38M-Base\nVelqora-38M-Instruct\nVelqora-40M-Base\nVelqora-40M-Instruct\n\nPlus the GGUF Versions\nalways Q4 Q8 and F16 for every model",
+      "lang": "en",
+      "created_at": "2026-11-22T03:09:06Z",
+      "quoted_text": null,
+      "is_retweet": false,
+      "is_quote": false,
+      "in_reply_to_id": null,
+      "author_id": "4aa54be4-1172-4372-92f3-075e1354eb06"
+    },
+    {
+      "tweet_id": "2124348529611034766",
+      "author_handle": "Maxilicious20AI",
+      "text": "Here all new Models: https://t.co/Pnrq1qnlmh",
+      "lang": "en",
+      "created_at": "2026-11-22T03:45:32Z",
+      "quoted_text": "Currently uploading the following models to Huggingface:\nVelqora-38M-Base\nVelqora-38M-Instruct\nVelqora-40M-Base\nVelqora-40M-Instruct\n\nPlus the GGUF Versions\nalways Q4 Q8 and F16 for every model",
+      "is_retweet": false,
+      "is_quote": true,
+      "in_reply_to_id": null,
+      "author_id": "4aa54be4-1172-4372-92f3-075e1354eb06",
+      "quoted_status_id_id": "2124339360283984000"
+    }
+  ],
+  "official_link": {
+    "brand_id": "mono-ai-studio",
+    "account_id": "4aa54be4-1172-4372-92f3-075e1354eb06",
+    "role_id": "official"
+  },
+  "judgments": [
+    {
+      "id": 2608391,
+      "post_id": "2124339360283984000",
+      "brand_id": "mono-ai-studio",
+      "revision_id": "8c2de827ca23d9715189d3393e92fe2c2aa5290ed49842ce82a8d30a7c04f838",
+      "stage": "content",
+      "canonical_judgment": {
+        "outcome": "classified",
+        "post_types": [
+          "releases_updates",
+          "hands_on_usage"
+        ],
+        "audience_topics": [
+          "openness_license"
+        ]
+      },
+      "contract_version": "stage1-v1",
+      "taxonomy_version": "stage1-taxonomy-v4",
+      "prompt_version": "compressed8-pulse-content-v2",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731+jev-1.14.0",
+      "provider_role": "content",
+      "input_context_fingerprint": "656acfadbf15ddcc1de2d0e63bfc672c57d7de5455fad5c89e769b32a97e78f0",
+      "selector_version": "compressed8-pulse-merge-v2",
+      "validation_state": "validated",
+      "changes_json": {
+        "provider_request_identity": "compressed8:deepinfra-0731+typesafe-1.14:pulse-v1"
+      },
+      "parent_judgment_id": null,
+      "content_judgment_id": null,
+      "brand_interpretation_judgment_id": null,
+      "created_at": "2026-11-22T03:19:45.796Z",
+      "updated_at": "2026-11-22T03:19:45.796Z"
+    },
+    {
+      "id": 2608392,
+      "post_id": "2124339360283984000",
+      "brand_id": "mono-ai-studio",
+      "revision_id": "8c2de827ca23d9715189d3393e92fe2c2aa5290ed49842ce82a8d30a7c04f838",
+      "stage": "brand_interpretation",
+      "canonical_judgment": {
+        "sentiment": "neutral",
+        "product_labels": [
+          "none"
+        ],
+        "geopolitical_modes": [
+          "none"
+        ],
+        "us_national_stance": "none",
+        "china_national_stance": "none"
+      },
+      "contract_version": "stage1-v1",
+      "taxonomy_version": "stage1-taxonomy-v4",
+      "prompt_version": "compressed8-pulse-brand-v2",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731+jev-1.14.0",
+      "provider_role": "brand_interpretation",
+      "input_context_fingerprint": "656acfadbf15ddcc1de2d0e63bfc672c57d7de5455fad5c89e769b32a97e78f0",
+      "selector_version": "compressed8-pulse-merge-v2",
+      "validation_state": "validated",
+      "changes_json": {
+        "provider_request_identity": "compressed8:deepinfra-0731+typesafe-1.14:pulse-v1"
+      },
+      "parent_judgment_id": null,
+      "content_judgment_id": null,
+      "brand_interpretation_judgment_id": null,
+      "created_at": "2026-11-22T03:19:45.800Z",
+      "updated_at": "2026-11-22T03:19:45.800Z"
+    },
+    {
+      "id": 2608393,
+      "post_id": "2124339360283984000",
+      "brand_id": "mono-ai-studio",
+      "revision_id": "8c2de827ca23d9715189d3393e92fe2c2aa5290ed49842ce82a8d30a7c04f838",
+      "stage": "final",
+      "canonical_judgment": {
+        "outcome": "classified",
+        "sentiment": "neutral",
+        "post_types": [
+          "releases_updates",
+          "hands_on_usage"
+        ],
+        "product_labels": [],
+        "audience_topics": [
+          "openness_license"
+        ],
+        "geopolitical_modes": [],
+        "us_national_stance": "none",
+        "audience_topics_state": "selected",
+        "china_national_stance": "none",
+        "geopolitical_modes_state": "none"
+      },
+      "contract_version": "stage1-v1",
+      "taxonomy_version": "stage1-taxonomy-v4",
+      "prompt_version": "compressed8-pulse-merge-v2",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731+jev-1.14.0",
+      "provider_role": "classifier",
+      "input_context_fingerprint": "656acfadbf15ddcc1de2d0e63bfc672c57d7de5455fad5c89e769b32a97e78f0",
+      "selector_version": "compressed8-pulse-merge-v2",
+      "validation_state": "validated",
+      "changes_json": {
+        "release_output": {
+          "schema": "pulse-classified-release-output-v1",
+          "sha256": "bddae4d3076a844c95b376d6ebd2a88b698465e504972cd484041bf57a73e21e",
+          "finding_keys": [
+            "0cb22d4f966f8c7d17a9e7cf6c66958b903e198df26078bcfe5baf21a73d18f1",
+            "af4d18709a7501fdde0809c03e10f7fbd5ca9cca11f476e57e23c5b842d28933",
+            "d7477799452764730fe0e6af0ab742ee35af10aae9c59a03edeb59ee7ed5c01b",
+            "e7e8000a98e211f1820ff4e6a26f7efb94e978419cf8a49ed892b5df1ffa2c82"
+          ]
+        },
+        "feed_input_fingerprint": "668a8e83b6320124e7e4304ac223c6d1152021b86f4c5c0404cd942ba3325105",
+        "provider_request_identity": "compressed8:deepinfra-0731+typesafe-1.14:pulse-v1"
+      },
+      "parent_judgment_id": null,
+      "content_judgment_id": 2608391,
+      "brand_interpretation_judgment_id": 2608392,
+      "created_at": "2026-11-22T03:19:45.803Z",
+      "updated_at": "2026-11-22T03:19:45.803Z"
+    },
+    {
+      "post_id": "2124348529611034766",
+      "brand_id": "mono-ai-studio",
+      "revision_id": "1a6435fbb07a5a8f7b513c3e165b092f592ab2ef93af82ef3e30e6e9ebadf8a2",
+      "stage": "content",
+      "selector_version": "pulse-release-only-v1",
+      "validation_state": "release_only",
+      "prompt_version": "compressed8-pulse-content-v2",
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731+jev-1.14.0",
+      "provider_role": "classifier-release",
+      "contract_version": "pulse-release-only-v1",
+      "taxonomy_version": "pulse-release-only-v1",
+      "input_context_fingerprint": "2927c4fea6d1e4cbd674ea26ee83d0bc56626d18df0d323e326132ea60ac95f5",
+      "canonical_judgment": {},
+      "changes_json": {
+        "brand_ids": [
+          "mono-ai-studio"
+        ],
+        "release_output": {
+          "schema": "pulse-classified-release-output-v1",
+          "sha256": "e6d31ca603b455c8387a11720352f5983904a49defbbf0960b0fd446a5260cda",
+          "finding_keys": [
+            "57c0e3377c7747111f0e0bf60230e1f3f8214ff6dabfde99410f57706656ecb4",
+            "5aaa9d7b8233a0b61f73b0b89fed95bf67d61fbf7459d45d5aeb4b7a903434cf",
+            "cc8da8c50ef833b31b5d333cab8bc3aac9bf16a036d8e70c7a11cc7c5eafc6fd",
+            "e026adc0ffd336936984f735fcfa99a963135e1d9e7732377db91b7925ab2de8"
+          ]
+        }
+      }
+    }
+  ],
+  "original_feed": {
+    "post_id": "2124339360283984000",
+    "brand_id": "mono-ai-studio",
+    "contract_version": "stage1-v1",
+    "taxonomy_version": "stage1-taxonomy-v4",
+    "prompt_version": "compressed8-pulse-merge-v2",
+    "model": "deepseek-ai/DeepSeek-V4-Flash-0731+jev-1.14.0",
+    "source_language": "en",
+    "input_context_fingerprint": "656acfadbf15ddcc1de2d0e63bfc672c57d7de5455fad5c89e769b32a97e78f0",
+    "outcome": "classified",
+    "sentiment_id": "neutral",
+    "china_nationalism_id": "none",
+    "us_nationalism_id": "none",
+    "china_national_stance_id": "none",
+    "us_national_stance_id": "none",
+    "selected_final_judgment_id": 2608393,
+    "classified_at": "2026-11-22T03:19:45.808Z"
+  },
+  "publications": [
+    {
+      "source": {
+        "id": "2124339360283984000",
+        "kind": "post"
+      },
+      "revision_id": "87cd475f0e34c903f8a2e593986207cfefff451fab11a0f5199a999d59d59ef9",
+      "content_fingerprint": "656acfadbf15ddcc1de2d0e63bfc672c57d7de5455fad5c89e769b32a97e78f0",
+      "extraction_version": "compressed8-pulse-content-v2",
+      "findings": [
+        {
+          "assertions": [
+            {
+              "access_channel": "weights",
+              "assertion_text": "Model is being uploaded to Huggingface as of the post time.",
+              "claim_kind": "availability",
+              "effective_at": null,
+              "effective_date": null,
+              "effective_month": null,
+              "effective_precision": "unknown",
+              "effective_year": null,
+              "event_timezone": null,
+              "not_after": null,
+              "not_before": null,
+              "source_excerpt": "Currently uploading the following models to Huggingface:",
+              "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+            }
+          ],
+          "brand_candidate_id": null,
+          "brand_id": "mono-ai-studio",
+          "candidate_repo_id": null,
+          "category": "model-llm",
+          "finding_key": "0cb22d4f966f8c7d17a9e7cf6c66958b903e198df26078bcfe5baf21a73d18f1",
+          "issuer_evidence": {
+            "observed_name": null,
+            "relation": "source_author",
+            "source_excerpt": "Currently uploading the following models to Huggingface:",
+            "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+          },
+          "novelty": "availability_update",
+          "observed_name": "Velqora-38M-Base",
+          "variant": null,
+          "version": null
+        },
+        {
+          "assertions": [
+            {
+              "access_channel": "weights",
+              "assertion_text": "Model is being uploaded to Huggingface as of the post time.",
+              "claim_kind": "availability",
+              "effective_at": null,
+              "effective_date": null,
+              "effective_month": null,
+              "effective_precision": "unknown",
+              "effective_year": null,
+              "event_timezone": null,
+              "not_after": null,
+              "not_before": null,
+              "source_excerpt": "Velqora-40M-Base",
+              "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+            }
+          ],
+          "brand_candidate_id": null,
+          "brand_id": "mono-ai-studio",
+          "candidate_repo_id": null,
+          "category": "model-llm",
+          "finding_key": "af4d18709a7501fdde0809c03e10f7fbd5ca9cca11f476e57e23c5b842d28933",
+          "issuer_evidence": {
+            "observed_name": null,
+            "relation": "source_author",
+            "source_excerpt": "Velqora-40M-Base",
+            "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+          },
+          "novelty": "availability_update",
+          "observed_name": "Velqora-40M-Base",
+          "variant": null,
+          "version": null
+        },
+        {
+          "assertions": [
+            {
+              "access_channel": "weights",
+              "assertion_text": "Model is being uploaded to Huggingface as of the post time.",
+              "claim_kind": "availability",
+              "effective_at": null,
+              "effective_date": null,
+              "effective_month": null,
+              "effective_precision": "unknown",
+              "effective_year": null,
+              "event_timezone": null,
+              "not_after": null,
+              "not_before": null,
+              "source_excerpt": "Velqora-40M-Instruct",
+              "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+            }
+          ],
+          "brand_candidate_id": null,
+          "brand_id": "mono-ai-studio",
+          "candidate_repo_id": null,
+          "category": "model-llm",
+          "finding_key": "d7477799452764730fe0e6af0ab742ee35af10aae9c59a03edeb59ee7ed5c01b",
+          "issuer_evidence": {
+            "observed_name": null,
+            "relation": "source_author",
+            "source_excerpt": "Velqora-40M-Instruct",
+            "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+          },
+          "novelty": "availability_update",
+          "observed_name": "Velqora-40M-Instruct",
+          "variant": null,
+          "version": null
+        },
+        {
+          "assertions": [
+            {
+              "access_channel": "weights",
+              "assertion_text": "Model is being uploaded to Huggingface as of the post time.",
+              "claim_kind": "availability",
+              "effective_at": null,
+              "effective_date": null,
+              "effective_month": null,
+              "effective_precision": "unknown",
+              "effective_year": null,
+              "event_timezone": null,
+              "not_after": null,
+              "not_before": null,
+              "source_excerpt": "Velqora-38M-Instruct",
+              "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+            }
+          ],
+          "brand_candidate_id": null,
+          "brand_id": "mono-ai-studio",
+          "candidate_repo_id": null,
+          "category": "model-llm",
+          "finding_key": "e7e8000a98e211f1820ff4e6a26f7efb94e978419cf8a49ed892b5df1ffa2c82",
+          "issuer_evidence": {
+            "observed_name": null,
+            "relation": "source_author",
+            "source_excerpt": "Velqora-38M-Instruct",
+            "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+          },
+          "novelty": "availability_update",
+          "observed_name": "Velqora-38M-Instruct",
+          "variant": null,
+          "version": null
+        }
+      ]
+    },
+    {
+      "source": {
+        "id": "2124348529611034766",
+        "kind": "post"
+      },
+      "revision_id": "1a6435fbb07a5a8f7b513c3e165b092f592ab2ef93af82ef3e30e6e9ebadf8a2",
+      "content_fingerprint": "2927c4fea6d1e4cbd674ea26ee83d0bc56626d18df0d323e326132ea60ac95f5",
+      "extraction_version": "compressed8-pulse-content-v2",
+      "findings": [
+        {
+          "assertions": [
+            {
+              "access_channel": "weights",
+              "assertion_text": "Model Velqora-38M-Base is being uploaded to Huggingface",
+              "claim_kind": "availability",
+              "effective_at": null,
+              "effective_date": null,
+              "effective_month": null,
+              "effective_precision": "unknown",
+              "effective_year": null,
+              "event_timezone": null,
+              "not_after": null,
+              "not_before": null,
+              "source_excerpt": "Velqora-38M-Base",
+              "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+            }
+          ],
+          "brand_candidate_id": null,
+          "brand_id": null,
+          "candidate_repo_id": null,
+          "category": "model-llm",
+          "finding_key": "5aaa9d7b8233a0b61f73b0b89fed95bf67d61fbf7459d45d5aeb4b7a903434cf",
+          "novelty": "availability_update",
+          "observed_name": "Velqora-38M-Base",
+          "variant": "Base",
+          "version": null
+        },
+        {
+          "assertions": [
+            {
+              "access_channel": "weights",
+              "assertion_text": "Model Velqora-38M-Instruct is being uploaded to Huggingface",
+              "claim_kind": "availability",
+              "effective_at": null,
+              "effective_date": null,
+              "effective_month": null,
+              "effective_precision": "unknown",
+              "effective_year": null,
+              "event_timezone": null,
+              "not_after": null,
+              "not_before": null,
+              "source_excerpt": "Velqora-38M-Instruct",
+              "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+            }
+          ],
+          "brand_candidate_id": null,
+          "brand_id": null,
+          "candidate_repo_id": null,
+          "category": "model-llm",
+          "finding_key": "cc8da8c50ef833b31b5d333cab8bc3aac9bf16a036d8e70c7a11cc7c5eafc6fd",
+          "novelty": "availability_update",
+          "observed_name": "Velqora-38M-Instruct",
+          "variant": "Instruct",
+          "version": null
+        },
+        {
+          "assertions": [
+            {
+              "access_channel": "weights",
+              "assertion_text": "Model Velqora-40M-Base is being uploaded to Huggingface",
+              "claim_kind": "availability",
+              "effective_at": null,
+              "effective_date": null,
+              "effective_month": null,
+              "effective_precision": "unknown",
+              "effective_year": null,
+              "event_timezone": null,
+              "not_after": null,
+              "not_before": null,
+              "source_excerpt": "Velqora-40M-Base",
+              "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+            }
+          ],
+          "brand_candidate_id": null,
+          "brand_id": null,
+          "candidate_repo_id": null,
+          "category": "model-llm",
+          "finding_key": "e026adc0ffd336936984f735fcfa99a963135e1d9e7732377db91b7925ab2de8",
+          "novelty": "availability_update",
+          "observed_name": "Velqora-40M-Base",
+          "variant": "Base",
+          "version": null
+        },
+        {
+          "assertions": [
+            {
+              "access_channel": "weights",
+              "assertion_text": "Model Velqora-40M-Instruct is being uploaded to Huggingface",
+              "claim_kind": "availability",
+              "effective_at": null,
+              "effective_date": null,
+              "effective_month": null,
+              "effective_precision": "unknown",
+              "effective_year": null,
+              "event_timezone": null,
+              "not_after": null,
+              "not_before": null,
+              "source_excerpt": "Velqora-40M-Instruct",
+              "source_locator": "https://x.com/Maxilicious20AI/status/2124339360283984000"
+            }
+          ],
+          "brand_candidate_id": null,
+          "brand_id": null,
+          "candidate_repo_id": null,
+          "category": "model-llm",
+          "finding_key": "57c0e3377c7747111f0e0bf60230e1f3f8214ff6dabfde99410f57706656ecb4",
+          "novelty": "availability_update",
+          "observed_name": "Velqora-40M-Instruct",
+          "variant": "Instruct",
+          "version": null
+        }
+      ]
+    }
+  ]
+}

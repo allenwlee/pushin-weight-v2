@@ -66,7 +66,8 @@ def test_saved_findings_replay_and_read_without_creating_products():
         == 1
     )
     assert models.EventDossier.objects.count() == 1
-    assert models.EventDossierClaim.objects.count() == 3
+    assert models.EventDossierClaim.objects.count() == 4
+    assert models.EventDossierClaim.objects.get(scope_key__startswith="pulse-novelty-v1:").assertion_text == "new_release"
     assert not models.Product.objects.exists()
 
 
@@ -92,7 +93,8 @@ def test_single_finding_resource_observation_and_replay():
     archive = models.CollectionEvidenceArchive.objects.get(capture_kind="product_release_intake")
     assert models.EventDossier.objects.count() == 1
     assert models.EventDossierSource.objects.count() == 1
-    assert models.EventDossierClaim.objects.count() == 3
+    assert models.EventDossierClaim.objects.count() == 4
+    assert models.EventDossierClaim.objects.get(scope_key__startswith="pulse-novelty-v1:").assertion_text == "new_release"
     assert models.CollectionEvidenceArchive.objects.count() == 1
     assert not models.Product.objects.exists()
     print(f"first/replay query counts and ms: {observations}; archive bytes: {archive.byte_count}")
@@ -187,7 +189,8 @@ def test_unnamed_finding_is_recoverable_and_changed_replay_is_rejected():
     item["category"] = "other"
     with pytest.raises(ValueError, match="changed evidence"):
         persist_classified_release_findings(**args, findings=[item])
-    assert models.EventDossierClaim.objects.count() == 3
+    assert models.EventDossierClaim.objects.count() == 4
+    assert models.EventDossierClaim.objects.get(scope_key__startswith="pulse-novelty-v1:").assertion_text == "new_release"
 
 
 def test_different_offerings_share_post_but_keep_separate_evidence():
@@ -276,7 +279,7 @@ def test_assertion_order_does_not_change_saved_evidence():
         first["findings"][0]["anchor_claim_id"]
         == second["findings"][0]["anchor_claim_id"]
     )
-    assert models.EventDossierClaim.objects.count() == 4
+    assert models.EventDossierClaim.objects.count() == 5
 
 
 def test_observation_origin_and_post_canonicalization_keep_source_lineage():
@@ -520,3 +523,29 @@ def test_duplicate_identical_assertions_are_saved_once_and_remain_replayable():
     saved = read_saved_release_findings(source=args["source"], revision_id=args["revision_id"])
     assert saved[0]["finding"]["assertions"] == value["assertions"]
     assert models.EventDossierClaim.objects.filter(scope_key__startswith="pulse-assertion-v1:").count() == 1
+
+
+def test_older_ranking_cannot_reverse_a_newer_source_correction():
+    from core.product_identity import resolve_saved_release_finding
+    from core.product_release_dossiers import persist_classified_release_findings
+
+    post = models.Post.objects.create(tweet_id="revised-discussion", text="Most used model: Model A")
+
+    def save(text, rev):
+        updated = finding()
+        updated["assertions"][0].update(assertion_text=text, source_excerpt=text)
+        return persist_classified_release_findings(
+            source={"kind": "post", "id": post.pk}, revision_id=rev * 64,
+            content_fingerprint=rev * 64, extraction_version="test", findings=[updated],
+        )["findings"][0]
+
+    original = save(post.text, "a")
+    corrected_text = "We released Model A."
+    post.text = corrected_text
+    post.save(update_fields=["text"])
+    updated = save(corrected_text, "b")
+    assert updated["dossier_id"] == original["dossier_id"]
+    resolve_saved_release_finding(claim_id=updated["anchor_claim_id"])
+    resolve_saved_release_finding(claim_id=original["anchor_claim_id"])
+    assert not models.EventDossierIntakeDecision.objects.filter(
+        event_dossier_id=original["dossier_id"], outcome="non_release").exists()

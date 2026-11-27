@@ -2,12 +2,13 @@
 
 import hashlib
 import logging
+from collections import deque
 from contextlib import contextmanager
 from datetime import timedelta
 from time import monotonic
 
 from django.db import connection, transaction
-from django.db.models import Case, Exists, F, OuterRef, Q, Value, When
+from django.db.models import Case, Exists, F, OuterRef, Q, Subquery, Value, When
 from django.db.models.functions import Greatest
 from django.utils import timezone
 
@@ -90,6 +91,88 @@ def enqueue_posts(post_ids):
     return {"selected": len(ids), "queued": queued, "missing": missing, "failed": missing}
 
 
+def _classified_drain_ids(due, limit):
+    """Prioritize saved release answers without sorting the entire backlog by judgment history."""
+    from core.classification_contract import COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS
+    from core.classified_product_releases import TARGETED_RELEASE_REVISION
+    from x_monitor.attribution import _TWO_ROLE_ALLOWED_REVISION_TRIPLETS
+
+    oldest = ("requested_at", "post_id")
+    newest = ("-requested_at", "-post_id")
+    # Bound the expensive per-post judgment checks. Include both ends of the
+    # ordinary queue and the posts with actual source-linked finding claims:
+    # an entire harvest page can otherwise consist of ordinary feed finals.
+    probe_size = max(20, limit)
+    by_age = due.values_list("post_id", flat=True)
+    ids = set(by_age.order_by(*oldest)[:probe_size + 1])
+    if len(ids) > probe_size:
+        ids.update(by_age.order_by(*newest)[:probe_size])
+        anchors = models.EventDossierClaim.objects.filter(
+            scope_key__startswith="pulse-finding-v1:", event_dossier_source__post_id__isnull=False,
+        ).values("event_dossier_source__post_id")
+        with_findings = by_age.filter(post_id__in=anchors)
+        ids.update(with_findings.order_by(*oldest)[:probe_size])
+        ids.update(with_findings.order_by(*newest)[:probe_size])
+    if not ids:
+        return []
+
+    selected = models.PostBrandClassificationState.objects.filter(
+        post_id=OuterRef("post_id"), selected_final_judgment__isnull=False,
+    )
+    # Older selected feed finals can still carry a compressed prompt revision
+    # without the release manifest. Only the publisher writes that manifest.
+    combined = selected.filter(
+        brand_id=OuterRef("brand_id"),
+        prompt_version__in=[row[2] for row in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS],
+        selected_final_judgment__changes_json__has_key="release_output",
+    ).annotate(nonempty=Q(selected_final_judgment__changes_json__release_output__finding_keys__0__isnull=False))
+    brand_results = models.PostBrand.objects.filter(post_id=OuterRef("post_id")).annotate(
+        has_findings=Subquery(combined.values("nonempty")[:1]),
+    )
+    # A newly attached brand with no manifest makes the combined publication
+    # pending. NULL sorts first, so one brand's older result cannot mask it.
+    complete = brand_results.order_by(F("has_findings").asc(nulls_first=True)).values("has_findings")[:1]
+    release_only = models.PostBrandClassificationJudgment.objects.filter(
+        post_id=OuterRef("post_id"), stage="content", selector_version="pulse-release-only-v1",
+        validation_state="release_only",
+        prompt_version__in=[*[row[0] for row in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS], TARGETED_RELEASE_REVISION],
+    ).annotate(nonempty=Q(changes_json__release_output__finding_keys__0__isnull=False))
+    feed = Exists(selected.filter(prompt_version__in=[
+        row[2] for row in _TWO_ROLE_ALLOWED_REVISION_TRIPLETS if row[2].startswith("stage1-two-role-merge-0731-v")
+    ]))
+    # Only read a boolean from each manifest. None means no such publication;
+    # False means a published empty output. The locked reader still validates
+    # the revision, complete brand set, fingerprint and extraction freshness.
+    rows = due.filter(post_id__in=ids).annotate(
+        combined=Subquery(complete),
+        partial=Subquery(release_only.order_by("-created_at", "-pk").values("nonempty")[:1]),
+        feed=feed,
+    ).order_by(*oldest)
+    findings, negatives, classified, waiting = deque(), [], [], []
+    for post_id, combined, partial, feed_final in rows.values_list("post_id", "combined", "partial", "feed"):
+        if combined or partial:
+            findings.append(post_id)
+        elif combined is not None or partial is not None:
+            negatives.append(post_id)
+        elif feed_final:
+            classified.append(post_id)
+        else:
+            waiting.append(post_id)
+        if limit == 1 and (combined is not None or partial is not None):
+            # Preserve FIFO between published generations on a one-slot drain:
+            # an association requeued at the tail must yield to a saved negative.
+            return [post_id]
+    recovery = negatives + classified + waiting
+    page = []
+    while findings and len(page) < limit:
+        page.append(findings.pop())
+        if findings and len(page) < limit:
+            page.append(findings.popleft())
+    if page and recovery and limit > 1:
+        page.insert(min(2, limit - 1), recovery.pop(0))
+    return (page + recovery)[:limit]
+
+
 def drain_posts(*, limit=DEFAULT_DRAIN_LIMIT, max_seconds=30, post_ids=None, classified_only=False, before_post=None):
     """Process a bounded page; locks fence duplicate workers, not harvest writes."""
     if type(limit) is not int or not 1 <= limit <= 500 or not 0 < max_seconds <= 120:
@@ -108,36 +191,10 @@ def drain_posts(*, limit=DEFAULT_DRAIN_LIMIT, max_seconds=30, post_ids=None, cla
     )
     if post_ids is not None:
         due = due.filter(post_id__in=post_ids)
-    order = ["requested_at", "post_id"]
     if classified_only:
-        from core.classification_contract import (
-            COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS,
-        )
-        from core.classified_product_releases import TARGETED_RELEASE_REVISION
-        from x_monitor.attribution import _TWO_ROLE_ALLOWED_REVISION_TRIPLETS
-
-        two_role_revisions = [row[2] for row in _TWO_ROLE_ALLOWED_REVISION_TRIPLETS
-                              if row[2].startswith("stage1-two-role-merge-0731-v")]
-
-        full_classification = Exists(models.PostBrandClassificationState.objects.filter(
-            post_id=OuterRef("post_id"),
-            prompt_version__in=[*[revision[2] for revision in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS],
-                                *two_role_revisions],
-            selected_final_judgment__isnull=False,
-        ))
-        release_only = Exists(models.PostBrandClassificationJudgment.objects.filter(
-            post_id=OuterRef("post_id"), stage="content", selector_version="pulse-release-only-v1",
-            validation_state="release_only",
-            prompt_version__in=[
-                *[revision[0] for revision in COMPRESSED_CLASSIFIER_SUPPORTED_REVISIONS],
-                TARGETED_RELEASE_REVISION,
-            ],
-        ))
-        due = due.alias(classified_ready=full_classification | release_only)
-        # A backlog awaiting classification cannot occupy every bounded slot
-        # ahead of newly published evidence. Full lineage is checked below.
-        order.insert(0, "-classified_ready")
-    ids = list(due.order_by(*order).values_list("post_id", flat=True)[:limit])
+        ids = _classified_drain_ids(due, limit)
+    else:
+        ids = list(due.order_by("requested_at", "post_id").values_list("post_id", flat=True)[:limit])
     result = {"selected": len(ids), "processed": 0, "candidates": 0, "failed": 0, "busy": 0}
     if classified_only:
         result.update(waiting_for_classification=0, unresolved=0, merged=0,
@@ -282,7 +339,7 @@ def drain_posts(*, limit=DEFAULT_DRAIN_LIMIT, max_seconds=30, post_ids=None, cla
                             texts.append(TextEvidence(locator="parent", kind="quote", text=parent_text))
                         candidate = detect(SourceRecord(namespace="x", source_id=str(post_id), texts=tuple(texts)))
                         completed_without_release = (
-                            enrichment.classification_status == "succeeded"
+                            outstanding is None and enrichment.classification_status == "succeeded"
                             and brands and {row[0] for row in rows} == brands
                             and all(row[1] in {"classified", "context_missing"} and row[2] in two_role_revisions
                                     for row in rows)

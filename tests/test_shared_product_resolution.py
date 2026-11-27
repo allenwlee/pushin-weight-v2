@@ -51,7 +51,8 @@ def test_saved_finding_with_unknown_identity_stays_pending_without_product():
     assert not Product.objects.exists()
 
 
-def test_only_confirmed_review_can_resolve_accepted_finding():
+@pytest.mark.parametrize("excerpt", ["Released Model A", "Most used model: Model A"])
+def test_only_confirmed_review_can_resolve_accepted_finding(excerpt):
     from django.utils import timezone
 
     from core.event_dossiers import ClaimDecision, ProductReleaseInput, complete_review
@@ -60,13 +61,15 @@ def test_only_confirmed_review_can_resolve_accepted_finding():
     from core.product_release_dossiers import persist_classified_release_findings
     from tests.test_pulse_finding_persistence import finding
 
-    post = Post.objects.create(tweet_id="reviewed-identity", text="Released Model A")
+    post = Post.objects.create(tweet_id="reviewed-identity", text=excerpt)
+    item = finding()
+    item["assertions"][0].update(assertion_text=excerpt, source_excerpt=excerpt)
     result = persist_classified_release_findings(
         source={"kind": "post", "id": post.pk},
         revision_id="b" * 64,
         content_fingerprint="c" * 64,
         extraction_version="test",
-        findings=[finding()],
+        findings=[item],
     )
     row = result["findings"][0]
     claim = EventDossierClaim.objects.get(pk=row["anchor_claim_id"])
