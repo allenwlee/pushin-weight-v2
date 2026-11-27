@@ -3381,9 +3381,6 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         and read['end'] - read['start'] >= timedelta(days=364)
                         for read in multibrand_reads
                     ))
-                    sentiment_pill.press("Enter")
-                    act(dropdown.locator('[data-dd-action="all"]').click)
-                    sentiment_pill.press("Escape")
                     type_pill = page.locator('[data-group="post_types"]')
                     type_pill.press("Enter")
                     type_choice = dropdown.locator('input[data-pw-filter-group="post_types"]:checked').first
@@ -3401,7 +3398,6 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     )
                     self.assertEqual(sum(chart_payload['totals'].values()), len(feed_response.json()['rows']))
                     self.assertTrue(any(read.get('post_types') is not None for read in multibrand_reads[before_type_reads:]))
-                    act(dropdown.locator('[data-dd-action="all"]').click)
                     type_pill.press("Escape")
                     product_pill = page.locator('[data-group="product_labels"]')
                     product_pill.press("Enter")
@@ -3412,6 +3408,9 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     product_state, window = request_state(feed_response.url)
                     self.assertEqual(window, 365)
                     self.assertIsInstance(product_state['product_labels'], list)
+                    self.assertIsInstance(product_state['post_types'], list)
+                    self.assertIsInstance(product_state['sentiment'], list)
+                    self.assertNotIn('positive', product_state['sentiment'])
                     page.wait_for_function(
                         "() => Array.isArray(JSON.parse(document.querySelector('canvas.home-chart').dataset.home).applied_filters.product_labels)"
                     )
@@ -3419,9 +3418,19 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home)"
                     )
                     self.assertEqual(sum(chart_payload['totals'].values()), len(feed_response.json()['rows']))
-                    self.assertTrue(any(read.get('product_labels') is not None for read in multibrand_reads[before_product_reads:]))
+                    self.assertTrue(any(
+                        read.get('product_labels') is not None and read.get('post_types') is not None
+                        and read.get('sentiments') is not None
+                        for read in multibrand_reads[before_product_reads:]
+                    ))
                     act(dropdown.locator('[data-dd-action="all"]').click)
                     product_pill.press("Escape")
+                    type_pill.press("Enter")
+                    act(dropdown.locator('[data-dd-action="all"]').click)
+                    type_pill.press("Escape")
+                    sentiment_pill.press("Enter")
+                    act(dropdown.locator('[data-dd-action="all"]').click)
+                    sentiment_pill.press("Escape")
                     act(page.locator("[data-pw-window-btn='1']").click)
                     residuals_by_group = {
                         "sentiment": ["__unclassified__"],
