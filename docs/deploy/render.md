@@ -11,6 +11,10 @@ Registering jobs does not activate sources, provider batches or schedules.
 Reviewed recurring source roles use explicit collection authority and the existing
 hourly benchmark runner. Historical backfiller-data-source work and evidence replay
 use the same adapters and numeric writer, with separate finite jobs and budgets.
+The hourly benchmark runner (`pushinweight-benchmark`, configured through the
+Render API rather than `render.yaml`) passes each measurement contract with its own
+`--contract` flag; see [GDPx collection activation](../operations/2026-11-27-175954-gdpx-collection-activation.md)
+for adding a contract and reading the command back.
 The existing fifteen-minute X cron remains the only harvest scheduler, and its
 runtime receipt adapter and recovery controller have separate ownership.
 
