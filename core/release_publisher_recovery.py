@@ -16,7 +16,7 @@ from core.product_verification import _repo_from_hf_url
 class PublisherArticle:
     title: str
     day: date
-    repo: str
+    repo: str | None
 
 
 class _ArticlePage(HTMLParser):
@@ -178,6 +178,8 @@ def _urls(raw):
 
 
 def _host(url, *, profile=False):
+    if not isinstance(url, str):
+        return ""
     try:
         parsed = urlsplit(url or "")
         if (
@@ -190,6 +192,80 @@ def _host(url, *, profile=False):
     except ValueError:
         pass
     return ""
+
+
+def _issuer_article(page, product, handle, publisher, url):
+    """A publisher can announce a closed model without offering downloadable weights."""
+    host = _host(url)
+
+    def same_page(value):
+        if not isinstance(value, str) or _host(value) != host:
+            return False
+        candidate, source = urlsplit(value), urlsplit(url)
+        return (candidate.path.rstrip("/"), candidate.query) == (
+            source.path.rstrip("/"),
+            source.query,
+        )
+
+    owner_ids = {
+        doc["@id"]
+        for doc in page.documents
+        if isinstance(doc, dict)
+        and doc.get("@type") == "Organization"
+        and isinstance(doc.get("@id"), str)
+        and _host(doc["@id"]) == host
+        and _host(doc.get("url")) == host
+        and isinstance(doc.get("name"), str)
+        and doc["name"].casefold() == publisher.casefold()
+    }
+    if len(owner_ids) != 1 or not any(
+        link.rstrip("/").casefold()
+        in {f"https://x.com/{handle}", f"https://twitter.com/{handle}"}
+        for link in page.links
+    ):
+        return None
+
+    owner_id = next(iter(owner_ids))
+    matches = set()
+    for doc in page.documents:
+        if not isinstance(doc, dict) or doc.get("@type") not in (
+            "Article",
+            "BlogPosting",
+            "NewsArticle",
+        ):
+            continue
+        owner, topics, title = (
+            doc.get("publisher"),
+            doc.get("about"),
+            doc.get("headline"),
+        )
+        if not (
+            isinstance(owner, dict)
+            and owner.get("@id") == owner_id
+            and same_page(doc.get("mainEntityOfPage"))
+            and isinstance(topics, list)
+            and product in topics
+            and isinstance(title, str)
+        ):
+            continue
+        # Keep the exact offering at the start of a Chinese launch headline.
+        # A comparison, benchmark result or review title cannot create a release.
+        chinese_launch = re.fullmatch(
+            re.escape(product)
+            + r"\s*(?:本地\s*)?(?:Agent\s*)?(?:模型\s*)?(?:正式)?发布[！!]?",
+            title.strip(),
+            re.IGNORECASE,
+        )
+        if not (_announcement_title(title, product) or chinese_launch):
+            continue
+        try:
+            day = datetime.fromisoformat(doc["datePublished"]).date()
+        except (TypeError, ValueError, KeyError):
+            continue
+        matches.add(
+            PublisherArticle(title, day, _model_repo(page.links, product, handle))
+        )
+    return matches.pop() if len(matches) == 1 else None
 
 
 def _publisher_page(raw, product, handle, budget, *, publisher_name=None):
@@ -248,26 +324,60 @@ def _publisher_page(raw, product, handle, budget, *, publisher_name=None):
             ):
                 continue
         articles.append(url)
-    if len(articles) != 1:
+    verify_issuer_article = False
+    request_count = 1
+    if not articles and publisher_label and _original_post(raw, handle, product):
+        # An old post can have only its original t.co URL. Fetch a single cited
+        # link with the existing bounded public reader, then verify the final
+        # domain, the article's declared owner and its link back to this account.
+        posted = _urls({"text": raw.get("text", "")})
+        if len(posted) != 1:
+            return None
+        expanded = [link for link in _urls(raw) if link != posted[0]]
+        if len(expanded) > 1:
+            return None
+        url = expanded[0] if expanded else posted[0]
+        if _host(url) != "t.co" and not re.fullmatch(
+            re.escape(publisher_label) + r"\.[a-z]{2,63}", _host(url)
+        ):
+            return None
+        request_count = 3 if _host(url) == "t.co" else 1
+        verify_issuer_article = True
+    elif len(articles) == 1:
+        url = articles[0]
+    else:
         return None
-    url = articles[0]
     host = _host(url)
     budget.check()
-    budget.remaining -= 1
+    if budget.remaining < request_count:
+        return None
+    budget.remaining -= request_count
     cap = min(1024 * 1024, budget.max_bytes - budget.total_bytes_read)
     if cap <= 0:
         return None
     try:
         body, final, mime = fetch_before_deadline(
-            url, max_bytes=cap, deadline=budget.deadline, max_requests=1
+            url, max_bytes=cap, deadline=budget.deadline, max_requests=request_count
         )
     except (ValueError, OSError, HTTPError):
         return None
     budget.total_bytes_read += len(body)
-    if _host(final) == host and "html" in mime:
+    if _host(final) == host and "html" in mime and not verify_issuer_article:
         page = publisher_article(body, product, handle)
         if page:
             return final, page
+    if publisher_label and "html" in mime:
+        final_host = _host(final)
+        if (hosts and final_host not in hosts) or not re.fullmatch(
+            re.escape(publisher_label) + r"\.[a-z]{2,63}", final_host
+        ):
+            return None
+        document = _ArticlePage()
+        document.feed(body.decode("utf-8", errors="replace"))
+        proof = _issuer_article(
+            document, product, handle.casefold(), publisher_name, final
+        )
+        return (final, proof) if proof else None
     return None
 
 
@@ -613,24 +723,37 @@ def recover_release_publisher(dossier, *, client, now, budget):
         if not handle or not product or len(product) < 2:
             continue
 
-        existing_dates = set(
-            claims.filter(
-                extraction_version="pulse-historical-announcement-v1",
-                reported_product__isnull=False,
-            ).values_list("event_dossier_source__post_id", flat=True)
+        histories = claims.filter(
+            extraction_version="pulse-historical-announcement-v1",
+            reported_product__isnull=False,
         )
+        dated_sources = list(
+            histories.values_list("event_dossier_source__post_id", "source_locator")
+        )
+        existing_dates = {post_id for post_id, _ in dated_sources}
+        verified_articles = {
+            post_id
+            for post_id, url in dated_sources
+            if _host(url) not in ("", "x.com", "twitter.com")
+        }
         fallback = None
         for saved, raw in _originals(handle, product, report, issuer, budget):
             if not _publisher_post(raw, handle):
                 continue
             original = _original_post(raw, handle, product)
-            article = _publisher_page(
-                raw, product, handle, budget, publisher_name=issuer.get("observed_name")
-            )
+            article = None
+            if not saved or saved.pk not in verified_articles:
+                article = _publisher_page(
+                    raw,
+                    product,
+                    handle,
+                    budget,
+                    publisher_name=issuer.get("observed_name"),
+                )
             if not (original or article):
                 continue
             repo = _model_repo(_urls(raw), product, handle) if original else None
-            if article and repo and repo != article[1].repo:
+            if article and article[1].repo and repo and repo != article[1].repo:
                 continue
             if issuer.get("relation") == "attributed_party" and not (article or repo):
                 continue
@@ -652,7 +775,7 @@ def recover_release_publisher(dossier, *, client, now, budget):
                 saved,
                 raw,
                 article,
-                article[1].repo if article else repo,
+                (article[1].repo or repo) if article else repo,
                 now,
             ):
                 return True

@@ -330,7 +330,9 @@ def test_failed_direct_fetch_cools_down_and_siblings_do_not_get_a_fabricated_zer
     job = scheduled(settings)
     product = job.contract.mappings.get().subject.product
     release_for(product)
-    now = timezone.now().replace(hour=13)
+    # Keep the scheduled run after both the job slot and its saved release evidence.
+    current = timezone.now()
+    now = max(current, current.replace(hour=13))
     monkeypatch.setattr(timezone, "now", lambda: now)
     take_metric_authority(job.pk)
     seen = []
