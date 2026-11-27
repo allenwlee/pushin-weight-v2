@@ -122,7 +122,7 @@ def recover_due_product_releases() -> dict[str, object]:
         chart_metrics = {"status": "deferred", "requests": 0}
         if remaining >= 1 and detection.get("status") in {"running", "uncontrolled"}:
             try:
-                chart_metrics = collect_due_release_metrics(client=client, max_seconds=remaining)
+                chart_metrics = collect_due_release_metrics(client=client, max_seconds=remaining, confirm_identities=True)
             except SoftTimeLimitExceeded:
                 raise
             except Exception:

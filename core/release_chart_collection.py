@@ -422,7 +422,8 @@ def release_metric_job_is_current(job, now, *, require_unread=False):
 
 
 def collect_due_release_metrics(
-    *, client, dossier_ids=None, cutoff=None, max_seconds=10, discover_saved_endpoints=None
+    *, client, dossier_ids=None, cutoff=None, max_seconds=10, discover_saved_endpoints=None,
+    confirm_identities=False,
 ):
     """Advance one due source job on the existing release worker, across restarts."""
     require(
@@ -437,14 +438,15 @@ def collect_due_release_metrics(
         "history_applied": 0,
         "requests": 0,
     }
-    if not settings.BENCHMARK_COLLECTION_ENABLED:
+    measure = settings.BENCHMARK_COLLECTION_ENABLED
+    if not measure and not (confirm_identities and settings.PRODUCT_RELEASE_BACKGROUND_ENABLED):
         return {**result, "status": "disabled"}
     budget = invocation_budget(
         client, requests=RELEASE_REQUEST_LIMIT, seconds=max_seconds, max_bytes=4 * 1024**2
     )
     now = (cutoff or timezone.now()).astimezone(UTC)
     try:
-        _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints, live=cutoff is None)
+        _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints, live=cutoff is None, measure=measure)
     except PlanningDeadline:
         result["status"] = "deferred"
     result["requests"] = RELEASE_REQUEST_LIMIT - budget.remaining
@@ -476,13 +478,15 @@ def _recent_publisher_findings(now):
     return fresh
 
 
-def _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints, *, live):
+def _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints, *, live, measure=True):
     from core.benchmark_attribution import UseNotPermitted, enforce_source_collection
     from core.chart_engine import single_brand_dates
 
     if dossier_ids is None:
         with bounded_planning(budget):
-            dossier_ids = _recent_publisher_findings(now) + _release_page(now, discovery_enabled=True)
+            dossier_ids = _recent_publisher_findings(now)
+            if measure:
+                dossier_ids += _release_page(now, discovery_enabled=True)
     else:
         require(
             isinstance(dossier_ids, (list, tuple)) and len(dossier_ids) <= 25,
@@ -503,6 +507,7 @@ def _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints,
         if dossier is None:
             continue
         evidence_cutoff = now
+        recovered = False
         try:
             recovered = recover_release_publisher(dossier, client=budget.client, now=now, budget=budget)
             if recovered and live:
@@ -527,11 +532,13 @@ def _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints,
             # requests remain under the worker's shared invocation budget.
             with bounded_planning(budget):
                 discover_saved_endpoints(release, now)
-        else:
+        elif not recovered:
             try:
                 discover_verified_hf_model(release, budget=budget)
             except (ValueError, httpx.HTTPError) as exc:
                 logging.getLogger(__name__).warning("HF mapping pending for %s: %s", identifier, type(exc).__name__)
+        if not measure:
+            continue
         with bounded_planning(budget):
             try:
                 lock_qualified_release(
@@ -559,6 +566,9 @@ def _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints,
                     claim_id=release.claim_id, job=job
                 )
                 job_ids.add(job.pk)
+    if not measure:
+        result["status"] = "identity_only"
+        return
     result["linked_jobs"] = len(job_ids)
     # Alternate priority when both lanes have due work; a continuously busy
     # live stream must not keep closed release windows waiting indefinitely.
