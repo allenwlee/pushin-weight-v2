@@ -39,17 +39,21 @@ def test_article_rejects_wrong_identity_scope_and_dates(old, new):
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.requires_postgres
+@pytest.mark.parametrize(
+    "weights_public, mapping_rejected", [(True, False), (False, False), (True, True)]
+)
 def test_cold_reporter_uses_publisher_post_and_article_then_replays_without_io(
-    monkeypatch, settings
+    monkeypatch, settings, weights_public, mapping_rejected
 ):
     from datetime import timedelta
-    from types import SimpleNamespace
 
+    import httpx
     from django.utils import timezone
 
     from core import models
     from core import release_publisher_recovery as recovery
     from core.classified_product_releases import read_publication_findings
+    from core.release_chart_collection import collect_due_release_metrics
     from tests.test_classified_product_releases import setup_cycle
     from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
 
@@ -107,23 +111,77 @@ def test_cold_reporter_uses_publisher_post_and_article_then_replays_without_io(
         recovery, "_search_publisher", lambda *a: search.append(a) or [original]
     )
     expected_date = published.date() - timedelta(days=1)
-    page = ARTICLE.replace("2026-11-25", expected_date.isoformat()).encode()
+    profile = '<a rel="me" href="https://huggingface.co/AminiTech">Official HF</a>'
+    page = (ARTICLE + profile).replace("2026-11-25", expected_date.isoformat()).encode()
     from core.staff_assets import public_fetch
 
     monkeypatch.setattr(
         public_fetch, "fetch_before_deadline", lambda url, **_: (page, url, "text/html")
     )
-    budget = SimpleNamespace(
-        check=lambda: None,
-        remaining=5,
-        max_bytes=1024 * 1024,
-        total_bytes_read=0,
-        deadline=99,
-    )
-    assert recovery.recover_release_publisher(
-        dossier, client=None, now=report.created_at, budget=budget
-    )
+
+    def metadata(request):
+        assert request.url.path == "/api/models/AminiTech/Soma-1X-lite"
+        if not weights_public:
+            return httpx.Response(404)
+        return httpx.Response(
+            200,
+            json={
+                "id": "AminiTech/Soma-1X-lite",
+                "_id": "6b067d23d5ae3eca49eb4edc",
+                "private": False,
+                "createdAt": "2026-11-25T06:16:03.000Z",
+            },
+        )
+
+    if mapping_rejected:
+        from core import release_provider_identity
+
+        def reject_mapping(**kwargs):
+            raise ValueError("reviewed publisher ownership changed")
+
+        monkeypatch.setattr(
+            release_provider_identity, "review_catalog_mapping", reject_mapping
+        )
+    settings.BENCHMARK_COLLECTION_ENABLED = False
+    with httpx.Client(transport=httpx.MockTransport(metadata)) as client:
+        summary = collect_due_release_metrics(
+            client=client, dossier_ids=[dossier.pk], confirm_identities=True
+        )
+        assert summary["requests"] == 2 and summary["status"] == "identity_only"
     product = models.Product.objects.get(display_name="Soma-1X Lite")
+    org = models.BrandAccount.objects.get(
+        brand=product.brand, role_id="official", account__data_source_id="hf"
+    ).account
+    assert org.normalized_identifier == "aminitech"
+    mappings = models.SourceSubjectMapping.objects.filter(
+        purpose="catalog", subject__product=product
+    )
+    if weights_public and not mapping_rejected:
+        assert (
+            product.repo_id == "AminiTech/Soma-1X-lite"
+            and org.pk == product.publisher_account_id
+        )
+        assert (
+            mappings.get().evidence_url
+            == "https://huggingface.co/AminiTech/Soma-1X-lite"
+        )
+    else:
+        assert (
+            not product.repo_id
+            and not product.publisher_account_id
+            and not mappings.exists()
+        )
+    if weights_public and not mapping_rejected:
+        from core.collection_budgets import invocation_budget
+        from core.release_provider_identity import hf_model_metadata
+
+        with httpx.Client(
+            transport=httpx.MockTransport(lambda r: pytest.fail("duplicate request"))
+        ) as client:
+            cached = hf_model_metadata(
+                product.repo_id, invocation_budget(client, requests=1, seconds=3)
+            )
+        assert cached[1]["id"] == product.repo_id
     original_claim = models.EventDossierClaim.objects.get(
         scope_key=f"pulse-history-v1:{product.product_key}", source_locator=source_url
     )
@@ -137,7 +195,7 @@ def test_cold_reporter_uses_publisher_post_and_article_then_replays_without_io(
         brand=product.brand, account__author_id=original["author_id"]
     ).exists()
     assert not recovery.recover_release_publisher(
-        dossier, client=None, now=report.created_at, budget=budget
+        dossier, client=None, now=report.created_at, budget=None
     )
     assert len(search) == 1
 
@@ -477,3 +535,32 @@ def test_invitation_only_announcement_verifies_issuer_without_borrowing_a_repo(
     if result:
         assert result[0] == url and result[1].day == date(2026, 8, 30)
         assert result[1].repo is None
+
+
+@pytest.mark.parametrize(
+    "case", ["publisher", "base", "ambiguous", "platform", "foreign"]
+)
+def test_launch_page_distinguishes_hf_publisher_profile_from_related_links(case):
+    from core.release_publisher_recovery import publisher_article
+
+    profile = '<a class="social-link" aria-label="StartLux 官方 Hugging Face" href="https://huggingface.co/startlux-models">HF</a>'
+    if case == "base":
+        profile = '<a href="https://huggingface.co/Qwen">base model publisher</a>'
+    if case == "ambiguous":
+        profile += profile.replace("startlux-models", "other-publisher")
+    if case == "platform":
+        profile = profile.replace("startlux-models", "models")
+    if case == "foreign":
+        profile = profile.replace("huggingface.co/", "huggingface.co.example.org/")
+    body = ARTICLE.replace("AminiTech", "StartLuxAI").replace(
+        "Soma-1X Lite", "Launch Model"
+    )
+    body = body.replace("StartLuxAI/Soma-1X-lite", "startlux-models/Launch-Model")
+    article = publisher_article((body + profile).encode(), "Launch Model", "StartLuxAI")
+    if case == "publisher":
+        assert (
+            article.profile == "startlux-models"
+            and article.repo == "startlux-models/Launch-Model"
+        )
+    else:
+        assert article is None

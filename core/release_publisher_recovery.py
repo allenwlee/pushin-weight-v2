@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -17,12 +18,14 @@ class PublisherArticle:
     title: str
     day: date
     repo: str | None
+    profile: str | None = None
 
 
 class _ArticlePage(HTMLParser):
     def __init__(self):
         super().__init__()
         self.links = []
+        self.hf_profiles = set()
         self.documents = []
         self._script = None
         self.headings = []
@@ -38,6 +41,14 @@ class _ArticlePage(HTMLParser):
             self._capture = (tag, self.byline_dates, [])
         if tag == "a" and attrs.get("href"):
             self.links.append(attrs["href"])
+            if "me" in attrs.get("rel", "").casefold().split() or (
+                "social-link" in classes
+                and "hugging face" in attrs.get("aria-label", "").casefold()
+            ):
+                profile = _hf_profile(attrs["href"])
+                if profile:
+                    self.hf_profiles.add(profile)
+
         elif tag == "script" and attrs.get("type") == "application/ld+json":
             self._script = []
 
@@ -66,6 +77,42 @@ class _ArticlePage(HTMLParser):
                 self.documents.extend(graph if isinstance(graph, list) else [item])
 
 
+def _hf_profile(url):
+    """A publisher's social-profile link must point to the root of a Hub namespace."""
+    from core.hf_metadata_client import NAMESPACE
+
+    if not isinstance(url, str):
+        return None
+    match = re.fullmatch(r"https://huggingface\.co/([^/?#]+)/?", url, re.IGNORECASE)
+    if not match or not NAMESPACE.fullmatch(match[1]):
+        return None
+    namespace = match[1].casefold()
+    if namespace in {
+        "api",
+        "models",
+        "datasets",
+        "spaces",
+        "collections",
+        "docs",
+        "papers",
+        "organizations",
+        "users",
+        "settings",
+        "join",
+        "login",
+        "pricing",
+        "blog",
+        "tasks",
+        "learn",
+        "enterprise",
+        "chat",
+        "buckets",
+        "kernels",
+    }:
+        return None
+    return namespace
+
+
 def _offering_key(value):
     # Keep meaningful version punctuation; HF slugs replace spaces with hyphens.
     return re.sub(r"[\s_-]+", "-", value.strip()).casefold()
@@ -89,15 +136,16 @@ def _announcement_title(title, product):
     )
 
 
-def _model_repo(links, product, publisher_handle):
+def _model_repo(links, product, publisher_handle, *other_namespaces):
     matching = set()
+    owners = {name.casefold() for name in (publisher_handle, *other_namespaces)}
     for url in links:
         repo = _repo_from_hf_url(url)
         if repo:
             owner, slug = repo.split("/")
-            if owner.casefold() == publisher_handle.casefold() and _offering_key(
-                slug
-            ) == _offering_key(product):
+            if owner.casefold() in owners and _offering_key(slug) == _offering_key(
+                product
+            ):
                 matching.add(repo)
     return matching.pop() if len(matching) == 1 else None
 
@@ -110,7 +158,8 @@ def publisher_article(body, product, handle):
     }
     if not any(url.rstrip("/").casefold() in socials for url in page.links):
         return None
-    repo = _model_repo(page.links, product, handle)
+    profile = next(iter(page.hf_profiles)) if len(page.hf_profiles) == 1 else None
+    repo = _model_repo(page.links, product, profile or handle)
     if not repo:
         return None
     matches = set()
@@ -128,7 +177,7 @@ def publisher_article(body, product, handle):
             day = datetime.fromisoformat(doc["datePublished"]).date()
         except (ValueError, TypeError, KeyError):
             continue
-        matches.add(PublisherArticle(title, day, repo))
+        matches.add(PublisherArticle(title, day, repo, profile))
     # CMS pages may put dates in the visible article byline instead of JSON-LD.
     if len(page.headings) == 1 and _announcement_title(page.headings[0], product):
         for byline in page.byline_dates:
@@ -262,8 +311,11 @@ def _issuer_article(page, product, handle, publisher, url):
             day = datetime.fromisoformat(doc["datePublished"]).date()
         except (TypeError, ValueError, KeyError):
             continue
+        profile = next(iter(page.hf_profiles)) if len(page.hf_profiles) == 1 else None
         matches.add(
-            PublisherArticle(title, day, _model_repo(page.links, product, handle))
+            PublisherArticle(
+                title, day, _model_repo(page.links, product, profile or handle), profile
+            )
         )
     return matches.pop() if len(matches) == 1 else None
 
@@ -561,7 +613,9 @@ def _announcement_effective(text, published_at):
     return {"effective_precision": "datetime", "effective_at": published_at}
 
 
-def _record_source(anchor, finding, source_post, raw, article, repo, now):
+def _record_source(
+    anchor, finding, source_post, raw, article, repo, now, *, budget=None
+):
     from django.db import transaction
 
     from core.classified_product_releases import (
@@ -572,9 +626,41 @@ def _record_source(anchor, finding, source_post, raw, article, repo, now):
     from core.models import EventDossier, EventDossierClaim, Product
     from core.product_identity import resolve_saved_release_finding
     from core.publisher_accounts import resolve_release_publisher
+    from core.release_provider_identity import (
+        bind_hf_model,
+        bind_hf_publisher,
+        lookup_release_hf_model,
+    )
     from monitor.cycle import persist_x_post
 
     report = anchor.event_dossier_source.post
+    # A verified announcing account's website field is also first-party evidence.
+    from core.product_verification import _walk_strings
+
+    profile_urls = [raw.get("author_url") or ""]
+    profile_bio = raw.get("author_profile_bio")
+    for fields in (
+        raw.get("author_entities"),
+        profile_bio.get("entities") if isinstance(profile_bio, dict) else None,
+    ):
+        if isinstance(fields, dict):
+            profile_urls.extend(_walk_strings(fields.get("url")))
+    profiles = {name for url in profile_urls if (name := _hf_profile(url))}
+    if article and article[1].profile:
+        profiles.add(article[1].profile)
+    profile = next(iter(profiles)) if len(profiles) == 1 else None
+    if profile and repo and profile.casefold() != repo.split("/")[0].casefold():
+        # The post and the publisher article point to different owners. Keep
+        # the verified profile and require fresh proof for the model repository.
+        repo = None
+    source_repo = repo
+    payload = None
+    if budget is not None and len(profiles) <= 1:
+        payload = lookup_release_hf_model(
+            raw, finding["observed_name"], profile, repo, budget
+        )
+    if payload:
+        repo = payload[1]["id"]
     with transaction.atomic():
         dossier = EventDossier.objects.select_for_update().get(
             pk=anchor.event_dossier_source.event_dossier_id
@@ -634,6 +720,8 @@ def _record_source(anchor, finding, source_post, raw, article, repo, now):
             {"effective_precision": "day", "effective_date": article[1].day}
             if article
             else _announcement_effective(title, source_post.created_at)
+            if _original_post(raw, source_post.author_handle, finding["observed_name"])
+            else None
         )
         existing_date = EventDossierClaim.objects.filter(
             event_dossier_source__event_dossier_id=result["dossier_id"],
@@ -656,21 +744,40 @@ def _record_source(anchor, finding, source_post, raw, article, repo, now):
                 **effective,
                 **common,
             )
-        if repo:
+        profile_account = bind_hf_publisher(owner, profile, url) if profile else None
+        bound = False
+        if payload and (not profile or profile_account is not None):
+            try:
+                bound = bind_hf_model(product, payload, url)
+            except ValueError as exc:
+                # bind_hf_model rolls back just the disputed mapping.
+                logging.getLogger(__name__).info(
+                    "HF model mapping deferred for product %s: %s", product.pk, exc
+                )
+        if repo and (source_repo or bound):
             repo_url = f"https://huggingface.co/{repo}"
             add_claim(
                 linked.pk,
                 claim_kind="release_context",
                 scope_key=f"official-hf-model:{repo}",
                 assertion_text=repo_url,
-                source_excerpt=repo_url,
+                source_excerpt=repo_url if source_repo else repo,
                 extraction_version="pulse-publisher-source-v1",
-                **common,
+                **(
+                    common
+                    if source_repo
+                    else {
+                        **common,
+                        "source_locator": "https://huggingface.co/api/models/" + repo,
+                    }
+                ),
             )
         return True
 
 
-def recover_release_publisher(dossier, *, client, now, budget):
+def recover_release_publisher(
+    dossier, *, client, now, budget, revisit_saved_articles=False
+):
     from core.classified_product_releases import (
         read_publication_findings,
         replay_saved_publisher,
@@ -742,7 +849,7 @@ def recover_release_publisher(dossier, *, client, now, budget):
                 continue
             original = _original_post(raw, handle, product)
             article = None
-            if not saved or saved.pk not in verified_articles:
+            if revisit_saved_articles or not saved or saved.pk not in verified_articles:
                 article = _publisher_page(
                     raw,
                     product,
@@ -750,9 +857,42 @@ def recover_release_publisher(dossier, *, client, now, budget):
                     budget,
                     publisher_name=issuer.get("observed_name"),
                 )
-            if not (original or article):
+            urls = _urls(raw)
+            repo = None
+            if any(_repo_from_hf_url(url) for url in urls):
+                from core.models import BrandAccount, PostBrandProduct
+
+                # P2 can already have confirmed a first-party release even when
+                # its announcement did not begin with an English launch formula.
+                confirmed = (
+                    PostBrandProduct.objects.filter(
+                        post=report,
+                        product__display_name__iexact=product,
+                        brand__in=BrandAccount.objects.filter(
+                            account_id=report.author_id, role_id="official"
+                        ).values("brand_id"),
+                    )
+                    .values_list("brand_id", flat=True)
+                    .distinct()[:2]
+                    if saved
+                    and saved.pk == report.pk
+                    and issuer.get("relation") == "source_author"
+                    else ()
+                )
+                brands = list(confirmed)
+                namespaces = (
+                    BrandAccount.objects.filter(
+                        brand_id=brands[0],
+                        role_id="official",
+                        account__data_source_id="hf",
+                    ).values_list("account__external_identifier", flat=True)
+                    if len(brands) == 1
+                    else ()
+                )
+                if original or len(brands) == 1:
+                    repo = _model_repo(urls, product, handle, *namespaces)
+            if not (original or article or repo):
                 continue
-            repo = _model_repo(_urls(raw), product, handle) if original else None
             if article and article[1].repo and repo and repo != article[1].repo:
                 continue
             if issuer.get("relation") == "attributed_party" and not (article or repo):
@@ -777,8 +917,17 @@ def recover_release_publisher(dossier, *, client, now, budget):
                 article,
                 (article[1].repo or repo) if article else repo,
                 now,
+                budget=budget if client is not None else None,
             ):
                 return True
-        if fallback and _record_source(anchor, finding, *fallback, None, None, now):
+        if fallback and _record_source(
+            anchor,
+            finding,
+            *fallback,
+            None,
+            None,
+            now,
+            budget=budget if client is not None else None,
+        ):
             return True
     return False
