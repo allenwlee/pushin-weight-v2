@@ -382,3 +382,98 @@ def test_original_post_and_publisher_page_reciprocally_confirm_exact_model(
     assert calls == ([article] if expected else [])
     if page:
         assert page[1].repo == "AminiTech/Soma-1X-lite"
+
+
+@pytest.mark.parametrize(
+    "case,expected",
+    [
+        ("verified", True),
+        ("wrong_account", False),
+        ("wrong_domain", False),
+        ("other_model", False),
+        ("review", False),
+        ("wrong_publisher", False),
+        ("extra_link", False),
+        ("too_few_requests", False),
+        ("third_party", False),
+        ("expanded", True),
+        ("wrong_canonical_page", False),
+    ],
+)
+def test_invitation_only_announcement_verifies_issuer_without_borrowing_a_repo(
+    monkeypatch, case, expected
+):
+    import json
+    from types import SimpleNamespace
+
+    from core.release_publisher_recovery import _publisher_page
+    from core.staff_assets import public_fetch
+
+    product = "StartLux-V1.0-27B-Preview"
+    original = "https://t.co/Fvr8a63KQr"
+    url = "https://startlux.com/benchmark/"
+    raw = {
+        "author_id": "2082016335425589248",
+        "author_handle": "StartLuxAI",
+        "text": f"Introducing {product}: a 27B dense model for local AI agents.\n{original}",
+    }
+    if case == "extra_link":
+        raw["text"] += " https://t.co/OtherLink"
+    if case == "third_party":
+        raw["is_quote"] = True
+    if case == "expanded":
+        raw["entities"] = {"urls": [{"url": original, "expanded_url": url}]}
+    organization = {
+        "@type": "Organization",
+        "@id": url + "#org",
+        "url": "https://www.startlux.com/",
+        "name": "StartLux",
+    }
+    article = {
+        "@type": "Article",
+        "headline": product + " 本地 Agent 模型正式发布",
+        "about": [product, "MCP-Universe"],
+        "publisher": {"@id": organization["@id"]},
+        "mainEntityOfPage": url,
+        "datePublished": "2026-08-30T10:30:01+08:00",
+    }
+    if case == "other_model":
+        article["about"] = [product + "-distilled"]
+    if case == "wrong_publisher":
+        article["publisher"] = {"@id": "https://qwen.ai/#org"}
+    if case == "wrong_canonical_page":
+        article["mainEntityOfPage"] += "other/"
+    if case == "review":
+        article["headline"] = product + " benchmark results"
+    handle = "OtherAccount" if case == "wrong_account" else "StartLuxAI"
+    page = (
+        '<script type="application/ld+json">'
+        + json.dumps({"@graph": [article, organization]})
+        + f'</script><a href="https://x.com/{handle}">X</a>'
+        + '<a href="https://huggingface.co/startlux-models">HF organization</a>'
+        + '<a href="https://huggingface.co/Qwen/Qwen3.6-27B">Base</a>'
+    )
+
+    def fetch(link, *, max_requests, **kwargs):
+        assert link in (original, url) and max_requests <= 3
+        return (
+            page.encode(),
+            "https://startlux.com.example.org/" if case == "wrong_domain" else url,
+            "text/html",
+        )
+
+    monkeypatch.setattr(public_fetch, "fetch_before_deadline", fetch)
+    budget = SimpleNamespace(
+        check=lambda: None,
+        remaining=1 if case == "too_few_requests" else 4,
+        deadline=1000,
+        max_bytes=100000,
+        total_bytes_read=0,
+    )
+    result = _publisher_page(
+        raw, product, "StartLuxAI", budget, publisher_name="StartLux"
+    )
+    assert bool(result) is expected
+    if result:
+        assert result[0] == url and result[1].day == date(2026, 8, 30)
+        assert result[1].repo is None
