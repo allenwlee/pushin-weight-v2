@@ -380,6 +380,65 @@ def prepare_publication_findings(*, post, tweet, result):
     return findings, _output_manifest(findings)
 
 
+def _named_launch_publishers(name, excerpt):
+    return {(m.group(1), m.group(2).casefold()) for m in re.finditer(
+        rf"(?:^|(?<=[.!?\n]))[ \t]*([\w.-]+(?: [A-Z][\w.-]*){{0,4}}) "
+        rf"\(@([A-Za-z0-9_]{{1,15}})\) (?:released|launched|introduced|announced) "
+        rf"{re.escape(name)}(?![\w-])", excerpt,
+    )}
+
+
+def _cited_launch_profile(issuer, name, handle, profile):
+    from core.release_publisher_recovery import _announcement_title
+
+    if (not isinstance(profile, dict) or not name or not handle
+            or (profile.get("handle") or "").casefold() != handle.casefold()
+            or not _announcement_title(issuer.get("source_excerpt"), name)):
+        return None
+    display = profile.get("display_name")
+    if isinstance(display, str) and display.strip() and any(
+        re.fullmatch(r"account:[0-9]+:display_name", source.get("id", ""))
+        and source.get("text") == display for source in profile.get("sources", ())
+    ):
+        return display.strip()
+    return None
+
+
+def replay_saved_publisher(finding, post):
+    """Project a missing issuer from this selected packet and its saved source observation."""
+    name = finding.get("observed_name")
+    if not post or not name or post.is_retweet:
+        return finding
+    locator = _saved_locator(post)
+    if not locator:
+        return finding
+    issuer = finding.get("issuer_evidence") or {}
+    if issuer.get("observed_name"):
+        return finding
+    witnesses = [a["source_excerpt"] for a in finding.get("assertions", ())
+                 if a.get("source_locator") == locator and a.get("source_excerpt") in (post.text or "")]
+    subjects = {(publisher, handle, quote) for quote in witnesses
+                for publisher, handle in _named_launch_publishers(name, quote)}
+    if len({(pub, handle) for pub, handle, _ in subjects}) == 1:
+        pub, handle, quote = min(subjects)
+        if handle != (post.author_handle or "").casefold():
+            return {**finding, "issuer_evidence": {"relation": "attributed_party", "observed_name": pub,
+                    "observed_handle": handle, "source_excerpt": quote, "source_locator": locator}}
+    if (subjects or issuer.get("relation") != "source_author" or issuer.get("source_excerpt") not in witnesses
+            or issuer.get("source_locator") != locator or not post.author_id or not post.author_name
+            or not str(post.native_author_id or "").isdecimal()
+            or str(post.native_author_id) != str(post.author.author_id)):
+        return finding
+    profile = {"handle": post.author_handle, "display_name": post.author_name, "domains": [],
+               "sources": [{"id": f"account:{post.native_author_id}:display_name", "text": post.author_name}]}
+    if post.author_description:
+        profile["sources"].append({"id": f"post:{post.pk}:author_description", "text": post.author_description[:2048]})
+    if _cited_launch_profile(issuer, name, post.author_handle, profile):
+        return {**finding, "issuer_evidence": {**issuer, "observed_name": post.author_name},
+                "publisher_profile": profile}
+    return finding
+
+
 def targeted_release_findings(*, post, tweet, records):
     """Convert source-quoted release extraction into the shared finding contract."""
     from core.product_release_findings import parse_release_findings
@@ -405,17 +464,8 @@ def targeted_release_findings(*, post, tweet, records):
         locator = matches[0]
         relation = record.get("publisher_relation")
         organization = record.get("organization_name")
-        # An explicit subject/handle introducing this exact offering contradicts a
-        # source-author vote for the reporter. Other @mentions are irrelevant.
-        if relation == "source_author" and name and locator == "post":
-            subjects = {
-                (match.group(1), match.group(2).lower())
-                for match in re.finditer(
-                    rf"(?:^|(?<=[.!?\n]))[ \t]*([\w.-]+(?: [A-Z][\w.-]*){{0,4}}) "
-                    rf"\(@([A-Za-z0-9_]{{1,15}})\) (?:released|launched|introduced|announced) "
-                    rf"{re.escape(name)}(?![\w-])", excerpt,
-                )
-            }
+        if name and locator == "post":
+            subjects = _named_launch_publishers(name, excerpt)
             if len(subjects) == 1:
                 named_party, handle = subjects.pop()
                 if handle != str(getattr(post, "author_handle", "") or "").lower().lstrip("@"):
@@ -551,6 +601,8 @@ def targeted_release_findings(*, post, tweet, records):
             else:
                 profile = tweet.get("author_profile_evidence")
                 name = record.get("organization_name")
+                if not name:
+                    name = _cited_launch_profile(issuer, finding["observed_name"], getattr(post, "author_handle", None), profile)
                 if (isinstance(profile, dict) and isinstance(name, str)
                         and name.strip().casefold() == str(profile.get("display_name") or "").strip().casefold()
                         and any(name.casefold() in str(source.get("text") or "").casefold()
