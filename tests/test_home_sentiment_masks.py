@@ -27,6 +27,7 @@ from core.models import (
 )
 from monitor.each_chart_facts import EACH_FACTS
 from monitor.home_sentiment_counts import (
+    HOME_CLASSIFICATION,
     HOME_SENTIMENT,
     HOME_SENTIMENT_V1,
     read_home_multibrand_sentiment_counts,
@@ -225,7 +226,7 @@ def test_older_worker_and_reader_are_safe_during_boundary_migration(migration_re
         MigrationExecutor(connection).migrate([('core', '0244_home_sentiment_masks')])
         output = StringIO()
         call_command('refresh_materializations', stdout=output)
-        fallback = json.loads(output.getvalue())[HOME_SENTIMENT.dataset_key]
+        fallback = json.loads(output.getvalue())[HOME_CLASSIFICATION.dataset_key]
         assert fallback['status'] == 'refreshed' and fallback['fallback_dataset'] == old_definition.dataset_key
         assert read_home_multibrand_sentiment_counts(**args) is not None
         MigrationExecutor(connection).migrate([('core', '0245_home_sentiment_recent_boundary')])

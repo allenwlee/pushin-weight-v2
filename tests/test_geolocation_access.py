@@ -381,3 +381,38 @@ def test_affiliation_source_writer_requires_authorized_connection(serving_login)
         transaction.atomic(),
     ):
         write_source_evidence(evidence, extracted_claim_data={"role": "Changed"})
+
+
+def test_classification_projection_grants_and_fallback(serving_login):
+    from datetime import timedelta
+    from django.utils import timezone
+    from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
+    from core.materializations import refresh_materialization
+    from core.models import Brand, PostBrand, PostBrandClassificationState, PostBrandSignal, PostTypeKey, SentimentKey
+    from monitor.home_sentiment_counts import HOME_CLASSIFICATION, HOME_SENTIMENT, read_home_multibrand_sentiment_counts
+
+    now = timezone.now()
+    brand = Brand.objects.create(nickname='classification-grant', accent_color='#123456')
+    PostTypeKey.objects.get_or_create(key='releases_updates')
+    SentimentKey.objects.get_or_create(key='positive')
+    post = Post.objects.create(tweet_id='classification-grant-fixture', created_at=now-timedelta(days=3))
+    PostBrand.objects.create(post=post, brand=brand)
+    PostBrandClassificationState.objects.create(
+        post=post, brand=brand, contract_version=CONTRACT_VERSION, taxonomy_version=TAXONOMY_VERSION,
+        prompt_version='fixture', model='fixture', input_context_fingerprint='a'*64, outcome='classified',
+    )
+    PostBrandSignal.objects.create(post=post, brand=brand, post_type_id='releases_updates', sentiment_id='positive')
+    assert refresh_materialization(HOME_SENTIMENT)['status'] == 'refreshed'
+    assert refresh_materialization(HOME_CLASSIFICATION)['status'] == 'refreshed'
+    serving, role, _owner, _report = serving_login
+    args = {'brands': [brand.pk], 'output_brands': [brand.pk], 'sentiments': None,
+            'post_types': ['releases_updates'], 'start': now-timedelta(days=365), 'end': now,
+            'at': now, 'timezone_name': 'UTC', 'promotion_mode': 'any', 'legacy_mode': 'any'}
+    with patch.object(connections['default'], 'connection', serving):
+        expected = read_home_multibrand_sentiment_counts(**args)
+        assert expected and sum(row['count'] for row in expected) == 1
+    with connection.cursor() as cursor:
+        cursor.execute(sql.SQL('REVOKE ALL ON {} FROM {}').format(
+            sql.Identifier('home_post_classification_facts'), sql.Identifier(role)))
+    with patch.object(connections['default'], 'connection', serving):
+        assert read_home_multibrand_sentiment_counts(**args) == expected

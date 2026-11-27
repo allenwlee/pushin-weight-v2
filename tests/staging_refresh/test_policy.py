@@ -137,13 +137,18 @@ def test_every_current_managed_table_has_an_explicit_refresh_disposition():
     assert not sequences - policy.relations.sequences
 
 
-def test_source_before_home_sentiment_view_is_authorized():
+@pytest.mark.parametrize('missing_views', [
+    {'home_post_sentiment_facts_source'},
+    {'home_post_classification_facts_source'},
+    {'home_post_sentiment_facts_source', 'home_post_classification_facts_source'},
+])
+def test_source_before_home_chart_views_is_authorized(missing_views):
     policy = load_policy(POLICY_PATH)
     source = _inspection(policy, source=True)
-    assert 'home_post_sentiment_facts_source' in source.views
+    assert missing_views <= source.views
     authorize(
         policy, action='preflight', environ=_environment(policy),
-        source=replace(source, views=source.views - {'home_post_sentiment_facts_source'}),
+        source=replace(source, views=source.views - missing_views),
         target=_inspection(policy, source=False),
     )
 

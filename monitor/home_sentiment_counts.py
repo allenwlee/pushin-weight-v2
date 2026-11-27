@@ -7,8 +7,9 @@ from django.db import DatabaseError, connection, transaction
 from core.classification_contract import COMPATIBLE_TAXONOMY_VERSIONS, CONTRACT_VERSION
 from core.materializations import MaterializationDefinition, sqlstate
 from monitor.each_chart_facts import _publication_day, each_publication_details
+from monitor.filter_constants import NO_PRODUCT_SIGNAL, UNCLASSIFIED
 
-_UNCLASSIFIED = "__unclassified__"
+_UNCLASSIFIED = UNCLASSIFIED
 _MASK_CONTRACT = "stage1-v1"
 _MASK_TAXONOMIES = (
     "stage1-taxonomy-v1", "stage1-taxonomy-v2", "stage1-taxonomy-v3", "stage1-taxonomy-v4",
@@ -39,7 +40,15 @@ HOME_SENTIMENT_V1 = replace(
     cutoff_sql="date_trunc('day', transaction_timestamp(), 'UTC') - interval '1 day'",
     online_capability="home_sentiment_masks_v1",
 )
+HOME_CLASSIFICATION = replace(
+    HOME_SENTIMENT,
+    dataset_key="home.post_classification_facts.v3",
+    relation="home_post_classification_facts",
+    source_tables=(*HOME_SENTIMENT.source_tables, "posts_brands_product_labels"),
+    online_capability="home_classification_masks_v3",
+)
 _MASK_FIELDS = "post_id,created_at,brands,unclassified,positive,negative,neutral,mixed,promotion_flag,legacy_flag"
+_CLASS_FIELDS = _MASK_FIELDS + ",type_brand_ids,type_keys,product_brand_ids,product_keys,no_product_brand_ids"
 _FIELDS = (
     "post_id, brand_id, created_at, state_present, state_contract_version, "
     "state_taxonomy_version, state_outcome, state_sentiment"
@@ -174,7 +183,8 @@ def _mask_publication_details(cursor, start, end, at, definition):
 
 def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, start, end,
                                          at, timezone_name, promotion_mode, legacy_mode,
-                                         _prefer_v1=False):
+                                         post_types=None, product_labels=None, _prefer_v1=False,
+                                         _prefer_v2=False):
     """Count associated brands after a Post matches any selected-brand sentiment.
 
     A versioned compact projection preserves current, legacy, orphan and
@@ -187,11 +197,13 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
             or not isinstance(promotion_mode, str)
             or promotion_mode not in {'off', 'only', 'any'}
             or legacy_mode not in {None, 'off', 'only', 'any'}
-            or not set(sentiments) <= _MASK_KEYS):
+            or (sentiments is not None and not set(sentiments) <= _MASK_KEYS)):
         return None
-    if brands == [] or not output_brands or not sentiments:
+    if brands == [] or not output_brands or any(
+        selection == [] for selection in (sentiments, post_types, product_labels)
+    ):
         return []
-    selected = set(sentiments)
+    selected = set(sentiments or ())
     unscoped = brands is None
     predicates = [
         f'cardinality(f.{key}) > 0' if unscoped else
@@ -201,6 +213,53 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
     if _UNCLASSIFIED in selected:
         predicates.append('cardinality(f.unclassified) > 0' if unscoped else
                           'f.unclassified COLLATE case_insensitive && cfg.scope')
+    sentiment_filters = ['(' + ' OR '.join(predicates) + ')'] if sentiments is not None else []
+    scope = '' if unscoped else ' AND edge.brand_id=ANY(cfg.scope)'
+    taxonomies = ','.join(f"'{value}'" for value in _MASK_TAXONOMIES)
+    classified = (f"state.contract_version='{_MASK_CONTRACT}' "
+                  f"AND state.taxonomy_version IN ({taxonomies}) AND state.outcome='classified'")
+    unclassified = ('cardinality(f.unclassified) > 0' if unscoped else
+                    'f.unclassified COLLATE case_insensitive && cfg.scope')
+    def classification_filters(use_masks):
+        filters, parameters = list(sentiment_filters), []
+        for selection, table, column, prefix in (
+            (post_types, 'posts_brands_signals', 'post_type_key', 'type'),
+            (product_labels, 'posts_brands_product_labels', 'product_label_key', 'product'),
+        ):
+            if selection is None:
+                continue
+            keys = [key for key in selection if key not in {_UNCLASSIFIED, NO_PRODUCT_SIGNAL}]
+            alternatives = []
+            if keys:
+                if use_masks:
+                    brand_test = '' if unscoped else ' AND edge.brand COLLATE case_insensitive=ANY(cfg.scope)'
+                    alternatives.append(f'''EXISTS (SELECT 1 FROM unnest(f.{prefix}_brand_ids, f.{prefix}_keys) edge(brand,key)
+                        WHERE edge.key COLLATE case_insensitive=ANY(%s::text[] COLLATE case_insensitive){brand_test})''')
+                else:
+                    alternatives.append(f'''EXISTS (SELECT 1 FROM {table} edge
+                        JOIN posts_brands_classification_states state
+                          ON state.post_id=edge.post_id AND state.brand_id=edge.brand_id
+                        WHERE edge.post_id=f.post_id {scope}
+                          AND edge.{column}=ANY(%s::text[] COLLATE case_insensitive)
+                          AND {classified} OFFSET 0)''')
+                parameters.append(keys)
+            if prefix == 'product' and NO_PRODUCT_SIGNAL in selection:
+                if use_masks:
+                    alternatives.append('cardinality(f.no_product_brand_ids) > 0' if unscoped else
+                                        'f.no_product_brand_ids COLLATE case_insensitive && cfg.scope')
+                else:
+                    alternatives.append(f'''EXISTS (SELECT 1 FROM posts_brands edge
+                        JOIN posts_brands_classification_states state
+                          ON state.post_id=edge.post_id AND state.brand_id=edge.brand_id
+                        WHERE edge.post_id=f.post_id {scope} AND {classified}
+                          AND NOT EXISTS (SELECT 1 FROM posts_brands_product_labels label
+                              WHERE label.post_id=edge.post_id AND label.brand_id=edge.brand_id)
+                        OFFSET 0)''')
+            expression = ' OR '.join(alternatives) or 'FALSE'
+            if _UNCLASSIFIED in selection:
+                expression = f'CASE WHEN {unclassified} THEN TRUE ELSE ({expression}) END'
+            filters.append('(' + expression + ')')
+        return filters, parameters
     flag_predicates = []
     for column, mode in (
         ('promotion_flag', promotion_mode),
@@ -210,7 +269,7 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
             flag_predicates.append(f'NOT f.{column}')
         elif mode == 'only':
             flag_predicates.append(f'f.{column}')
-    used_v2 = False
+    used_v2 = used_v3 = False
     try:
         with transaction.atomic(), connection.cursor() as cursor:
             cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
@@ -218,12 +277,22 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
             # disk on production-sized multi-brand windows. The setting is
             # local to this read-only transaction.
             cursor.execute("SET LOCAL work_mem = '32MB'")
-            definition = HOME_SENTIMENT_V1 if _prefer_v1 else HOME_SENTIMENT
+            definition = HOME_SENTIMENT_V1 if _prefer_v1 else HOME_SENTIMENT if _prefer_v2 else HOME_CLASSIFICATION
             boundary, dirty_ids = _mask_publication_details(cursor, start, end, at, definition)
-            if boundary <= start and not _prefer_v1:
+            if (definition == HOME_CLASSIFICATION and dirty_ids is None
+                    and post_types is None and product_labels is None):
+                old_boundary, old_dirty = _mask_publication_details(
+                    cursor, start, end, at, HOME_SENTIMENT,
+                )
+                if old_boundary > boundary:
+                    definition, boundary, dirty_ids = HOME_SENTIMENT, old_boundary, old_dirty
+            if boundary <= start and definition == HOME_CLASSIFICATION:
+                definition = HOME_SENTIMENT
+                boundary, dirty_ids = _mask_publication_details(cursor, start, end, at, definition)
+            if boundary <= start and definition == HOME_SENTIMENT:
                 definition = HOME_SENTIMENT_V1
                 boundary, dirty_ids = _mask_publication_details(cursor, start, end, at, definition)
-            elif not _prefer_v1 and dirty_ids is None:
+            elif definition == HOME_SENTIMENT and dirty_ids is None:
                 # Overflow can make v2's exact saved prefix older than v1's.
                 old_boundary, old_dirty = _mask_publication_details(
                     cursor, start, end, at, HOME_SENTIMENT_V1,
@@ -233,9 +302,15 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
             if boundary <= start:
                 return None
             used_v2 = definition == HOME_SENTIMENT
+            used_v3 = definition == HOME_CLASSIFICATION
+            needs_classification = used_v3 and (post_types is not None or product_labels is not None)
+            fields = _CLASS_FIELDS if needs_classification else _MASK_FIELDS
+            source = ('home_post_classification_facts_source' if needs_classification
+                      else 'home_post_sentiment_facts_source')
+            filters, filter_params = classification_filters(used_v3)
             dirty_cte = ''
             saved_filter = ''
-            live = f'''SELECT {_MASK_FIELDS} FROM home_post_sentiment_facts_source
+            live = f'''SELECT {fields} FROM {source}
                        WHERE created_at >= %s AND created_at < %s'''
             dirty = ''
             if dirty_ids:
@@ -246,7 +321,7 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
                     SELECT 1 FROM dirty_ids d WHERE d.post_id = saved.post_id COLLATE "C"
                 )'''
                 dirty = f''' UNION ALL SELECT changed.* FROM dirty_ids dirty CROSS JOIN LATERAL (
-                    SELECT {_MASK_FIELDS} FROM home_post_sentiment_facts_source
+                    SELECT {fields} FROM {source}
                     WHERE post_id=dirty.post_id COLLATE "default"
                       AND post_id COLLATE "C"=dirty.post_id COLLATE "C"
                       AND created_at >= %s AND created_at < %s OFFSET 0
@@ -256,7 +331,7 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
                     SELECT %s::text[] COLLATE case_insensitive AS scope,
                            %s::varchar[] COLLATE case_insensitive AS outputs
                 ){dirty_cte}, facts AS (
-                    SELECT {_MASK_FIELDS} FROM {connection.ops.quote_name(definition.relation)} saved
+                    SELECT {fields} FROM {connection.ops.quote_name(definition.relation)} saved
                     WHERE saved.created_at >= %s AND saved.created_at < %s {saved_filter}
                     UNION ALL {live} {dirty}
                 )
@@ -265,7 +340,7 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
                     SELECT (f.created_at AT TIME ZONE %s)::date AS day,
                            f.brands COLLATE "C" AS brands,count(*) AS n
                     FROM facts f CROSS JOIN cfg
-                    WHERE ({' OR '.join(predicates)})
+                    WHERE {' AND '.join(filters) if filters else 'TRUE'}
                       {''.join(' AND ' + p for p in flag_predicates)}
                     GROUP BY 1,2
                 ) g CROSS JOIN cfg CROSS JOIN LATERAL unnest(g.brands) associated(brand_id)
@@ -276,17 +351,26 @@ def read_home_multibrand_sentiment_counts(*, brands, output_brands, sentiments, 
             cursor.execute(sql, [brands or [], output_brands, *([dirty_ids] if dirty_ids else []),
                                  start, boundary,
                                  boundary, end,
-                                 *([start, boundary] if dirty_ids else []), timezone_name])
+                                 *([start, boundary] if dirty_ids else []), timezone_name,
+                                 *filter_params])
             return [{'brand_id': brand, 'day': day, 'count': count}
                     for brand, day, count in cursor.fetchall()]
     except DatabaseError as error:
         # An older service can temporarily reconcile grants without knowing
         # these new views during a rolling deployment. Use the complete reader.
+        if sqlstate(error) in {'42501', '42P01', '55000'} and used_v3:
+            return read_home_multibrand_sentiment_counts(
+                brands=brands, output_brands=output_brands, sentiments=sentiments,
+                start=start, end=end, at=at, timezone_name=timezone_name,
+                promotion_mode=promotion_mode, legacy_mode=legacy_mode,
+                post_types=post_types, product_labels=product_labels, _prefer_v2=True,
+            )
         if sqlstate(error) in {'42501', '42P01', '55000'} and used_v2 and not _prefer_v1:
             return read_home_multibrand_sentiment_counts(
                 brands=brands, output_brands=output_brands, sentiments=sentiments,
                 start=start, end=end, at=at, timezone_name=timezone_name,
-                promotion_mode=promotion_mode, legacy_mode=legacy_mode, _prefer_v1=True,
+                promotion_mode=promotion_mode, legacy_mode=legacy_mode,
+                post_types=post_types, product_labels=product_labels, _prefer_v1=True,
             )
         if sqlstate(error) in {'42501', '42P01', '42703', '42883', '55000', '55P03'}:
             return None

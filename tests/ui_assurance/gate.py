@@ -64,6 +64,7 @@ FOCUSED_TESTS = [
     "tests/test_home_v22_filter_pills.py",
     "tests/test_home_sentiment_counts.py",
     "tests/test_home_multibrand_sentiment.py",
+    "tests/test_home_multibrand_classification.py",
     "tests/test_home_sentiment_masks.py",
     "tests/test_geolocation_access.py::test_home_sentiment_falls_back_when_old_deploy_revokes_new_views",
     "tests/staging_refresh/test_policy.py",

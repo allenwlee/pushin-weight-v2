@@ -36,7 +36,8 @@ OWNER_ONLY_TABLES = frozenset({"enrichment_budget_windows"})
 CHART_FACTS_VIEWS = frozenset({
     "each_brand_post_facts_source", "each_brand_post_facts",
     "home_post_sentiment_facts_source", "home_post_sentiment_facts",
-    "home_post_sentiment_facts_v2",
+    "home_post_sentiment_facts_v2", "home_post_classification_facts_source",
+    "home_post_classification_facts",
 })
 SERVING_VIEWS = frozenset({
     "trend_narrative_versions", "brand_trend_narratives", "editorial_pictures",

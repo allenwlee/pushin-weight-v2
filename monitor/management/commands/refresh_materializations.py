@@ -10,9 +10,9 @@ from core.materializations import refresh_materialization, sqlstate
 def registered_definitions():
     from monitor.each_chart_facts import EACH_FACTS
     from monitor.home_count_summary import HOME_COUNTS
-    from monitor.home_sentiment_counts import HOME_SENTIMENT
+    from monitor.home_sentiment_counts import HOME_CLASSIFICATION
 
-    return HOME_COUNTS, EACH_FACTS, HOME_SENTIMENT
+    return HOME_COUNTS, EACH_FACTS, HOME_CLASSIFICATION
 
 
 class Command(BaseCommand):
@@ -22,20 +22,25 @@ class Command(BaseCommand):
         return results
 
     def handle(self, *args, **options):
+        from monitor.home_sentiment_counts import HOME_CLASSIFICATION
+
         results = {}
         failures = []
         for definition in registered_definitions():
             try:
                 results[definition.dataset_key] = refresh_materialization(definition)
-                if (definition.dataset_key == 'home.post_sentiment_facts.v2'
+                if (definition.dataset_key == HOME_CLASSIFICATION.dataset_key
                         and results[definition.dataset_key]['status'] == 'unavailable'):
-                    # A rollback may remove v2 before all new workers stop.
-                    from monitor.home_sentiment_counts import HOME_SENTIMENT_V1
+                    # Rolling deploys and rollback can remove newer projections.
+                    from monitor.home_sentiment_counts import HOME_SENTIMENT, HOME_SENTIMENT_V1
 
-                    results[definition.dataset_key] = {
-                        **refresh_materialization(HOME_SENTIMENT_V1),
-                        'fallback_dataset': HOME_SENTIMENT_V1.dataset_key,
-                    }
+                    for fallback in (HOME_SENTIMENT, HOME_SENTIMENT_V1):
+                        result = refresh_materialization(fallback)
+                        if result['status'] != 'unavailable':
+                            results[definition.dataset_key] = {
+                                **result, 'fallback_dataset': fallback.dataset_key,
+                            }
+                            break
             except Exception as error:  # noqa: BLE001 -- report failure, then attempt the next dataset.
                 failures.append(definition.dataset_key)
                 results[definition.dataset_key] = {

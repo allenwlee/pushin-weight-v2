@@ -481,6 +481,7 @@ relations:
   views:
     - each_brand_post_facts_source
     - home_post_sentiment_facts_source
+    - home_post_classification_facts_source
     - benchmark_observation_provenance
     - benchmark_publication_dates
     - benchmark_endpoint_revisions

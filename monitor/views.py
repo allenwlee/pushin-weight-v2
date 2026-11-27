@@ -30,6 +30,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
 from monitor.each_request_budget import bounded_each_request
+from monitor.filter_constants import NO_PRODUCT_SIGNAL, UNCLASSIFIED
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.signing import salted_hmac
@@ -197,8 +198,8 @@ _DASHBOARD_UNTRACKED_PROMOTION_KEYS: tuple[str, ...] = (
     "general", "spam", "scam", "crypto", "unauthorized",
 ) if u18a_enabled("untracked_brand_promotions") else ()
 
-_FILTER_UNCLASSIFIED = "__unclassified__"
-_FILTER_NO_PRODUCT_SIGNAL = "__no_product_signal__"
+_FILTER_UNCLASSIFIED = UNCLASSIFIED
+_FILTER_NO_PRODUCT_SIGNAL = NO_PRODUCT_SIGNAL
 _FILTER_NO_AUDIENCE_TOPIC = "__no_audience_topic__"
 _HOME_RESIDUAL_KEYS: dict[str, frozenset[str]] = {
     "post_types": frozenset({"other", _FILTER_UNCLASSIFIED}),
@@ -3110,7 +3111,7 @@ def _post_matches_filter(post: dict[str, Any], filters: dict[str, Any]) -> bool:
     return True
 
 
-def _scoped_classification_pairs(brand_scope: Any) -> QuerySet:
+def _scoped_classification_pairs(brand_scope: Any, *, bounded_feed: bool = False) -> QuerySet:
     """Return post-brand pairs annotated with current classification state."""
     pairs = PostBrand.objects.filter(post_id=OuterRef("tweet_id"))
     if brand_scope not in (None, "__all__"):
@@ -3122,7 +3123,8 @@ def _scoped_classification_pairs(brand_scope: Any) -> QuerySet:
         taxonomy_version__in=COMPATIBLE_TAXONOMY_VERSIONS,
         outcome=PostBrandClassificationState.Outcome.CLASSIFIED,
     )
-    return pairs.annotate(_is_classified=Exists(classified_state))
+    existence = _PostCorrelatedExists if bounded_feed else Exists
+    return pairs.annotate(_is_classified=existence(classified_state))
 
 
 class _PostCorrelatedExists(Exists):
@@ -3140,6 +3142,7 @@ def _filter_home_posts_queryset(
     created_at_start: datetime | None = None,
     created_at_end: datetime | None = None,
     deduplicate: bool = True,
+    bounded_feed: bool = False,
 ) -> QuerySet:
     """Return the bounded, set-based Post queryset shared by chart aggregation."""
     queryset = queryset if queryset is not None else Post.objects.all()
@@ -3154,6 +3157,7 @@ def _filter_home_posts_queryset(
             created_at__lt=now,
         )
 
+    post_exists = _PostCorrelatedExists if bounded_feed else Exists
     for axis in ("brands", "lang"):
         active = normalized_filters.get(axis)
         if active is None or active == "__all__":
@@ -3177,12 +3181,12 @@ def _filter_home_posts_queryset(
                 )
             queryset = queryset.filter(condition)
         else:
-            queryset = queryset.filter(Exists(PostBrand.objects.filter(
+            queryset = queryset.filter(post_exists(PostBrand.objects.filter(
                 post_id=OuterRef("tweet_id"), brand_id__in=active,
             )))
 
     brand_scope = normalized_filters.get("brands")
-    scoped_classification_pairs = _scoped_classification_pairs(brand_scope)
+    scoped_classification_pairs = _scoped_classification_pairs(brand_scope, bounded_feed=bounded_feed)
 
     active_types = normalized_filters.get("post_types")
     if active_types is not None and active_types != "__all__":
@@ -3203,12 +3207,12 @@ def _filter_home_posts_queryset(
             stored_types = _dashboard_storage_keys("post_type", selected_types)
             matching_types = PostBrandSignal.objects.filter(
                 post_id=OuterRef("tweet_id"), post_type_id__in=stored_types
-            ).filter(Exists(current_classified_edge))
+            ).filter(post_exists(current_classified_edge))
             if brand_scope not in (None, "__all__"):
                 matching_types = matching_types.filter(brand_id__in=brand_scope)
-            type_condition |= Q(Exists(matching_types))
+            type_condition |= Q(post_exists(matching_types))
         if _FILTER_UNCLASSIFIED in active_types:
-            type_condition |= Q(Exists(
+            type_condition |= Q(post_exists(
                 scoped_classification_pairs.filter(
                     _is_classified=False
                 )
@@ -3237,21 +3241,21 @@ def _filter_home_posts_queryset(
             )
             matching_products = PostBrandProductLabel.objects.filter(
                 post_id=OuterRef("tweet_id"), product_label_id__in=stored_products
-            ).filter(Exists(current_classified_edge))
+            ).filter(post_exists(current_classified_edge))
             if brand_scope not in (None, "__all__"):
                 matching_products = matching_products.filter(brand_id__in=brand_scope)
-            product_condition |= Q(Exists(matching_products))
+            product_condition |= Q(post_exists(matching_products))
         if _FILTER_NO_PRODUCT_SIGNAL in active_products:
             no_product_pairs = scoped_classification_pairs.filter(
                 _is_classified=True
             ).annotate(
-                _has_product=Exists(PostBrandProductLabel.objects.filter(
+                _has_product=post_exists(PostBrandProductLabel.objects.filter(
                     post_id=OuterRef("post_id"), brand_id=OuterRef("brand_id")
                 ))
             ).filter(_has_product=False)
-            product_condition |= Q(Exists(no_product_pairs))
+            product_condition |= Q(post_exists(no_product_pairs))
         if _FILTER_UNCLASSIFIED in active_products:
-            product_condition |= Q(Exists(
+            product_condition |= Q(post_exists(
                 scoped_classification_pairs.filter(
                     _is_classified=False
                 )
@@ -3776,6 +3780,8 @@ def _build_home_chart_payload(
         promotion_mode = normalized_filters.get(_HOME_PROMOTION_FILTER)
         legacy_mode = normalized_filters.get("unsanctioned")
         sentiment = normalized_filters.get("sentiment")
+        post_types = normalized_filters.get("post_types")
+        product_labels = normalized_filters.get("product_labels")
         if (
             isinstance(brands_filter, list) and len(brands_filter) == 1
             and len(brand_nicknames) == 1 and isinstance(sentiment, list)
@@ -3795,11 +3801,11 @@ def _build_home_chart_payload(
             )
         elif (
             (brands_filter in (None, "__all__") or isinstance(brands_filter, list))
-            and isinstance(sentiment, list)
+            and any(isinstance(value, list) for value in (sentiment, post_types, product_labels))
             and all(
                 normalized_filters.get(axis) in (None, "__all__")
                 for axis in _HOME_MULTI_VALUE_FILTERS
-                if axis not in {"brands", "sentiment"}
+                if axis not in {"brands", "sentiment", "post_types", "product_labels"}
             )
         ):
             from monitor.home_sentiment_counts import (
@@ -3808,7 +3814,18 @@ def _build_home_chart_payload(
 
             agg_rows = read_home_multibrand_sentiment_counts(
                 brands=None if brands_filter in (None, "__all__") else brands_filter,
-                output_brands=brand_nicknames, sentiments=sentiment,
+                output_brands=brand_nicknames,
+                sentiments=sentiment if isinstance(sentiment, list) else None,
+                post_types=(
+                    _dashboard_storage_keys("post_type", post_types)
+                    + [key for key in post_types if key == _FILTER_UNCLASSIFIED]
+                    if isinstance(post_types, list) else None
+                ),
+                product_labels=(
+                    _dashboard_storage_keys("product_label", product_labels)
+                    + [key for key in product_labels if key in _HOME_RESIDUAL_KEYS["product_labels"]]
+                    if isinstance(product_labels, list) else None
+                ),
                 start=window_start, end=now, at=requested_at,
                 timezone_name=bucket_timezone, promotion_mode=promotion_mode,
                 legacy_mode=legacy_mode,
@@ -5057,6 +5074,10 @@ def _feed_page_posts(
         created_at_start=created_at_start,
         created_at_end=created_at_end,
         deduplicate=False,
+        bounded_feed=(sort == "created_at" and any(
+            isinstance(normalized.get(axis), list)
+            for axis in ("post_types", "product_labels")
+        )),
     )
 
     sort_field = "created_at"

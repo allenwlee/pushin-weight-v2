@@ -41,6 +41,10 @@ configuration:
     - monitor/templates
     - monitor/static
     - monitor/views.py
+    - monitor/home_sentiment_counts.py
+    - monitor/filter_constants.py
+    - core/migrations/0246_home_classification_masks.py
+    - core/migrations/_home_classification_masks_v3.py
     - project
     - docs/ideation/mockups
   semantic_anchors:

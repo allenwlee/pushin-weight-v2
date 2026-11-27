@@ -3193,7 +3193,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         from core.materializations import refresh_materialization
         from monitor.each_chart_facts import EACH_FACTS
         from monitor.home_sentiment_counts import (
-            HOME_SENTIMENT, read_home_multibrand_sentiment_counts, read_home_sentiment_counts,
+            HOME_CLASSIFICATION, HOME_SENTIMENT, read_home_multibrand_sentiment_counts, read_home_sentiment_counts,
         )
         from tests.test_chart_harvest_coverage import record_harvest
 
@@ -3201,6 +3201,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         record_harvest(now, finished_at=now, staggered=False)
         self.assertEqual(refresh_materialization(EACH_FACTS, force=True)["status"], "refreshed")
         self.assertEqual(refresh_materialization(HOME_SENTIMENT, force=True)["status"], "refreshed")
+        self.assertEqual(refresh_materialization(HOME_CLASSIFICATION, force=True)["status"], "refreshed")
         saved_reads = []
         multibrand_reads = []
 
@@ -3380,9 +3381,48 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         and read['end'] - read['start'] >= timedelta(days=364)
                         for read in multibrand_reads
                     ))
-                    act(page.locator("[data-pw-window-btn='1']").click)
-
+                    sentiment_pill.press("Enter")
+                    act(dropdown.locator('[data-dd-action="all"]').click)
                     sentiment_pill.press("Escape")
+                    type_pill = page.locator('[data-group="post_types"]')
+                    type_pill.press("Enter")
+                    type_choice = dropdown.locator('input[data-pw-filter-group="post_types"]:checked').first
+                    self.assertEqual(type_choice.count(), 1)
+                    before_type_reads = len(multibrand_reads)
+                    feed_response, _ = act(type_choice.uncheck)
+                    type_state, window = request_state(feed_response.url)
+                    self.assertEqual(window, 365)
+                    self.assertIsInstance(type_state['post_types'], list)
+                    page.wait_for_function(
+                        "() => Array.isArray(JSON.parse(document.querySelector('canvas.home-chart').dataset.home).applied_filters.post_types)"
+                    )
+                    chart_payload = page.evaluate(
+                        "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home)"
+                    )
+                    self.assertEqual(sum(chart_payload['totals'].values()), len(feed_response.json()['rows']))
+                    self.assertTrue(any(read.get('post_types') is not None for read in multibrand_reads[before_type_reads:]))
+                    act(dropdown.locator('[data-dd-action="all"]').click)
+                    type_pill.press("Escape")
+                    product_pill = page.locator('[data-group="product_labels"]')
+                    product_pill.press("Enter")
+                    product_choice = dropdown.locator('input[data-pw-filter-group="product_labels"]:checked').first
+                    self.assertEqual(product_choice.count(), 1)
+                    before_product_reads = len(multibrand_reads)
+                    feed_response, _ = act(product_choice.uncheck)
+                    product_state, window = request_state(feed_response.url)
+                    self.assertEqual(window, 365)
+                    self.assertIsInstance(product_state['product_labels'], list)
+                    page.wait_for_function(
+                        "() => Array.isArray(JSON.parse(document.querySelector('canvas.home-chart').dataset.home).applied_filters.product_labels)"
+                    )
+                    chart_payload = page.evaluate(
+                        "() => JSON.parse(document.querySelector('canvas.home-chart').dataset.home)"
+                    )
+                    self.assertEqual(sum(chart_payload['totals'].values()), len(feed_response.json()['rows']))
+                    self.assertTrue(any(read.get('product_labels') is not None for read in multibrand_reads[before_product_reads:]))
+                    act(dropdown.locator('[data-dd-action="all"]').click)
+                    product_pill.press("Escape")
+                    act(page.locator("[data-pw-window-btn='1']").click)
                     residuals_by_group = {
                         "sentiment": ["__unclassified__"],
                         "post_types": ["other", "__unclassified__"],

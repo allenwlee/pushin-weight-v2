@@ -825,7 +825,8 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
     required_views = policy.relations.views
     # Historical sources can predate these chart source views. The migrated
     # target still requires the complete declared inventory.
-    optional_chart_views = {'each_brand_post_facts_source', 'home_post_sentiment_facts_source'}
+    optional_chart_views = {'each_brand_post_facts_source', 'home_post_sentiment_facts_source',
+                            'home_post_classification_facts_source'}
     required_views = required_views - (optional_chart_views - source.views)
     # Supported historical sources predate these scalar-only serving views.
     # The upgraded target still requires the complete current view inventory.
