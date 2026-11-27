@@ -1439,3 +1439,11 @@ msgstr "巨头"
 
 msgid "Chatter updates are delayed. The latest available story is shown."
 msgstr "Chatter 更新延迟，当前显示最近发布的报道。"
+
+#: monitor/general_views.py
+msgid "General is temporarily unavailable. Please retry."
+msgstr "综合页面暂时不可用，请重试。"
+
+#: monitor/general_views.py
+msgid "Retry"
+msgstr "重试"

@@ -127,7 +127,27 @@ def test_recent_classified_lookup_matches_existing_pagination(monkeypatch, secti
     actual = collect()
     monkeypatch.setattr(general_readers, "_recent_classified_candidates", lambda *args: None)
     assert actual == collect()
-    assert len(actual) == 12
+    assert actual == [f"ordered-{index:02d}" for index in range(12)]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_jobs_skip_recent_history_scan_while_moving_retains_it(monkeypatch):
+    from monitor import general_readers
+
+    classified_post("jobs-direct", "job_listings")
+    classified_post("moving-recent", "personnel_changes")
+    calls = []
+    original = general_readers._recent_classified_candidates
+
+    def observed(*args):
+        calls.append(args)
+        return original(*args)
+
+    monkeypatch.setattr(general_readers, "_recent_classified_candidates", observed)
+    assert general_feed("jobs", as_of=NOW)["items"][0]["id"] == "jobs-direct"
+    assert calls == []
+    assert general_feed("moving", as_of=NOW)["items"][0]["id"] == "moving-recent"
+    assert len(calls) == 1
 
 
 @pytest.mark.django_db(transaction=True)

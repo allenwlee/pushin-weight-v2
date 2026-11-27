@@ -683,3 +683,11 @@ msgstr "Some lineage evidence is invalid and needs investigation."
 #: monitor/pulse_views.py
 msgid "Some non-X lineage evidence is pending; automatic recovery is not available yet."
 msgstr "Some non-X lineage evidence is pending; automatic recovery is not available yet."
+
+#: monitor/general_views.py
+msgid "General is temporarily unavailable. Please retry."
+msgstr "General is temporarily unavailable. Please retry."
+
+#: monitor/general_views.py
+msgid "Retry"
+msgstr "Retry"

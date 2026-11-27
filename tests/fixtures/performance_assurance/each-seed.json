@@ -50,12 +50,12 @@
     {
       "id": "general-seeder",
       "path": "tests/general_helpers.py",
-      "sha256": "35d8d8bc0cc01222b48682a9f1e31f568009f0991bf40ec4b8db4401f19de321"
+      "sha256": "f2ee3c18f7bdb1bb8c71f9f047974b2bdc8953f55ba6dff85a9a1ee7921625d1"
     },
     {
       "id": "combined-seeder",
       "path": "tests/each_performance_fixture.py",
-      "sha256": "f73708a631fe327d0e1f6007f18af8b2d7285349fa3165ce98cb19e45d7677e5"
+      "sha256": "e9d24950a316f04cd412a88218fa6cea5fe0a38129c80def9880d215113f86e9"
     },
     {
       "id": "harvest-coverage-seeder",
@@ -146,7 +146,13 @@
         "general-seeder"
       ],
       "scope": "The four contract section posts; classified_post uses its default qwen brand.",
-      "purpose": "Populate actual General section records and persisted saved commentary in each supported locale."
+      "purpose": "Populate actual General section records and persisted saved commentary in each supported locale.",
+      "pagination": {
+        "additional_posts_per_section": 21,
+        "identity": "general-perf-{category}-{index:02d}",
+        "age_hours": "index + 1",
+        "content": "Saved trilingual commentary for every added Post; real classification and feed readers."
+      }
     },
     {
       "id": "general-closed-job",

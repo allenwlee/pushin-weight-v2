@@ -1,7 +1,8 @@
 ---
-title: Restore the homepage seven-day chart
+title: General performance and shared UI fixes - Plan
+type: fix
+date: 2026-11-25
 artifact_contract: ce-unified-plan/v1
-artifact_readiness: implementation-ready
 product_contract_source: ollija-annotate-plan
 execution: code
 ollija:
@@ -13,13 +14,17 @@ ollija:
   delivery_route: direct
   delivery_route_selected_by_user: true
 ---
-# Restore the homepage seven-day chart
+# General performance and shared UI fixes - Plan
 
 ## Plain-English Summary
 
-Clicking 7D should update both the homepage chart and the week-over-week Pulse counts on the first click. Production kept displaying 1D when the count query exceeded the browser's 12-second deadline. The feed responded independently.
+General should open with its cards much sooner and finish Refresh, More and selection changes reliably. Jobs can use an existing lookup that examines far fewer posts. Calendar and Free will rank event/opportunity dates before checking post eligibility, so they can avoid work on cards that cannot appear on the page. Both page loads and panel updates will share the same reader limit and bounded failure handling.
 
-Reuse the published quarter-hour counts and look up the remaining posts by time, including corrections to older posts. Check the result against a direct source count and exercise the button in a browser. The existing time windows, tracked brands, filters and refresh deadline continue to apply. Extend verification to homepage, General and dashboard interactions affected by shared data or chart readers. Check time ranges, brands, classification filters and dashboard tabs where available, including combinations of controls.
+The same plan includes the four desktop fixes: restore the Pulse bar's bottom scrollbar, place NVIDIA after Qwen, fill the brand dropdown down each column, and remove the grey marks beside right-side chart numbers. Existing content, brand identities, mobile scrolling and server-rendered cards remain intact. This approach adds no materialized views or other database structures.
+
+Correctness will be checked against the complete existing reader, including every page and date boundary. Browser checks will cover real controls and replacements. Speed will be measured on matched requests while ordinary collection continues; the proposed targets are at least 50% lower median initial latency, sample p95 within 8 seconds for initial content and 3 seconds for panel updates. The temporal optimization has not been implemented or timed yet, so those targets are acceptance criteria rather than promises.
+
+The owner selected autonomous goal execution on 2026-11-27. Implement and verify this follow-up; a new deployment remains on request. The earlier homepage/dashboard release is already deployed at `6a954b91`.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -58,11 +63,387 @@ Occupied staging: if a staged route finds `staging` in use by an unrelated relea
 
 ## Delivery Exceptions
 
-Production is authorized. The shared staging branch is occupied by an independent Chatter release at fa85d9d3, so the November 9 occupied-staging owner default selects direct production without changing staging.
+- The owner accepted the measured 38.8% median improvement (3.42s to 2.09s) for this release and requested production deployment. The original 50% threshold was missed. The absolute latency targets passed.
+- Shared staging contains unrelated Chatter and Pulse releases. Use direct production under the occupied staging owner default in AGENTS.md.
 
-Before the direct production push, dispatch `homepage-counts.yml` on the exact candidate branch revision and require its completed successful run for that same SHA. The workflow also runs after matching pushes to `main`; that automatic post-push run provides ongoing coverage but does not replace the pre-push candidate run.
+The original release used direct production and completed at `6a954b91`. Its receipts remain in the Appendix. Current General and UI work is authorized for implementation and verification through the owner-selected autonomous goal, with delivery on request. No prior deployment instruction in the Appendix applies to this new candidate.
 
-## Implementation and regression checks
+---
+
+## Goal Capsule
+
+- **Objective:** General opens with its actual cards promptly, and Refresh, More and selection changes finish reliably; the four requested desktop presentation fixes work on their shared surfaces.
+- **Means:** Reduce qualification work before document hydration, reuse the existing Jobs lookup, and apply one bounded reader path to initial and fragment requests (KTD1–KTD4).
+- **Authority:** The owner selected option 2 (autonomous goal) on 2026-11-27 to implement and verify General fixes together with UI1–UI4. Commit/push and a new deployment remain on request. The earlier production repair at `6a954b91` is complete and is retained as evidence in the Appendix.
+- **Execution boundary:** Read the active contracts and U1–U9. Appendix instructions describe the prior release and do not add work to this follow-up. Preserve other sessions' files and all live collection.
+- **Stop conditions:** Do not silently change membership, freshness, initial server-rendered cards or the frozen performance acceptance set to make the optimization pass. If the bounded implementation trials miss the target, report the measured residual and the storage/capacity decision needed.
+
+---
+
+## Product Contract
+
+### Summary
+
+Reduce General's work before it assembles Calendar, Free stuff, Jobs and Who's moving cards. Keep its current content, sorting and navigation. Restore the desktop Pulse scrollbar, put NVIDIA after Qwen, fill the brand dropdown down each column, and remove the short marks beside right-side chart labels.
+
+### Problem Frame
+
+At production revision `6a954b91`, one all-brand General browser load took 22.91 seconds. A matching application trace took 22.13 seconds: Calendar 9.51, Free 10.78, Jobs 10.63 and Moving 0.55 seconds. These panels overlap through two readers, so their times are not additive. Simultaneous English/Japanese requests took about 17.8 seconds each. A fast shell paint is insufficient because the requested content is the cards.
+
+Calendar and Free spent most of the measured time checking whether linked posts had eligible classifications. Jobs searched 30,922 recent posts to find 21 results. Separate Refresh/More requests bypass the initial page's reader limit and statement timeout. The available evidence establishes these costs; it does not prove a new algorithm's cold-load performance or that materialized-view refreshes caused the delays.
+
+### Requirements
+
+**General content and navigation**
+
+- R1. Successful initial General responses contain the four first-page feeds in HTML and remain usable without JavaScript.
+- R2. Preserve exact eligible Post membership and rendered facts using `public_posts()` and same-Post/same-brand current v3/v4 classification state; eligible signal/state pairs do not require a PostBrand association.
+- R3. Preserve ordering, distinct Post counting, the requested limit and signed continuation semantics, including the fixed traversal `as_of` and C-collated Post-ID ties.
+- R4. Calendar and Free retain current lifecycle, date-precision, canonical/evidence-link and rejection behavior; ranking is evaluated against the traversal clock.
+- R5. Preserve locale fallback, editorial access, preferences, private/no-store responses and atomic Post URLs. Fresh requests observe committed source changes without introducing a cache TTL.
+- R6. Refresh/More failures retain displayed cards and provide a usable Retry action; superseded responses cannot replace a newer selection or append duplicate cards.
+
+**Resource use and visible speed**
+
+- R7. Initial page and fragment reads share the same bounded database admission path per web worker, with finite waits and cleanup after success, failure or timeout.
+- R8. Meet the frozen performance criteria below while normal harvesting, enrichment and refresh remain active. A fixture-only result or HTTP 200 is insufficient proof.
+
+**Owner-requested presentation**
+
+- R9. Restore a usable bottom scrollbar on an overflowing desktop Pulse chip bar while preserving mobile touch scrolling (UI1).
+- R10. Shared brand presentation begins Meta → DeepSeek → Qwen → NVIDIA, preserving the relative order and identities of remaining eligible brands (UI2).
+- R11. Each brand-menu group fills vertically down its first column before moving right, with matching keyboard/DOM reading order (UI3).
+- R12. Right-side chart labels retain numbers and gridlines but have no short grey tick strokes beside them (UI4).
+
+### Success Criteria
+
+These are proposed engineering acceptance targets for the implementation, not previously measured guarantees. Under the bounded paired workload in the Verification Contract, initial General card-ready latency must improve by at least 50% at the median, have sample p95 at or below 8 seconds, and produce no failed requests. Refresh/More must have sample p95 at or below 3 seconds for each tested panel operation. Report first-after-idle and concurrent samples separately, including their maxima. The finite sample cannot establish a population-wide latency guarantee.
+
+The full result, ordering, facts and decoded cursor parity checks must pass. UI1–UI4 require actual browser evidence before and after replacement. The refreshed General performance workload must make the expected data requests; an unrelated click that makes zero chart requests cannot satisfy R8.
+
+### Scope Boundaries
+
+This work changes General's readers and request lifecycle, shared presentation, and their verification. It adds zero tables, columns, indexes or materialized views. It does not change collection schedules, source data, classification taxonomy, brand keys, authorization or editorial selection.
+
+Deferred to follow-up: shared eligibility caching/materialization or database capacity changes if the measured live-reader approach misses the target; existing like-count homepage feed slowness; unrelated staging-copy defects. A new projection would require its own schema/source-dependency and freshness design before it could join the active units.
+
+Product Contract preservation: the four UI requests retain their meaning and UI1–UI4 identifiers; R1–R8 add the General performance contract to the same artifact.
+
+---
+
+## Planning Contract
+
+### Current evidence and dependencies
+
+The implementation baseline is `6a954b9195cdacb291363b6d6d169a706b35ccaa`. Reconcile later relevant commits before execution. The dirty `fix/general-feed-performance-20261127` checkout starts at older `ddd41308`; its candidate and migration 0242 are not a ready patch. Production already contains that chronology index and later temporal-query changes. Preserve that checkout and do not replay its index migration.
+
+The inspected storage is `Post`, `PostBrandSignal`, `PostBrandClassificationState`, `Event`, `EventEvidence` and `Opportunity` in `core/models.py`, with source relationships introduced in migrations 0032/0041 and chronology ordering in migration 0242. Existing keys and indexes support Post identity, same-brand classification and source links. This plan reuses those records. Classification replacements in `monitor/cycle.py` and fact/evidence writes in `core/targeted_extraction.py` remain live inputs; no derived storage or new writer path is introduced.
+
+### Key Technical Decisions
+
+- KTD1. **Use the direct classified-signal lookup for Jobs only.** The existing exact fallback examined about 1,251 signals and 10,745 buffers in the recorded probe, versus 139,807 buffers for the recent-post scan. Moving retains its current recent scan and exact sparse fallback. Warm timings support the candidate but do not establish loaded latency (R2–R3, R8).
+- KTD2. **Rank narrow temporal facts before qualifying posts.** Select each linked Post's best anchor using the existing lifecycle rules at `as_of`, then qualify rank cohorts until the complete page plus one is established. Hydrate full documents and display facts for the selected page. Retain a complete reader as correctness reference and fallback (R2–R4).
+- KTD3. **Preserve exact reads with no new cache or materialization.** Existing homepage masks differ in taxonomy eligibility, PostBrand dependence and created-time versus fetched-time semantics. Full-page caching would also mix private/editorial state and clock-dependent ranking. The chosen change reduces current work without a new freshness or invalidation contract (R5, R8).
+- KTD4. **Use one ownership-aware admission wrapper for General HTTP reads.** Initial-page threads and the fragment endpoint acquire the existing two-per-worker permit exactly once per expensive panel call. Thread-owned connections close after work; reusable request connections restore their settings; caller-owned transactions remain caller-owned. This is a process-local bound, not a cluster-wide limit (R7).
+- KTD5. **Bound failures as well as queries.** Start one monotonic 10-second server data-read budget at entry to the initial or fragment view. Initial selection/editorial reads and all four panels share that deadline; it must not start after editorial work finishes. Include permit wait and check remaining time between candidate batches and before every SQL statement; the statement timeout cannot exceed remaining time on both request-thread and panel-thread connections. The two-slot cap covers expensive panel readers, not every request-thread SQL query. Use a 12-second browser deadline for fragments. A deliberate deadline produces localized failure/Retry feedback; a superseded request's abort stays silent. Deadline or admission exhaustion returns a private/no-store 503 with `Retry-After: 1`, never an empty successful feed. Do not automatically fan out retries (R6–R7).
+- KTD6. **Treat the independent General reader as the oracle.** Compare the full complete reader with the optimized reader in one database snapshot, following each one's own decoded continuation. A shared `as_of` fixes the ranking clock; it does not freeze the database across separate HTTP requests or across all initial panel connections (R2–R4).
+- KTD7. **Keep UI changes in existing shared presentation paths.** UI1–UI4 retain their original history references and browser checks in U6–U9. Preserve brand keys and tracked eligibility; do not fork a separate brand-order list (R9–R12).
+- KTD8. **Keep continuation URLs bounded without weakening filter binding.** The implementation baseline exposed HTTP 414 for General More: the actual default selection has 1,735 brands, all embedded in each signed cursor. Sign a stable digest of the canonical filter identity in new cursors, preserving section, locale, brand selection, version, traversal clock and ordering semantics. Continue accepting valid legacy cursors for their existing lifetime. Test large selections, changed filters, malformed/tampered cursors and real browser pagination. This is a representation change with no new storage or eligibility change (R3, R6).
+
+### Temporal reader design
+
+The new candidate uses the existing Python lifecycle rules, not a second SQL implementation. First read narrow nonrejected fact rows and canonical/evidence Post links in bounded batches, checking the deadline between batches. Include every field needed for lifecycle and anchor selection; inspect `_parse_temporal`, `event_lifecycle`, `opportunity_lifecycle`, `_fact_order` and `timing_anchor` before extracting a common helper. Do not fetch raw payloads or complete localized documents for this pass. Record retained anchor count and peak memory alongside source size; batching the SQL does not itself bound the accumulated anchor map. Do not truncate candidates to satisfy a resource target.
+
+Compute an anchor for each distinct linked Post. Exclude Posts whose linked facts are all past, closed or cancelled from ranked results, but retain their links in the unlinked exclusion set. Rejected-only links permit the existing undated behavior. Evidence-only links and cross-brand facts keep their current meaning; brand eligibility comes from the matching signal/state, not the Event's brand.
+
+Process live/open and upcoming cohorts in exact `(tier, anchor-start)` order. Within a cohort, qualify against public visibility, current signals, selected brands, `fetched_at <= as_of` and the cursor. Finish the full boundary cohort, or select its global top results through equivalent bounded queries, before stopping. Merge the best results across any SQL parameter batches using descending fetched time and ascending C-collated Post ID. Fact ID breaks ties when selecting an anchor; it is not an additional feed-order key.
+
+Stop early only after `limit + 1` distinct eligible Posts and proof that all unvisited cohorts rank later. If dated results fill the page, do not run the undated recent-post scan. Otherwise merge the linked unknown/postponed cohort with the unlinked unknown stream before truncation. The unlinked stream excludes every nonrejected link, including terminal-only links, and retains the current complete sparse fallback. Apply the cursor to the exact full sort key. Keep all split reads for one temporal page inside the existing Repeatable Read snapshot; caller-managed transaction and non-PostgreSQL fallbacks retain their behavior.
+
+```mermaid
+flowchart TB
+  A[Calendar or Free request with fixed traversal clock] --> B[Read narrow facts and all nonrejected Post links]
+  B --> C[Compute one canonical anchor per linked Post]
+  C --> D[Qualify dated rank cohorts against current Post and classification data]
+  D --> E{Complete page plus one proven?}
+  E -->|Yes| H[Hydrate selected page and sign continuation]
+  E -->|No| F[Merge linked undated candidates with exact unlinked stream]
+  F --> G[Apply full sort and cursor; use complete sparse fallback when needed]
+  G --> H
+```
+
+### Request ownership and failure lifecycle
+
+```mermaid
+flowchart TB
+  A[Initial General page] --> B[Four panel tasks sharing one request deadline]
+  C[Refresh or More endpoint] --> D[One panel task and request deadline]
+  B --> E[Shared two-slot admission wrapper in this web worker]
+  D --> E
+  E --> F[Reader with remaining-time SQL limits]
+  F --> G[Release only after actual work ends; restore or close owned connection]
+  G --> H[Return cards or private retryable 503]
+```
+
+```mermaid
+stateDiagram-v2
+  [*] --> Waiting
+  Waiting --> Reading: permit acquired before deadline
+  Waiting --> Failed: deadline or admission exhausted
+  Reading --> Ready: result completed
+  Reading --> Failed: query, batch or request deadline
+  Ready --> Displayed: request sequence still current
+  Ready --> Discarded: newer request superseded it
+  Failed --> RetainedCards: fragment failure or browser deadline
+  RetainedCards --> Waiting: user selects Retry
+  Displayed --> [*]
+  Discarded --> [*]
+```
+
+The diagrams describe request and candidate flow; KTD4–KTD6 own the resource and consistency rules. A disconnected browser does not prove database cancellation. An already-running task retains its permit until its SQL finishes or is cancelled and cleanup completes. A failed initial page returns a retryable error response rather than presenting missing panels as a completed page.
+
+### Alternatives and execution-time unknowns
+
+The rejected linked-ID JOIN and `ANY(array)` variants preserved membership but did not reliably reduce measured work. Increasing readers from two to three did not improve the recorded loaded samples. Neither is part of this candidate. A new eligibility projection has a different storage, writer and publication design; it is deferred because the lower-work exact reader can be tested reversibly first. No Bake-off is needed for this reversible choice.
+
+Final batch sizes, exact SQL plans and cold performance are execution-time measurements. Start with existing query/parameter bounds and permit at most two evidence-driven revisions of U3's query/batching design. A failure to meet R8 remains an unmet outcome; do not replace it with a warm-only claim or silently select a cache TTL.
+
+---
+
+## Implementation Units
+
+### U1. Pin General membership, pagination and measured work
+
+**Goal:** Establish an independent correctness oracle and representative performance workload before changing the readers.
+
+**Requirements:** R1–R8. **Dependencies:** none.
+
+**Files:** `tests/test_general_readers.py`, `tests/test_general_timing.py`, `tests/test_general_jobs_people.py`, `tests/test_general_views.py`, `tests/general_helpers.py`, `tests/fixtures/general_feed_contract.json`, `tests/fixtures/performance_assurance/declaration.general-candidate.json`.
+
+**Approach:** Reuse the complete reader as the reference and extend current fixtures. Use deterministic PostgreSQL data for semantic/race checks and the ordinary route's explicit open-brand list for representative measurements. Keep full-page evidence separate from individual SQL timings.
+
+**Test scenarios:**
+
+1. Unrestricted, actual default open-brand list, one/two/three brands, empty selection, invalid brand and sparse old matches yield the expected route behavior and exact reader results.
+2. Zero, one, 20, 21 and multiple pages, duplicate brand signals, equal fetched timestamps and C-collation-sensitive IDs preserve order and continuation through the final page.
+3. v3/v4 classified states qualify; legacy, failed/missing states and mismatched brands do not. A valid signal/state pair without PostBrand remains eligible.
+4. Compare every displayed field and decoded cursor payload, not signed token bytes. Advance baseline and candidate through their own continuations.
+5. Record current shape-dependent tests and adapt their observation hooks without weakening what they prove; avoid comparing the new Jobs branch to itself.
+
+**Verification:** The fixtures distinguish the proposed implementation from the complete reader and catch the known sparse-brand omission. Capture baseline request/queue/query/hydration/card-ready timings before implementing U2–U4. No production clone or shared-database reset.
+
+### U2. Use the existing direct Jobs lookup
+
+**Goal:** Stop scanning tens of thousands of unrelated recent posts for a Jobs page.
+
+**Requirements:** R2–R3, R8; KTD1 and KTD6. **Dependencies:** U1.
+
+**Files:** `monitor/general_readers.py`, `tests/test_general_jobs_people.py`, `tests/test_general_readers.py`, `tests/test_general_views.py`.
+
+**Approach:** Route Jobs directly through the current complete signal-first query with its `limit + 1`, deduplication and continuation logic. Retain Moving's current recent-post candidate and complete fallback. Reuse current document/job-evidence hydration.
+
+Apply KTD8 to the shared continuation serializer/parser used by all four feeds. Keep new URLs safely within the observed request-line limit and retain legacy validation; never drop filter validation to reduce token length.
+
+**Test scenarios:**
+
+1. Jobs first and later pages match U1's reference for default, sparse and multibrand selections.
+2. Duplicate signals do not duplicate a card; same-time ID ties stay ordered on all pages.
+3. Job age labels remain correct immediately before and at 24 hours, across all locales and evidence variants.
+4. Moving still uses its intended dense path, falls back for sparse results, and preserves person/affiliation evidence.
+5. With 1,735 eligible brand keys, More uses a compact URL and reaches the next page; both cursor formats reject changed filters and tampering, and valid legacy cursors retain their original traversal clock.
+
+**Verification:** Independent parity passes and recorded query work falls below the existing Jobs baseline on the same workload. Measure the whole page separately before claiming R8.
+
+### U3. Rank temporal facts before qualifying and hydrating posts
+
+**Goal:** Reduce Calendar/Free qualification work while preserving complete ordered pages.
+
+**Requirements:** R2–R5, R8; KTD2, KTD3 and KTD6. **Dependencies:** U1.
+
+**Files:** `monitor/general_readers.py`, `core/intelligence_readers.py` only if a shared timing helper is needed, `tests/test_general_timing.py`, `tests/test_general_readers.py`, `tests/test_intelligence_readers.py` if that existing module is changed.
+
+**Approach:** Implement the temporal design above in the existing reader, sharing anchor/lifecycle logic with final card presentation. Retain the complete path for unsupported transaction/database conditions and sparse completion. Remove any replaced candidate-query code after its callers use the shared path; keep an independent reference in tests.
+
+**Execution note:** Characterize lifecycle and cursor behavior before restructuring candidate reads. Extend the existing concurrent-evidence tests to observe the new query boundary rather than obsolete SQL text.
+
+**Test scenarios:**
+
+1. Enough eligible live/upcoming cards produce a full page without scanning undated posts; earlier ineligible candidates do not make the reader stop early.
+2. A cohort crossing the page boundary is fully considered; qualifying Posts later in a parameter batch can displace earlier fetched-time results. Limit counts distinct Posts, not facts or signals.
+3. One Post linked to several Events chooses the same anchor, including equal-rank fact-ID ties; direct and evidence-only links deduplicate correctly.
+4. Past/closed/cancelled-only facts stay absent, rejected-only facts permit the undated case, and postponed/unknown facts merge with unlinked unknown rows in exact chronological order.
+5. Upcoming-to-live and live-to-ended transitions, date-only/unknown precision and multiple facts match the canonical lifecycle at the cursor clock, even when wall time advances without writes.
+6. A sparse brand with older matches and a cursor entering the unknown tier returns every eligible page, including fewer than a full final page.
+7. Concurrent fact/link creation, parent rejection, source reassignment and deletion between reads cannot make one temporal page combine incompatible snapshots. A fresh request observes the committed change; a continuation keeps its clock without claiming a frozen cross-request database.
+8. Caller-owned READ COMMITTED/Repeatable Read, disabled autocommit and non-PostgreSQL paths preserve current ownership and complete fallback behavior.
+
+**Verification:** Same-snapshot item/fact/order/cursor parity passes. Measure qualification probe count, rows/bytes hydrated, buffers and full panel/card-ready duration. Retain U3 only if the fixed comparison shows useful work reduction without sparse-case regressions; the two-trial limit and R8 still apply.
+
+### U4. Bound initial and fragment work and finish failed browser requests
+
+**Goal:** Keep General request bursts within the existing reader capacity and recover visibly from deadlines.
+
+**Requirements:** R1, R5–R7; KTD4–KTD5. **Dependencies:** U1; integrate with U2–U3 before final measurement.
+
+**Files:** `monitor/general_views.py`, `monitor/general_readers.py` only for shared deadline/batch checks, `monitor/static/monitor/general.js`, `tests/test_general_concurrency.py`, `tests/test_general_views.py`, `tests/test_general_browser.py`.
+
+**Approach:** Reuse one General HTTP read wrapper across the initial thread pool and fragment endpoint. Carry language, selection, shared clock and request deadline explicitly. Bound permit waits and SQL using remaining time. Restore reusable connection settings after errors; use a rollback/savepoint boundary where needed so timeout cleanup never commits, closes or leaves a caller-owned transaction unusable. Keep browser sequence validation and distinguish timeout cancellation from supersession.
+
+Track the selection that produced each panel's displayed cards and continuation separately from the active page selection. When a selection change fails, retain those cards and show Retry for the active selection's first page. Hide More and block its request path while the displayed selection differs from the active selection. Restore pagination only after a matching successful response supplies a continuation; switching back to the displayed selection may reuse its valid continuation. Keep the server's signed filter validation intact.
+
+**Test scenarios:**
+
+1. Two initial pages mixed with Refresh/More and a four-panel weights change never exceed two active panel readers in one worker. Separate workers have separate caps, reported honestly.
+2. A queued request reaches its deadline without issuing SQL; no nested permit acquisition or starvation occurs. A stalled running query times out, releases its slot after cleanup and does not prevent a later healthy request.
+3. Failure in one initial panel cancels queued work, returns promptly and lets already-running siblings clean up. Caller-owned transactions and request connection settings survive handled failures.
+4. A fragment deadline or 503 retains prior cards, clears `aria-busy` and pending state, and exposes localized Retry. Retry of More uses the same continuation only while its displayed selection still matches the active selection, and appends no duplicate cards.
+5. Rapid open → none → open changes discard late results even when AbortController cannot cancel the network request. Deadline timers from older requests cannot abort or clear a newer request.
+6. Initial server HTML still contains all feeds without JavaScript; successful locale/timezone/audience/navigation behavior and private response headers remain unchanged.
+7. The existing countdown refresh throttle remains intact. Page exit cancels outstanding timers/requests, and returning through browser history restores working controls without duplicate refreshes or stale deadlines.
+8. Slow selection or editorial reads consume the same initial deadline as panel work; request-thread timeouts restore connection state and return the same explicit retryable failure.
+9. During a weights change, three panels succeed and one fails. The failed panel retains its previous cards and first-page Retry; More cannot send the old filter's cursor. Retry restores pagination only after the active selection's successful response provides a continuation. Switching back and superseding that Retry preserve the same selection/sequence rules.
+
+**Verification:** Real PostgreSQL blocking/timeout tests and browser races prove KTD4–KTD5. Error responses are explicit failures and never counted as successful latency samples.
+
+### U5. Verify the integrated General and shared UI candidate
+
+**Goal:** Prove the complete candidate meets the content, interaction and measured-speed contract.
+
+**Requirements:** R1–R12. **Dependencies:** U2–U4 and U6–U9.
+
+**Files:** `tests/test_general_browser.py`, `tests/test_general_concurrency.py`, `tests/fixtures/ui_assurance/general-declaration.json`, `tests/fixtures/ui_assurance/each-declaration.json`, `tests/fixtures/performance_assurance/declaration.general-candidate.json`, `tests/ui_assurance/general.py`, `tests/ui_assurance/gate.py`; existing homepage/Each browser and JavaScript tests named in U6–U9.
+
+**Approach:** Extend the existing declarations and test adapters with the actual General initial-load, Refresh, More and weights-change interactions. Preserve the existing homepage and Each obligations. Ensure changed temporal helpers remain in the product identity. Correct any stale checker to prove the same property against current code, then run the Verification Contract.
+
+**Test scenarios:**
+
+1. Fresh anonymous General HTML, all four rendered panels, Refresh and More pass in English, Japanese and Chinese; no-JavaScript pages retain content and links.
+2. Actual default selection and sparse Meta/Qwen cases remain correct under paired concurrency and natural materialization/harvest activity.
+3. Window/filter/brand changes still update homepage charts and Pulse on the first click; dashboard category switches retain area rendering and right-axis presentation.
+4. Shared styles and assets load on homepage, General, Pulse, Chatter and dashboard; route exclusions are justified by component tracing, not page names.
+5. Every required General/performance scenario executes real expected requests and visible-state assertions. Missing selectors, skipped checks and setup errors fail the assessment.
+
+**Verification:** Record exact code/data/environment identities and the prescribed result set. Meet the Success Criteria and Definition of Done; retain failures and uncertainty rather than reporting a partial optimization as completion.
+
+### U6. UI1 — Restore the desktop Pulse bar's bottom scrollbar
+
+**Requirements:** R9; KTD7. **Dependencies:** none; verify together in U5.
+
+**Files:** tests/test_home_v22_browser.py, tests/test_dashboard_each_browser.py; monitor/static/home-v20.css, monitor/static/pro-general.css; related shared templates if reproduction identifies a missing shell class.
+
+**Approach and test scenarios:**
+
+- Reproduce the missing scrollbar in the actual desktop homepage and any dashboard surface sharing `.pulse-bar`, recording route, locale, viewport, browser, shell classes, loaded stylesheet versions and revision before editing application code.
+- Use historical commit `31c2cfbf69b62848813d6769548693a1b006aa4e` (`feat(home): polish pulse, timezones, and feed identity`) as the behavior reference. It added a bottom scrollbar for overflowing desktop Pulse chips in `monitor/static/home-v20.css`: desktop minimum width 900px, visible six-pixel WebKit scrollbar, thin scrollbar, bottom padding, track and thumb. These declarations still exist at `6a954b91`; establish why the live page no longer shows the control before choosing a repair. Trace the CSS cascade, current shell and overflow sizing, including `monitor/static/pro-general.css`, and account for browser/OS overlay-scrollbar behavior without changing user settings.
+- Reinstate a usable bottom scrollbar under the overflowing chip row using the existing implementation and current palette. The last chip must be reachable by normal user scrolling. Preserve chip selection, counts, focus and narrow-screen touch scrolling.
+- Strengthen `test_live_brand_pills_follow_chart_order_and_remain_accessible` and retain `test_mobile_pulse_remains_touch_scrollable_without_desktop_scrollbar` in `tests/test_home_v22_browser.py`. Existing computed-style and programmatic-scroll assertions alone do not prove a visible usable desktop scrollbar. Add actual user-scroll behavior and same-state visual/geometry evidence for the failing desktop shell, before and after Pulse replacement, at wide and near-breakpoint desktop widths. Include a non-overflowing case and a 390px mobile preservation case.
+
+**Verification:** The reported visible outcome passes in the real browser before and after the relevant DOM/chart replacement, with adjacent behavior preserved.
+
+
+### U7. UI2 — Move NVIDIA immediately after Qwen in shared brand presentation
+
+**Requirements:** R10; KTD7. **Dependencies:** none; verify together in U5.
+
+**Files:** monitor/views.py, tests/test_home_v22_browser.py, tests/test_dashboard_each_browser.py, tests/test_views.py.
+
+**Approach and test scenarios:**
+
+- Update the existing shared presentation priority in `monitor/views.py` (`_HOME_CHART_BRAND_PRIORITY`), keeping a single ordering source for its existing callers. The leading sequence becomes **Meta → DeepSeek → Qwen → NVIDIA**. Preserve the relative order of every other eligible brand.
+- Retain existing identity keys: Meta is `llama`; NVIDIA is `nemo_megatron`. This is a display-order change, not a key rename, tracking-policy change, company/product change or schema migration.
+- Verify all consumers of the shared ordering: Pulse chips, chart series/legend, brand dropdown and dashboard brand controls where applicable. Preserve tracked-brand eligibility, open/closed group boundaries, selected values, brand colors and chart values. Update explicit prior-order expectations to the owner-selected sequence; do not derive all expectations from the implementation being tested.
+- Prove NVIDIA appears once immediately after Qwen on initial load and after refresh, brand changes and restored preferences. Exercise routes with NVIDIA present and absent from the eligible set.
+
+**Verification:** The reported visible outcome passes in the real browser before and after the relevant DOM/chart replacement, with adjacent behavior preserved.
+
+
+### U8. UI3 — Fill the brand dropdown vertically before moving right
+
+**Requirements:** R11; KTD7. **Dependencies:** layout implementation can proceed independently; its literal full-list brand-order assertion requires U7 and runs in U5's integrated verification.
+
+**Files:** monitor/templates/monitor/home.html and matching shared brand markup, monitor/static/home-v20.css, monitor/static/pw-filter-pills.js if needed; tests/test_home_v22_browser.py, tests/test_dashboard_each_browser.py.
+
+**Approach and test scenarios:**
+
+- Change only the brand menu's layout so each existing group fills top-to-bottom in the first column, then top-to-bottom in the next column. With the full open-brand set, the first column starts **Meta, DeepSeek, Qwen, NVIDIA, …**. Preserve the existing group separation and other filter menus' layouts.
+- Trace `monitor/templates/monitor/home.html` brand `data-tier-grid` markup, matching shared templates, `.filter-dropdown .dd-grid` rules in `monitor/static/home-v20.css`, and the portaled dropdown behavior in `monitor/static/pw-filter-pills.js`. Choose a layout that handles changing item counts and viewport widths without clipping or introducing an extra horizontal scroller.
+- Preserve canonical DOM and keyboard reading order, checkbox names/values, click behavior, select-all behavior, focus, menu positioning and saved selections. Avoid a visual-only reorder that leaves keyboard navigation jumping across columns.
+- In a browser, open the actual portaled menu and assert bounding-box positions sorted by column then row, with literal expected leading brand keys. DOM array order alone cannot prove this requirement. Cover full and sparse lists, desktop resizing, mobile layout, `en`, `ja` and `zh_hans`, and one-click selection after reopening the menu and after a chart refresh.
+
+**Verification:** The reported visible outcome passes in the real browser before and after the relevant DOM/chart replacement, with adjacent behavior preserved.
+
+
+### U9. UI4 — Remove the short grey tick marks beside right-side Y-axis labels
+
+**Requirements:** R12; KTD7. **Dependencies:** none; verify together in U5.
+
+**Files:** monitor/static/pw-chart.js, monitor/static/pw-each-chart.js, tests/test_pw_chart_filter.js, tests/test_pw_each_chart.js, tests/test_home_v22_browser.py, tests/test_dashboard_each_browser.py.
+
+**Approach and test scenarios:**
+
+- Confirm the reported marks visually on the homepage chart and identify the matching shared dashboard rendering. Remove the short tick strokes immediately left of right-side numeric labels; retain the numbers, units, horizontal chart gridlines, scale, series colors and chart geometry.
+- Inspect `chartScales()` in `monitor/static/pw-chart.js` and the right-axis configuration in `monitor/static/pw-each-chart.js`. At `6a954b91` both define grid colors and hide the axis border without explicitly disabling grid tick strokes. This is a source-based candidate cause, not a browser-confirmed diagnosis. Scope the correction to the right Y axis; preserve X-axis date and comparison marks.
+- Verify rendered charts and resolved axis options after initial load, 1D/7D/30D/365D changes where supported, brand/filter changes, and dashboard category/count/percentage changes where supported. Use same-state screenshot or canvas-region evidence that the strokes are absent and labels/gridlines remain; configuration assertions alone are insufficient.
+
+**Verification:** The reported visible outcome passes in the real browser before and after the relevant DOM/chart replacement, with adjacent behavior preserved.
+
+
+---
+
+## Verification Contract
+
+### Correctness and interaction gates
+
+Use a small branch-specific PostgreSQL database with deterministic fixtures. Preserve the permanent shared database and use its wrapper only when those existing data are required. Run the affected General tests named in U1–U5 and the UI tests named in U6–U9. The existing `tests/test_general_recent_index.py` checks the retained migration; do not invent a new migration or delete its proof.
+
+Follow the project's `.claude/skills/fix-ui/SKILL.md` for Bridgewright validation, prescription, affected checks and exact-candidate assessment. The executable affected command is `uv run --extra dev python -m tests.ui_assurance.gate --scope affected`; candidate verification uses `--scope candidate --candidate-revision <sha>` with the skill's explicit candidate performance inputs. Required evidence covers actual General requests and all changed shared controls. Record zero failed, skipped, errored, missing or unknown obligations. Plan edits alone do not require executing these application tests.
+
+### Frozen performance workload
+
+Before changing product code, record the baseline SHA, actual default open-brand list, serving role, source cohort/time range, database/service topology and workload conditions. Run the same ordinary page/fragment paths for the candidate. Read-only SQL parity is separate from application timing because forcing an entire page into a read-only transaction can hide caught sidecar failures.
+
+Use at most two concurrent client requests. Freeze these 40 requests for each measured revision before implementation:
+
+- **20 full General loads:** 10 sequential default-selection loads (five English, five Japanese), then five simultaneous English/Japanese pairs: three default-selection pairs, one Meta-only pair and one Qwen-only pair.
+- **20 fragment operations:** default-selection Refresh and More for each of four panels in both English and Japanese (16 requests), plus Calendar and Free Refresh and More with a preselected sparse brand (four requests, alternating English/Japanese). Obtain required continuation tokens from the same recorded initial workload; record an empty/final page as such and use the fixed fixture cohort to guarantee separate pagination correctness coverage. Run fragments sequentially except two fixed simultaneous pairs, one Refresh pair and one More pair; keep that schedule identical for baseline and candidate.
+
+Compare the 16 default-selection full loads for the 50% median target; require the initial 8-second sample-p95 target for the full 20-load batch as well. Evaluate each default panel/operation cell for the 3-second target and report its count of two; the additional sparse observations must also meet 3 seconds and be reported separately. Cover all locales in correctness tests. At least one full-page pair and fragment group must overlap naturally occurring harvest/refresh. Do not pause jobs or flush production caches to manufacture a cold run. Label first-after-idle observations accurately, and never call them guaranteed cold-cache tests.
+
+Record every duration and failure, sample counts, medians, nearest-rank sample p95, maxima, queue wait, per-panel SQL/qualification/hydration time and browser card-ready time. For each small panel/operation cell, report its p95 as a sample statistic with its small count, not a service guarantee. Preserve the exact batch composition across baseline/candidate. Prefer alternating paired baseline/candidate reads where the authorized environment supports this safely; otherwise state the unpaired confound and do not claim causal improvement from an incomparable run.
+
+Stop the measurement batch on two consecutive timeout/5xx results or any observed collection regression. Preserve the failures. Allow at most two U3 design revisions, each evaluated against the same acceptance set; retries require a changed cause, not repeated warm-cache attempts. A missing representative baseline or natural-load interval leaves R8 unverified, while independent correctness work can continue.
+
+The first implementation baseline stopped early after two consecutive HTTP 414 pagination failures. Preserve its 20 completed initial-load samples and fragment results; do not repeat the unchanged failing batch. The candidate retains the frozen workload, and unsuccessful or unperformed baseline fragment cells remain unavailable for comparative latency claims. The initial-load comparison and candidate's absolute fragment targets remain independently testable.
+
+### Evidence and learning references
+
+- `monitor/general_views.py`, `monitor/general_readers.py` and `monitor/static/monitor/general.js` establish the current route, reader and request-lifecycle behavior.
+- `docs/solutions/workflow-issues/2026-10-27-214740-django-page-probe-read-only-lock-errors.md` governs interpretation of application probes.
+- `docs/solutions/data-migration/2026-10-08-143200-original-content-cutover-checks.md` supports selecting bounded records before wide hydration and verifying displayed records.
+- `docs/solutions/integration-issues/2026-11-21-065100-enrichment-reservations-and-reader-coverage.md` supports proving persisted changes reach the visible reader.
+- The Appendix retains the dated production measurements and their original receipt locations. Those measurements justify the candidates and are not verification of this new work.
+
+---
+
+## Definition of Done
+
+U1–U9 meet their verification criteria, the full General parity/race suite passes, and the measured workload meets R8 as qualified by the owner’s performance acceptance under Delivery Exceptions. All four UI requests have browser evidence on their actual shared surfaces. No new persistent data structures or live-operation interruptions were introduced. Remove experimental query branches and temporary product instrumentation that the selected implementation supersedes; retain only deliberate fallback behavior and useful bounded timing instrumentation.
+
+Report implementation, checks, remote commits and deployment separately. The reviewed planning stage is complete; the owner-selected goal now covers implementation and verification. If a later request selects deployment, record its route and endpoint in Ollija metadata before release, verify the exact deployed revision and live interactions, and preserve the applicable rollback path. Historical production approval in the Appendix does not authorize this new release.
+
+---
+
+## Planning review record
+
+The 2026-11-27 review covered coherence, feasibility, scope, design, adversarial assumptions and security using native session agents. It applied two corrections within the existing contract: make the dropdown's final order assertion depend on the shared brand reorder, and prevent a failed General selection change from reusing a different selection's continuation. The latter was confirmed from the browser request builder and the reader's signed-filter check. No review decisions or proposed corrections remain open.
+
+The performance design remains an implementation-time hypothesis with the bounded measurements above. This planning run changed documents only; it did not run application tests, production probes or a deployment. The independent external-model pass was not started under the owner's instruction to use GPT within this session.
+
+## Appendix
+
+The following records describe the completed homepage/dashboard release and the observations that motivated this follow-up. They are historical evidence, not additional active implementation units or current release instructions.
+
+### Implementation and regression checks
 
 - Base revision `260a5c068d1da59ef78b36c5152de2a39f0487fd`. The observed production revision matched the base.
 - In `monitor/home_count_summary.py`, use an explicit lower and upper bound for the unpublished tail and each partial quarter. Look up brand associations by the selected post's ID so a wider tail from historical corrections still avoids the full association table.
@@ -72,7 +453,7 @@ Before the direct production push, dispatch `homepage-counts.yml` on the exact c
 
 The shared selection rule lives in the repository’s `fix-ui` skill. The project’s `AGENTS.md` and recurring-mistakes M5 point to it for backend work. The affected page owns its expected result and timing assertions, including when the work runs outside Compound Engineering.
 
-## Online homepage count publication
+### Online homepage count publication
 
 Production verification found the saved homepage counts can remain dirty when writers change the source during a refresh. The current publication transaction discards the rebuilt view on any generation change. A historical dirty boundary before the whole 7D comparison forces a full recount, which exceeded the browser deadline on production data. Keep collection and enrichment active throughout this work.
 
@@ -84,21 +465,21 @@ Prove real concurrent recent and historical writes, an older correction after th
 
 Each chart facts have a separate 90-second refresh timeout, observed in production. Record its effect on the dashboard interaction checks and diagnose independently rather than claiming the homepage publication repair fixes it.
 
-## Selected-brand classification performance follow-up
+### Selected-brand classification performance follow-up
 
 After the first production deployment, the Meta 7D and 30D chart with a sentiment selection timed out during overlapping chart/feed requests. The classification-aware chart and feed share the same filter semantics. An initial bounded selected-brand/time candidate subquery did not meet the production-data deadline and has been removed. Keep the shared classification rules and feed pagination path, remove irrelevant ordering inside the chart's post-ID subquery, and evaluate the guarded saved-facts reader below for the supported sentiment case. Verify current and historical classification, unclassified records, ambiguous legacy labels, multiple brands, feed/chart parity and the 7D, 30D and 365D selection sequence. Measure the actual candidate on production data with read-only access.
 
 The first two scheduled homepage refresh attempts after deployment either timed out under competing reads or returned busy during harvest. The same code published successfully in a quiet gap. Extend the online barrier's bounded NOWAIT retries to cover a normal harvest write window, release all locks before each wait, and verify both eventual success and a bounded busy return. No harvest or enrichment operation is paused.
 
-## Saved-facts sentiment candidate
+### Saved-facts sentiment candidate
 
 Investigate a guarded daily chart reader for one explicitly selected brand and sentiment selection. Reuse the existing Each facts and their published/dirty cutoff; use the live source from that cutoff onward in the same consistent database snapshot. Preserve the existing legacy-sentiment, unclassified, promotion, and unsanctioned rules, and retain the existing queryset for unsupported filters, unavailable data, or an unusable saved prefix. Add caller-level parity tests across time windows, stale corrections, conflicting legacy values, exclusion modes, and fallback cases before considering the optimization. Measure the actual candidate under representative conditions; stale facts used for timing alone are not correctness evidence. This adds no tables or columns.
 
-## First-page feed query
+### First-page feed query
 
 A filtered homepage deep link exceeded 20s; a read-only trace attributed the first 12s timeout to the feed's `SELECT DISTINCT` over full post rows. Test a shared brand-membership `EXISTS` filter and omit `DISTINCT` only for the feed's own base Post queryset, whose other joins are single-valued or existence checks. Preserve the default deduplication contract for callers supplying other querysets. Verify duplicate brand links, multiple selections, classification, both sort orders, and cursor pagination against the existing distinct reference; measure the actual endpoint under representative load.
 
-## Broader interaction regression net
+### Broader interaction regression net
 
 These checks are pending. Earlier receipts cover only the conditions described below.
 
@@ -109,7 +490,7 @@ These checks are pending. Earlier receipts cover only the conditions described b
 - Add existing range-switch browser cases to the homepage regression workflow and resolve hosted access to the private Bridgewright dependency through an available authorized installation path. Ensure the release procedure runs relevant checks for direct releases as well as pull requests. Verify triggers and dependencies with an executed run, retaining existing assertions.
 - Add focused regression coverage only for identified gaps. Record commands, revision, data conditions, timing and results per route. Complete each affected interaction or record a specific evidenced unresolved issue.
 
-## Verification record
+### Verification record
 
 The original browser request aborted after 12.01 seconds and retained the one-day chart. Its feed request returned in 0.77 seconds. The deployed worker reported a timeout in the Pulse count reader. The original database plan scanned the full post-brand association table.
 
@@ -132,7 +513,7 @@ ruff check monitor/home_count_summary.py tests/test_home_chart_materialization.p
 git diff --check
 ```
 
-## Follow-up evidence and remaining work (2026-11-26 JST)
+### Follow-up evidence and remaining work (2026-11-26 JST)
 
 - The deployed 21:07 scheduled run refreshed homepage counts but the Each facts refresh failed. Each remained dirty from October 16 and its last publication was November 25 at 14:09 JST. A later historical write also dirtied homepage counts from November 24.
 - The selected-brand sentiment chart still exceeded a 12-second production-data statement limit. The bounded selected-brand subquery has not solved this case; do not treat its local regression tests as performance evidence.
@@ -213,7 +594,7 @@ Post-deployment continuation: at 01:51 JST a Meta sentiment 30D change returned 
 
 The 30D Meta sentiment query remains sensitive to I/O when historical corrections dirty several days. One read-only candidate response took 13.79s and a cold EXPLAIN ANALYZE took 19.53s; the main costs were the live post scan and saved-fact heap reads. A time-first lateral rewrite exceeded 20s and was discarded. The rollback fix and longer refresh budget must not be represented as proof that this cold 30D latency is solved. Exact-candidate testing, a real successful longer refresh, and repeat live interaction checks remain required.
 
-### Production continuation — November 27, 02:42 JST
+#### Production continuation — November 27, 02:42 JST
 
 The exact `268515de09cf9efaa780e2307cd482e457e99898` candidate passed hosted `homepage-counts.yml` run 45864470371 and was pushed to main; web, harvest and counts services report that revision live. In an anonymous Tokyo Chrome session, selecting Meta and excluding positive sentiment then switching 7D, 30D and 365D returned chart/feed HTTP 200 and rendered without the failure marker in 4.96s, 10.38s and 8.06s, respectively. This single run does not prove cold or repeatedly dirty performance; 30D remains close to the client deadline. The subsequent Meta dashboard load returned chart HTTP 503 at 15s while the previous revision's scheduled Each rebuild was reading and eventually timed out at its 180s limit. At that time Each's dirty boundary was November 21 UTC. The new 300s refresh budget is live but has not yet completed a natural scheduled run. Preserve this failure and verify refresh completion and dashboard behavior during and after realistic rebuild contention.
 
@@ -231,9 +612,9 @@ A separate read-only Meta 365D query with the same simulated five-day dirty boun
 
 Candidate `ddd41308` did not pass its exact-revision checks: the hosted run 45872653287 found a race in the per-brand narrative browser test, and the local assurance gate found the General, Chatter and Each source-identity declarations stale after the reader change. The hosted test awaited the chart response but inspected the old expanded card before JavaScript replaced it; the test now waits for that old card to disconnect before asserting the new card is collapsed. Refresh only the three declarations' source identities from their actual current source files, preserving their control models and fixtures, then rerun the required exact-candidate browser and performance checks. These earlier failures are not passed results.
 
-### General cold-load repair in progress
+#### General cold-load repair in progress
 
-### Dashboard historical-change precision (investigation and implementation)
+#### Dashboard historical-change precision (investigation and implementation)
 
 Production observations show that roughly 51 historical source mutations between refreshes can move the existing timestamp boundary back several days, making a chart reread tens of thousands of unchanged posts. During a concurrent homepage materialization refresh, one chart timed out at 15 seconds. The timestamp boundary remains the safety fallback; do not treat the General fix as resolving this failure.
 
@@ -271,7 +652,7 @@ At 04:53 JST the same simulated-dirty 30D Meta reader completed in 8.57s while a
 
 The combined change received a completed full Compound Engineering code review (`/tmp/compound-engineering-501/ce-code-review/20261127-rerun-045011`): no actionable findings. It covered the untracked migration and test, source-identity changes, and a separate review of the new assurance-gate entries; it used an in-session GPT adversarial reviewer. The review did not run database tests or prove deployment behavior. Exact-revision hosted, local browser/performance, migration and production verification remain release requirements.
 
-### Multi-brand sentiment regression found after deployment
+#### Multi-brand sentiment regression found after deployment
 
 The exact `e072a2bc` revision is deployed on web, harvest and refresh, with migration 0243 applied. Anonymous production browser checks showed first-click 7D, 30D, 365D and Meta deselection working, but excluding positive sentiment with all brands selected on 365D aborted at the 12-second client deadline and showed the retained-result failure. This is an open requirement, not successful completion. Reproduce and optimize the multi-brand sentiment path without narrowing selection semantics: the existing filter qualifies a Post when any selected-brand current or legacy classification matches, or when any selected Post-brand association is unclassified, then counts that Post for every selected associated brand. Classification-state and signal rows have separate Post and Brand foreign keys and are not guaranteed to have a corresponding PostBrand row, so orphan qualifying evidence must retain its existing effect; canonical brand spelling, mixed classification versions, legacy ambiguity, promotion/unsanctioned exclusions, all time windows, cross-brand associations and current dirty/live publication boundaries must also match the existing reader. Reuse the shared sentiment reader where it can preserve those semantics; keep fallback for unsupported combinations. Compare exact daily series and totals with the existing filter in PostgreSQL tests including cross-brand and orphan cases, and in a read-only consistent production snapshot. Measure the actual affected browser action against representative live data and during normal rebuild contention. Include the new regression in the existing direct-release/Bridgewright gate, repeat required review and exact-revision checks, deploy and verify the final revision. Do not stop or reschedule harvesting.
 
@@ -287,7 +668,7 @@ The existing staging-refresh source-view inventory now includes the new ordinary
 
 Full formal review completed at `/tmp/compound-engineering-501/ce-code-review/20261127-masks-formal/review.json`. It confirmed the release-owned grant risk: after older owner builds finish, prove the serving role can read both new views and reconcile grants with the current owner code if necessary; repeat after any stale-owner rollback. The reviewer retained production timing, count parity, combined refresh contention, and exact-candidate gates as unverified release work. Its earlier code and test findings were fixed and retested; the final focused sentiment suite passed 58 PostgreSQL-required tests.
 
-### Production follow-up: bound the live tail
+#### Production follow-up: bound the live tail
 
 Revision `dd882a19` passed 793 tests, 372 subtests, all 438 required PostgreSQL checks, 5,215 homepage and 38 Each assurance obligations, performance attempt `aebb1da01a1bbc5ba797e84d`, and hosted run 45897394691. It is live on web, harvest, enrichment and refresh, with migration 0244 and both serving grants present. The scheduled 06:52 JST job published all three summaries successfully at 06:58. Nevertheless, the all-brand 365D sentiment click still exceeded the client deadline; its summary query took 14.77s on live data. The 7D optimized and original counts matched in a single production snapshot. Grouping by date and identical brand arrays before expanding them preserved every 365D summary result in a production snapshot and ran in 7.44s on one warm run with 32MB transaction-local work memory; under concurrent materialization refresh it took 11.51s, too close to the deadline. A separate timing-only experiment limiting the live tail to two hours took 5.42s, but deliberately omitted intermediate data and is not correctness evidence.
 
@@ -297,7 +678,7 @@ The v1 summary continues to track historical changes but is not rebuilt routinel
 
 Follow-up full review completed at `/tmp/compound-engineering-501/ce-code-review/20261127-boundary-formal/review.json`, with no remaining code findings. The implemented dual-summary migration acquires a non-waiting state-table lock before changing triggers, uses one shared refresh advisory lock, and reserves publication rows in a fixed order for qualifying historical writes. Rehearsal tests use isolated schemas and cover active state readers, mixed-age transactions, both migration directions, older-worker fallback and a better v1 prefix after v2 overflow. The targeted fresh-schema suite passed 102 tests, with 98 PostgreSQL-required checks; later boundary and isolated rehearsal cases passed six more. The second 30-minute production health sample had 15 classifications succeeded and five pending, with no unhealthy rows; translation/commentary remain on-demand and the legacy completeness acceptance gate was not met. Exact final-candidate release checks and production verification remain.
 
-### Production follow-up: classification filters
+#### Production follow-up: classification filters
 
 On 2026-11-27, revision `1d3e336f` served the previously failing 365-day all-brand sentiment interaction in 4.63 seconds, but an anonymous 7-day all-brand post-type change timed out at the worker. Its existing query scans classification evidence far beyond the requested window. A read-only prototype combining the published per-Post sentiment facts with live post-type evidence returned grouped results in 3.82 seconds for 7 days but took 24.09 seconds for 365 days; these timings do not establish parity. Investigate set-based and other scalable paths for post type, product labels and combinations, preserving per-Post eligibility, scoped and orphan evidence, residual categories, flags, snapshot consistency and live updates. Reuse existing storage where feasible; do not introduce a schema change without evaluating its ownership, writer cost and online rollout. Compare complete results against the existing reader across windows, scopes, combinations, historical corrections and fallback modes. Exercise real anonymous chart and feed interactions and measure representative 7/30/365-day production cases, including normal refresh contention. Repeat the exact-candidate assurance and hosted checks and verify production before closing the task. Harvesting remains active throughout.
 
@@ -319,7 +700,7 @@ Full code review receipt: `/tmp/compound-engineering-501/ce-code-review/20261127
 
 A sparse-brand probe initially used the display name `meta`, but the retained database key is `llama`. With `llama`, the bounded feed returned 7D bug and release pages in 2.41s and 0.08s; the invalid `meta` value exposed a new slow empty-result scan. Keeping the original brand-membership `EXISTS` while bounding only classification checks returned the invalid-brand empty result in 0.10s/0.01s, the `llama` cases in 0.22s/0.03s, and all-brand product/type cases in 0.05s/0.03s in warm read-only single runs. The previous candidate's two local gates were stopped after 358/356 passing tests because this correction changed product code; they are not release evidence. Re-run all exact-revision checks and the hosted workflow for the corrected candidate.
 
-### Production follow-up: General and sentiment feeds
+#### Production follow-up: General and sentiment feeds
 
 Revision `8c11159a` passed the exact-candidate local and hosted checks and is live on web, harvest, refresh and enrichment. Migration 0246 is applied and the v3 view was published in 3m12s without pausing harvesting. Live 7D classification combinations returned charts, but restoring the post-type selection left an all-brand sentiment feed taking 18.6s and the chart timing out. A read-only bounded sentiment-feed probe returned 50 rows in 0.25s; implement that bounded path for chronological sentiment feeds and verify membership and pagination, sparse brands and real interactions. The existing slow like-count sort is not covered by that timing.
 
@@ -330,3 +711,17 @@ During the scheduled 11:07 JST refresh, the two-reader production-data probe too
 Each parallel PostgreSQL reader sets a 25-second per-statement deadline on its own short-lived connection. This bounds an individual stalled SQL statement; it is not a 25-second total deadline for all statements in a panel. A PostgreSQL `pg_sleep` test verifies cancellation and eventual release of both slots. Slow active readers are allowed to finish or time out and clean up after a sibling's error; they are not abandoned without a resource cap.
 
 Candidate `66be246c` passed the affected gate (790 tests, 314 subtests and 38 Each obligations), but its full gate failed one hover-size assertion after feed replacement: the inspection image had zero layout width when measured. The browser test passed three consecutive focused reruns after waiting for the image to be visible before measuring it. Retain its original text, placement and relative-size assertions; repeat the full candidate and hosted gates for the final revision. Live 7D and 30D all-brand source comparisons matched every returned bucket; 365D matched for the events post type across all 21 brands. The 365D comparison was read-only, so optional narrative sidecar writes failed and were caught; that does not prove sidecar behavior. A sparse Meta mixed-sentiment feed returned five pages, with pages four and five taking 14.34s and 12.14s. Its compiled SQL is identical before and after this follow-up, so treat this as an existing separate feed-latency limitation rather than claiming it is fixed.
+
+#### Production verification and remaining latency — 2026-11-27
+
+Revision `6a954b9195cdacb291363b6d6d169a706b35ccaa` is live on web, harvest, refresh and enrichment. Before the push, hosted `homepage-counts.yml` run `45929121900` succeeded for that exact revision. The local candidate gate passed 862 tests and 372 subtests, including 505 PostgreSQL-required checks with zero skips or errors; Bridgewright assessed all 5,215 homepage and 38 Each obligations cleanly. Candidate performance attempt `407dca8aede392c22336fbde` was clean on the declared fixture. The separate affected gate on product-equivalent revision `66be246c` passed 790 tests and 314 subtests; the later commit only added a visibility wait to a full-gate browser test and this plan record.
+
+Production browser evidence: `/tmp/pw-v3-live-classification-verify-6a9-1127.log` passed 24 7D/30D/365D window, brand, sentiment, post-type and product interactions, including restoring the filters that previously timed out; actions took 0.51–9.26s in that run. `/tmp/pw-postdeploy-allbrand-6a9-1127.log` recorded homepage initial load 5.59s, 7D switch 7.56s, 30D switch 2.56s, 365D switch 2.03s, 365D sentiment change 4.79s and Meta removal 6.38s. The Meta dashboard initial sentiment load took 5.88s; post-type, sentiment and product tabs took 2.14s, 1.06s and 1.75s. These are single live measurements, not latency guarantees. Pulse and Chatter loaded their CSS and navigated to Japanese successfully in `/tmp/pw-pulse-chatter-live-6a9-1127.log`; their first loads took 1.81s and 6.89s respectively.
+
+All-brand General remains slow under load despite returning HTTP 200: one browser load took 22.91s, while Qwen and Yi loads took 4.63s and 1.38s. Two simultaneous English/Japanese requests completed in 17.77s and 17.76s. The live traced all-brand request took 22.13s: Calendar 9.51s, Free 10.78s and Jobs 10.63s. A warm repeat of the Calendar linked-facts query took 18.6ms with about 9,000 shared-buffer hits, indicating cache and database read pressure can dominate; a different lookup order matched in a consistent snapshot but did not consistently improve warm performance. Reducing the Jobs scan also showed no reliable full-page gain once caches warmed. Do not call General instant or claim this release resolved its remaining cold/load latency. A follow-up should evaluate shared precomputation or caching with an explicit freshness contract, writer cost and representative concurrent-load measurements rather than guessing at an index or increasing connections.
+
+The 30-minute enrichment cohort had 8 classified and 12 pending, no unhealthy posts, and all 20 pending translation; its regression result was inconclusive and completeness result failed. The worker subsequently logged successful post-deployment classification calls. The pre-existing sparse Meta mixed-sentiment fourth/fifth feed pages took 14.34s/12.14s; like-count filtered feeds and the unrelated staging-copy preservation issue remain outside this release. The 365D same-snapshot parity check covered events for all 21 brands, not every 365D category combination; its read-only narrative sidecar write attempts were rejected and caught. Preserve those limits when interpreting verification.
+
+The first scheduled harvest started after the final deployment at 12:15 JST and finished successfully at 12:27 JST; web, harvest, refresh and enrichment still reported `6a954b9` live afterward. Collection was not intentionally paused.
+
+General latency optimization continuation: In a production-data isolated WSGI probe during active collection, alternating reader limits 2, 3, 3, 2 produced full-page times 8.54s, 16.00s, 25.29s and 19.30s; individual Jobs queries took 6.07s, 14.79s, 24.17s and 13.25s. Workload and cache varied, but these samples do not support increasing the two-reader limit. A set-based linked-fact rewrite returned identical Calendar and Free IDs in a shared snapshot, but used 9,991 versus 9,364 and 13,513 versus 11,726 shared buffers in warmed explain plans; do not keep it. The `ANY(array)` linked-ID variant also matched, but warm query times were not better and savings were only 2.5–4% of buffers. Production activity included queries waiting on data-file reads. Existing classification masks are not a direct General substitute: General requires v3/v4 classifications, permits orphan evidence, and orders on fetched time rather than creation time.

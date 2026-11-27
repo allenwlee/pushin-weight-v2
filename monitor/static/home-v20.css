@@ -423,6 +423,20 @@
   .filter-dropdown .dd-grid.cols-2 { grid-template-columns: 1fr 1fr; }
   .filter-dropdown .dd-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
 
+  /* Keep visual reading order aligned with the brand checkbox DOM order. */
+  .filter-dropdown[data-lens-pair="open,closed"] .dd-grid {
+    display: block;
+    columns: 3 8rem;
+    column-gap: 10px;
+  }
+  .filter-dropdown[data-lens-pair="open,closed"] .dd-grid.cols-2 {
+    column-count: 2;
+  }
+  .filter-dropdown[data-lens-pair="open,closed"] .dd-grid label {
+    break-inside: avoid;
+    margin-bottom: 2px;
+  }
+
   .filter-dropdown label {
     display: flex;
     align-items: flex-start;

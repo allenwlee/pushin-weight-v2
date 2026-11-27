@@ -4,7 +4,7 @@
   "package_source_revision": "0390f3c42195856a67afcb1d62464052cebf3476",
   "fixture": {
     "path": "tests/fixtures/performance_assurance/each-seed.json",
-    "sha256": "f0614c86606f28fc34563faa3f21117226c38275d19678ab7de663a371db5368"
+    "sha256": "b3ccc98894daa15572c1da1dbbd7ee240c4631eec53c05d35ebf4e316022365e"
   },
   "base_origin": "http://127.0.0.1:8792",
   "asset_origins": [],
@@ -243,9 +243,52 @@
       "state_seeds": [],
       "actions": [
         {
-          "kind": "press",
-          "target": ".pulse-published-reports > summary",
-          "value": "Enter"
+          "kind": "click",
+          "target": "[data-refresh=\"calendar\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-refresh=\"free\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-refresh=\"jobs\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-refresh=\"moving\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-more=\"calendar\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-more=\"free\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-more=\"jobs\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-more=\"moving\"]"
+        },
+        {
+          "kind": "click",
+          "target": ".primary-settings [data-value=\"open\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 500
+        },
+        {
+          "kind": "click",
+          "target": ".primary-settings [data-value=\"open\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 500
         }
       ],
       "required_metrics": [
@@ -286,7 +329,13 @@
           "enforcement": "blocking"
         }
       ],
-      "network_expectations": [],
+      "network_expectations": [
+        {
+          "path": "/general/feed/",
+          "max_requests": 40,
+          "max_bytes": 6000000
+        }
+      ],
       "cache_expectations": []
     },
     {
@@ -297,9 +346,52 @@
       "state_seeds": [],
       "actions": [
         {
-          "kind": "press",
-          "target": ".pulse-published-reports > summary",
-          "value": "Enter"
+          "kind": "click",
+          "target": "[data-refresh=\"calendar\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-refresh=\"free\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-refresh=\"jobs\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-refresh=\"moving\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-more=\"calendar\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-more=\"free\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-more=\"jobs\"]"
+        },
+        {
+          "kind": "click",
+          "target": "[data-more=\"moving\"]"
+        },
+        {
+          "kind": "click",
+          "target": ".primary-settings [data-value=\"open\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 500
+        },
+        {
+          "kind": "click",
+          "target": ".primary-settings [data-value=\"open\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 500
         }
       ],
       "required_metrics": [
@@ -340,7 +432,13 @@
           "enforcement": "blocking"
         }
       ],
-      "network_expectations": [],
+      "network_expectations": [
+        {
+          "path": "/general/feed/",
+          "max_requests": 40,
+          "max_bytes": 6000000
+        }
+      ],
       "cache_expectations": []
     },
     {
@@ -428,7 +526,7 @@
       ],
       "cache_expectations": [
         {
-          "path": "/static/pw-each-chart.ec2eec8e2bbe.js",
+          "path": "/static/pw-each-chart.30cbf96c7cb4.js",
           "policy": "immutable",
           "min_max_age_seconds": 31536000,
           "must_reuse": true
@@ -526,7 +624,7 @@
       ],
       "cache_expectations": [
         {
-          "path": "/static/pw-each-chart.ec2eec8e2bbe.js",
+          "path": "/static/pw-each-chart.30cbf96c7cb4.js",
           "policy": "immutable",
           "min_max_age_seconds": 31536000,
           "must_reuse": true

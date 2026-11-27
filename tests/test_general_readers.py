@@ -1,4 +1,6 @@
 import json
+from hashlib import sha256
+from urllib.parse import urlencode
 
 import pytest
 from django.db import connection
@@ -89,6 +91,41 @@ def test_reader_query_count_does_not_grow_per_card():
         page = general_feed("jobs", as_of=NOW)
     assert len(page["items"]) == 20
     assert len(many) == len(one)
+
+
+def test_large_selection_continuation_fits_request_line_and_keeps_filter_binding():
+    from monitor.general_readers import general_feed
+
+    for index in range(3):
+        classified_post(f"large-selection-{index}", age=index + 1)
+    brands = ["qwen", *[sha256(str(i).encode()).hexdigest()[:28] for i in range(1734)]]
+    first = general_feed("jobs", brands=brands, limit=1, as_of=NOW)
+    url = "/general/feed/?" + urlencode({"section": "jobs", "cursor": first["next_cursor"]})
+    assert len(url.encode()) < 2000
+    second = general_feed("jobs", brands=list(reversed(brands)), limit=1, cursor=first["next_cursor"])
+    assert [item["id"] for item in second["items"]] == ["large-selection-1"]
+    assert second["as_of"] == first["as_of"]
+    for different in (brands[:-1], None, []):
+        with pytest.raises(ValueError, match="continuation"):
+            general_feed("jobs", brands=different, cursor=first["next_cursor"])
+
+
+def test_legacy_continuation_still_validates_exact_filters_and_clock():
+    from django.core import signing
+
+    from monitor.general_readers import CURSOR_SALT, general_feed
+
+    first = classified_post("legacy-0", age=1)
+    classified_post("legacy-1", age=2)
+    cursor = signing.dumps({
+        "filters": {"section": "jobs", "locale": "en", "brands": ["qwen"], "version": 1},
+        "as_of": NOW.isoformat(), "last": [-first.fetched_at.timestamp(), first.pk],
+    }, salt=CURSOR_SALT, compress=True)
+    page = general_feed("jobs", brands=["qwen"], cursor=cursor)
+    assert [item["id"] for item in page["items"]] == ["legacy-1"]
+    assert page["as_of"] == NOW.isoformat()
+    with pytest.raises(ValueError, match="continuation"):
+        general_feed("jobs", brands=["mistral"], cursor=cursor)
 
 
 def test_withdrawn_current_commentary_is_not_exposed_by_the_feed():

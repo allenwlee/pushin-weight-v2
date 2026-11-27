@@ -2,15 +2,20 @@
 import os
 from datetime import timedelta
 from html.parser import HTMLParser
+from unittest.mock import patch
 from urllib.parse import urlparse
 
 import pytest
 from django.db import connection
-from django.utils import timezone
 from django.test import Client, override_settings
-from unittest.mock import patch
+from django.utils import timezone
 
-from core.models import Post, PostBrandClassificationState, PostEnrichmentState, PostSynthesisDemand
+from core.models import (
+    Post,
+    PostBrandClassificationState,
+    PostEnrichmentState,
+    PostSynthesisDemand,
+)
 from monitor.post_artifacts import read_post_content_many
 from tests import general_helpers
 from tests.each_performance_fixture import seed_each_performance_orm
@@ -129,3 +134,16 @@ def test_terminal_translation_fixture_renders_failed_sprite_without_pending_work
     from monitor.enrichment_queue import stage_due_q
     assert not PostEnrichmentState.objects.filter(stage_due_q("translation", anchor) | stage_due_q("classification", anchor)).exists()
     assert not PostSynthesisDemand.objects.filter(state__in=["pending", "processing"]).exists()
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+def test_each_general_panel_has_a_real_continuation_in_performance_fixture():
+    require_task_test_database()
+    anchor = seed_each_performance_orm()
+    from monitor.general_readers import general_feed
+    for section in ("calendar", "free", "jobs", "moving"):
+        first = general_feed(section, brands=["qwen"], as_of=anchor)
+        assert len(first["items"]) == 20 and first["next_cursor"]
+        second = general_feed(section, brands=["qwen"], cursor=first["next_cursor"])
+        assert second["items"]
+        assert not {item["id"] for item in first["items"]} & {item["id"] for item in second["items"]}

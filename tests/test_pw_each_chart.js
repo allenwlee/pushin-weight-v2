@@ -109,6 +109,7 @@ test('B treatment preserves bottom-to-top datasets while reversing legend and to
   assert.equal(chart.data.datasets[2].borderColor, '#ff7018');
   assert.equal(chart.data.datasets[2].borderWidth, 2);
   assert.equal(chart.options.scales.x.grid.display, false);
+  assert.equal(chart.options.scales.y.grid.drawTicks, false);
   const items = [0, 1, 2, 3].map(datasetIndex => ({ datasetIndex }));
   items.sort(chart.options.plugins.tooltip.itemSort);
   assert.deepEqual(items.map(item => item.datasetIndex), [3, 2, 1, 0]);

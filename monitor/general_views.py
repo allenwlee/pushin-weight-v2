@@ -2,16 +2,18 @@
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from functools import wraps
 from threading import BoundedSemaphore, Event
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from django.core import signing
 from django.db import connection, connections
-from django.http import Http404, HttpResponseBadRequest, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils import timezone, translation
+from django.utils.html import format_html
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_noop, pgettext
 from django.views.decorators.http import require_GET
@@ -20,6 +22,11 @@ from monitor.content_views import content_locale, private_response
 from monitor.editorial.readers import feed_payload as editorial_feed
 from monitor.editorial.views import access as editorial_access
 from monitor.editorial.views import pool_controls, pool_options
+from monitor.general_budget import (
+    GeneralReadBudget,
+    GeneralReadTimeout,
+    current_read_budget,
+)
 from monitor.general_readers import SECTIONS, general_feed
 from monitor.views import (
     _home_preferences_namespace,
@@ -40,46 +47,75 @@ PANEL_GLYPHS = {
     "moving": "a-personnel",
 }
 _GENERAL_FEED_MAX_READERS = 2
-_GENERAL_FEED_STATEMENT_TIMEOUT_MS = 25_000
+_GENERAL_READ_BUDGET_SECONDS = 10
 _GENERAL_FEED_SLOTS = BoundedSemaphore(_GENERAL_FEED_MAX_READERS)
+
+
+def _bounded_general_request(view):
+    @wraps(view)
+    def bounded(request, *args, **kwargs):
+        budget = GeneralReadBudget(_GENERAL_READ_BUDGET_SECONDS)
+        try:
+            with budget.on_connection():
+                return view(request, *args, **kwargs)
+        except GeneralReadTimeout:
+            locale = content_locale(request)
+            with translation.override("zh-hans" if locale == "zh-cn" else locale):
+                response = HttpResponse(format_html(
+                    '<main><p>{}</p><a href="{}">{}</a></main>',
+                    _("General is temporarily unavailable. Please retry."),
+                    request.get_full_path(), _("Retry"),
+                ), status=503)
+            response["Retry-After"] = "1"
+            return private_response(response)
+    return bounded
+
+
+def _general_panel_read(section, options, budget, *, worker=False, failed=None):
+    if not _GENERAL_FEED_SLOTS.acquire(timeout=budget.remaining()):
+        raise GeneralReadTimeout("General reader admission deadline exceeded")
+    try:
+        if failed is not None and failed.is_set():
+            return None
+        with budget.on_connection(), translation.override("zh-hans" if options["locale"] == "zh-cn" else options["locale"]):
+            return general_feed(section, **options)
+    except BaseException:
+        if failed is not None:
+            failed.set()
+        raise
+    finally:
+        try:
+            if worker and connection.connection is not None:
+                connections.close_all()
+        finally:
+            _GENERAL_FEED_SLOTS.release()
 
 
 def _general_panel_feeds(*, locale, brands, as_of):
     """Read independent panels with at most two database readers per worker."""
     options = {"locale": locale, "brands": brands, "as_of": as_of}
+    budget = current_read_budget() or GeneralReadBudget(_GENERAL_READ_BUDGET_SECONDS)
     if (
         connection.vendor != "postgresql"
         or connection.in_atomic_block
         or not connection.get_autocommit()
     ):
-        return {section: general_feed(section, **options) for section in SECTIONS}
+        return {section: _general_panel_read(section, options, budget) for section in SECTIONS}
 
     failed = Event()
 
     def read(section):
-        with _GENERAL_FEED_SLOTS:
-            if failed.is_set():
-                return None
-            try:
-                with connections["default"].cursor() as cursor:
-                    cursor.execute(
-                        "SELECT set_config('statement_timeout', %s, false)",
-                        [str(_GENERAL_FEED_STATEMENT_TIMEOUT_MS)],
-                    )
-                with translation.override("zh-hans" if locale == "zh-cn" else locale):
-                    return general_feed(section, **options)
-            except BaseException:
-                failed.set()
-                raise
-            finally:
-                connections.close_all()
+        return _general_panel_read(section, options, budget, worker=True, failed=failed)
 
     executor = ThreadPoolExecutor(
         max_workers=_GENERAL_FEED_MAX_READERS, thread_name_prefix="general-feed"
     )
     try:
         futures = {executor.submit(read, section): section for section in SECTIONS}
-        results = {futures[future]: future.result() for future in as_completed(futures)}
+        try:
+            results = {futures[future]: future.result() for future in as_completed(futures, timeout=budget.remaining())}
+        except TimeoutError as error:
+            raise GeneralReadTimeout("General panel deadline exceeded") from error
     except BaseException:
         failed.set()
         executor.shutdown(wait=False, cancel_futures=True)
@@ -267,6 +303,7 @@ def _settings_links(state, request, *, path="/general/"):
 
 
 @require_GET
+@_bounded_general_request
 def general(request):
     try:
         state = selection(request)
@@ -382,6 +419,7 @@ def chatter(request):
 
 
 @require_GET
+@_bounded_general_request
 def feed(request):
     try:
         state = selection(request)
@@ -389,12 +427,11 @@ def feed(request):
             "zh-hans" if state["locale"] == "zh-cn" else state["locale"]
         ):
             payload = present_feed(
-                general_feed(
+                _general_panel_read(
                     request.GET.get("section"),
-                    locale=state["locale"],
-                    brands=state["brands"],
-                    cursor=request.GET.get("cursor"),
-                    limit=int(request.GET.get("limit", 20)),
+                    {"locale": state["locale"], "brands": state["brands"],
+                     "cursor": request.GET.get("cursor"), "limit": int(request.GET.get("limit", 20))},
+                    current_read_budget(),
                 )
             )
             payload["html"] = render_to_string(

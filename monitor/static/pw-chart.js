@@ -712,7 +712,7 @@
             font: minute ? { size: 9 } : undefined,
             padding: minute ? 2 : undefined,
           },
-          grid: { color: GRID_LINE },
+          grid: { color: GRID_LINE, drawTicks: false },
           border: { display: false, dash: [1, 3] },
         },
       });

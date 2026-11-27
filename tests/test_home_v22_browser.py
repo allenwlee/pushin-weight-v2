@@ -46,6 +46,7 @@ _HOME_CHART_BRAND_PRIORITY = (
     "llama",
     "deepseek",
     "qwen",
+    "nemo_megatron",
     "minimax",
     "glm",
     "mimo",
@@ -55,7 +56,6 @@ _HOME_CHART_BRAND_PRIORITY = (
     "stepfun",
     "ernie",
     "hunyuan",
-    "nemo_megatron",
     "doubao",
     "yi",
     "sensechat",
@@ -7108,6 +7108,84 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         refreshed_text.locator(".post-language-tag").inner_text(),
                         "en",
                     )
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
+    @patch("monitor.views._tracked_home_brand_nicknames")
+    def test_desktop_pulse_brand_columns_and_right_axis_after_refresh(self, tracked):
+        for nickname in _HOME_CHART_BRAND_PRIORITY[:21]:
+            Brand.objects.get_or_create(nickname=nickname, defaults={"display_name": nickname})
+        tracked.return_value = tuple(_live_brand_nicknames())
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(ignore_default_args=["--hide-scrollbars"])
+            try:
+                for locale, width in (("en", 1440), ("ja", 950), ("zh_hans", 1440), ("en", 390)):
+                    context = self._anonymous_context(browser)
+                    page = context.new_page()
+                    page.set_viewport_size({"width": width, "height": 960})
+                    try:
+                        page.goto(f"{self.live_server_url}/?locale={locale}", wait_until="networkidle")
+                        for window in (1, 7):
+                            if window == 7:
+                                page.locator('[data-pw-window-btn="7"]').click()
+                                page.wait_for_function("() => JSON.parse(document.querySelector('canvas[data-home]').dataset.home).window_days === 7")
+                            page.wait_for_function("() => Boolean(window.Chart?.getChart(document.querySelector('canvas[data-home]')))")
+                            pulse = page.locator('[data-pw-pulse]')
+                            with self.subTest(component="scrollbar", locale=locale, width=width, window=window):
+                                geometry = pulse.evaluate("n=>({overflow:n.scrollWidth>n.clientWidth,bar:n.offsetHeight-n.clientHeight})")
+                                self.assertTrue(geometry["overflow"])
+                                if width >= 900:
+                                    self.assertGreaterEqual(geometry["bar"], 6)
+                                    pulse.hover()
+                                    page.mouse.wheel(10000, 0)
+                                    page.wait_for_function("() => document.querySelector('[data-pw-pulse]').scrollLeft > 0")
+                                else:
+                                    self.assertEqual(geometry["bar"], 0)
+                            with self.subTest(component="brand-order", locale=locale, width=width, window=window):
+                                self.assertEqual(pulse.locator('[data-pw-pulse-entry]').evaluate_all("nodes=>nodes.slice(0,4).map(n=>n.dataset.pwPulseEntry)"), ["llama", "deepseek", "qwen", "nemo_megatron"])
+                            page.locator('[data-group="brands"]').click()
+                            dropdown = page.locator('body > .filter-dropdown.is-portaled')
+                            with self.subTest(component="columns", locale=locale, width=width, window=window):
+                                boxes = dropdown.locator('[data-tier-grid="open"] label').evaluate_all("nodes=>nodes.map(n=>({key:n.querySelector('input').value,x:n.getBoundingClientRect().x,y:n.getBoundingClientRect().y}))")
+                                visual = sorted(boxes, key=lambda b: (round(b["x"]), b["y"]))
+                                self.assertEqual([b["key"] for b in visual], [b["key"] for b in boxes])
+                                self.assertEqual([b["key"] for b in visual[:4]], ["llama", "deepseek", "qwen", "nemo_megatron"])
+                                self.assertLessEqual(dropdown.evaluate("n=>n.scrollWidth-n.clientWidth"), 1)
+                                inputs = dropdown.locator('[data-tier-grid="open"] input')
+                                inputs.first.focus()
+                                page.keyboard.press("Tab")
+                                self.assertEqual(page.evaluate("document.activeElement.value"), "deepseek")
+                            page.locator('[data-group="brands"]').click()
+                            with self.subTest(component="right-axis", locale=locale, width=width, window=window):
+                                axis = page.evaluate("""() => {
+                                  const chart=Chart.getChart(document.querySelector('canvas[data-home]'));
+                                  return {ticks:chart.scales.y.options.grid.drawTicks,grid:chart.scales.y.options.grid.drawOnChartArea,labels:chart.scales.y.ticks.map(t=>t.label),height:chart.chartArea.height};
+                                }""")
+                                self.assertFalse(axis["ticks"])
+                                self.assertTrue(axis["grid"])
+                                self.assertTrue(axis["labels"])
+                                self.assertGreater(axis["height"], 100)
+                            page.evaluate("window.scrollTo(0, 0)")
+                            destination = _artifact_dir()
+                            destination.mkdir(parents=True, exist_ok=True)
+                            page.screenshot(path=str(destination / f'home-{locale}-{width}-{window}.png'))
+                    finally:
+                        context.close()
+                tracked.return_value = ("qwen",)
+                context = self._anonymous_context(browser)
+                page = context.new_page()
+                page.set_viewport_size({"width": 1440, "height": 960})
+                try:
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    geometry = page.locator('[data-pw-pulse]').evaluate("n=>({overflow:n.scrollWidth>n.clientWidth,bar:n.offsetHeight-n.clientHeight})")
+                    self.assertFalse(geometry["overflow"])
+                    self.assertEqual(geometry["bar"], 0)
+                    page.locator('[data-group="brands"]').click()
+                    menu = page.locator('body > .filter-dropdown.is-portaled')
+                    self.assertEqual(menu.locator('[data-tier-grid="open"] input').evaluate_all("nodes=>nodes.map(n=>n.value)"), ["qwen"])
+                    self.assertLessEqual(menu.evaluate("n=>n.scrollWidth-n.clientWidth"), 1)
                 finally:
                     context.close()
             finally:

@@ -8,6 +8,71 @@ from core.models import Event, EventEvidence, Opportunity, OpportunityType
 from monitor.general_readers import general_feed, temporal_facts
 from tests.general_helpers import NOW, classified_post
 
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("section", ["calendar", "free"])
+@pytest.mark.parametrize("brands", [None, ["qwen"], ["llama"], []])
+def test_temporal_every_page_matches_independent_complete_reader(section, brands):
+    from django.core import signing
+    from django.db import transaction
+
+    from monitor.general_readers import CURSOR_SALT
+    from tests.general_helpers import complete_general_feed
+
+    for index in range(32):
+        post = classified_post(f"parity-{index:02d}", "events" if section == "calendar" else "opportunities", age=(31 - index) // 3, brand="qwen" if index % 3 else "llama")
+        if index % 8 == 0:
+            continue
+        start = -1 if index < 16 else 1
+        terminal = index % 9 == 0
+        values = {"source_status": "cancelled" if terminal else "unknown", "review_status": "rejected" if index % 11 == 0 else "confirmed"}
+        if section == "calendar":
+            event(post, start, 2, **values)
+            if index % 5 == 0:
+                extra = event(post, -2, 1, source_post=None, source_url="https://example.org/workshop")
+                EventEvidence.objects.create(event=extra, source_post=post, observed_title="Evidence", observed_at=NOW, evidence_hash=f"{index:064d}")
+        else:
+            Opportunity.objects.create(brand_id="qwen", source_post=post, sponsor_name="Qwen", opportunity_type_reference=OpportunityType.objects.get(code="free_credits"), action_type="apply", benefit_type="credits", first_seen_at=NOW, last_seen_at=NOW, opportunity_identity=post.pk, open_value=(NOW + timedelta(hours=start)).isoformat(), open_precision="datetime", close_value=(NOW + timedelta(hours=2)).isoformat(), close_precision="datetime", **values)
+    with transaction.atomic():
+        with connection.cursor() as sql:
+            sql.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        actual_cursor = reference_cursor = None
+        for _ in range(33):
+            actual = general_feed(section, brands=brands, limit=3, cursor=actual_cursor, as_of=NOW)
+            reference = complete_general_feed(section, brands=brands, limit=3, cursor=reference_cursor, as_of=NOW)
+            actual_cursor, reference_cursor = actual.pop("next_cursor"), reference.pop("next_cursor")
+            assert actual == reference
+            assert bool(actual_cursor) == bool(reference_cursor)
+            if not actual_cursor:
+                break
+            actual_state = signing.loads(actual_cursor, salt=CURSOR_SALT)
+            reference_state = signing.loads(reference_cursor, salt=CURSOR_SALT)
+            assert (actual_state["as_of"], actual_state["last"]) == (reference_state["as_of"], reference_state["last"])
+        else:
+            pytest.fail("Continuation failed to terminate")
+
+
+@pytest.mark.django_db(transaction=True)
+def test_dated_page_qualifies_rank_cohort_and_hydrates_only_selected_posts(monkeypatch):
+    from monitor import general_readers
+
+    monkeypatch.setattr(general_readers, "_TEMPORAL_CANDIDATE_BATCH_SIZE", 4)
+    for index in range(30):
+        event(classified_post(f"ranked-{index:02d}", "events", age=30 - index), 1, 2)
+    hydrated = []
+    original = general_readers.temporal_facts
+
+    def inspect(post_ids, *args, **kwargs):
+        hydrated.append(list(post_ids))
+        return original(post_ids, *args, **kwargs)
+
+    monkeypatch.setattr(general_readers, "temporal_facts", inspect)
+    with CaptureQueriesContext(connection) as queries:
+        page = general_feed("calendar", as_of=NOW, limit=3)
+    assert [item["id"] for item in page["items"]] == ["ranked-29", "ranked-28", "ranked-27"]
+    assert hydrated == [["ranked-29", "ranked-28", "ranked-27"]]
+    assert not any("WITH recent AS MATERIALIZED" in q["sql"] for q in queries)
+
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
@@ -188,7 +253,9 @@ def test_calendar_pages_bound_unknown_posts_without_losing_dated_items(monkeypat
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("section", ["calendar", "free"])
-def test_linked_candidate_lookup_drives_from_fact_ids_and_deduplicates(section):
+def test_linked_candidate_lookup_drives_from_fact_ids_and_deduplicates(section, monkeypatch):
+    from monitor import general_readers
+
     post = classified_post("linked-fact-first", "events" if section == "calendar" else "opportunities", age=1000)
     if section == "calendar":
         event(post, 2, 3)
@@ -202,13 +269,21 @@ def test_linked_candidate_lookup_drives_from_fact_ids_and_deduplicates(section):
                 last_seen_at=NOW, opportunity_identity=f"linked-{index}",
             )
     classified_post("unrelated-classification", "job_listings")
+    qualified = []
+    original = general_readers._qualify_temporal_cohort
+
+    def observe(post_ids, *args):
+        qualified.append(list(post_ids))
+        return original(post_ids, *args)
+
+    monkeypatch.setattr(general_readers, "_qualify_temporal_cohort", observe)
     with CaptureQueriesContext(connection) as queries:
         page = general_feed(section, as_of=NOW, limit=7)
     assert [item["id"] for item in page["items"]] == [post.pk]
-    linked_queries = [query["sql"] for query in queries if "WITH linked AS MATERIALIZED" in query["sql"]]
+    assert qualified == [[post.pk]]
+    linked_queries = [query["sql"] for query in queries if "WITH linked_ids(pk)" in query["sql"]]
     assert len(linked_queries) == 1
     assert "CROSS JOIN LATERAL" in linked_queries[0]
-    assert "SELECT DISTINCT source_post_id" in linked_queries[0]
 
 
 @pytest.mark.django_db(transaction=True)
@@ -413,3 +488,53 @@ def test_free_stuff_uses_its_own_opening_closing_and_excludes_closed_offers():
     items = general_feed("free", as_of=NOW)["items"]
     assert [item["id"] for item in items] == ["2500", "2501"]
     assert [item["timing"]["state"] for item in items] == ["open", "upcoming"]
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("change", ["parent_rejected", "source_reassigned", "deleted", "evidence_created"])
+def test_temporal_page_keeps_one_snapshot_when_links_change(monkeypatch, change):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import connections
+
+    from monitor import general_readers
+    from tests.general_helpers import complete_general_feed
+
+    first = classified_post("snapshot-first", "events", age=2)
+    second = classified_post("snapshot-second", "events", age=1)
+    record = event(first, 2, 3)
+    before = complete_general_feed("calendar", brands=["qwen"], as_of=NOW)
+    anchors = general_readers._temporal_anchors
+    changed = False
+
+    def write_change():
+        try:
+            if change == "parent_rejected":
+                Event.objects.filter(pk=record.pk).update(review_status="rejected")
+            elif change == "source_reassigned":
+                Event.objects.filter(pk=record.pk).update(source_post_id=second.pk)
+            elif change == "deleted":
+                Event.objects.filter(pk=record.pk).delete()
+            else:
+                EventEvidence.objects.create(
+                    event_id=record.pk, source_post=second, observed_title="New evidence",
+                    observed_at=NOW, evidence_hash="9" * 64,
+                )
+        finally:
+            connections.close_all()
+
+    def change_after_anchors(*args, **kwargs):
+        nonlocal changed
+        result = anchors(*args, **kwargs)
+        if not changed:
+            changed = True
+            with ThreadPoolExecutor(max_workers=1) as writer:
+                writer.submit(write_change).result(timeout=10)
+        return result
+
+    monkeypatch.setattr(general_readers, "_temporal_anchors", change_after_anchors)
+    during = general_feed("calendar", brands=["qwen"], as_of=NOW)
+    assert changed and during["items"] == before["items"]
+    after = general_feed("calendar", brands=["qwen"], as_of=NOW)
+    reference = complete_general_feed("calendar", brands=["qwen"], as_of=NOW)
+    assert after["items"] == reference["items"] != before["items"]

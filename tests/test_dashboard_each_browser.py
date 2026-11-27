@@ -314,6 +314,9 @@ EACH_CHART_STATE = """() => {
     tab: document.querySelector('[data-each-tab][aria-selected="true"]').dataset.eachTab,
     yPosition: y.options.position,
     yBorder: y.options.border.display,
+    yTicks: y.options.grid.drawTicks,
+    yGrid: y.options.grid.drawOnChartArea,
+    yLabels: y.ticks.map(t => t.label),
     gridDash: y.options.border.dash,
     yMax: chart.options.scales.y.max ?? null,
     tooltip: chart.options.plugins.tooltip.enabled !== false,
@@ -541,6 +544,9 @@ class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
                         self.assertTrue(page.locator('[data-each-bucket-note]').is_hidden())
                         self.assertEqual(state["yPosition"], "right")
                         self.assertIs(state["yBorder"], False)
+                        self.assertIs(state["yTicks"], False)
+                        self.assertIs(state["yGrid"], True)
+                        self.assertTrue(state["yLabels"])
                         self.assertEqual(state["gridDash"], [1, 3])
                         self.assertTrue(state["tooltip"], "the category tooltip stays")
                         for dataset in state["datasets"]:

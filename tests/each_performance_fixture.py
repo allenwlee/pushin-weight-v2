@@ -58,6 +58,11 @@ def seed_each_performance_orm(*, now=None):
         contract = json.loads((ROOT / "tests/fixtures/general_feed_contract.json").read_text())
         for post_id, category in contract["sections"].items():
             general_helpers.saved_commentary(general_helpers.classified_post(post_id, category))
+            # Exercise each panel's real continuation rather than a hidden More control.
+            for index in range(21):
+                general_helpers.saved_commentary(general_helpers.classified_post(
+                    f"general-perf-{category}-{index:02d}", category, age=index + 1,
+                ))
         general_helpers.saved_commentary(general_helpers.classified_post(
             contract["closed_job"], brand="claude",
         ))

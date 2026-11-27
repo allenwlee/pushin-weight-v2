@@ -1512,3 +1512,11 @@ msgstr "大手"
 
 msgid "Chatter updates are delayed. The latest available story is shown."
 msgstr "Chatterの更新が遅れています。現在は最新の公開記事を表示しています。"
+
+#: monitor/general_views.py
+msgid "General is temporarily unavailable. Please retry."
+msgstr "General を一時的に利用できません。もう一度お試しください。"
+
+#: monitor/general_views.py
+msgid "Retry"
+msgstr "再試行"

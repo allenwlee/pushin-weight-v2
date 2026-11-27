@@ -40,6 +40,9 @@ def candidate_args(mode="candidate", target=SOURCE):
 @pytest.fixture
 def runners(monkeypatch, tmp_path):
     calls = []
+    declaration = tmp_path / "tests/fixtures/performance_assurance/declaration.json"
+    declaration.parent.mkdir(parents=True)
+    declaration.write_text(json.dumps({"scenarios": []}))
     monkeypatch.setattr(gate, "ROOT", tmp_path)
     monkeypatch.setattr(gate, "EVIDENCE_PATH", tmp_path / "evidence.json")
     monkeypatch.setattr(gate, "EACH_EVIDENCE_PATH", tmp_path / "each-evidence.json")

@@ -42,6 +42,8 @@ def product_identity():
         ROOT / "pyproject.toml",
         ROOT / "uv.lock",
         ROOT / "monitor/general_readers.py",
+        ROOT / "monitor/general_budget.py",
+
         ROOT / "monitor/general_views.py",
         ROOT / "monitor/original_content.py",
         ROOT / "monitor/original_content_readers.py",

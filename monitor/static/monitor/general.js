@@ -42,8 +42,11 @@
     loading: 'Updating…', failed: 'Could not refresh. Previous results are still shown.', retry: 'Retry', min: 'min', hrs: 'hrs', days: 'days', live: 'Live: ends in', start: 'Starts in', recent: 'Just listed', fetched: 'Fetched', ago: 'ago', end: 'Live: end time unavailable', ended: 'Ended',
   };
   const panels = new Map();
+  const selectionKey = selection => JSON.stringify([
+    selection.locale, selection.weights, [...new URL(location.href).searchParams.getAll('brand')].sort(),
+  ]);
   for (const section of Object.keys(initial.feeds)) {
-    panels.set(section, {node: document.querySelector(`[data-panel="${section}"]`), feed: initial.feeds[section], sequence: 0, controller: null, pending: false, lastClockRefresh: 0});
+    panels.set(section, {node: document.querySelector(`[data-panel="${section}"]`), feed: initial.feeds[section], selection: selectionKey(initial.state), sequence: 0, controller: null, deadlineTimer: null, pending: false, failed: false, lastClockRefresh: 0});
   }
   function persist() {
     try {
@@ -173,25 +176,41 @@
       target.append(button);
     }
   }
+  function syncMore(panel) {
+    const button = panel.node.querySelector('[data-more]');
+    button.hidden = !panel.feed.next_cursor || panel.selection !== selectionKey(state);
+    button.disabled = panel.pending;
+  }
   async function load(section, more = false) {
     const panel = panels.get(section);
-    if (more && (panel.pending || !panel.feed.next_cursor)) return;
+    const selection = selectionKey(state);
+    if (more && (panel.pending || !panel.feed.next_cursor || panel.selection !== selection)) return;
     panel.controller?.abort();
+    clearTimeout(panel.deadlineTimer);
     const controller = new AbortController();
     panel.controller = controller;
     const sequence = ++panel.sequence;
     panel.pending = true;
+    panel.failed = false;
+    syncMore(panel);
     status(panel, copy.loading);
     panel.node.setAttribute('aria-busy', 'true');
     const target = pageUrl();
     target.pathname = '/general/feed/';
     target.searchParams.set('section', section);
     if (more) target.searchParams.set('cursor', panel.feed.next_cursor); else target.searchParams.delete('cursor');
+    let timedOut = false;
+    const deadlineTimer = setTimeout(() => {
+      if (sequence !== panel.sequence) return;
+      timedOut = true;
+      controller.abort();
+    }, 12000);
+    panel.deadlineTimer = deadlineTimer;
     try {
       const response = await fetch(target, {signal: controller.signal, headers: {Accept: 'application/json'}});
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
-      if (sequence !== panel.sequence) return;
+      if (sequence !== panel.sequence || selection !== selectionKey(state)) return;
       if (payload.section !== section || payload.locale !== state.locale || !Array.isArray(payload.items) || typeof payload.html !== 'string') throw new Error('Invalid feed');
       const cards = panel.node.querySelector('[data-cards]');
       const fragment = document.createElement('template');
@@ -207,13 +226,22 @@
         clockBase = Date.parse(payload.as_of); clockStart = performance.now();
       }
       panel.feed = {next_cursor: payload.next_cursor};
-      panel.node.querySelector('[data-more]').hidden = !payload.next_cursor;
+      panel.selection = selection;
       status(panel, '');
       updateTimes();
     } catch (error) {
-      if (sequence === panel.sequence && error.name !== 'AbortError') status(panel, copy.failed, () => load(section, more));
+      if (sequence === panel.sequence && (error.name !== 'AbortError' || timedOut)) {
+        panel.failed = true;
+        status(panel, copy.failed, () => load(section, more && panel.selection === selectionKey(state)));
+      }
     } finally {
-      if (sequence === panel.sequence) { panel.pending = false; panel.node.removeAttribute('aria-busy'); }
+      clearTimeout(deadlineTimer);
+      if (sequence === panel.sequence) {
+        panel.deadlineTimer = null;
+        panel.pending = false;
+        panel.node.removeAttribute('aria-busy');
+        syncMore(panel);
+      }
     }
   }
   document.querySelectorAll('[data-refresh]').forEach(button => button.addEventListener('click', () => load(button.dataset.refresh)));
@@ -261,7 +289,7 @@
         if (remaining <= 0) {
           text = copy.loading;
           label.classList.remove('is-live', 'is-upcoming');
-          if (!panel.pending && performance.now() - panel.lastClockRefresh > 15000) { panel.lastClockRefresh = performance.now(); load(section); }
+          if (!panel.pending && !panel.failed && performance.now() - panel.lastClockRefresh > 15000) { panel.lastClockRefresh = performance.now(); load(section); }
         } else {
           text = `${['live', 'open'].includes(stateName) ? copy.live : copy.start} ${duration(remaining)}`;
           label.style.setProperty('--blink-duration', `${Math.max(.7, Math.min(8, remaining / 1800))}s`);
@@ -286,7 +314,16 @@
   let timer = setInterval(updateTimes, 15000);
   window.addEventListener('pagehide', () => {
     clearInterval(timer);
-    for (const panel of panels.values()) panel.controller?.abort();
+    for (const panel of panels.values()) {
+      ++panel.sequence;
+      clearTimeout(panel.deadlineTimer);
+      panel.deadlineTimer = null;
+      panel.controller?.abort();
+      if (panel.pending) status(panel, '');
+      panel.pending = false;
+      panel.node.removeAttribute('aria-busy');
+      syncMore(panel);
+    }
   });
   window.addEventListener('pageshow', event => {
     if (!event.persisted) return;

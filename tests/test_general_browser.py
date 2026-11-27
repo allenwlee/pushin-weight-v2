@@ -42,6 +42,163 @@ class GeneralBrowserTests(StaticLiveServerTestCase):
             **({"executable_path": executable} if executable else {})
         )
 
+    def test_failed_weights_change_keeps_cards_without_reusing_old_cursor(self, playwright=None):
+        if playwright is None:
+            for index in range(23):
+                classified_post(f"weights-job-{index:02d}", age=index + 1)
+        with (nullcontext(playwright) if playwright else sync_playwright()) as pw:
+            browser = self.browser(pw)
+            try:
+                for locale in ("en", "ja", "zh_hans"):
+                    with self.subTest(locale=locale):
+                        page = browser.new_page(viewport={"width": 1440, "height": 900})
+                        requests = []
+                        page.on("request", lambda request, requests=requests: requests.append(request.url))
+                        page.goto(f"{self.live_server_url}/general/?lang={locale}&weights=open")
+                        jobs = page.locator('#jobs [data-post-id]')
+                        more = page.locator('#jobs [data-more]')
+                        expect(jobs).to_have_count(20)
+                        expect(more).to_be_visible()
+                        before = jobs.evaluate_all("nodes=>nodes.map(n=>n.dataset.postId)")
+
+                        def fail_jobs(route):
+                            if "section=jobs" in route.request.url and "weights=none" in route.request.url:
+                                route.fulfill(status=503, body="Unavailable")
+                            else:
+                                route.continue_()
+
+                        page.route("**/general/feed/**", fail_jobs)
+                        page.locator('.primary-settings [data-value="open"]').click()
+                        retry = page.locator('#jobs [data-feed-status] button')
+                        expect(retry).to_be_visible()
+                        self.assertEqual(jobs.evaluate_all("nodes=>nodes.map(n=>n.dataset.postId)"), before)
+                        expect(more).to_be_hidden()
+                        expect(page.locator('#calendar [data-post-id]')).to_have_count(0)
+                        expect(page.locator('[data-panel][aria-busy="true"]')).to_have_count(0)
+                        page.unroute("**/general/feed/**", fail_jobs)
+                        retry.click()
+                        expect(jobs).to_have_count(0)
+                        expect(more).to_be_hidden()
+                        self.assertFalse(any("weights=none" in url and "cursor=" in url for url in requests))
+                        page.locator('.primary-settings [data-value="open"]').click()
+                        expect(jobs).to_have_count(20)
+                        expect(more).to_be_visible()
+                        more.click()
+                        expect(jobs).to_have_count(24)
+                        self.assertEqual(len(set(jobs.evaluate_all("nodes=>nodes.map(n=>n.dataset.postId)"))), 24)
+                        expect(page.locator('[data-panel][aria-busy="true"]')).to_have_count(0)
+                        page.close()
+            finally:
+                browser.close()
+
+    def test_fragment_browser_deadline_finishes_pending_state_and_can_retry(self, playwright=None):
+        with (nullcontext(playwright) if playwright else sync_playwright()) as pw:
+            browser = self.browser(pw)
+            try:
+                page = browser.new_page()
+                page.goto(f"{self.live_server_url}/general/?lang=ja")
+                page.clock.install()
+                # Exercise the real endpoint, then hold the first response until
+                # its signal aborts. A suspended Playwright route survives the
+                # browser abort and leaves an unfinished handler at teardown.
+                page.evaluate("""() => {
+                  const fetch = window.fetch;
+                  let held = false;
+                  window.__deadlineRequestReceived = false;
+                  window.fetch = async (url, options) => {
+                    const response = await fetch(url, options);
+                    if (held || !String(url).includes('/general/feed/')) return response;
+                    held = true;
+                    window.__deadlineRequestReceived = true;
+                    return new Promise((resolve, reject) => {
+                      const abort = () => reject(new DOMException('Aborted', 'AbortError'));
+                      if (options.signal.aborted) abort();
+                      else options.signal.addEventListener('abort', abort, {once: true});
+                    });
+                  };
+                }""")
+                page.locator('[data-refresh="jobs"]').click()
+                expect(page.locator('#jobs')).to_have_attribute('aria-busy', 'true')
+                page.wait_for_function("window.__deadlineRequestReceived")
+                page.clock.fast_forward(12001)
+                retry = page.locator('#jobs [data-feed-status] button')
+                expect(retry).to_have_text('再試行')
+                expect(page.locator('#jobs')).not_to_have_attribute('aria-busy', 'true')
+                expect(page.locator('#jobs [data-post-id="6102"]')).to_be_visible()
+                retry.click()
+                expect(page.locator('#jobs [data-feed-status]')).to_be_hidden()
+            finally:
+                browser.close()
+
+    def test_failed_clock_refresh_waits_for_manual_retry(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+        now = timezone.now()
+        Event.objects.create(
+            brand_id="qwen", source_post_id="6100", title="Ending workshop",
+            organizer_name="Qwen", first_seen_at=now, last_seen_at=now,
+            event_identity="browser-clock-failure", source_status="live",
+            start_value=(now - timedelta(hours=1)).isoformat(), start_precision="datetime",
+            end_value=(now + timedelta(seconds=30)).isoformat(), end_precision="datetime",
+        )
+        with sync_playwright() as pw:
+            browser = self.browser(pw)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.goto(f"{self.live_server_url}/general/?lang=en")
+                requests = []
+                def fail(route):
+                    requests.append(route.request.url)
+                    route.fulfill(status=503, body="Unavailable")
+                page.route("**/general/feed/**", fail)
+                page.clock.fast_forward(31000)
+                retry = page.locator('#calendar [data-feed-status] button')
+                expect(retry).to_have_text("Retry")
+                self.assertEqual(len(requests), 1)
+                page.clock.fast_forward(60000)
+                self.assertEqual(len(requests), 1)
+                expect(page.locator('#calendar [data-post-id="6100"]')).to_be_visible()
+                retry.click()
+                expect(retry).to_have_text("Retry")
+                self.assertEqual(len(requests), 2)
+            finally:
+                browser.close()
+
+    def test_each_panel_refreshes_and_pages_in_all_locales(self):
+        for category in CONTRACT["sections"].values():
+            for index in range(21):
+                saved_commentary(classified_post(f"pagination-{category}-{index:02d}", category, age=index + 1))
+        with sync_playwright() as pw:
+            browser = self.browser(pw)
+            try:
+                for locale in ("en", "ja", "zh_hans"):
+                    page = browser.new_page()
+                    page.goto(f"{self.live_server_url}/general/?lang={locale}")
+                    for section in ("calendar", "free", "jobs", "moving"):
+                        cards = page.locator(f'#{section} [data-post-id]')
+                        expect(cards).to_have_count(20)
+                        with page.expect_response(lambda response, section=section: "/general/feed/" in response.url and f"section={section}" in response.url) as response:
+                            page.locator(f'[data-refresh="{section}"]').click()
+                        self.assertEqual(response.value.status, 200)
+                        expect(page.locator(f'#{section}')).not_to_have_attribute("aria-busy", "true")
+                        expect(cards).to_have_count(20)
+                        with page.expect_response(lambda response, section=section: "/general/feed/" in response.url and f"section={section}" in response.url and "cursor=" in response.url) as response:
+                            page.locator(f'[data-more="{section}"]').click()
+                        self.assertEqual(response.value.status, 200)
+                        expect(cards).to_have_count(22)
+                        self.assertEqual(len(set(cards.evaluate_all("nodes=>nodes.map(n=>n.dataset.postId)"))), 22)
+                    page.locator('.primary-settings [data-value="open"]').click()
+                    for section in ("calendar", "free", "jobs", "moving"):
+                        expect(page.locator(f'#{section} [data-post-id]')).to_have_count(0)
+                    page.locator('.primary-settings [data-value="open"]').click()
+                    for section in ("calendar", "free", "jobs", "moving"):
+                        expect(page.locator(f'#{section} [data-post-id]')).to_have_count(20)
+                    page.close()
+            finally:
+                browser.close()
+
     def test_general_style_palette_lockup_fonts_and_pill_logos(self):
         """Owner item 41: human view on a gray page; agent palette kept; locked lockup."""
         # A brand with no logo file keeps a text-only pill.
@@ -494,6 +651,8 @@ class GeneralBrowserTests(StaticLiveServerTestCase):
             browser.close()
 
     def test_declared_controls_and_races_against_the_real_page(self):
+        for index in range(23):
+            classified_post(f"weights-job-{index:02d}", age=index + 1)
         declaration = load_general_declaration()
         results = []
         defaults = {
@@ -621,7 +780,11 @@ class GeneralBrowserTests(StaticLiveServerTestCase):
                             pw
                         )
                     elif parts[0] == "invariant":
-                        if parts[1] == "closed-weights-unavailable":
+                        if parts[1] == "general-pagination-retry-selection":
+                            self.test_failed_weights_change_keeps_cards_without_reusing_old_cursor(pw)
+                        elif parts[1] == "general-fragment-deadline":
+                            self.test_fragment_browser_deadline_finishes_pending_state_and_can_retry(pw)
+                        elif parts[1] == "closed-weights-unavailable":
                             before_url = page.url
                             page.locator(
                                 '.primary-settings [data-value="closed"]'

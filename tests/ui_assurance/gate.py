@@ -37,6 +37,7 @@ FOCUSED_TESTS = [
     "tests/test_graphics_readers.py::test_story_video_keeps_poster_without_prefetching",
     "tests/test_content_detail.py",
     "tests/test_general_browser.py",
+    "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_desktop_pulse_brand_columns_and_right_axis_after_refresh",
     "tests/test_pulse_browser.py",
     "tests/test_pulse_pipeline_browser.py",
     "tests/test_pulse_readers.py::test_historical_product_restores_latest_schema",
@@ -164,6 +165,21 @@ def candidate_declaration(root: Path, revision: str) -> str:
     (root / path).parent.mkdir(parents=True, exist_ok=True)
     (root / path).write_text(json.dumps(data, indent=2) + "\n")
     return str(path)
+
+
+def require_general_performance_requests(evidence, declaration):
+    """Zero-request interactions cannot satisfy General's performance workload."""
+    declared = {row["id"]: row for row in declaration["scenarios"] if row["id"].startswith("general-")}
+    observed = {row["scenario_id"]: row for row in evidence.get("scenarios", [])}
+    for key, scenario in declared.items():
+        row = observed.get(key)
+        if row is None:
+            raise RuntimeError(f"Missing General performance scenario: {key}")
+        requests = sum(item["requests"] for item in row.get("network_observations", [])
+                       if item["path"].split("?", 1)[0] == "/general/feed/")
+        # Four refreshes, four continuations and two four-panel selection changes.
+        if requests < 16 * scenario["runs"]:
+            raise RuntimeError(f"General performance omitted required data requests: {key}")
 
 
 def _require_candidate_performance_args(
@@ -381,6 +397,11 @@ def main(argv: list[str] | None = None) -> int:
                 raise RuntimeError(
                     "sealed performance evidence does not match the measured revision"
                 )
+            require_general_performance_requests(
+                performance_result["payload"]["evidence"],
+                json.loads((ROOT / args.performance_declaration).read_text()),
+            )
+
         print(
             json.dumps(
                 {

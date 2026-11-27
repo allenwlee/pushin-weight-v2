@@ -275,3 +275,26 @@ def test_each_candidate_preserves_four_workloads_and_measures_rich_each_legend()
             {"path": "/feed/", "max_requests": 0, "max_bytes": 0},
             {"path": "/chart.html", "max_requests": 0, "max_bytes": 0},
         ]
+
+
+def test_general_performance_requires_real_refresh_more_and_selection_requests():
+    import pytest
+
+    from tests.ui_assurance.gate import require_general_performance_requests
+    declaration = _load("declaration.general-candidate.json")
+    evidence = {"scenarios": []}
+    for scenario in declaration["scenarios"][2:]:
+        targets = [action.get("target") for action in scenario["actions"]]
+        for panel in ("calendar", "free", "jobs", "moving"):
+            assert f'[data-refresh="{panel}"]' in targets
+            assert f'[data-more="{panel}"]' in targets
+        assert targets.count('.primary-settings [data-value="open"]') == 2
+        evidence["scenarios"].append({"scenario_id": scenario["id"], "network_observations": [
+            {"path": "/general/feed/?section=jobs", "requests": 16 * scenario["runs"]},
+        ]})
+    require_general_performance_requests(evidence, declaration)
+    evidence["scenarios"][0]["network_observations"][0]["requests"] = 0
+    with pytest.raises(RuntimeError, match="omitted required data requests"):
+        require_general_performance_requests(evidence, declaration)
+    with pytest.raises(RuntimeError, match="Missing General performance scenario"):
+        require_general_performance_requests({}, declaration)

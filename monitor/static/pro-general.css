@@ -123,6 +123,15 @@ body.pw-v20.pw-general .pw-panel-icon { width: 20px; height: 20px; flex: 0 0 20p
 body.pw-v20.pw-general .pulse-bar-wrap { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; margin-top: 14px; padding: 4px 14px; }
 body.pw-v20.pw-general .pulse-bar-wrap .pulse-state { grid-column: 1; margin: 0 0 6px; }
 body.pw-v20.pw-general .pulse-bar { gap: 6px; padding: 8px 0 !important; scrollbar-width: thin; scrollbar-color: #d5dceb transparent; }
+/* Non-auto standard properties override the existing six-pixel WebKit bar. */
+@media (min-width: 900px) {
+  @supports selector(::-webkit-scrollbar) {
+    body.pw-v20.pw-general.desktop-shell .pulse-bar {
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
+  }
+}
 body.pw-v20.pw-general.desktop-shell .pulse-bar::-webkit-scrollbar-track { background: transparent; }
 body.pw-v20.pw-general.desktop-shell .pulse-bar::-webkit-scrollbar-thumb { background: #d5dceb; }
 body.pw-v20.pw-general .pulse-chip,

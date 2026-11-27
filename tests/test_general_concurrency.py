@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event, Lock, get_ident
 
 import pytest
-from django.db import DatabaseError, connection, connections
+from django.db import connection, connections
 from django.utils import translation
 
 from monitor import general_views
@@ -58,16 +58,16 @@ def test_simultaneous_requests_share_the_worker_reader_limit(monkeypatch):
     slots = general_views._GENERAL_FEED_SLOTS
 
     class TrackedSlots:
-        def __enter__(self):
+        def acquire(self, *args, **kwargs):
             nonlocal attempts
             with lock:
                 attempts += 1
                 if attempts == 3:
                     third_attempt.set()
-            return slots.__enter__()
+            return slots.acquire(*args, **kwargs)
 
-        def __exit__(self, *args):
-            return slots.__exit__(*args)
+        def release(self):
+            return slots.release()
 
     def fake_feed(section, **options):
         nonlocal active
@@ -204,9 +204,9 @@ def test_reader_statement_deadline_cancels_a_stalled_query(monkeypatch):
             cursor.execute("SELECT pg_sleep(1)")
         return section
 
-    monkeypatch.setattr(general_views, "_GENERAL_FEED_STATEMENT_TIMEOUT_MS", 100)
+    monkeypatch.setattr(general_views, "_GENERAL_READ_BUDGET_SECONDS", 0.1)
     monkeypatch.setattr(general_views, "general_feed", stalled_feed)
-    with pytest.raises(DatabaseError, match="statement timeout"):
+    with pytest.raises(general_views.GeneralReadTimeout, match="deadline"):
         general_views._general_panel_feeds(locale="en", brands=[], as_of=NOW)
     slots = general_views._GENERAL_FEED_SLOTS
     assert slots.acquire(timeout=10)
@@ -254,3 +254,93 @@ def test_manual_transaction_keeps_reads_on_its_connection(monkeypatch):
     finally:
         connection.rollback()
         connection.set_autocommit(True)
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_fragment_admission_uses_same_slots_and_returns_retryable_failure(client, monkeypatch):
+    monkeypatch.setattr(general_views, "_GENERAL_READ_BUDGET_SECONDS", 0.05, raising=False)
+    slots = general_views._GENERAL_FEED_SLOTS
+    assert slots.acquire(timeout=1)
+    assert slots.acquire(timeout=1)
+    try:
+        response = client.get("/general/feed/?section=jobs&lang=en", secure=True)
+    finally:
+        slots.release()
+        slots.release()
+    assert response.status_code == 503
+    assert response["Retry-After"] == "1"
+    assert "private" in response["Cache-Control"]
+    assert "no-store" in response["Cache-Control"]
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_fragment_timeout_preserves_caller_transaction_and_connection_settings(client, monkeypatch):
+    def stalled_feed(section, **options):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_sleep(0.2)")
+        return {"section": section, "locale": options["locale"], "as_of": NOW.isoformat(), "items": [], "next_cursor": None}
+
+    monkeypatch.setattr(general_views, "_GENERAL_READ_BUDGET_SECONDS", 0.05, raising=False)
+    monkeypatch.setattr(general_views, "general_feed", stalled_feed)
+    original = connection.connection
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW statement_timeout")
+        original_timeout = cursor.fetchone()[0]
+    response = client.get("/general/feed/?section=jobs&lang=en", secure=True)
+    assert response.status_code == 503
+    assert connection.connection is original
+    assert connection.in_atomic_block and not connection.needs_rollback
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW statement_timeout")
+        assert cursor.fetchone()[0] == original_timeout
+        cursor.execute("SELECT 1")
+        assert cursor.fetchone() == (1,)
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_initial_selection_uses_the_request_deadline(client, monkeypatch):
+    select = general_views.selection
+
+    def slow_selection(request):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_sleep(0.2)")
+        return select(request)
+
+    monkeypatch.setattr(general_views, "selection", slow_selection)
+    monkeypatch.setattr(general_views, "_GENERAL_READ_BUDGET_SECONDS", 0.05, raising=False)
+    response = client.get("/general/?lang=ja", secure=True)
+    assert response.status_code == 503
+    assert response["Retry-After"] == "1"
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_request_deadline_is_cumulative_and_restores_connection_timeout():
+    from monitor.general_budget import GeneralReadBudget, GeneralReadTimeout
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW statement_timeout")
+        original = cursor.fetchone()[0]
+    with pytest.raises(GeneralReadTimeout), GeneralReadBudget(0.12).on_connection(), connection.cursor() as cursor:
+        cursor.execute("SELECT pg_sleep(0.08)")
+        cursor.execute("SELECT pg_sleep(0.08)")
+    assert connection.get_autocommit() and not connection.needs_rollback
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW statement_timeout")
+        assert cursor.fetchone()[0] == original
+        cursor.execute("SELECT 1")
+        assert cursor.fetchone() == (1,)
+
+
+@pytest.mark.parametrize("locale,expected", [("en", "Retry"), ("ja", "再試行"), ("zh_hans", "重试")])
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_expired_initial_page_returns_localized_retry(client, monkeypatch, locale, expected):
+    monkeypatch.setattr(general_views, "_GENERAL_READ_BUDGET_SECONDS", 0)
+    response = client.get(f"/general/?lang={locale}", secure=True)
+    assert response.status_code == 503
+    assert expected in response.content.decode()
+    assert response["Retry-After"] == "1"
+    assert "private" in response["Cache-Control"] and "no-store" in response["Cache-Control"]

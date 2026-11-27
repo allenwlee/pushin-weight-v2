@@ -330,7 +330,7 @@
               color: '#687589', precision: 0,
               callback: mode === 'percent' ? function (value) { return value + '%'; } : undefined
             },
-            grid: { color: '#dfe4ec' },
+            grid: { color: '#dfe4ec', drawTicks: false },
             border: { display: false, dash: [1, 3] }
           }
         }

@@ -6,7 +6,9 @@ current classification; the identity of a public Post survives feed turnover.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from hashlib import sha256
 from urllib.parse import quote, urlsplit
 
 from django.core import signing
@@ -42,6 +44,7 @@ from core.models import (
     PostBrandSignal,
     PostSynthesisArtifact,
 )
+from monitor.general_budget import check_read_deadline
 from monitor.post_artifacts import SUPPORTED_CONTENT_LOCALES, read_post_content_many
 
 SECTIONS = {
@@ -168,12 +171,22 @@ def post_documents(posts, *, locale="en", section=None):
     return documents
 
 
+def _filter_fingerprint(filters):
+    return sha256(json.dumps(filters, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def _traversal(section, locale, brands, cursor, as_of):
     filters = {"section": section, "locale": locale, "brands": brands, "version": 1}
     if cursor:
         try:
             payload = signing.loads(cursor, salt=CURSOR_SALT, max_age=86400)
-            if payload["filters"] != filters:
+            if not isinstance(payload, dict):
+                raise TypeError("Invalid continuation")
+            if payload.get("version") == 2:
+                matching = payload.get("filters_sha256") == _filter_fingerprint(filters)
+            else:
+                matching = "version" not in payload and payload.get("filters") == filters
+            if not matching:
                 raise ValueError("Continuation belongs to different filters")
             at = datetime.fromisoformat(payload["as_of"])
             last = payload["last"]
@@ -220,19 +233,7 @@ def temporal_facts(post_ids, section, *, as_of):
         )
     for row in records:
         is_event = section == "calendar"
-        start = {
-            "value": row.start_value if is_event else row.open_value,
-            "precision": row.start_precision if is_event else row.open_precision,
-        }
-        end = {
-            "value": row.end_value if is_event else row.close_value,
-            "precision": row.end_precision if is_event else row.close_precision,
-        }
-        state = (
-            event_lifecycle(row, as_of=as_of)
-            if is_event
-            else opportunity_lifecycle(row, as_of=as_of)
-        )
+        timing = _temporal_timing_fact(row, section, as_of=as_of)
         fact = {
             "kind": "event" if is_event else "opportunity",
             "id": row.pk,
@@ -241,9 +242,7 @@ def temporal_facts(post_ids, section, *, as_of):
             if is_event
             else row.benefit_text or row.opportunity_type_reference.code.replace("_", " "),
             "organization": row.organizer_name if is_event else row.sponsor_name,
-            "start": start,
-            "end": end,
-            "state": state,
+            **timing,
             "timezone": _reported_source_timezone(row),
             "schedule": row.source_schedule_text
             if is_event
@@ -393,109 +392,192 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
     return {pk: list(rows.values()) for pk, rows in result.items()}
 
 
-def _bounded_temporal_candidates(section, signals, brands, at, last, limit):
-    """Keep linked posts plus a bounded, ordered page of posts without facts.
+def _temporal_timing_fact(row, section, *, as_of):
+    is_event = section == "calendar"
+    return {
+        "id": row.pk,
+        "start": {
+            "value": row.start_value if is_event else row.open_value,
+            "precision": row.start_precision if is_event else row.open_precision,
+        },
+        "end": {
+            "value": row.end_value if is_event else row.close_value,
+            "precision": row.end_precision if is_event else row.close_precision,
+        },
+        "state": event_lifecycle(row, as_of=as_of) if is_event else opportunity_lifecycle(row, as_of=as_of),
+    }
 
-    If the recent window does not contain a full page, fall back to the
-    original complete reader: a rare brand may have older matches.
-    """
+
+_TEMPORAL_CANDIDATE_BATCH_SIZE = 512
+
+
+def _temporal_anchors(section, at):
+    """Rank narrow facts without reading Post content or qualification state."""
+    model = Event if section == "calendar" else Opportunity
+    fields = ("start_value", "start_precision", "end_value", "end_precision") if section == "calendar" else ("open_value", "open_precision", "close_value", "close_precision")
+    facts, anchors = {}, {}
+
+    def link(post_id, fact):
+        if post_id is None or fact["state"] in {"past", "closed", "cancelled"}:
+            return
+        previous = anchors.get(post_id)
+        if previous is None or _fact_order(fact) < _fact_order(previous):
+            anchors[post_id] = fact
+
+    rows = model.objects.exclude(review_status="rejected").only("id", "source_post_id", "source_status", *fields).order_by("id")
+    for row in rows.iterator(chunk_size=_TEMPORAL_CANDIDATE_BATCH_SIZE):
+        check_read_deadline()
+        fact = _temporal_timing_fact(row, section, as_of=at)
+        facts[row.pk] = fact
+        link(row.source_post_id, fact)
+    if section == "calendar":
+        evidence = EventEvidence.objects.exclude(event__review_status="rejected").order_by().values_list("event_id", "source_post_id")
+        for event_id, post_id in evidence.iterator(chunk_size=_TEMPORAL_CANDIDATE_BATCH_SIZE):
+            check_read_deadline()
+            link(post_id, facts[event_id])
+    return anchors
+
+
+def _temporal_link_queries(section):
+    if section == "calendar":
+        return [Event.objects.exclude(review_status="rejected"), EventEvidence.objects.exclude(event__review_status="rejected")]
+    return [Opportunity.objects.exclude(review_status="rejected")]
+
+
+def _qualify_temporal_cohort(post_ids, public_query, signal_query, at, last, limit):
+    """Finish a rank tie across batches before choosing its global top page."""
+    public_sql, public_params = public_query
+    signal_sql, signal_params = signal_query
+    cursor_filter, cursor_params = "", []
+    if last:
+        last_fetch = datetime.fromtimestamp(-last[2], tz=UTC)
+        cursor_filter = ' AND (p.fetched_at < %s OR (p.fetched_at = %s AND p.pk COLLATE "C" > %s COLLATE "C"))'
+        cursor_params = [last_fetch, last_fetch, last[3]]
+    selected = []
+    for offset in range(0, len(post_ids), _TEMPORAL_CANDIDATE_BATCH_SIZE):
+        check_read_deadline()
+        batch = post_ids[offset:offset + _TEMPORAL_CANDIDATE_BATCH_SIZE]
+        values = ",".join(["(%s)"] * len(batch))
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                WITH linked_ids(pk) AS (VALUES {values})
+                SELECT r.pk, r.fetched_at FROM (
+                    SELECT p.pk, p.fetched_at FROM linked_ids ranked
+                    CROSS JOIN LATERAL (
+                        SELECT p.pk, p.fetched_at FROM ({public_sql}) p
+                        WHERE p.pk=ranked.pk AND p.fetched_at <= %s {cursor_filter}
+                        OFFSET 0
+                    ) p
+                    ORDER BY p.fetched_at DESC, p.pk COLLATE "C" OFFSET 0
+                ) r
+                WHERE EXISTS (SELECT 1 FROM ({signal_sql}) matched
+                              WHERE matched.post_id=r.pk OFFSET 0)
+                ORDER BY r.fetched_at DESC, r.pk COLLATE "C" LIMIT %s
+                """,
+                [*batch, *public_params, at, *cursor_params, *signal_params, limit + 1],
+            )
+            selected.extend(cursor.fetchall())
+        selected.sort(key=lambda row: (-row[1].timestamp(), str(row[0])))
+        del selected[limit + 1:]
+    return dict(selected)
+
+
+def _unlinked_temporal_candidates(section, signals, public_query, signal_query, at, last, limit, brands):
+    """Bound the common recent case and complete sparse selections exactly."""
+    public_sql, public_params = public_query
+    signal_sql, signal_params = signal_query
+    params = [*public_params, at]
+    cursor_filter = ""
+    if last and last[:2] == [2, 0]:
+        last_fetch = datetime.fromtimestamp(-last[2], tz=UTC)
+        cursor_filter = ' AND (p.fetched_at < %s OR (p.fetched_at = %s AND p.pk COLLATE "C" > %s COLLATE "C"))'
+        params += [last_fetch, last_fetch, last[3]]
+    recent_limit = 5000
+    params.append(recent_limit)
+    no_facts = []
+    links = []
+    for query in _temporal_link_queries(section):
+        posts = query.filter(source_post_id__isnull=False).order_by().values("source_post_id")
+        links.append(posts)
+        sql, values = posts.query.sql_with_params()
+        no_facts.append(f"r.pk NOT IN ({sql})")
+        params.extend(values)
+    params.extend(signal_params)
+    params.append(limit + 1)
+    rows = None
+    if brands is None or len(brands) > 2:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+            WITH recent AS MATERIALIZED (
+                SELECT p.pk, p.fetched_at FROM ({public_sql}) p
+                WHERE p.fetched_at <= %s {cursor_filter}
+                ORDER BY p.fetched_at DESC, p.pk COLLATE "C" LIMIT %s
+            ), window_size AS (SELECT count(*) AS scanned FROM recent)
+            SELECT matching.pk, matching.fetched_at, window_size.scanned
+            FROM window_size LEFT JOIN LATERAL (
+                SELECT r.pk, r.fetched_at FROM recent r
+                WHERE {' AND '.join(no_facts)} AND EXISTS (
+                    SELECT 1 FROM ({signal_sql}) matched WHERE matched.post_id=r.pk OFFSET 0
+                )
+                ORDER BY r.fetched_at DESC, r.pk COLLATE "C" LIMIT %s
+            ) matching ON true
+                """, params,
+            )
+            rows = cursor.fetchall()
+    if rows is not None:
+        unknown = [(pk, fetched) for pk, fetched, _ in rows if pk is not None]
+        if len(unknown) > limit or rows[0][2] < recent_limit:
+            return dict(unknown)
+    eligible = public_posts().filter(pk__in=signals.values("post_id"), fetched_at__lte=at).annotate(_sort_id=Collate("tweet_id", "C"))
+    for posts in links:
+        eligible = eligible.exclude(pk__in=posts)
+    if last and last[:2] == [2, 0]:
+        eligible = eligible.filter(Q(fetched_at__lt=last_fetch) | Q(fetched_at=last_fetch, _sort_id__gt=last[3]))
+    return dict(eligible.order_by("-fetched_at", "_sort_id").values_list("pk", "fetched_at")[:limit + 1])
+
+
+def _bounded_temporal_candidates(section, signals, brands, at, last, limit):
+    """Qualify ordered fact cohorts before hydrating only the selected cards."""
     if connection.vendor != "postgresql":
         return None
     with connection.cursor() as cursor:
         cursor.execute("SHOW transaction_isolation")
         if cursor.fetchone()[0] not in {"repeatable read", "serializable"}:
-            # A caller-owned READ COMMITTED transaction cannot keep the
-            # linked and unlinked queries on the same snapshot.
             return None
     if brands == []:
-        return {}, set()
-    recent_limit = 5000
+        return {}, {}
+    if last and (len(last) != 4 or last[0] not in (0, 1, 2)):
+        return None
     try:
-        public_sql, public_params = public_posts().order_by().values("pk", "fetched_at").query.sql_with_params()
-        signal_sql, signal_params = signals.order_by().values("post_id").query.sql_with_params()
+        public_query = public_posts().order_by().values("pk", "fetched_at").query.sql_with_params()
+        signal_query = signals.order_by().values("post_id").query.sql_with_params()
     except EmptyResultSet:
-        return {}, set()
-    params = [*public_params, at]
-    cursor_filter = ""
-    if last and len(last) == 4 and last[0] == 2 and last[1] == 0:
-        try:
-            last_fetch = datetime.fromtimestamp(-last[2], tz=UTC)
-        except (ValueError, OverflowError, TypeError):
-            return None
-        cursor_filter = (
-            ' AND p.fetched_at <= %s AND (p.fetched_at < %s OR (p.fetched_at = %s AND p.pk COLLATE "C" > %s COLLATE "C"))'
-        )
-        params += [last_fetch, last_fetch, last_fetch, last[3]]
-    elif last and (len(last) != 4 or last[0] not in (0, 1, 2)):
-        return None
-
-    if section == "calendar":
-        link_queries = [
-            Event.objects.exclude(review_status="rejected"),
-            EventEvidence.objects.exclude(event__review_status="rejected"),
-        ]
-    else:
-        link_queries = [Opportunity.objects.exclude(review_status="rejected")]
-    linked_queries = []
-    linked_params = []
-    no_facts = []
-    params.append(recent_limit)
-    for link_query in link_queries:
-        posts = link_query.filter(source_post_id__isnull=False).order_by().values("source_post_id")
-        link_sql, link_params = posts.query.sql_with_params()
-        linked_queries.append(link_sql)
-        linked_params.extend(link_params)
-        no_facts.append(f"r.pk NOT IN ({link_sql})")
-        params.extend(link_params)
-    params.extend(signal_params)
-    params.append(limit + 1)
-    query = f"""
-        WITH recent AS MATERIALIZED (
-            SELECT p.pk, p.fetched_at FROM ({public_sql}) p
-            WHERE p.fetched_at <= %s {cursor_filter}
-            ORDER BY p.fetched_at DESC, p.pk COLLATE "C" LIMIT %s
-        ), window_size AS (SELECT count(*) AS scanned FROM recent)
-        SELECT matching.pk, matching.fetched_at, window_size.scanned
-        FROM window_size LEFT JOIN LATERAL (
-            SELECT r.pk, r.fetched_at FROM recent r
-            WHERE {' AND '.join(no_facts)} AND EXISTS (
-                SELECT 1 FROM ({signal_sql}) matched WHERE matched.post_id=r.pk OFFSET 0
-            )
-            ORDER BY r.fetched_at DESC, r.pk COLLATE "C" LIMIT %s
-        ) matching ON true
-    """
-    with connection.cursor() as cursor:
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-    unknown = [(pk, fetched) for pk, fetched, _ in rows if pk is not None]
-    scanned = rows[0][2]
-    if len(unknown) <= limit and scanned == recent_limit:
-        return None
-    # Drive the lookup from the comparatively small set of linked fact IDs.
-    # A single ORM IN/OR expression can make PostgreSQL scan the complete
-    # classified-post set first, even though only a few posts have dates.
-    linked_sql = " UNION ALL ".join(linked_queries)
-    with connection.cursor() as cursor:
-        cursor.execute(
-            f"""
-            WITH linked AS MATERIALIZED (
-                SELECT DISTINCT source_post_id FROM ({linked_sql}) linked_sources
-            )
-            SELECT p.pk, p.fetched_at FROM linked l
-            CROSS JOIN LATERAL (
-                SELECT p.pk, p.fetched_at FROM ({public_sql}) p
-                WHERE p.pk=l.source_post_id AND p.fetched_at <= %s
-                  AND EXISTS (SELECT 1 FROM ({signal_sql}) matched
-                              WHERE matched.post_id=p.pk OFFSET 0)
-                OFFSET 0
-            ) p
-            """,
-            [*linked_params, *public_params, at, *signal_params],
-        )
-        candidates = dict(cursor.fetchall())
-    linked_ids = set(candidates)
-    candidates.update(unknown)
-    return candidates, linked_ids
+        return {}, {}
+    anchors = _temporal_anchors(section, at)
+    cohorts = {}
+    for post_id, anchor in anchors.items():
+        cohorts.setdefault(_fact_order(anchor)[:2], []).append(post_id)
+    candidates, facts, ranked = {}, {}, []
+    for prefix, post_ids in sorted(cohorts.items()):
+        check_read_deadline()
+        if last and list(prefix) < last[:2]:
+            continue
+        matched = _qualify_temporal_cohort(post_ids, public_query, signal_query, at, last if last and list(prefix) == last[:2] else None, limit)
+        for pk, fetched in matched.items():
+            candidates[pk], facts[pk] = fetched, [anchors[pk]]
+            ranked.append(([*prefix, -fetched.timestamp(), str(pk)], pk))
+        if prefix[0] < 2 and len(ranked) > limit:
+            break
+    if len(ranked) <= limit or (ranked and ranked[-1][0][0] == 2):
+        unknown = _unlinked_temporal_candidates(section, signals, public_query, signal_query, at, last, limit, brands)
+        for pk, fetched in unknown.items():
+            candidates[pk], facts[pk] = fetched, []
+            ranked.append(([2, 0, -fetched.timestamp(), str(pk)], pk))
+    ranked.sort()
+    selected = [pk for _, pk in ranked[:limit + 1]]
+    return {pk: candidates[pk] for pk in selected}, {pk: facts[pk] for pk in selected}
 
 
 def _recent_classified_candidates(signals, brands, at, last, limit):
@@ -559,7 +641,7 @@ def _general_feed(
     )
     recent_candidates = (
         _recent_classified_candidates(signals, brands, at, last, limit)
-        if section in {"jobs", "moving"} else None
+        if section == "moving" else None
     )
     if recent_candidates is not None:
         candidates = recent_candidates
@@ -581,14 +663,12 @@ def _general_feed(
         candidates = dict(eligible.values_list("pk", "fetched_at"))
         fact_ids = list(candidates)
     else:
-        candidates, fact_ids = bounded
-    facts = (
+        candidates, _ = bounded
+    facts = bounded[1] if bounded is not None else (
         temporal_facts(list(fact_ids), section, as_of=at)
         if section in {"calendar", "free"}
         else {}
     )
-    if bounded is not None:
-        facts.update({pk: [] for pk in candidates if pk not in facts})
     timing = {pk: timing_anchor(rows) for pk, rows in facts.items()}
     ordered = []
     for pk, fetched in candidates.items():
@@ -606,6 +686,8 @@ def _general_feed(
     if last is not None:
         ordered = [(key, pk) for key, pk in ordered if key > last]
     page = ordered[:limit]
+    if bounded is not None:
+        facts = temporal_facts([pk for _, pk in page], section, as_of=at)
     posts = list(public_posts().filter(pk__in=[pk for _, pk in page]))
     documents = post_documents(posts, locale=locale, section=section)
     if section in {"jobs", "moving"}:
@@ -618,7 +700,10 @@ def _general_feed(
     next_cursor = None
     if len(ordered) > limit:
         next_cursor = signing.dumps(
-            {"filters": filters, "as_of": at.isoformat(), "last": page[-1][0]},
+            {
+                "version": 2, "filters_sha256": _filter_fingerprint(filters),
+                "as_of": at.isoformat(), "last": page[-1][0],
+            },
             salt=CURSOR_SALT,
             compress=True,
         )
