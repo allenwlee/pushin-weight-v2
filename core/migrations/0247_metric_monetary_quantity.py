@@ -10,7 +10,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies: ClassVar = [
-        ("core", "0245_home_sentiment_recent_boundary"),
+        ("core", "0246_home_classification_masks"),
     ]
 
     operations: ClassVar = [

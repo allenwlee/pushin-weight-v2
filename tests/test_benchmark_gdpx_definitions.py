@@ -116,7 +116,7 @@ def test_metric_quantity_constraint_admits_monetary_only_as_a_new_form():
 def test_migration_only_widens_metric_quantity_constraint():
     from django.db import migrations
 
-    migration = import_module("core.migrations.0246_metric_monetary_quantity")
+    migration = import_module("core.migrations.0247_metric_monetary_quantity")
     operations = migration.Migration.operations
     assert [type(op) for op in operations] == [
         migrations.RemoveConstraint,
@@ -299,8 +299,8 @@ def test_database_accepts_monetary_and_rejects_unknown_quantity_forms():
         )
 
 
-BEFORE_MONETARY = ("core", "0245_home_sentiment_recent_boundary")
-AFTER_MONETARY = ("core", "0246_metric_monetary_quantity")
+BEFORE_MONETARY = ("core", "0246_home_classification_masks")
+AFTER_MONETARY = ("core", "0247_metric_monetary_quantity")
 
 
 @pytest.mark.requires_postgres
