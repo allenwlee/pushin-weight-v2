@@ -3155,13 +3155,13 @@ def test_p2_rechecks_publisher_after_matching_ingestion_finishes(
     runner._run_post_fetch([], run_id="publisher-contention")
     started, looked_up = Event(), Event()
     backend = []
-    original_lookup = publisher_accounts.brand_name_candidates
+    original_lookup = publisher_accounts._release_brand_candidates
 
     def checked_lookup(*args, **kwargs):
         looked_up.set()
         return original_lookup(*args, **kwargs)
 
-    monkeypatch.setattr(publisher_accounts, "brand_name_candidates", checked_lookup)
+    monkeypatch.setattr(publisher_accounts, "_release_brand_candidates", checked_lookup)
 
     def p2_worker():
         try:
