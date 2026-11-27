@@ -376,7 +376,7 @@ def _source_job(mapping, now):
     return take_metric_authority(job.pk)
 
 
-def release_metric_job_is_current(job, now):
+def release_metric_job_is_current(job, now, *, require_unread=False):
     """The hourly dispatcher may also see this job; honor corrected dossiers and ownership."""
     from core.chart_engine import single_brand_dates
 
@@ -388,6 +388,16 @@ def release_metric_job_is_current(job, now):
     )
     if len(mappings) != 1 or not release_metric_mapping_is_current(mappings[0]):
         return False
+    if require_unread:
+        from core.collection_identity import release_metric_catalog_state
+        from core.models import MetricValue
+
+        mapping = mappings[0]
+        if not release_metric_catalog_state(mapping) or MetricValue.objects.filter(
+            observation__mapping__source_id=job.source_id,
+            observation__mapping__subject_id=mapping.subject_id,
+        ).exists():
+            return False
     product_key = mappings[0].subject.product_id
     dates = single_brand_dates(now.astimezone(UTC).date())
     today = now.astimezone(UTC).date()
@@ -576,7 +586,7 @@ def _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints,
         and budget.deadline - budget.clock() >= 1
     ):
         rows = dispatch_due(
-            job_ids=job_ids, execute=True, budget=budget, limit=1, now=now
+            job_ids=job_ids, execute=True, budget=budget, limit=1, now=now, allow_initial_release=live
         )
         result["applied"] = sum(row["applied"] for row in rows)
     if not history_first and not result["applied"]:
