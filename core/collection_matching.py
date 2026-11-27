@@ -34,7 +34,7 @@ from core.models import (
 )
 
 RULESET = "product-crosswalk-v1"
-SOURCES = ("github", "openrouter", "arena", "opencode")
+SOURCES = ("github", "openrouter", "arena", "opencode", "gdpx")
 MAX_CANDIDATES = 5
 MAX_ENVELOPE_BYTES = 32768
 logger = logging.getLogger(__name__)
@@ -229,6 +229,22 @@ def _native(observation, scope, row_index=None, documents=None, evidence_pin=Non
         return None
     repo = listing
     label, publisher, repo_pin = identifier, None, None
+    gdpx = {}
+    if source == "gdpx":
+        # KTD14: the display name is the label; the slug never matches a name.
+        if not (
+            listing.get("id") == identifier
+            and isinstance(listing.get("name"), str)
+            and listing["name"].strip()
+        ):
+            return None
+        label = listing["name"]
+        gdpx = {
+            "publisher_hint": listing.get("lab"),
+            "review_only_variant": bool(listing.get("specialist"))
+            or "abliterated" in identifier.casefold()
+            or "abliterated" in label.casefold(),
+        }
     if source == "github":
         owner = repo.get("owner", {})
         if not (
@@ -260,6 +276,7 @@ def _native(observation, scope, row_index=None, documents=None, evidence_pin=Non
         "publisher_account_key": str(publisher.pk) if publisher else None,
         "repo": repo_pin,
         "publication_row_index": row_index,
+        **gdpx,
     }
 
 
@@ -682,6 +699,15 @@ def _native_inventory(sources, cutoff):
                     ),
                 ),
             ]
+        elif source == "gdpx":
+            # Published cells only; endpoint checks and publication markers
+            # carry no model labels.
+            scopes = [
+                (
+                    "model_id",
+                    base.filter(source_subject_kind="model", observation_kind__isnull=True),
+                )
+            ]
         else:
             scopes = [
                 (
@@ -842,6 +868,8 @@ def _candidate(product, native, *, origin_target_id=None):
         if native["source"] == "openrouter"
         else "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset"
         if native["source"] == "arena"
+        else "https://gdpx.semianalysis.com/"
+        if native["source"] == "gdpx"
         else "https://opencode.ai/data"
     )
     from core.collection_identity import qualified_catalog_ownership
@@ -850,6 +878,12 @@ def _candidate(product, native, *, origin_target_id=None):
         row["decision"], row["reasons"] = (
             "unmatched",
             ["publisher_ownership_unqualified"],
+        )
+    if native.get("review_only_variant"):
+        # R13: specialist and abliterated rows never link to a base product.
+        row["decision"], row["reasons"] = (
+            "unmatched",
+            ["specialist_or_abliterated_variant"],
         )
     # A structured explicit provider cross-reference is stronger than spelling.
     refs = (
@@ -981,6 +1015,17 @@ def preview_matches(*, brand_ids, sources=SOURCES, cutoff=None):
                 if len(claims[key]) > 1:
                     candidate.update(
                         decision="unmatched", reasons=["competing_product_identity"]
+                    )
+                    candidate["input_sha256"] = digest(
+                        {k: v for k, v in candidate.items() if k != "input_sha256"}
+                    )
+            # GDPx publishes one id per model, so two ids sharing a product
+            # name are ambiguous rather than spellings of one identity.
+            gdpx = [c for c in product["candidates"] if c["source"] == "gdpx"]
+            if len(gdpx) > 1:
+                for candidate in gdpx:
+                    candidate.update(
+                        decision="unmatched", reasons=["competing_source_identity"]
                     )
                     candidate["input_sha256"] = digest(
                         {k: v for k, v in candidate.items() if k != "input_sha256"}

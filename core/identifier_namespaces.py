@@ -28,7 +28,7 @@ def target_namespace_id(values):
         source = observation.run.job.source_id
         kind = observation.source_subject_kind
         if values.get("target_kind") == "match_candidate":
-            if source not in {"github", "hf", "arena", "openrouter"}:
+            if source not in {"github", "hf", "arena", "openrouter", "gdpx"}:
                 raise ValueError("unsupported matching evidence source")
             kind = "repository" if source == "github" else "model"
     else:

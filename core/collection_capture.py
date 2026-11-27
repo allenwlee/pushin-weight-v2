@@ -97,6 +97,33 @@ def _has_legacy_fields(model, *names):
     return all(name in present for name in names)
 
 
+def _gdpx_model_documents(observation):
+    """A GDPx row's model labels, read from its run's selected publication payload."""
+    run = observation.run
+    require(
+        observation.source_subject_kind == "model" and run.payload_archive_id is not None,
+        "GDPx observation has no selected publication",
+    )
+    payload = read_document(run.payload_archive)
+    require(
+        isinstance(payload, dict) and digest(payload) == run.payload_sha256,
+        "GDPx selected publication changed",
+    )
+    dataset = payload.get("dataset")
+    models = dataset.get("models") if isinstance(dataset, dict) else None
+    require(isinstance(models, list), "GDPx publication has no model list")
+    found = [
+        model for model in models
+        if isinstance(model, dict) and model.get("id") == observation.source_identifier
+    ]
+    require(len(found) == 1, "GDPx model is absent from its publication")
+    return (
+        found[0],
+        {"category": observation.category_key, "config": observation.config_key},
+        {"updated_at": dataset.get("updatedAt"), "dataset_sha256": payload.get("dataset_sha256")},
+    )
+
+
 def observation_object_documents(observation):
     """Return a catalog object's captured fields, preferring frozen legacy evidence."""
     if observation.projection_kind == "hf-release-collection-v1":
@@ -204,6 +231,13 @@ def observation_object_documents(observation):
             "HF selected listing is absent or conflicts with its capture",
         )
         return matching[0], {}, {}
+    if (
+        observation.legacy_archive_id is None
+        and observation.observation_kind is None
+        and observation.run.job.source_id == "gdpx"
+        and observation.run.job.purpose == "metric"
+    ):
+        return _gdpx_model_documents(observation)
     if observation.legacy_archive_id is None:
         require(
             _has_legacy_fields(

@@ -863,3 +863,210 @@ def test_review_explicit_first_party_reference_qualifies_without_candidate_appro
         and mapping.publisher_account_id == publisher.pk
     )
     assert mapping.identifier_metadata["match_review"]["owner_confirmed"] is False
+
+
+# --- GDPx: freshly collected typed observations (U6, R12, R13) ---------------
+
+
+def gdpx_products(*names, payload_change=None):
+    """Store the recorded GDPx publication through persist_source, then name products."""
+    from tests.test_benchmark_gdpx_store import contract, payload
+
+    data = payload(payload_change)
+    from core.benchmark_metric_store import persist_source
+
+    run = persist_source(contract(), "gdpx", "9" * 64, data)
+    assert run.status == "success"
+    brand, _ = Brand.objects.get_or_create(nickname="gdpx-brand")
+    company, _ = Company.objects.get_or_create(nickname="gdpx-company")
+    BrandCompany.objects.get_or_create(brand=brand, company=company)
+    publisher = hf_publisher(namespace="GdpxFixture", company=company, confirmed=True)
+    products = {
+        name: Product.objects.create(
+            display_name=name,
+            repo_id=None,
+            brand=brand,
+            publisher_account=publisher.account,
+            created_at=timezone.now(),
+            **product_type_fields(Product, "model-llm"),
+            private=False,
+        )
+        for name in names
+    }
+    return brand, products, run
+
+
+def gdpx_preview(brand):
+    from core.collection_matching import preview_matches
+
+    return preview_matches(brand_ids=[brand.pk], sources=["gdpx"])
+
+
+def candidates_for(report, product):
+    return next(
+        p for p in report["products"] if p["product_key"] == str(product.product_key)
+    )["candidates"]
+
+
+def test_gdpx_preview_reads_typed_observations_without_legacy_archives():
+    from core.collection_matching import identifier_presence
+
+    brand, products, run = gdpx_products("Claude Opus 5.5")
+    stored = CollectionObservation.objects.filter(run=run)
+    assert stored.exists() and not stored.filter(legacy_archive__isnull=False).exists()
+    report = gdpx_preview(brand)
+    (candidate,) = candidates_for(report, products["Claude Opus 5.5"])
+    assert candidate["source"] == "gdpx"
+    assert candidate["identifier"] == "claude-opus-5-5"
+    assert candidate["identifier_scope"] == "model_id"
+    assert candidate["source_subject_kind"] == "model"
+    assert candidate["observed_label"] == "Claude Opus 5.5"
+    assert candidate["publisher_hint"] == "Anthropic"
+    assert candidate["decision"] == "needs_review"
+    assert candidate["confidence_pct"] == 90
+    assert candidate["evidence_url"] == "https://gdpx.semianalysis.com/"
+    evidence = CollectionObservation.objects.get(pk=candidate["evidence"]["observation_id"])
+    assert evidence.run_id == run.pk and evidence.source_identifier == "claude-opus-5-5"
+    assert report["writes"] == 0 and report["partial"] == []
+    assert identifier_presence(
+        source="gdpx", kind="model", scope="model_id", identifier="claude-opus-5-5"
+    ) == "present"
+
+
+def test_gdpx_reviewed_match_admits_a_catalog_mapping():
+    brand, products, _ = gdpx_products("Claude Opus 5.5")
+    report = gdpx_preview(brand)
+    assert apply_reviewed(report)["status"] == "success"
+    mapping = SourceSubjectMapping.objects.get()
+    assert (mapping.source_id, mapping.identifier_scope_code, mapping.external_identifier) == (
+        "gdpx", "model_id", "claude-opus-5-5"
+    )
+    assert mapping.subject.product_id == products["Claude Opus 5.5"].product_key
+    assert mapping.evidence_url == "https://gdpx.semianalysis.com/"
+
+
+def test_gdpx_unreviewed_name_match_is_not_linked():
+    from core.collection_matching import apply_matches
+
+    brand, _, _ = gdpx_products("Claude Opus 5.5")
+    report = gdpx_preview(brand)
+    apply_matches(
+        preview=report,
+        input_sha256=report["input_sha256"],
+        reviewed_by="operator",
+        review_basis="Preview only",
+        reviewed_candidate_ids=[],
+    )
+    assert not SourceSubjectMapping.objects.exists()
+
+
+def test_gdpx_matches_on_display_name_never_on_slug():
+    brand, products, _ = gdpx_products("gpt-6-2-astra", "GPT 6.2 Astra")
+    report = gdpx_preview(brand)
+    assert candidates_for(report, products["gpt-6-2-astra"]) == []
+    (candidate,) = candidates_for(report, products["GPT 6.2 Astra"])
+    assert candidate["identifier"] == "gpt-6-2-astra"
+    assert candidate["observed_label"] == "GPT 6.2 Astra"
+
+
+def test_gdpx_specialist_and_abliterated_rows_never_link_to_a_product():
+    brand, products, _ = gdpx_products(
+        "Kimi K3.1 Pro", "Kimi K3.1 Pro Abliterated", "HO1"
+    )
+    report = gdpx_preview(brand)
+    (base,) = candidates_for(report, products["Kimi K3.1 Pro"])
+    assert base["identifier"] == "kimi-k3-1-pro" and base["decision"] == "needs_review"
+    for name, native in (
+        ("Kimi K3.1 Pro Abliterated", "kimi-k3-1-pro-abliterated"),
+        ("HO1", "hinoki-ho1"),
+    ):
+        (excluded,) = candidates_for(report, products[name])
+        assert excluded["identifier"] == native
+        assert excluded["decision"] == "unmatched"
+        assert excluded["reasons"] == ["specialist_or_abliterated_variant"]
+    with pytest.raises(ValueError, match="review cannot override"):
+        apply_reviewed(report)
+    assert not SourceSubjectMapping.objects.exists()
+
+
+def test_gdpx_abliterated_name_is_excluded_without_a_specialist_label():
+    def unlabel(dataset):
+        for model in dataset["models"]:
+            if model["id"] == "kimi-k3-1-pro-abliterated":
+                del model["specialist"]
+
+    brand, products, _ = gdpx_products(
+        "Kimi K3.1 Pro Abliterated", payload_change=unlabel
+    )
+    (excluded,) = candidates_for(gdpx_preview(brand), products["Kimi K3.1 Pro Abliterated"])
+    assert excluded["decision"] == "unmatched"
+    assert excluded["reasons"] == ["specialist_or_abliterated_variant"]
+
+
+def test_gdpx_two_models_claiming_one_product_are_both_unmatched():
+    def collide(dataset):
+        for model in dataset["models"]:
+            if model["id"] == "claude-sonnet-5-5":
+                model["name"] = "Claude-Opus 5.5"
+
+    brand, products, _ = gdpx_products("Claude Opus 5.5", payload_change=collide)
+    found = candidates_for(gdpx_preview(brand), products["Claude Opus 5.5"])
+    assert {c["identifier"] for c in found} == {"claude-opus-5-5", "claude-sonnet-5-5"}
+    assert {c["decision"] for c in found} == {"unmatched"}
+    assert all(c["reasons"] == ["competing_source_identity"] for c in found)
+
+
+def test_gdpx_dry_run_command_lists_recorded_fixture_models():
+    brand, _, _ = gdpx_products("Claude Fable 5.2", "Kimi K3")
+    output = StringIO()
+    call_command(
+        "match_collection_products", brand=[brand.pk], source=["gdpx"], stdout=output
+    )
+    report = json.loads(output.getvalue())
+    assert report["sources"] == ["gdpx"] and report["writes"] == 0
+    assert {
+        c["identifier"] for p in report["products"] for c in p["candidates"]
+    } == {"claude-fable-5-2", "kimi-k3"}
+    assert not SourceSubjectMapping.objects.exists()
+
+
+def test_arena_candidate_shape_is_unchanged_by_gdpx_support():
+    brand, _, _ = catalog_fixture()
+    (candidate,) = preview(brand)["products"][0]["candidates"]
+    assert set(candidate) == {
+        "source", "identifier", "identifier_scope", "source_subject_kind",
+        "observed_label", "db_presence", "evidence", "publisher_account_key",
+        "repo", "publication_row_index", "product_key", "role", "confidence_pct",
+        "confidence_basis", "decision", "reasons", "ownership", "evidence_url",
+        "candidate_id", "input_sha256",
+    }
+    assert candidate["evidence_url"] == (
+        "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset"
+    )
+
+
+def test_gdpx_target_guard_migration_rewrites_only_the_source_list():
+    """0248 adds gdpx to the guard's match_candidate source list and reverses cleanly."""
+    from importlib import import_module
+
+    from django.db import connection
+
+    migration = import_module("core.migrations.0248_gdpx_match_candidate_namespace")
+
+    def definition():
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_get_functiondef(%s::regproc)", [migration.FUNCTION])
+            return cursor.fetchone()[0]
+
+    applied = definition()
+    assert applied.count(migration.AFTER) == 1 and migration.BEFORE not in applied
+    with connection.schema_editor() as editor:
+        migration.backwards(None, editor)
+    reverted = definition()
+    assert reverted == applied.replace(migration.AFTER, migration.BEFORE)
+    with connection.schema_editor() as editor:
+        migration.forwards(None, editor)
+    assert definition() == applied
+    with connection.schema_editor() as editor, pytest.raises(RuntimeError):
+        migration.forwards(None, editor)
+    assert definition() == applied

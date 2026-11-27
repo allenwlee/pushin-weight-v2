@@ -18,7 +18,7 @@ OPERATIONS = {
     "chatter_search": ("content", {"x"}),
     "release_acquisition": ("content", {"hf", "github"}),
     "release_document_import": ("content", {"publisher_web", "hf", "github"}),
-    "match_crosswalk": ("catalog", {"github", "openrouter", "arena", "opencode"}),
+    "match_crosswalk": ("catalog", {"github", "openrouter", "arena", "opencode", "gdpx"}),
     "github_catalog": ("catalog", {"github"}),
     "hf_catalog": ("catalog", {"hf"}),
     "model_inventory": ("catalog", {"github", "hf", "openrouter", "arena"}),
