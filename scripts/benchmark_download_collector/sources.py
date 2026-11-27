@@ -1,4 +1,4 @@
-"""Small, bounded readers for the three fixed public-data sources."""
+"""Small, bounded readers for the fixed public-data sources."""
 
 from __future__ import annotations
 
@@ -24,11 +24,14 @@ ARENA_CONTRACT = "arena-overall-text-v1"
 ARENA_LATEST = "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset/resolve/main/text/latest-00000-of-00001.parquet"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/datasets/rankings-daily"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+GDPX_URL = "https://gdpx.semianalysis.com/"
+PUBLIC_USER_AGENT = "PushinWeight-public-metadata"
 SOURCE_URLS = {
     "arena": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
     "hf": "https://huggingface.co/docs/hub/models-download-stats",
     "openrouter": "https://openrouter.ai/rankings",
     "opencode": "https://opencode.ai/data/llms.txt",
+    "gdpx": GDPX_URL,
 }
 
 
@@ -41,6 +44,25 @@ def opencode_url(path):
         "unreviewed OpenCode model endpoint",
     )
     return "https://opencode.ai" + path
+
+
+def gdpx_url(url):
+    """Only the GDPx homepage and its own static build files are fetchable."""
+    parsed = urlsplit(url) if isinstance(url, str) else None
+    require(
+        parsed is not None
+        and parsed.scheme == "https"
+        and parsed.netloc == "gdpx.semianalysis.com"
+        and not parsed.query
+        and not parsed.fragment
+        and (
+            parsed.path == "/"
+            or re.fullmatch(r"/_next/static/(?:[A-Za-z0-9_~-][A-Za-z0-9_~.-]*/)*[A-Za-z0-9_~-][A-Za-z0-9_~.-]*\.js", parsed.path)
+            and "/." not in parsed.path
+        ),
+        "untrusted_gdpx_url",
+    )
+    return url
 
 
 class SourceError(ValueError):
@@ -77,6 +99,7 @@ class Budget:
         self.total_bytes_read = 0
         self.capture = None
         self.collection_scope = None
+        self.last_receipt = None
 
     def public_request(self, url, params=None, *, headers=None):
         """Build independently of client cookies, default credentials and redirects."""
@@ -121,8 +144,11 @@ class Budget:
         if self.cumulative and self.total_bytes_read >= self.max_bytes:
             raise SourceError("byte_cap")
 
-    def get(self, url, params, *, key=None, asset=False, opencode=False):
-        if asset:
+    def get(self, url, params, *, key=None, asset=False, opencode=False, text=False):
+        require(not text or not (asset or opencode or key or params), "invalid text request")
+        if text:
+            gdpx_url(url)
+        elif asset:
             parsed = urlsplit(url)
             require(
                 parsed.scheme == "https"
@@ -149,6 +175,8 @@ class Budget:
         require(not asset or not key, "asset_credentials_forbidden")
         for attempt in range(3):
             headers = {"Authorization": f"Bearer {key}"} if key else {}
+            if text:
+                headers = {"User-Agent": PUBLIC_USER_AGENT}
             receipt = None
             try:
                 # Build independently: do not inherit client cookies/default credentials.
@@ -182,6 +210,12 @@ class Budget:
                             self.capture.received(receipt, body=content, status=200, response_bytes=len(content), media_type=response.headers.get("content-type", "application/octet-stream" if asset else "application/json").split(";")[0])
                         if asset:
                             return bytes(content)
+                        if text:
+                            self.last_receipt = receipt
+                            try:
+                                return content.decode("utf-8")
+                            except UnicodeDecodeError as exc:
+                                raise SourceError("malformed_text") from exc
                         try:
                             payload = json.loads(content)
                         except (ValueError, UnicodeDecodeError) as exc:
@@ -333,6 +367,70 @@ def opencode(budget, selected, *, now=None):
         "rows": rows,
         "endpoint_checks": checks,
         "coverage": "entire_exposed_model_history",
+    }
+
+
+def gdpx(budget, *, previous_probe=None, today=None):
+    """Read the whole published GDPx dataset, or raise a typed ``GdpxError``.
+
+    Fetches the homepage and every same-host JavaScript chunk it references,
+    selects exactly one embedded dataset, validates it and checks recomputed
+    headline scores against the server-rendered leaderboard.
+    """
+    from core import benchmark_gdpx as parse
+
+    requests = []
+
+    def fetch(url):
+        try:
+            body = budget.get(url, None, text=True)
+        except SourceError as exc:
+            code = str(exc)
+            challenged = code in {"http_403", "http_429"}
+            raise parse.GdpxError(
+                "fetch_challenged" if challenged else "fetch_failed",
+                code,
+                requests=requests,
+            ) from exc
+        raw = body.encode("utf-8")
+        requests.append(
+            {
+                "url": url,
+                "bytes": len(raw),
+                "body_sha256": hashlib.sha256(raw).hexdigest(),
+                "request_id": getattr(budget.last_receipt, "pk", None),
+            }
+        )
+        return body
+
+    try:
+        page = fetch(GDPX_URL)
+        paths, refused = parse.chunk_references(page)
+        if not paths:
+            raise parse.GdpxError("fetch_challenged", "no_chunk_references")
+        chunks = {path: fetch(gdpx_url(GDPX_URL.rstrip("/") + path)) for path in paths}
+        dataset, partners, chunk = parse.select_dataset(chunks)
+        parse.validate_dataset(dataset, partners, today=today)
+        headline_check = parse.check_headlines(dataset, partners, page)
+    except parse.GdpxError as exc:
+        exc.requests = requests
+        raise
+    probe = parse.version_probe(page, dataset)
+    return {
+        "status": "ok",
+        "source_url": GDPX_URL,
+        "updated_at": dataset["updatedAt"],
+        "dataset": dataset,
+        "partners": partners,
+        "dataset_sha256": parse.canonical_digest(dataset),
+        "dataset_chunk": chunk,
+        "expected_observation_count": parse.expected_observation_count(dataset),
+        "headline_check": headline_check,
+        "version_probe": probe,
+        "anomalies": parse.probe_anomalies(probe, previous_probe),
+        "requests": requests,
+        "refused_references": refused,
+        "coverage": "full_published_dataset",
     }
 
 

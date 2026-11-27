@@ -9,9 +9,9 @@ from core.benchmark_metric_store import persist_source
 from core.measurement_taxonomy import digest
 from tests.test_benchmark_download_persistence import provider_contract
 
-pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
-
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     "source,metrics",
     [
@@ -54,3 +54,15 @@ def test_recorded_public_shapes_keep_values_and_provenance(source, metrics):
     assert run.observations.count() == len(fixture["payload"]["rows"])
     assert not run.observations.filter(mapping__isnull=False).exists()
     assert all(o.values.exists() for o in run.observations.all())
+
+
+def test_recorded_gdpx_site_yields_the_independently_extracted_dataset():
+    """The 2026-11-25 homepage and data chunk still parse; no database needed."""
+    from tests.test_benchmark_gdpx import EXPECTED, read
+
+    result = read()
+    assert result["dataset"] == EXPECTED["dataset"]
+    assert {r["name"]: r["published"] for r in result["headline_check"]} == (
+        EXPECTED["headlines"]
+    )
+    assert result["expected_observation_count"] == 393

@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,12001,(s,t,a)=>{t.exports=JSON.parse('{"locale":"en","labels":{"score":"Score","cost":"$ / task"},"updatedAt":"2026-11-25"}')}]);
