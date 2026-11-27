@@ -288,7 +288,12 @@ def test_general_performance_requires_real_refresh_more_and_selection_requests()
         for panel in ("calendar", "free", "jobs", "moving"):
             assert f'[data-refresh="{panel}"]' in targets
             assert f'[data-more="{panel}"]' in targets
-        assert targets.count('.primary-settings [data-value="open"]') == 2
+        if scenario["profile"] == "mobile":
+            weights = '#general-settings [data-pref="weights"][data-value="open"]'
+            assert targets.index("[data-open-settings]") < targets.index(weights)
+        else:
+            weights = '.primary-settings [data-value="open"]'
+        assert targets.count(weights) == 2
         evidence["scenarios"].append({"scenario_id": scenario["id"], "network_observations": [
             {"path": "/general/feed/?section=jobs", "requests": 16 * scenario["runs"]},
         ]})

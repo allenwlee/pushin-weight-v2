@@ -466,16 +466,27 @@
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": ".primary-settings [data-value=\"open\"]"
+          "kind": "press",
+          "target": "[data-open-settings]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": ".primary-settings [data-value=\"open\"]"
+          "kind": "press",
+          "target": "#general-settings [data-pref=\"weights\"][data-value=\"open\"]",
+          "value": "Enter"
+        },
+        {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
+          "kind": "press",
+          "target": "#general-settings [data-pref=\"weights\"][data-value=\"open\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
