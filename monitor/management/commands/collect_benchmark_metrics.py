@@ -10,6 +10,7 @@ import httpx
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
 
+from core.benchmark_gdpx import GdpxError
 from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import collection_lock, persist_source
 from core.benchmark_metric_timing import aware_instant
@@ -17,6 +18,67 @@ from core.measurement_taxonomy import digest, require
 from core.models import MetricCollectionContract
 from scripts.benchmark_download_collector import sources
 from scripts.benchmark_download_collector.identity import days
+
+READERS = frozenset({"hf", "openrouter", "opencode", "arena", "gdpx"})
+
+
+def reader_requests(requests):
+    """Request references as plain strings; stored payloads reject UUID objects."""
+    return [
+        {
+            **request,
+            "request_id": None
+            if request["request_id"] is None
+            else str(request["request_id"]),
+        }
+        for request in requests
+    ]
+
+
+def gdpx_previous_probe(contract):
+    """The version probe recorded on this contract's latest GDPx publication."""
+    from core.models import CollectionObservation
+
+    marker = (
+        CollectionObservation.objects.filter(
+            run__job__contract=contract,
+            run__job__source_id="gdpx",
+            run__job__purpose="metric",
+            run__status__in=["success", "partial"],
+            observation_kind="publication_marker",
+        )
+        .order_by("-published_date", "-observed_at", "-pk")
+        .first()
+    )
+    if marker is None:
+        return None
+    return {
+        "label": marker.provider_revision,
+        "task_totals_sha256": marker.payload_sha256,
+    }
+
+
+def record_failure_code(run, code):
+    """Replace the generic rejected-payload code with the reader's typed cause.
+
+    The store marks any error payload ``invalid_source_data``; a typed GDPx
+    failure is more specific, and ``collection_status`` reports it from the run.
+    """
+    from django.db import transaction
+    from django.utils import timezone
+
+    from core.models import CollectionAttempt, CollectionRun
+
+    if run.status != "failed" or run.error_code != "invalid_source_data":
+        return
+    with transaction.atomic():
+        CollectionRun.objects.filter(
+            pk=run.pk, status="failed", error_code="invalid_source_data"
+        ).update(error_code=code, updated_at=timezone.now())
+        CollectionAttempt.objects.filter(
+            run_id=run.pk, stop_reason="invalid_source_data"
+        ).update(stop_reason=code)
+    run.refresh_from_db(fields=["error_code", "updated_at"])
 
 
 class Command(BaseCommand):
@@ -27,7 +89,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--source",
             required=True,
-            choices=["hf", "github", "openrouter", "arena", "opencode"],
+            choices=["hf", "github", "openrouter", "arena", "opencode", "gdpx"],
         )
         parser.add_argument("--start-date", required=True)
         parser.add_argument("--end-date", required=True)
@@ -107,6 +169,8 @@ class Command(BaseCommand):
                     )
                 )
                 return
+            if source not in READERS:
+                raise ValueError("unsupported metric source")
             if options["job"]:
                 from core.benchmark_attribution import enforce_source_collection
                 from core.collection_state import claim_job, fenced_run
@@ -166,15 +230,25 @@ class Command(BaseCommand):
                     cumulative=claim is not None,
                 )
 
+                failure = {}
+
                 def fetch():
                     try:
                         return fetch_source()
-                    except sources.SourceError:
-                        return {
+                    except sources.SourceError as exc:
+                        result = {
                             "status": "error",
                             "rows": [],
                             "request_count": options["max_requests"] - budget.remaining,
                         }
+                        if isinstance(exc, GdpxError):
+                            failure["code"] = exc.code
+                            result.update(
+                                error_code=exc.code,
+                                error_detail=exc.detail,
+                                requests=reader_requests(exc.requests),
+                            )
+                        return result
 
                 def fetch_source():
                     if source == "hf":
@@ -222,7 +296,12 @@ class Command(BaseCommand):
                                 select_history_window,
                             )
                             result = select_history_window(result, params['start_date'], params['end_date'])
-                    else:
+                    elif source == "gdpx":
+                        result = sources.gdpx(
+                            budget, previous_probe=gdpx_previous_probe(contract)
+                        )
+                        result["requests"] = reader_requests(result["requests"])
+                    elif source == "arena":
                         result = sources.arena(
                             budget,
                             params["start_date"],
@@ -231,6 +310,8 @@ class Command(BaseCommand):
                                 "config", "text_style_control"
                             ),
                         )
+                    else:
+                        raise ValueError("unsupported metric source")
                     result["request_count"] = options["max_requests"] - budget.remaining
                     return result
 
@@ -274,6 +355,8 @@ class Command(BaseCommand):
                     claim=claim,
                     transport_budget=budget,
                 )
+                if failure:
+                    record_failure_code(run, failure["code"])
             self.stdout.write(
                 json.dumps(
                     {

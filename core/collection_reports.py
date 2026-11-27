@@ -61,6 +61,21 @@ def _metric_evidence(value, observation, definition):
     return result
 
 
+def _gdpx_dimensions(observation):
+    """Partner (or ``overall``), harness|reasoning config, domain and dataset date."""
+    return {
+        name: value
+        for name, value in (
+            ("category", observation.category_key),
+            ("config", observation.config_key),
+            ("domain", observation.coordinate_key),
+            ("date", observation.source_record_date.isoformat()
+             if observation.source_record_date else None),
+        )
+        if value is not None
+    }
+
+
 def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at=None):
     """Read native snapshots, with current or time-qualified attribution.
 
@@ -72,7 +87,7 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
     require(type(limit) is int and 0 < limit <= 1000, "invalid numeric report limit")
     contract = MetricCollectionContract.objects.get(pk=contract_id)
     require(source in contract.source_configuration, "source outside contract")
-    require(source in {"arena", "openrouter", "opencode", "hf", "github"},
+    require(source in {"arena", "openrouter", "opencode", "hf", "github", "gdpx"},
             "unsupported metric source")
     query = (
         MetricValue.objects.filter(
@@ -112,6 +127,9 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
         assignment = attribution_at(observation, known_at=known_at)
         if source in {"arena", "openrouter", "opencode"}:
             dimensions = observation_dimensions(observation)
+            source_evidence = observation_provenance_metadata(observation)
+        elif source == "gdpx":
+            dimensions = _gdpx_dimensions(observation)
             source_evidence = observation_provenance_metadata(observation)
         elif source == "hf":
             dimensions = observation_dimensions(observation)
