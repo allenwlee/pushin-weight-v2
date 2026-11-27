@@ -217,3 +217,75 @@ def test_partial_continuation_does_not_wait_for_next_days_fresh_inventory_slot(
     decision = due_job(job, now=NOW.replace(hour=9))
     assert decision["due"]
     assert decision["slot"] == previous.replace(hour=10).isoformat()
+
+
+def test_hourly_entry_runs_existing_contract_and_gdpx_daily_job_together(
+    settings, monkeypatch
+):
+    """The deployed cron, given both contracts, stores GDPx's first poll."""
+    from core.collection_scheduling import take_collection_authority
+    from core.models import CollectionRun
+    from tests.test_benchmark_gdpx import site
+    from tests.test_collection_scheduling import (
+        GDPX_EXPECTED,
+        gdpx_contract,
+        gdpx_observations,
+        role_spy,
+    )
+
+    job, contract, raw = routine_job(settings)
+    take_collection_authority(job.pk)
+    gdpx, gdpx_job = gdpx_contract(contract)
+    hf_seen, gdpx_seen = [], []
+    gdpx_respond = site(requests=gdpx_seen)
+
+    def respond(request):
+        if request.url.host == "gdpx.semianalysis.com":
+            return gdpx_respond(request)
+        hf_seen.append(str(request.url))
+        if request.url.path == "/api/models":
+            return httpx.Response(200, json=[raw])
+        if request.url.path.endswith("/overview"):
+            return httpx.Response(200, json={"name": "lab", "numFollowers": 0})
+        return httpx.Response(200, json=raw)
+
+    factory = httpx.Client
+    monkeypatch.setattr(
+        httpx, "Client", lambda **_: factory(transport=httpx.MockTransport(respond))
+    )
+    monkeypatch.setattr("core.collection_scheduling.timezone.now", lambda: NOW)
+    roles = role_spy(monkeypatch)
+    output = StringIO()
+    call_command(
+        "collect_benchmark_due",
+        "--contract", str(contract.pk),
+        "--contract", str(gdpx.pk),
+        "--apply",
+        stdout=output,
+    )
+    rows = json.loads(output.getvalue())
+    assert any(r.get("job_id") == str(job.pk) and r["applied"] for r in rows)
+    (shared,) = [r for r in rows if r.get("job_id") == str(gdpx_job.pk)]
+    assert shared["applied"] and shared["status"] == "success"
+    assert roles == [{"execute": True, "now": NOW}]
+    # The existing contract's source role collected exactly as before.
+    assert len(hf_seen) == 4
+    assert MetricValue.objects.exclude(observation__run__job__contract=gdpx).count() == 3
+    run = CollectionRun.objects.get(job=gdpx_job)
+    assert (run.status, run.selected_count, run.success_count) == (
+        "success", GDPX_EXPECTED, GDPX_EXPECTED,
+    )
+    assert run.scheduled_slot_at == NOW.replace(hour=10)
+    assert run.request_count == len(gdpx_seen) == 13
+    assert gdpx_observations(gdpx) == (GDPX_EXPECTED, 1)
+    # The next hourly tick in the same UTC day fetches neither source again.
+    call_command(
+        "collect_benchmark_due",
+        "--contract", str(contract.pk),
+        "--contract", str(gdpx.pk),
+        "--apply",
+        stdout=StringIO(),
+    )
+    assert len(hf_seen) == 4 and len(gdpx_seen) == 13
+    assert gdpx_observations(gdpx) == (GDPX_EXPECTED, 1)
+    assert len(roles) == 2

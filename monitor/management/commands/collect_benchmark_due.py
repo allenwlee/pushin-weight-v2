@@ -1,6 +1,7 @@
 """Scheduler entry point, inert unless environment and reviewed sources enable it."""
 
 import json
+import traceback
 import uuid
 from datetime import UTC, timedelta
 from io import StringIO
@@ -26,18 +27,51 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser):
-        parser.add_argument("--contract", required=True)
+        parser.add_argument(
+            "--contract",
+            action="append",
+            required=True,
+            help="Repeat to process several contracts in one invocation.",
+        )
         parser.add_argument("--apply", action="store_true")
 
     def handle(self, *args, **options):
         if options["apply"] and not settings.BENCHMARK_COLLECTION_ENABLED:
             raise CommandError("Benchmark collection is disabled in this environment")
+        contracts = options["contract"]
+        # call_command(contract="...") passes the keyword value through unparsed.
+        contracts = [contracts] if isinstance(contracts, str) else contracts
+        now = timezone.now().astimezone(UTC)
+        output, failed = [], []
+        for identifier in contracts:
+            if len(contracts) == 1:
+                # A single contract keeps its original error and skips roles.
+                self.collect_contract(identifier, options, now, output)
+                continue
+            try:
+                self.collect_contract(identifier, options, now, output)
+            except Exception as exc:  # noqa: BLE001 - isolate each contract
+                # Each contract is isolated; report after the others finish.
+                failed.append(identifier)
+                detail = (
+                    str(exc)
+                    if isinstance(exc, CommandError)
+                    else "".join(traceback.format_exception(exc)).rstrip()
+                )
+                self.stderr.write(f"Collection contract {identifier} failed: {detail}")
+        output.extend(dispatch_collection_roles(execute=options["apply"], now=now))
+        self.stdout.write(json.dumps(output))
+        if failed:
+            raise CommandError(
+                f"{len(failed)} of {len(contracts)} collection contracts failed: "
+                + ", ".join(failed)
+            )
+
+    def collect_contract(self, identifier, options, now, output):
         try:
-            contract = MetricCollectionContract.objects.get(pk=options["contract"])
+            contract = MetricCollectionContract.objects.get(pk=identifier)
         except (MetricCollectionContract.DoesNotExist, ValueError) as exc:
             raise CommandError("Unknown collection contract") from exc
-        now = timezone.now().astimezone(UTC)
-        output = []
         for source, config in contract.source_configuration.items():
             registry = DataSource.objects.get(pk=source)
             authority = metric_authority(registry, contract.pk)
@@ -127,5 +161,3 @@ class Command(BaseCommand):
                 )
                 row["applied"] = True
             output.append(row)
-        output.extend(dispatch_collection_roles(execute=options["apply"], now=now))
-        self.stdout.write(json.dumps(output))

@@ -554,9 +554,13 @@ job's UTC hour. A run that is not `success` sets `next_retry_at` fifteen minutes
 ahead, so a later hourly tick retries the same day; after a success the job waits
 for the next day's slot. `collect_benchmark_due` accepts `--contract` more than
 once, so the hourly benchmark cron can pass the existing contract and the GDPx
-contract in one invocation. Each contract runs in isolation: an error in one is
-reported after the others finish, and the command then exits nonzero.
-`dispatch_collection_roles` runs once per invocation, after the contracts. Adding
+contract in one invocation. With several contracts, each runs in isolation: an
+error escaping one is reported after the others finish, the JSON result is still
+written, and the command then exits nonzero. `dispatch_collection_roles` runs once
+per invocation, after the contracts. With a single `--contract` the command keeps
+its earlier behavior: an error stops it immediately, before role dispatch. A
+reader failure inside a job-owned run is recorded on the run and does not by
+itself make the command exit nonzero. Adding
 the GDPx contract to the Render cron's start command is a separate release action.
 A GDPx run's success rule and typed failure codes are described in the
 [collector guide](../../scripts/benchmark_download_collector/README.md#gdpx-reader).
