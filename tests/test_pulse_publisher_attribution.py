@@ -95,3 +95,20 @@ def test_saved_publisher_replay_binds_observed_profile_or_named_party_and_preser
     assert replay_saved_publisher(saved, post) is saved
     post.text = "A corrected, unrelated post"
     assert replay_saved_publisher(saved, post) is saved
+
+
+def test_startlux_short_lineage_quote_never_transfers_ownership():
+    child = "StartLux-V1.0-27B-Preview"
+    parent = "Qwen3.6-27B"
+    opening = f"Introducing {child}."
+    sentence = f"Post-trained on {parent} using an Auto-Research approach designed by StartLux, {child} focuses on tool use."
+    relation = {"relationship_kind": "finetune", "parent_observed_name": parent,
+                "source_excerpt": f"Post-trained on {parent}"}
+    for body, recover in [(sentence, True), (sentence.replace(parent, parent + "-FP8"), False),
+                          (sentence.replace("Post-trained", "Possibly post-trained"), False)]:
+        finding = extract(opening + "\n" + body, child, handle="StartLuxAI", org="StartLux",
+                          source_excerpt=opening, lineage_evidence=[relation], brand_id="qwen")
+        assert finding["observed_name"] == child
+        assert finding["issuer_evidence"]["relation"] == "source_author"
+        assert not finding.get("brand_id") and not finding.get("family_evidence")
+        assert [row["source_excerpt"] for row in finding.get("lineage_evidence", [])] == ([body] if recover else [])

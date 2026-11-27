@@ -17,6 +17,74 @@ def _same_product_name(first, second):
         return cursor.fetchone()[0]
 
 
+def catalog_parent_ids(name, limit):
+    """Verified names that can identify a parent independently of its child's publisher."""
+    from django.db.models import Q
+
+    from core.collection_identity import dedicated_product_mapping
+    from core.models import Product, SourceSubjectMapping
+    from core.product_preview_names import preview_targets
+
+    ids = set(Product.objects.filter(
+        Q(display_name__iexact=name) | Q(repo_id__iexact=name)
+    ).order_by("pk").values_list("pk", flat=True)[:limit + 1])
+    ids.update(preview_targets(None, name))
+    mappings = SourceSubjectMapping.objects.filter(
+        purpose="catalog", external_identifier__iexact=name, subject__product__isnull=False,
+    ).select_related("subject__product").only(
+        "subject__product__id", "identity_snapshot", "identifier_metadata"
+    ).order_by("pk")
+    for mapping in mappings:
+        if dedicated_product_mapping(mapping):
+            ids.add(mapping.subject.product.pk)
+            if len(ids) > limit:
+                break
+    return ids
+
+
+def name_pattern(name):
+    return rf"(?<![\w./:+-]){re.escape(name)}(?!\w|[._:/+-]\w)"
+
+
+def quoted_parent_spelling(reported, excerpt):
+    """Read independently confirmed names; return only a literal, unambiguous quotation."""
+    from django.utils import timezone
+
+    from core.collection_identity import dedicated_product_mapping
+    from core.models import Product, SourceSubjectMapping
+    from core.product_preview_names import chart_preview_names
+
+    def matches(names):
+        spellings = set()
+        for name in filter(None, names):
+            pattern = name_pattern(name)
+            spellings.update(match.group() for match in re.finditer(pattern, excerpt, re.IGNORECASE))
+        return spellings
+
+    literal = matches([reported])
+    if len(literal) == 1:
+        return literal.pop()
+    products = catalog_parent_ids(reported, 1)
+    if len(products) != 1:
+        return None
+    product = Product.objects.only("brand_id", "display_name", "repo_id", "product_key").get(pk=next(iter(products)))
+    spellings = [product.display_name, product.repo_id, *chart_preview_names(product, timezone.now(), False)]
+    mappings = SourceSubjectMapping.objects.filter(purpose="catalog", subject__product_id=product.product_key)
+    spellings.extend(m.external_identifier for m in mappings if dedicated_product_mapping(m))
+    attested = matches(spellings)
+    if len(attested) == 1:
+        name = attested.pop()
+        if catalog_parent_ids(name, 1) == products:
+            return name
+    return None
+
+
+def _parent_name_matches(anchor_name, observed, product_id):
+    return _same_product_name(anchor_name, observed) or (
+        product_id is not None and catalog_parent_ids(observed, 1) == {product_id}
+    )
+
+
 def _supports_relation(relation, child_name):
     """Accept only explicit directional wording; other evidence remains pending."""
     from core.product_release_intake import _FUTURE, _NEGATED
@@ -33,6 +101,15 @@ def _supports_relation(relation, child_name):
         "merge": r"(?:is\s+)?(?:a\s+)?merge\s+of",
     }
     verb = verbs.get(relation["relationship_kind"])
+    if relation["relationship_kind"] == "finetune":
+        # A participial opening describes the subject immediately after the comma.
+        parent = re.escape(relation["parent_observed_name"])
+        child = re.escape(child_name)
+        if re.match(
+            rf"^\s*[·•-]?\s*post[- ]trained on {parent}(?: using [\w -]+)?,\s*{child}(?!\w|[._:/+-]\w)",
+            excerpt, re.IGNORECASE,
+        ):
+            return True
     return bool(verb and re.search(
         rf"(?<![\w./:+-]){re.escape(child_name)}(?!\w|[._:/+-]\w)\s+{verb}\s+{re.escape(relation['parent_observed_name'])}(?!\w|[._:/+-]\w)",
         excerpt, re.IGNORECASE,
@@ -158,14 +235,15 @@ def register_qualified_lineage(*, child_claim_id, parent_claim_id, relation_inde
         elif expected_parent_id is not None and (parent_id != expected_parent_id or not parent_eligible):
             result = {"status": "stale_parent"}
         elif (stored and child_eligible and parent_eligible and post and relation["source_excerpt"] in (post.text or "")
-                and parent_name and child_name and _same_product_name(parent_name, relation["parent_observed_name"])
+                and parent_name and child_name and _parent_name_matches(parent_name, relation["parent_observed_name"], parent_id)
                 and _supports_relation(relation, child_name) and child_id and parent_id and child_id != parent_id):
             products = {row.pk: row for row in Product.objects.select_for_update(of=("self",)).select_related("product_type")
                         .filter(pk__in=[child_id, parent_id]).order_by("pk")}
             child, parent = products[child_id], products[parent_id]
             if expected_child_brand is not None and child.brand_id != expected_child_brand:
                 result = {"status": "stale_child"}
-            elif child.brand_id and child.brand_id == parent.brand_id and child.product_type_id and parent.product_type_id:
+            elif (child.brand_id and parent.brand_id and child.product_type_id and parent.product_type_id
+                  and (child.brand_id == parent.brand_id or relation["relationship_kind"] != "new_version")):
                 edges = ProductRelationship.objects.filter(parent_product_id=parent.product_key, child_product_id=child.product_key)
                 replay = edges.filter(product_relationship_type__code=relation["relationship_kind"],
                                       evidence__finding_claim_id=str(child_anchor.pk)).first()
@@ -333,6 +411,8 @@ def resolve_reported_lineage(*, child_claim_id, relation_index, basis_version_id
                 review__event_dossier__merged_into__isnull=True,
             ).values_list("product__id", flat=True).distinct()[:max_candidates + 1]
             candidates = set(edges) | set(reviews)
+            if relation["relationship_kind"] != "new_version":
+                candidates.update(catalog_parent_ids(name, max_candidates))
             if len(candidates) > max_candidates:
                 result = {"status": "candidate_limit", "retryable": True}
             elif len(candidates) > 1:
@@ -356,7 +436,7 @@ def resolve_reported_lineage(*, child_claim_id, relation_index, basis_version_id
                         parent_packet = _read_pulse_packet(parent_anchor)
                         latest = parent_dossier.intake_decisions.order_by("-recorded_at", "-pk").values_list("outcome", flat=True).first()
                         if (latest not in {"non_release", "scam", "superseded"}
-                                and _same_product_name(_qualified_anchor_name(parent_anchor, parent_dossier, packet=parent_packet), name)
+                                and _parent_name_matches(_qualified_anchor_name(parent_anchor, parent_dossier, packet=parent_packet), name, parent_id)
                                 and _resolved_anchor_product(parent_anchor, parent_dossier, packet=parent_packet) == parent_id):
                             matches.append(parent_anchor)
                             break
