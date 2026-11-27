@@ -3378,7 +3378,7 @@ def _filter_home_posts_queryset(
         axis_condition = Q()
         existence = (
             _PostCorrelatedExists
-            if not deduplicate and axis == "sentiment" and brand_scope not in (None, "__all__")
+            if not deduplicate and axis == "sentiment" and (bounded_feed or brand_scope not in (None, "__all__"))
             else Exists
         )
         if selected_values:
@@ -5076,7 +5076,7 @@ def _feed_page_posts(
         deduplicate=False,
         bounded_feed=(sort == "created_at" and any(
             isinstance(normalized.get(axis), list)
-            for axis in ("post_types", "product_labels")
+            for axis in ("post_types", "product_labels", "sentiment")
         )),
     )
 

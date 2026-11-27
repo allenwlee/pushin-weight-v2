@@ -1,10 +1,13 @@
 """General's server-rendered shell and progressive, read-only panel updates."""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from threading import BoundedSemaphore, Event
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from django.core import signing
+from django.db import connection, connections
 from django.http import Http404, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
@@ -36,6 +39,39 @@ PANEL_GLYPHS = {
     "jobs": "a-jobs",
     "moving": "a-personnel",
 }
+_GENERAL_FEED_MAX_READERS = 2
+_GENERAL_FEED_SLOTS = BoundedSemaphore(_GENERAL_FEED_MAX_READERS)
+
+
+def _general_panel_feeds(*, locale, brands, as_of):
+    """Read independent panels with at most two database readers per worker."""
+    options = {"locale": locale, "brands": brands, "as_of": as_of}
+    if (
+        connection.vendor != "postgresql"
+        or connection.in_atomic_block
+        or not connection.get_autocommit()
+    ):
+        return {section: general_feed(section, **options) for section in SECTIONS}
+
+    failed = Event()
+
+    def read(section):
+        with _GENERAL_FEED_SLOTS:
+            if failed.is_set():
+                return None
+            try:
+                with translation.override("zh-hans" if locale == "zh-cn" else locale):
+                    return general_feed(section, **options)
+            except BaseException:
+                failed.set()
+                raise
+            finally:
+                connections.close_all()
+
+    with ThreadPoolExecutor(
+        max_workers=_GENERAL_FEED_MAX_READERS, thread_name_prefix="general-feed"
+    ) as executor:
+        return dict(zip(SECTIONS, executor.map(read, SECTIONS), strict=True))
 
 
 def editorial_panels(request, locale):
@@ -225,11 +261,10 @@ def general(request):
     locale = state["locale"]
     now = timezone.now()
     with translation.override("zh-hans" if locale == "zh-cn" else locale):
+        feeds = _general_panel_feeds(locale=locale, brands=state["brands"], as_of=now)
         panels = {}
         for section in SECTIONS:
-            feed = present_feed(
-                general_feed(section, locale=locale, brands=state["brands"], as_of=now)
-            )
+            feed = present_feed(feeds[section])
             title = (
                 pgettext("General page", "Calendar")
                 if section == "calendar"

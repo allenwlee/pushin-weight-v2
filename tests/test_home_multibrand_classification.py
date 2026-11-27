@@ -348,6 +348,7 @@ def test_independent_classification_axes_respect_scope_and_live_changes(fact_bra
 
 @pytest.mark.parametrize('selection', [
     {'post_types': ['releases_updates', '__unclassified__']},
+    {'sentiment': ['mixed', 'negative', 'neutral', '__unclassified__']},
     {'product_labels': ['ideas_requests']},
     {'product_labels': ['ideas_requests', '__no_product_signal__', '__unclassified__']},
     {'post_types': ['releases_updates', '__unclassified__'],
@@ -403,6 +404,8 @@ def test_bounded_classification_feed_preserves_membership_and_pagination(fact_br
         assert 'posts_brands_signals' in bounded_sql
     if 'product_labels' in selection:
         assert 'posts_brands_product_labels' in bounded_sql
+    if 'sentiment' in selection:
+        assert 'posts_brands_classification_states' in bounded_sql
 
 
 def test_last_product_label_deleted_during_v3_refresh_becomes_no_signal(fact_brand):
