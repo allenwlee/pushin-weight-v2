@@ -6,6 +6,8 @@ from functools import lru_cache
 from types import SimpleNamespace
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from core.benchmark_gdpx import canonical_digest, expected_observation_count
 
@@ -332,6 +334,27 @@ def test_unchanged_repoll_under_new_chunk_writes_nothing_and_reports_393_reused(
     assert CollectionObservation.objects.filter(
         observation_kind="publication_marker"
     ).count() == 1
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_unchanged_repoll_query_count_does_not_scale_with_reused_row_count():
+    """An unchanged daily poll reuses all 393 rows; the query count must stay
+    a small bounded constant rather than growing with the reused row count
+    (two queries per `row_references` entry before the bulk-load fix)."""
+    target = contract()
+    persist(target, "1", payload())
+
+    def reorder(dataset):
+        dataset["results"].reverse()
+
+    redeployed = payload(reorder)
+    redeployed["dataset_chunk"] = "/_next/static/immutable/chunks/zzzzzzzzzzzzz.js"
+    with CaptureQueriesContext(connection) as captured:
+        second = persist(target, "2", redeployed)
+    assert second.status == "success"
+    assert links(second).count() == EXPECTED
+    assert len(captured) < 150
 
 
 @pytest.mark.requires_postgres

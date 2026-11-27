@@ -103,38 +103,67 @@ def record_endpoint_checks(run, checks, contract, *, verify_only=False):
                 for field, value in defaults.items()),
             "endpoint check marker conflicts with source evidence",
         )
-        for label, observation_id in check.get("row_references", {}).items():
-            referenced = CollectionObservation.objects.select_related(
-                "run__job"
-            ).get(pk=observation_id)
-            require(
-                referenced.run.job.contract_id == contract.pk
-                and referenced.run.job.source_id == source
-                and referenced.status == "ok"
-                and referenced.mapping_id == getattr(mapping, "pk", None)
-                and (
-                    referenced.source_identifier == identifier
-                    and referenced.source_record_date == native_date(label)
-                    if source == "opencode"
-                    else stored_identity(referenced) == label
-                ),
-                "endpoint row reference conflicts with source evidence",
-            )
-            if verify_only:
-                link = CollectionObservationInput.objects.filter(
+        row_references = check.get("row_references", {})
+        if row_references:
+            referenced_ids = set(row_references.values())
+            # Bulk-load every observation this check references once, instead of
+            # one SELECT per reference (a daily GDPx check references ~393 rows).
+            fetched_observations = {
+                observation.pk: observation
+                for observation in CollectionObservation.objects.filter(
+                    pk__in=referenced_ids
+                ).select_related("run__job")
+            }
+            existing_links = {
+                link.input_observation_id: link
+                for link in CollectionObservationInput.objects.filter(
                     observation=marker,
-                    input_observation=referenced,
+                    input_observation_id__in=referenced_ids,
                     input_role="endpoint_revision_row",
-                ).first()
-                require(link is not None, "endpoint row link is missing")
-            else:
-                link, _ = CollectionObservationInput.objects.get_or_create(
-                    observation=marker,
-                    input_observation=referenced,
-                    input_role="endpoint_revision_row",
-                    defaults={"row_locator": label},
                 )
-            require(link.row_locator == label, "endpoint row label conflicts")
+            }
+            links_to_create = {}
+            for label, observation_id in row_references.items():
+                referenced = fetched_observations.get(observation_id)
+                if referenced is None:
+                    # Preserve the exact DoesNotExist semantics .get() used to
+                    # raise for a reference that was never actually recorded.
+                    referenced = CollectionObservation.objects.select_related(
+                        "run__job"
+                    ).get(pk=observation_id)
+                require(
+                    referenced.run.job.contract_id == contract.pk
+                    and referenced.run.job.source_id == source
+                    and referenced.status == "ok"
+                    and referenced.mapping_id == getattr(mapping, "pk", None)
+                    and (
+                        referenced.source_identifier == identifier
+                        and referenced.source_record_date == native_date(label)
+                        if source == "opencode"
+                        else stored_identity(referenced) == label
+                    ),
+                    "endpoint row reference conflicts with source evidence",
+                )
+                if verify_only:
+                    link = existing_links.get(observation_id)
+                    require(link is not None, "endpoint row link is missing")
+                else:
+                    link = existing_links.get(observation_id) or links_to_create.get(
+                        observation_id
+                    )
+                    if link is None:
+                        link = CollectionObservationInput(
+                            observation=marker,
+                            input_observation=referenced,
+                            input_role="endpoint_revision_row",
+                            row_locator=label,
+                        )
+                        links_to_create[observation_id] = link
+                require(link.row_locator == label, "endpoint row label conflicts")
+            if links_to_create:
+                CollectionObservationInput.objects.bulk_create(
+                    links_to_create.values()
+                )
     return inserted
 
 
