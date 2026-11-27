@@ -44,13 +44,12 @@ class Command(BaseCommand):
         now = timezone.now().astimezone(UTC)
         output, failed = [], []
         for identifier in contracts:
-            if len(contracts) == 1:
-                # A single contract keeps its original error and skips roles.
-                self.collect_contract(identifier, options, now, output)
-                continue
             try:
                 self.collect_contract(identifier, options, now, output)
-            except Exception as exc:  # noqa: BLE001 - isolate each contract
+            except Exception as exc:  # isolate each contract
+                if len(contracts) == 1:
+                    # A single contract keeps its original error and skips roles.
+                    raise
                 # Each contract is isolated; report after the others finish.
                 failed.append(identifier)
                 detail = (

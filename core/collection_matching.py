@@ -35,6 +35,20 @@ from core.models import (
 
 RULESET = "product-crosswalk-v1"
 SOURCES = ("github", "openrouter", "arena", "opencode", "gdpx")
+
+
+STATIC_EVIDENCE_URLS = {
+    "arena": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
+    "gdpx": "https://gdpx.semianalysis.com/",
+}
+
+
+def _unmatch(candidate, reason):
+    """Mark a candidate unmatched and re-seal its input digest."""
+    candidate.update(decision="unmatched", reasons=[reason])
+    candidate["input_sha256"] = digest(
+        {k: v for k, v in candidate.items() if k != "input_sha256"}
+    )
 MAX_CANDIDATES = 5
 MAX_ENVELOPE_BYTES = 32768
 logger = logging.getLogger(__name__)
@@ -861,17 +875,14 @@ def _candidate(product, native, *, origin_target_id=None):
     }
     if origin_target_id is not None:
         row["origin_target_id"] = origin_target_id
-    row["evidence_url"] = (
-        f"https://github.com/{native['observed_label']}"
-        if native["source"] == "github"
-        else f"https://openrouter.ai/{native['identifier']}"
-        if native["source"] == "openrouter"
-        else "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset"
-        if native["source"] == "arena"
-        else "https://gdpx.semianalysis.com/"
-        if native["source"] == "gdpx"
-        else "https://opencode.ai/data"
-    )
+    if native["source"] == "github":
+        row["evidence_url"] = f"https://github.com/{native['observed_label']}"
+    elif native["source"] == "openrouter":
+        row["evidence_url"] = f"https://openrouter.ai/{native['identifier']}"
+    else:
+        row["evidence_url"] = STATIC_EVIDENCE_URLS.get(
+            native["source"], "https://opencode.ai/data"
+        )
     from core.collection_identity import qualified_catalog_ownership
 
     if publisher is None or not qualified_catalog_ownership(publisher, product=product):
@@ -973,10 +984,7 @@ def preview_matches(*, brand_ids, sources=SOURCES, cutoff=None):
                     {"product_key": str(product.product_key), "reason": "candidate_cap"}
                 )
                 for candidate in candidates[:MAX_CANDIDATES]:
-                    candidate.update(decision="unmatched", reasons=["candidate_cap"])
-                    candidate["input_sha256"] = digest(
-                        {k: v for k, v in candidate.items() if k != "input_sha256"}
-                    )
+                    _unmatch(candidate, "candidate_cap")
             output.append(
                 {
                     "product_key": str(product.product_key),
@@ -1013,23 +1021,13 @@ def preview_matches(*, brand_ids, sources=SOURCES, cutoff=None):
                     candidate["identifier"],
                 )
                 if len(claims[key]) > 1:
-                    candidate.update(
-                        decision="unmatched", reasons=["competing_product_identity"]
-                    )
-                    candidate["input_sha256"] = digest(
-                        {k: v for k, v in candidate.items() if k != "input_sha256"}
-                    )
+                    _unmatch(candidate, "competing_product_identity")
             # GDPx publishes one id per model, so two ids sharing a product
             # name are ambiguous rather than spellings of one identity.
             gdpx = [c for c in product["candidates"] if c["source"] == "gdpx"]
             if len(gdpx) > 1:
                 for candidate in gdpx:
-                    candidate.update(
-                        decision="unmatched", reasons=["competing_source_identity"]
-                    )
-                    candidate["input_sha256"] = digest(
-                        {k: v for k, v in candidate.items() if k != "input_sha256"}
-                    )
+                    _unmatch(candidate, "competing_source_identity")
 
     def sort_key(row):
         confidence = max(
