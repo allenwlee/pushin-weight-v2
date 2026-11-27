@@ -15,3 +15,9 @@ Start here for PushinWeight's research on outside services, including API contra
 Use each provider's `api/` for wire contracts and pricing sources, `research/` for dated test results and vendor communications, and `legal/` for terms and policy evidence. Add those folders as material warrants. Put studies comparing multiple X providers in [comparisons](comparisons/README.md). Link existing application studies from the relevant provider index when their fixtures or product analysis belong with the original.
 
 For PushinWeight's implemented calls, start with the [call inventory](../reference/twitterapi-io-calls.md). For live receipts, fallback, and public announcements, use [X provider observability](../operations/x-provider-observability.md).
+
+## Benchmark sources
+
+| Provider | What we have studied |
+| --- | --- |
+| [SemiAnalysis GDPx](semianalysis_gdpx/README.md) | Agentic benchmark results by model and data partner, how the embedded dataset is reached, update cadence and terms of use. |
