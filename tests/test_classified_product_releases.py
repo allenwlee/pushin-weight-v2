@@ -965,8 +965,24 @@ def test_targeted_release_retains_only_source_backed_lineage():
     findings = targeted_release_findings(post=post, tweet=tweet, records=[record])
     assert findings[0]["lineage_evidence"][0]["parent_observed_name"] == "Qwen3"
     record["lineage_evidence"][0]["parent_observed_name"] = "Qwen2"
-    with pytest.raises(ValueError):
-        targeted_release_findings(post=post, tweet=tweet, records=[record])
+    recovered = targeted_release_findings(post=post, tweet=tweet, records=[record])[0]
+    assert recovered["observed_name"] == "Qwen4"
+    assert not recovered.get("lineage_evidence")
+
+
+def test_lineage_uses_existing_repository_name_without_creating_an_alias():
+    from core.classified_product_releases import targeted_release_findings
+
+    parent = models.Product.objects.create(display_name="Model 27B", repo_id="Repo/Exact-27B")
+    sentence = "Acme-Preview is a fine-tune of Repo/Exact-27B."
+    post = models.Post.objects.create(tweet_id="release-parent-crosswalk", text=sentence)
+    findings = targeted_release_findings(post=post, tweet={"text": sentence}, records=[{
+        "model_name": "Acme-Preview", "source_excerpt": sentence, "categories": ["model-llm"],
+        "lineage_evidence": [{"relationship_kind": "finetune", "parent_observed_name": parent.display_name,
+                              "source_excerpt": sentence}],
+    }])
+    assert findings[0]["lineage_evidence"][0]["parent_observed_name"] == "Repo/Exact-27B"
+    assert models.Product.objects.count() == 1
 
 
 def test_targeted_release_does_not_bind_a_different_offering_from_the_post():

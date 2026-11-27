@@ -5,7 +5,8 @@ from core.models import ProductRelationship, TaxonomyVersion
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
-def _two_saved_findings(*, lineage_excerpt="Model 5 succeeds Model 4", post_lineage=None, parent_name="Model 4"):
+def _two_saved_findings(*, lineage_excerpt="Model 5 succeeds Model 4", post_lineage=None, parent_name="Model 4",
+                        other_publisher=False, kind="new_version"):
     from core.models import Account, Brand, BrandAccount, Post, Role
     from core.product_identity import resolve_saved_release_finding
     from core.product_release_dossiers import persist_classified_release_findings
@@ -17,6 +18,10 @@ def _two_saved_findings(*, lineage_excerpt="Model 5 succeeds Model 4", post_line
     BrandAccount.objects.create(brand=brand, account=account, role=role)
     outcomes = []
     for number in (4, 5):
+        if number == 5 and other_publisher:
+            brand = Brand.objects.create(nickname="independent-publisher")
+            account = Account.objects.create(author_id="123456765", handle="othercreator")
+            BrandAccount.objects.create(brand=brand, account=account, role=role)
         name = f"Model {number}"
         text = f"We released {name}" + (". " + (post_lineage or lineage_excerpt) if number == 5 else "")
         post = Post.objects.create(tweet_id=f"lineage-post-{number}", author=account, text=text)
@@ -25,7 +30,7 @@ def _two_saved_findings(*, lineage_excerpt="Model 5 succeeds Model 4", post_line
         item["issuer_evidence"] = {"relation": "source_author", "source_locator": None,
                                    "source_excerpt": f"We released {name}", "observed_name": None}
         if number == 5:
-            item["lineage_evidence"] = [{"relationship_kind": "new_version", "parent_observed_name": parent_name,
+            item["lineage_evidence"] = [{"relationship_kind": kind, "parent_observed_name": parent_name,
                                          "source_excerpt": lineage_excerpt, "source_locator": None}]
         saved = persist_classified_release_findings(source={"kind": "post", "id": post.pk}, revision_id="b" * 64,
                                                    content_fingerprint="c" * 64, extraction_version="test", findings=[item])
@@ -52,6 +57,29 @@ def test_explicit_lineage_reuses_qualified_products_and_compact_taxonomy():
                                       relation_index=0, basis_version_id=None, max_subjects=2, max_seconds=5)["status"] == "matched_replay"
     assert ProductRelationship.objects.count() == 1
     assert TaxonomyVersion.objects.count() == baseline_versions + 1
+
+
+def test_cross_publisher_training_uses_catalog_parent_without_moving_products():
+    from core.models import Product, ProductGroupMembership
+    from core.product_release_lineage import resolve_reported_lineage
+
+    parent, child = _two_saved_findings(
+        other_publisher=True, kind="finetune", lineage_excerpt="Post-trained on Model 4, Model 5 runs locally.",
+    )
+    def identities():
+        return (list(Product.objects.order_by("pk").values_list("product_key", "brand_id")),
+                set(ProductGroupMembership.objects.values_list("product_id", "group_id")))
+
+    before = identities()
+    assert len({brand for _, brand in before[0]}) == 2
+    result = resolve_reported_lineage(child_claim_id=child["anchor_claim_id"], relation_index=0,
+                                      basis_version_id=None, max_candidates=5, max_subjects=2, max_seconds=5)
+    assert result["status"] == "created"
+    edge = ProductRelationship.objects.get(pk=result["relationship_id"])
+    assert str(edge.parent_product_id) == parent["product_key"]
+    assert str(edge.child_product_id) == child["product_key"]
+    assert edge.product_relationship_type.code == "finetune"
+    assert identities() == before
 
 
 def test_lineage_does_not_match_wrong_parent_or_unverified_excerpt():

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from urllib.parse import urlsplit
 
@@ -439,6 +440,44 @@ def replay_saved_publisher(finding, post):
     return finding
 
 
+def _targeted_lineage(relations, child, passages, limits):
+    """Recover a short citation only from one explicit, directional source sentence."""
+    from core.product_release_lineage import _supports_relation, name_pattern, quoted_parent_spelling
+
+    supported = []
+    if not child or not isinstance(relations, list) or len(relations) > limits.max_assertions:
+        return supported
+    for relation in relations:
+        if not isinstance(relation, dict):
+            continue
+        parent = relation.get("parent_observed_name")
+        quote = relation.get("source_excerpt")
+        kind = relation.get("relationship_kind")
+        if (kind not in ("new_version", "finetune", "adapter", "quantized", "merge")
+                or not isinstance(parent, str) or not parent.strip() or len(parent) > limits.max_text_chars
+                or not isinstance(quote, str) or not quote.strip()):
+            continue
+        matches = [key for key, text in passages.items() if quote in text]
+        if len(matches) != 1:
+            continue
+        locator = matches[0]
+        if not re.search(name_pattern(parent), quote):
+            # Prefer the publisher's literal name, including an independently verified alias.
+            parent = quoted_parent_spelling(parent, quote) or parent
+        if not re.search(name_pattern(child), quote) or not re.search(name_pattern(parent), quote):
+            sentences = re.split(r"(?<=[.!?])\s+|[\r\n]+", passages[locator])
+            candidates = [line for line in sentences if quote in line and child in line and parent in line
+                          and _supports_relation({**relation, "parent_observed_name": parent, "source_excerpt": line}, child)]
+            if len(candidates) != 1:
+                continue
+            quote = candidates[0]
+        item = {"relationship_kind": kind, "parent_observed_name": parent,
+                "source_locator": locator, "source_excerpt": quote}
+        if len(quote) <= limits.max_text_chars and item not in supported:
+            supported.append(item)
+    return supported
+
+
 def targeted_release_findings(*, post, tweet, records):
     """Convert source-quoted release extraction into the shared finding contract."""
     from core.product_release_findings import parse_release_findings
@@ -506,24 +545,10 @@ def targeted_release_findings(*, post, tweet, records):
                 raise ValueError("targeted_release_family_excerpt_ambiguous")
             family = {"name": family_name, "source_locator": family_matches[0],
                       "source_excerpt": family_excerpt}
-        lineage = []
-        relations = record.get("lineage_evidence") or []
-        if not isinstance(relations, list):
-            raise ValueError("targeted_release_lineage_invalid")
-        for relation in relations:
-            if not isinstance(relation, dict):
-                raise ValueError("targeted_release_lineage_invalid")
-            relation_excerpt = relation.get("source_excerpt")
-            relation_matches = [key for key, value in passages.items()
-                                if isinstance(relation_excerpt, str) and relation_excerpt in value]
-            if len(relation_matches) != 1:
-                raise ValueError("targeted_release_lineage_excerpt_ambiguous")
-            lineage.append({
-                "relationship_kind": relation.get("relationship_kind"),
-                "parent_observed_name": relation.get("parent_observed_name"),
-                "source_locator": relation_matches[0],
-                "source_excerpt": relation_excerpt,
-            })
+        reported_lineage = record.get("lineage_evidence")
+        lineage = _targeted_lineage(reported_lineage, name, passages, RELEASE_LIMITS)
+        if reported_lineage and (not isinstance(reported_lineage, list) or len(lineage) < len(reported_lineage)):
+            logging.getLogger(__name__).info("Unresolved optional lineage on release post %s", post.pk)
         claim_kind = record.get("claim_kind")
         channel = record.get("access_channel")
         if claim_kind != "availability" or channel not in CHANNEL_MEANINGS:
