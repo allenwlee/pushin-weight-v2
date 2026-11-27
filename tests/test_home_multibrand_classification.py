@@ -446,3 +446,18 @@ def test_last_product_label_deleted_during_v3_refresh_becomes_no_signal(fact_bra
         expected = _build_home_chart_payload(7, filters, now=now, brand_projection=projection)
     assert actual['series'] == expected['series'] and actual['totals'] == expected['totals']
     assert actual['totals'][fact_brand.pk] > 0
+
+
+@pytest.mark.parametrize('selection', [
+    {'post_types': ['releases_updates']},
+    {'product_labels': ['ideas_requests']},
+])
+def test_bounded_classification_feed_handles_unknown_brand(fact_brand, selection):
+    from monitor.views import _feed_page_posts
+
+    posts, cursor, more, _ = _feed_page_posts(
+        window_days=7,
+        filters={'brands': ['brand-does-not-exist'], 'untracked_brand_promotions': 'any', **selection},
+        sort='created_at', order='desc', cursor=None, limit=20, now=NOW,
+    )
+    assert posts == [] and cursor is None and more is False

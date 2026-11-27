@@ -3181,7 +3181,7 @@ def _filter_home_posts_queryset(
                 )
             queryset = queryset.filter(condition)
         else:
-            queryset = queryset.filter(post_exists(PostBrand.objects.filter(
+            queryset = queryset.filter(Exists(PostBrand.objects.filter(
                 post_id=OuterRef("tweet_id"), brand_id__in=active,
             )))
 
