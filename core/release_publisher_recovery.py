@@ -328,10 +328,18 @@ def _search_publisher(handle, product, budget):
 
 def _saved_originals(handle, product, report):
     from core.models import Post
+    from core.publisher_accounts import cited_x_account
 
+    if report.author_id and (report.author_handle or "").casefold() == handle.casefold():
+        account_id = report.author_id
+    else:
+        account = cited_x_account(report, handle)
+        if account is None:
+            return
+        account_id = account.pk
     rows = (
         Post.objects.filter(
-            author_handle__iexact=handle,
+            author_id=account_id,
             text__icontains=product,
             created_at__lte=report.created_at,
         )
