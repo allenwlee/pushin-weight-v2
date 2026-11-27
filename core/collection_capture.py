@@ -97,21 +97,35 @@ def _has_legacy_fields(model, *names):
     return all(name in present for name in names)
 
 
-def _gdpx_model_documents(observation):
-    """A GDPx row's model labels, read from its run's selected publication payload."""
+def _gdpx_model_documents(observation, *, archive_cache=None):
+    """A GDPx row's model labels, read from its run's selected publication payload.
+
+    ``archive_cache``, when supplied, is a caller-owned dict keyed by
+    ``payload_archive_id``. One daily GDPx run's payload archive is shared by
+    every model observation in that run, so a caller inspecting many
+    observations from the same run passes the same dict to read, parse, and
+    checksum-verify that archive once instead of once per observation.
+    """
     run = observation.run
     require(
         observation.source_subject_kind == "model" and run.payload_archive_id is not None,
         "GDPx observation has no selected publication",
     )
-    payload = read_document(run.payload_archive)
-    require(
-        isinstance(payload, dict) and digest(payload) == run.payload_sha256,
-        "GDPx selected publication changed",
-    )
-    dataset = payload.get("dataset")
-    models = dataset.get("models") if isinstance(dataset, dict) else None
-    require(isinstance(models, list), "GDPx publication has no model list")
+    cached = archive_cache.get(run.payload_archive_id) if archive_cache is not None else None
+    if cached is None:
+        payload = read_document(run.payload_archive)
+        require(
+            isinstance(payload, dict) and digest(payload) == run.payload_sha256,
+            "GDPx selected publication changed",
+        )
+        dataset = payload.get("dataset")
+        models = dataset.get("models") if isinstance(dataset, dict) else None
+        require(isinstance(models, list), "GDPx publication has no model list")
+        cached = (payload, dataset, models)
+        if archive_cache is not None:
+            archive_cache[run.payload_archive_id] = cached
+    else:
+        payload, dataset, models = cached
     found = [
         model for model in models
         if isinstance(model, dict) and model.get("id") == observation.source_identifier
@@ -124,8 +138,12 @@ def _gdpx_model_documents(observation):
     )
 
 
-def observation_object_documents(observation):
-    """Return a catalog object's captured fields, preferring frozen legacy evidence."""
+def observation_object_documents(observation, *, archive_cache=None):
+    """Return a catalog object's captured fields, preferring frozen legacy evidence.
+
+    ``archive_cache`` is forwarded only to the GDPx path (see
+    ``_gdpx_model_documents``); other sources ignore it.
+    """
     if observation.projection_kind == "hf-release-collection-v1":
         from core.product_release_hf_collection import collection_documents
 
@@ -237,7 +255,7 @@ def observation_object_documents(observation):
         and observation.run.job.source_id == "gdpx"
         and observation.run.job.purpose == "metric"
     ):
-        return _gdpx_model_documents(observation)
+        return _gdpx_model_documents(observation, archive_cache=archive_cache)
     if observation.legacy_archive_id is None:
         require(
             _has_legacy_fields(

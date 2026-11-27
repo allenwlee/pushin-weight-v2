@@ -933,6 +933,52 @@ def test_gdpx_preview_reads_typed_observations_without_legacy_archives():
     ) == "present"
 
 
+def test_gdpx_preview_reads_the_shared_run_payload_archive_once(monkeypatch):
+    """One daily GDPx run's payload archive backs every model observation in
+    that run. The preview must read/parse/checksum it once per run, not once
+    per model observation, and its output must be unchanged by caching."""
+    from core import collection_capture
+
+    brand, products, run = gdpx_products("Claude Opus 5.5")
+    model_rows = CollectionObservation.objects.filter(
+        run=run, source_subject_kind="model", observation_kind__isnull=True
+    )
+    # The recorded GDPx fixture publication covers many models sharing this
+    # one run; reading each model's labels must not re-read the archive.
+    assert model_rows.count() > 1
+
+    calls = []
+    original_read_document = collection_capture.read_document
+
+    def counting_read_document(archive):
+        calls.append(archive.pk)
+        return original_read_document(archive)
+
+    monkeypatch.setattr(collection_capture, "read_document", counting_read_document)
+
+    report = gdpx_preview(brand)
+
+    assert calls == [run.payload_archive_id], (
+        "expected the run's payload archive to be read exactly once "
+        f"for {model_rows.count()} model observations, got {len(calls)} reads"
+    )
+
+    # Output is byte-for-byte what the uncached path produces.
+    (candidate,) = candidates_for(report, products["Claude Opus 5.5"])
+    assert candidate["source"] == "gdpx"
+    assert candidate["identifier"] == "claude-opus-5-5"
+    assert candidate["identifier_scope"] == "model_id"
+    assert candidate["source_subject_kind"] == "model"
+    assert candidate["observed_label"] == "Claude Opus 5.5"
+    assert candidate["publisher_hint"] == "Anthropic"
+    assert candidate["decision"] == "needs_review"
+    assert candidate["confidence_pct"] == 90
+    assert candidate["evidence_url"] == "https://gdpx.semianalysis.com/"
+    evidence = CollectionObservation.objects.get(pk=candidate["evidence"]["observation_id"])
+    assert evidence.run_id == run.pk and evidence.source_identifier == "claude-opus-5-5"
+    assert report["writes"] == 0 and report["partial"] == []
+
+
 def test_gdpx_reviewed_match_admits_a_catalog_mapping():
     brand, products, _ = gdpx_products("Claude Opus 5.5")
     report = gdpx_preview(brand)

@@ -664,6 +664,11 @@ def preview_pending_target(*, target_id, product_key):
 
 def _native_inventory(sources, cutoff):
     records, partial = {}, []
+    # One GDPx daily run's selected publication archive is shared by every
+    # model observation in that run (up to MAX_MODELS). Cache it here, keyed
+    # by payload_archive_id, so observation_object_documents reads, parses
+    # and checksum-verifies it once per run instead of once per observation.
+    archive_cache = {}
     for source in sources:
         base = (
             CollectionObservation.objects.filter(
@@ -672,7 +677,7 @@ def _native_inventory(sources, cutoff):
                 observed_at__lte=cutoff,
                 run__status__in=["success", "partial"],
             )
-            .select_related("run__job", "legacy_archive")
+            .select_related("run__job", "legacy_archive", "run__payload_archive")
             .only(
                 "id",
                 "run_id",
@@ -681,10 +686,17 @@ def _native_inventory(sources, cutoff):
                 "observed_at",
                 "observation_key",
                 "observation_kind",
+                "category_key",
+                "config_key",
                 "legacy_archive_id",
                 "legacy_archive__body",
                 "legacy_archive__content_sha256",
                 "run__job__source_id",
+                "run__job__purpose",
+                "run__payload_sha256",
+                "run__payload_archive_id",
+                "run__payload_archive__body",
+                "run__payload_archive__content_sha256",
             )
         )
         if source == "github":
@@ -736,7 +748,7 @@ def _native_inventory(sources, cutoff):
                 .distinct("source_identifier")
             )
             for observation in _pages(latest[:10001]):
-                documents = observation_object_documents(observation)
+                documents = observation_object_documents(observation, archive_cache=archive_cache)
                 if len(json.dumps(documents, sort_keys=True, separators=(",", ":")).encode()) > MAX_ENVELOPE_BYTES:
                     partial.append(
                         {"source": source, "scope": scope, "reason": "oversized_evidence"}
@@ -768,7 +780,7 @@ def _native_inventory(sources, cutoff):
                         {"source": source, "reason": "embedded_publication_cap"}
                     )
                     break
-                documents = observation_object_documents(observation)
+                documents = observation_object_documents(observation, archive_cache=archive_cache)
                 if len(json.dumps(documents, sort_keys=True, separators=(",", ":")).encode()) > MAX_ENVELOPE_BYTES:
                     partial.append(
                         {"source": source, "reason": "oversized_embedded_publication"}
