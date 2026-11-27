@@ -254,3 +254,59 @@ def test_rolling_hf_must_match_frozen_definition_and_30_day_window(monkeypatch):
         lambda value: dict(frozen, unit="likes"),
     )
     assert chart_engine._single_chart_definition(mapping, "downloads") is None
+
+
+def test_partial_day_exception_requires_a_direct_qualified_rolling_snapshot():
+    start = datetime(2026, 11, 27, tzinfo=UTC)
+    cutoff = start.replace(hour=12)
+    row = {
+        "dimensions": {},
+        "run_id": "direct",
+        "provider_as_of": None,
+        "import_completed_at": cutoff.isoformat(),
+        "value_id": 1,
+        "observation_id": 2,
+        "source_metadata": {},
+        "value": "7",
+        "unit": "downloads",
+        "window_mode": "rolling",
+        "measurement_kind": "count",
+        "first_local_observed_at": start.replace(hour=11).isoformat(),
+    }
+
+    def point(*, qualified=True, direct=True, source="hf", **changes):
+        metric = SimpleNamespace(
+            mapping=SimpleNamespace(source_id=source),
+            selection=SimpleNamespace(metric_key="downloads"),
+        )
+        request = SimpleNamespace(
+            target=SimpleNamespace(dossier_id="release" if qualified else None),
+            cutoff=cutoff,
+            history_mode="hindsight",
+        )
+        return chart_engine._metric_points(
+            metric,
+            request,
+            start,
+            cutoff,
+            {"2026-11-27": [row | changes]},
+            {"direct"} if direct else set(),
+            True,
+        )["points"][0]
+
+    assert point()["value"] == "7"
+    for unsupported in (
+        {"qualified": False},
+        {"direct": False},
+        {"source": "opencode"},
+        {"window_mode": "daily"},
+        {"first_local_observed_at": None},
+        {"first_local_observed_at": "2026-11-27"},
+        {"first_local_observed_at": "invalid"},
+        {"first_local_observed_at": "2026-11-26T23:00:00+00:00"},
+        {"first_local_observed_at": "2026-11-27T13:00:00+00:00"},
+        {"provider_as_of": "2026-11-27T13:00:00+00:00"},
+        {"revision_conflict": True},
+        {"source_metadata": {"period_status": "partial"}},
+    ):
+        assert point(**unsupported)["value"] is None, unsupported

@@ -20,7 +20,7 @@ from scripts.benchmark_download_collector.identity import days
 
 
 class Command(BaseCommand):
-    stealth_options = ("http_client",)
+    stealth_options = ("http_client", "initial_release_reading")
     help = "Collect a reviewed source into shared metric history; requires --apply."
 
     def add_arguments(self, parser):
@@ -138,7 +138,10 @@ class Command(BaseCommand):
                     ("max_bytes", "bytes"),
                 ):
                     options[flag] = min(options[flag], job.budgets[name])
-                claim = claim_job(job.pk, typed=True, expected_slot=options["slot"])
+                claim = claim_job(
+                    job.pk, typed=True, expected_slot=options["slot"],
+                    initial_release_reading=options.get("initial_release_reading", False),
+                )
                 with fenced_run(claim) as (_, active):
                     require(options["slot"] is None or active.scheduled_slot_at == aware_instant(options["slot"]),
                             "metric schedule slot differs from claimed slot")
