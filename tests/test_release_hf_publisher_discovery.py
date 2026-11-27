@@ -23,7 +23,7 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
     ],
 )
 def test_scheduled_discovery_binds_only_verified_product_and_records_zero(
-    settings, namespace, returned_repo
+    settings, namespace, returned_repo, monkeypatch
 ):
     setup_spec()  # Install the existing metrics and the fixture's collection grants.
     models.DataSource.objects.filter(pk="hf").update(enabled=True)
@@ -48,6 +48,14 @@ def test_scheduled_discovery_binds_only_verified_product_and_records_zero(
         source_excerpt="https://huggingface.co/" + repo,
         extraction_version="pulse-publisher-source-v1",
     )
+    # The upstream original-X and article fetches use the same invocation budget.
+    # Exercise the two remaining physical HF fetches on the same wake.
+    def recovered_at_source(dossier, *, client, now, budget):
+        if not calls and dossier.pk == announcement.event_dossier_source.event_dossier_id:
+            budget.remaining -= 2
+        return False
+
+    monkeypatch.setattr("core.release_publisher_recovery.recover_release_publisher", recovered_at_source)
     calls = []
 
     def respond(request):

@@ -42,6 +42,8 @@ from core.release_chart_handoff import lock_qualified_release, resolve_release
 # GitHub statistics are already collected through catalog/release observations and
 # their dedicated projection worker. They are not a direct numeric HTTP adapter.
 DIRECT_SOURCES = ("hf", "openrouter", "opencode", "arena")
+# One cold release can need X, the publisher article, model identity and a measurement.
+RELEASE_REQUEST_LIMIT = 4
 
 
 def _contract_from_recipe(recipe, product, reviewed_by):
@@ -428,14 +430,14 @@ def collect_due_release_metrics(
     if not settings.BENCHMARK_COLLECTION_ENABLED:
         return {**result, "status": "disabled"}
     budget = invocation_budget(
-        client, requests=3, seconds=max_seconds, max_bytes=4 * 1024**2
+        client, requests=RELEASE_REQUEST_LIMIT, seconds=max_seconds, max_bytes=4 * 1024**2
     )
     now = (cutoff or timezone.now()).astimezone(UTC)
     try:
         _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints, live=cutoff is None)
     except PlanningDeadline:
         result["status"] = "deferred"
-    result["requests"] = 3 - budget.remaining
+    result["requests"] = RELEASE_REQUEST_LIMIT - budget.remaining
     return result
 
 
