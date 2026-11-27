@@ -243,44 +243,80 @@
       "state_seeds": [],
       "actions": [
         {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
           "kind": "click",
           "target": "[data-refresh=\"calendar\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 1200
         },
         {
           "kind": "click",
           "target": "[data-refresh=\"free\"]"
         },
         {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
           "kind": "click",
           "target": "[data-refresh=\"jobs\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 1200
         },
         {
           "kind": "click",
           "target": "[data-refresh=\"moving\"]"
         },
         {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
           "kind": "click",
           "target": "[data-more=\"calendar\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 1200
         },
         {
           "kind": "click",
           "target": "[data-more=\"free\"]"
         },
         {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
           "kind": "click",
           "target": "[data-more=\"jobs\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 1200
         },
         {
           "kind": "click",
           "target": "[data-more=\"moving\"]"
         },
         {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
           "kind": "click",
           "target": ".primary-settings [data-value=\"open\"]"
         },
         {
           "kind": "wait",
-          "value": 500
+          "value": 1200
         },
         {
           "kind": "click",
@@ -288,7 +324,7 @@
         },
         {
           "kind": "wait",
-          "value": 500
+          "value": 1200
         }
       ],
       "required_metrics": [
@@ -346,44 +382,80 @@
       "state_seeds": [],
       "actions": [
         {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
           "kind": "click",
           "target": "[data-refresh=\"calendar\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 1200
         },
         {
           "kind": "click",
           "target": "[data-refresh=\"free\"]"
         },
         {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
           "kind": "click",
           "target": "[data-refresh=\"jobs\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 1200
         },
         {
           "kind": "click",
           "target": "[data-refresh=\"moving\"]"
         },
         {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
           "kind": "click",
           "target": "[data-more=\"calendar\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 1200
         },
         {
           "kind": "click",
           "target": "[data-more=\"free\"]"
         },
         {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
           "kind": "click",
           "target": "[data-more=\"jobs\"]"
+        },
+        {
+          "kind": "wait",
+          "value": 1200
         },
         {
           "kind": "click",
           "target": "[data-more=\"moving\"]"
         },
         {
+          "kind": "wait",
+          "value": 1200
+        },
+        {
           "kind": "click",
           "target": ".primary-settings [data-value=\"open\"]"
         },
         {
           "kind": "wait",
-          "value": 500
+          "value": 1200
         },
         {
           "kind": "click",
@@ -391,7 +463,7 @@
         },
         {
           "kind": "wait",
-          "value": 500
+          "value": 1200
         }
       ],
       "required_metrics": [
