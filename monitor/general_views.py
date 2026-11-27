@@ -1,6 +1,6 @@
 """General's server-rendered shell and progressive, read-only panel updates."""
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from threading import BoundedSemaphore, Event
 from urllib.parse import urlencode
@@ -40,6 +40,7 @@ PANEL_GLYPHS = {
     "moving": "a-personnel",
 }
 _GENERAL_FEED_MAX_READERS = 2
+_GENERAL_FEED_STATEMENT_TIMEOUT_MS = 25_000
 _GENERAL_FEED_SLOTS = BoundedSemaphore(_GENERAL_FEED_MAX_READERS)
 
 
@@ -60,6 +61,11 @@ def _general_panel_feeds(*, locale, brands, as_of):
             if failed.is_set():
                 return None
             try:
+                with connections["default"].cursor() as cursor:
+                    cursor.execute(
+                        "SELECT set_config('statement_timeout', %s, false)",
+                        [str(_GENERAL_FEED_STATEMENT_TIMEOUT_MS)],
+                    )
                 with translation.override("zh-hans" if locale == "zh-cn" else locale):
                     return general_feed(section, **options)
             except BaseException:
@@ -68,10 +74,19 @@ def _general_panel_feeds(*, locale, brands, as_of):
             finally:
                 connections.close_all()
 
-    with ThreadPoolExecutor(
+    executor = ThreadPoolExecutor(
         max_workers=_GENERAL_FEED_MAX_READERS, thread_name_prefix="general-feed"
-    ) as executor:
-        return dict(zip(SECTIONS, executor.map(read, SECTIONS), strict=True))
+    )
+    try:
+        futures = {executor.submit(read, section): section for section in SECTIONS}
+        results = {futures[future]: future.result() for future in as_completed(futures)}
+    except BaseException:
+        failed.set()
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise
+    else:
+        executor.shutdown(wait=True)
+        return {section: results[section] for section in SECTIONS}
 
 
 def editorial_panels(request, locale):

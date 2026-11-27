@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event, Lock, get_ident
 
 import pytest
-from django.db import connection, connections
+from django.db import DatabaseError, connection, connections
 from django.utils import translation
 
 from monitor import general_views
@@ -113,35 +113,21 @@ def test_simultaneous_requests_share_the_worker_reader_limit(monkeypatch):
 @pytest.mark.django_db(transaction=True)
 def test_panel_failure_does_not_start_later_reads(monkeypatch):
     both_started = Barrier(2, timeout=10)
-    failed = Event()
-    third_attempt = Event()
     release = Event()
+    finished = Event()
     called = []
-    lock = Lock()
-    attempts = 0
-    slots = general_views._GENERAL_FEED_SLOTS
-
-    class TrackedSlots:
-        def __enter__(self):
-            nonlocal attempts
-            with lock:
-                attempts += 1
-                if attempts == 3:
-                    third_attempt.set()
-            return slots.__enter__()
-
-        def __exit__(self, *args):
-            return slots.__exit__(*args)
 
     def fake_feed(section, **options):
         called.append(section)
         if section in ("calendar", "free"):
             both_started.wait()
         if section == "free":
-            failed.set()
             raise ValueError("panel failed")
         if section == "calendar":
-            assert release.wait(10)
+            try:
+                assert release.wait(10)
+            finally:
+                finished.set()
         return section
 
     def request():
@@ -151,16 +137,21 @@ def test_panel_failure_does_not_start_later_reads(monkeypatch):
             connections.close_all()
 
     monkeypatch.setattr(general_views, "general_feed", fake_feed)
-    monkeypatch.setattr(general_views, "_GENERAL_FEED_SLOTS", TrackedSlots())
     with ThreadPoolExecutor(max_workers=1) as caller:
         future = caller.submit(request)
         try:
-            assert failed.wait(10)
-            assert third_attempt.wait(10)
+            with pytest.raises(ValueError, match="panel failed"):
+                future.result(timeout=5)
         finally:
             release.set()
-        with pytest.raises(ValueError, match="panel failed"):
-            future.result()
+        assert finished.wait(10)
+        slots = general_views._GENERAL_FEED_SLOTS
+        assert slots.acquire(timeout=10)
+        try:
+            assert slots.acquire(timeout=10)
+            slots.release()
+        finally:
+            slots.release()
     assert set(called) == {"calendar", "free"}
 
 
@@ -190,12 +181,40 @@ def test_reader_connections_close_on_success_and_failure(monkeypatch, fail):
     if fail:
         with pytest.raises(ValueError, match="panel failed"):
             general_views._general_panel_feeds(locale="en", brands=[], as_of=NOW)
+        slots = general_views._GENERAL_FEED_SLOTS
+        assert slots.acquire(timeout=10)
+        try:
+            assert slots.acquire(timeout=10)
+            slots.release()
+        finally:
+            slots.release()
         fail = False
         assert len(general_views._general_panel_feeds(locale="en", brands=[], as_of=NOW)) == 4
     else:
         assert len(general_views._general_panel_feeds(locale="en", brands=[], as_of=NOW)) == 4
     assert opened and len(opened) == len(closed)
     assert all(closed) and all(raw.closed for raw in opened)
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_reader_statement_deadline_cancels_a_stalled_query(monkeypatch):
+    def stalled_feed(section, **options):
+        with connections["default"].cursor() as cursor:
+            cursor.execute("SELECT pg_sleep(1)")
+        return section
+
+    monkeypatch.setattr(general_views, "_GENERAL_FEED_STATEMENT_TIMEOUT_MS", 100)
+    monkeypatch.setattr(general_views, "general_feed", stalled_feed)
+    with pytest.raises(DatabaseError, match="statement timeout"):
+        general_views._general_panel_feeds(locale="en", brands=[], as_of=NOW)
+    slots = general_views._GENERAL_FEED_SLOTS
+    assert slots.acquire(timeout=10)
+    try:
+        assert slots.acquire(timeout=10)
+        slots.release()
+    finally:
+        slots.release()
 
 
 @pytest.mark.requires_postgres
