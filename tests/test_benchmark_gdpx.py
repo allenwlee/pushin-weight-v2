@@ -381,6 +381,20 @@ def test_challenges_are_fetch_challenged(response, attempts):
     assert len(requests) == attempts
 
 
+def test_homepage_invalid_utf8_is_fetch_failed():
+    requests = []
+    error = failure(
+        {
+            "/": httpx.Response(
+                200, content=b"\xff\xfe\xfd", headers={"content-type": "text/html"}
+            )
+        },
+        requests,
+    )
+    assert error.code == "fetch_failed" and error.detail == "malformed_text"
+    assert len(requests) == 1
+
+
 def test_chunk_challenge_is_fetch_challenged():
     assert failure({DATA_PATH: httpx.Response(403)}).code == "fetch_challenged"
     assert failure({DATA_PATH: httpx.Response(500)}).code == "fetch_failed"
@@ -454,3 +468,21 @@ def test_version_label_or_task_total_change_is_flagged_not_blocking():
     assert result["anomalies"] == ["task_totals_changed"]
     assert result["version_probe"]["task_totals"]["aria"] == [11]
     assert read(previous_probe=baseline)["anomalies"] == []
+
+
+def test_unreadable_version_label_is_flagged_not_blocking():
+    # Zero version labels: nothing on the homepage matches a vX.Y span.
+    unlabeled = HOMEPAGE.replace(">v1.0</span>", ">unreleased</span>")
+    result = read({"/": unlabeled})
+    assert result["status"] == "ok"
+    assert result["version_probe"]["label"] is None
+    assert result["anomalies"] == ["version_label_unreadable"]
+    # Two distinct version labels: the probe can't pick one.
+    duplicated = HOMEPAGE.replace(
+        "</head>", '<span class="hidden">v9.9</span></head>'
+    )
+    assert duplicated != HOMEPAGE
+    result = read({"/": duplicated})
+    assert result["status"] == "ok"
+    assert result["version_probe"]["label"] is None
+    assert result["anomalies"] == ["version_label_unreadable"]
