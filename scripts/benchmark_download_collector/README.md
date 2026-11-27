@@ -129,6 +129,118 @@ homepage. Only enable it on the intended environment. Optional `start` and `end`
 query parameters must remain inside the reviewed launch/coverage range and 366-day
 budget. Responses use `no-store`; late posts and new measurements appear on reload.
 
+## GDPx reader
+
+[GDPx by SemiAnalysis](../../docs/external_vendors/semianalysis_gdpx/README.md)
+scores frontier models on partner-supplied tasks grouped into domains. It has no
+API: the homepage is a Next.js build whose JavaScript files embed the whole
+dataset as one `JSON.parse('...')` string. `sources.gdpx(budget, previous_probe=...)`
+fetches it, and the pure parsing and checks live in `core/benchmark_gdpx.py`.
+
+One poll works like this:
+
+1. Fetch `https://gdpx.semianalysis.com/` through `Budget.get(..., text=True)`.
+   Text mode accepts only that homepage and `/_next/static/**.js` paths on the
+   same host, with no query or fragment. Redirects are refused, requests send
+   `User-Agent: PushinWeight-public-metadata` and no credentials, and the
+   request, time and byte caps still apply.
+2. Collect every same-host chunk reference from the homepage, whether written
+   plainly or escaped. References to another host are listed in
+   `refused_references` and never fetched. A homepage with no chunk references,
+   or an HTTP 403/429, is `fetch_challenged`; any other fetch error is
+   `fetch_failed`.
+3. Fetch every referenced chunk and decode each `JSON.parse` literal. An object
+   carrying all of `updatedAt`, `source`, `models`, `overall` and `results` is a
+   dataset candidate. None is `dataset_not_found`; more than one distinct dataset
+   (by canonical digest) is `dataset_ambiguous`. The partner registry (partner
+   id, name, domain) is read from the `a("<id>","<name>","<domain>","/partners/...")`
+   calls in the chunk that holds the dataset.
+4. Validate every key, type and range against the November 2026 shape, including
+   that every result's partner is in the registry. Any difference is `shape_changed`.
+5. Recompute the headline score of each non-specialist model shown in the
+   server-rendered leaderboard and require agreement with the displayed value to
+   within 0.05. A difference is `headline_mismatch`.
+
+The headline is the mean over domains of the mean per-partner `score` within that
+domain: each domain counts equally, and each partner counts equally within its
+domain. `headline_scores` computes it for the reader check.
+`stored_headline_scores(contract)` computes it from stored rows: it uses the
+current revision of each row (`selected_identity_rows`), limited to the rows the
+latest successful GDPx check references. A model that has no stored rows, or that
+the latest stored publication omits, has no score rather than zero. Specialist
+models are excluded, as on the site, using the labels in that run's archived
+selected payload.
+
+Each successful read also records a version probe: the homepage version label
+(`v1.0` in November 2026) and a SHA-256 fingerprint of per-partner task totals.
+A changed or unreadable probe adds `version_label_changed`, `task_totals_changed`
+or `version_label_unreadable` to the payload's `anomalies`. The anomalies are kept
+in the run's archived selected payload and source metadata. They never block
+collection; a new benchmark version that changes definitions needs a new contract.
+
+```sh
+python manage.py collect_benchmark_metrics --contract CONTRACT_UUID --source gdpx \
+  --start-date 2026-11-27 --end-date 2026-11-27 --apply
+python manage.py collection_status --contract CONTRACT_UUID --source gdpx \
+  --identifier claude-fable-5-2
+```
+
+The command's date arguments are required, but GDPx always reads the whole current
+publication. A failed poll keeps its request archives, stores no values, and
+records the typed failure code as the run's `error_code`. For a scheduled job,
+`collection_status --job JOB_UUID` shows it as the last attempt's `error_code`.
+
+Storage uses the existing collection tables. A GDPx contract has `gdpx` as its only
+source and no mappings, so every published row is stored by GDPx's own model id
+(`mapping` is NULL). Admitting a GDPx name through the crosswalk therefore never
+requires a replacement contract. Each `results` row and each `overall` entry
+becomes one observation:
+
+| Column | Value |
+| --- | --- |
+| `source_identifier` | GDPx model id, such as `claude-fable-5-2` |
+| `category_key` | partner id; `overall` for a model's reported overall cost and tokens |
+| `coordinate_key` | partner domain; none for `overall` rows |
+| `config_key` | `<harness>\|<reasoning casefolded>`, such as `Claude Code\|max` |
+| `published_date`, `source_record_date` | the dataset's `updatedAt`, day precision |
+
+Per-partner rows carry `score` and `partial_score` (`percent`, `score` form),
+`tasks`, `tasks_scored`, `tasks_with_partial`, `tasks_with_cost` and
+`tasks_with_tokens` (`tasks`, `count` form), `cost_per_task` (`usd`, `monetary`
+form) and `tokens_per_task` (`output_tokens_per_task`, `ratio` form). `overall`
+rows carry only the published `cost_per_task` and `tokens_per_task`; they are never
+recomputed from partner rows. Only `score` is required. A published null is stored
+as a `source_value_unavailable` gap, never as zero, and negative money or token
+values and percentages outside 0–100 are rejected. The model's `lab`,
+`openWeights`, `specialist` and verbatim `harness`/`reasoning` labels stay in the
+archived selected payload.
+
+Change detection reuses the OpenCode revision model. Each poll records one
+`gdpx:dataset` endpoint check with the dataset's `updatedAt` and canonical body
+digest; array order and integral-float spelling do not change the digest. An
+unchanged row is referenced, not rewritten. A changed row is a new observation that
+supersedes the prior one, including when a score goes down. A changed body under an
+unchanged `updatedAt` sets `revision_conflict` (`same_update_different_body`). An
+older `updatedAt` than the stored one is recorded as a check (`older_than_stored`)
+and never selected. A model missing from a newer publication keeps its earlier rows
+and is listed in the check's `absent_rows`. One `gdpx:publication` marker is written
+per distinct `updatedAt`, carrying the version label and task-total fingerprint.
+
+A run's `selected_count` is the validated publication's expected observation count:
+one per result plus one per `overall` entry (393 for the 2026-11-25 publication).
+`success_count` counts the observations stored or reused for it, and the run is
+`success` only when the two are equal. An older publication leaves the run
+`partial` with zero successes.
+
+GDPx source operation defaults, which a contract's own settings override, are
+daily polling, two-day retrieval freshness, thirty-day publication freshness, and
+caps of 100 requests, 120 seconds and 32 MiB per poll.
+The source's attribution credit is "GDPx by SemiAnalysis" with its terms URL.
+Collection requires the owner's recorded use policy (`collection` and `retention`
+allowed, with the terms' commercial-use clauses as recorded restrictions) in
+`DataSource("gdpx").metadata["use_policy"]`; registering definitions does not write
+it.
+
 ## Time, scope and interpretation
 
 The owned taxonomy uses products as precise measurement subjects, alongside brands,
@@ -370,6 +482,7 @@ The tool cannot automatically discover undisclosed upstream methodology changes.
 - [Official Arena leaderboard dataset](https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset), CC BY 4.0. New collection uses overall text scores without style control. Existing style-controlled contracts remain separate.
 - [Hugging Face download semantics](https://huggingface.co/docs/hub/models-download-stats). Collection reuses the existing bounded public HF metadata client.
 - [OpenRouter daily dataset](https://openrouter.ai/docs/api/api-reference/datasets/daily-token-totals-for-top-50-models), CC BY 4.0. The report includes the required source and `as_of` attribution. Documented limits are 30 requests/minute per key and 500/day per account; this collector makes one request per selected date range, excluding retries.
+- [GDPx](https://gdpx.semianalysis.com/), credited as "GDPx by SemiAnalysis" under its [terms](https://gdpx.semianalysis.com/terms). The reader fetches only the public homepage and its own static JavaScript files; see the [vendor notes](../../docs/external_vendors/semianalysis_gdpx/README.md) for the terms summary and the owner decision.
 
 AA, LiveBench and individual task benchmarks are deferred. No subscription or
 paid inference endpoint is used. There is no scheduler or production integration.

@@ -1,5 +1,13 @@
 # Database schema reference
 
+The [`ck_metric_quantity`](#table-metrics) value list and the
+[`collection_job_targets`](#table-collection_job_targets) source-guard note are
+checked against migrations `0247_metric_monetary_quantity` and
+`0248_gdpx_match_candidate_namespace` at source revision `22b43684` and on a
+branch-specific test database on November 27, 2026 JST. These migrations add no
+tables or columns, and this scoped check does not refresh the older inventory
+totals below.
+
 The [Each raw-fact views](#view-each-brand-post-facts) are defined by migration
 `0235_each_chart_facts` after the Pulse schema. Their20columns, indexes and
 publication behavior were checked on the branch-specific fixture database on
@@ -9229,6 +9237,8 @@ Model: [CollectionJobTarget](../../core/models.py#L9192).
 - `pw_rg5_ref_22b98ca21253_fk`: `FOREIGN KEY (identifier_scope_id) REFERENCES source_identifier_namespaces(id) DEFERRABLE INITIALLY DEFERRED`.
 - `pw_rg5_source_collection_job_targets`: `CREATE TRIGGER pw_rg5_source_collection_job_targets BEFORE INSERT OR UPDATE ON public.collection_job_targets FOR EACH ROW EXECUTE FUNCTION pw_rg5_source_collection_job_targets()`.
 
+The `pw_rg5_source_collection_job_targets()` function rejects an `identifier_scope_id` whose namespace belongs to a different source or subject kind than the target. The source comes from the pinned mapping or, failing that, from the evidence observation's job. For a `match_candidate` target without a mapping, the expected subject kind is `repository` for `github` and `model` for `hf`, `arena`, `openrouter` and `gdpx` (`gdpx` added by `0248_gdpx_match_candidate_namespace`). Other targets use the evidence observation's `source_subject_kind`.
+
 [Back to table inventory](#table-inventory)
 
 <a id="table-collection_metric_gaps"></a>
@@ -10212,7 +10222,7 @@ Model: [SourceMetric](../../core/models.py#L8513).
 - `metrics_unit_id_6337e316_fk_measurement_units_code`: `FOREIGN KEY (unit_id) REFERENCES measurement_units(code) DEFERRABLE INITIALLY DEFERRED`.
 - `metrics_window_unit_id_2fe033ff_fk_measurement_units_code`: `FOREIGN KEY (window_unit_id) REFERENCES measurement_units(code) DEFERRABLE INITIALLY DEFERRED`.
 - `ck_metric_value_kind`: `CHECK (((value_kind)::text = ANY ((ARRAY['integer'::character varying, 'float'::character varying])::text[])))`.
-- `ck_metric_quantity`: `CHECK (((quantity_form)::text = ANY ((ARRAY['count'::character varying, 'score'::character varying, 'rank'::character varying, 'variance'::character varying, 'ratio'::character varying])::text[])))`.
+- `ck_metric_quantity`: `CHECK (((quantity_form)::text = ANY ((ARRAY['count'::character varying, 'score'::character varying, 'rank'::character varying, 'variance'::character varying, 'ratio'::character varying, 'monetary'::character varying])::text[])))`. `monetary` (added by `0247_metric_monetary_quantity`, which replaced only this constraint) marks an amount of money, such as GDPx `cost_per_task` in the `usd` unit; writers reject negative monetary values.
 - `ck_metric_value_role`: `CHECK (((value_role)::text = ANY ((ARRAY['value'::character varying, 'lower_bound'::character varying, 'upper_bound'::character varying])::text[])))`.
 - `ck_metric_kind_window`: `CHECK (((((measurement_kind)::text = 'state'::text) AND (window_alignment IS NULL) AND (window_amount IS NULL) AND ((window_duration_basis)::text = 'none'::text) AND ((window_mode)::text = 'none'::text) AND (window_unit_id IS NULL)) OR (((measurement_kind)::text = 'flow'::text) AND (window_alignment IS NULL) AND (window_amount IS NULL) AND ((window_duration_basis)::text = 'none'::text) AND ((window_mode)::text = 'since_origin'::text) AND (window_unit_id IS NULL)) OR (((measurement_kind)::text = 'flow'::text) AND (window_amount > (0)::numeric) AND (window_amount IS NOT NULL) AND (window_amount < (1000000000)::numeric) AND ((window_duration_basis)::text = ANY ((ARRAY['calendar'::character varying, 'fixed'::character varying, 'unknown'::character varying])::text[])) AND ((window_mode)::text = ANY ((ARRAY['rolling'::character varying, 'calendar'::character varying, 'fixed'::character varying])::text[])) AND ((window_unit_id)::text = ANY ((ARRAY['day'::character varying, 'second'::character varying])::text[])) AND (window_unit_id IS NOT NULL) AND ((((window_alignment)::text = ANY ((ARRAY['source_local_midnight'::character varying, 'provider_defined'::character varying])::text[])) AND (window_alignment IS NOT NULL) AND ((window_mode)::text = 'calendar'::text)) OR ((window_alignment IS NULL) AND (NOT ((window_mode)::text = 'calendar'::text)))))))`.
 

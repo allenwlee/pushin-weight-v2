@@ -1,16 +1,18 @@
-"""Pure GDPx parsing: chunk discovery, dataset extraction, validation and checks.
+"""GDPx parsing: chunk discovery, dataset extraction, validation and headlines.
 
 GDPx (https://gdpx.semianalysis.com/) publishes no API. Its homepage is a
 Next.js build whose JavaScript chunks embed the full dataset as one
 ``JSON.parse('...')`` string literal, next to a partner registry built from
 ``a("<id>", "<name>", "<domain>", "/partners/...")`` calls. This module turns
 fetched homepage and chunk text into a validated dataset or a typed failure.
-It performs no network or database access; ``sources.gdpx`` does the fetching.
+Apart from ``stored_headline_scores``, which reads stored rows, it performs no
+network or database access; ``sources.gdpx`` does the fetching.
 
 The published headline score is a mean over domains of the mean over that
 domain's partners of each per-partner ``score`` (equal weight per domain, equal
-weight per partner within a domain). ``headline_scores`` is shared with
-readers that recompute it from stored per-partner rows.
+weight per partner within a domain). ``headline_scores`` is shared by the
+reader check and ``stored_headline_scores``, which recomputes it from stored
+per-partner rows.
 """
 
 from __future__ import annotations
@@ -377,6 +379,73 @@ def headline_scores(rows, partner_domains):
         model_id: sum(sum(s) / len(s) for s in domains.values()) / len(domains)
         for model_id, domains in by_model.items()
     }
+
+
+def stored_headline_scores(contract):
+    """Model id -> headline score from the latest complete stored GDPx publication.
+
+    Rows come from the revision selection (``selected_identity_rows``),
+    restricted to the identities that the latest successful publication check
+    references, so a model or configuration absent from that publication has
+    no score rather than a stale one. A model with no stored rows is absent,
+    never zero. Specialists are excluded as on the site, using the labels in
+    that run's archived selected payload.
+    """
+    from core.benchmark_opencode import selected_identity_rows, stored_identity
+    from core.collection_capture import read_document
+    from core.measurement_taxonomy import require
+    from core.models import CollectionObservation, MetricValue
+
+    check = (
+        CollectionObservation.objects.filter(
+            run__job__contract=contract,
+            run__job__source_id="gdpx",
+            run__job__purpose="metric",
+            run__status="success",
+            observation_kind="endpoint_check",
+            status="ok",
+        )
+        .select_related("run__payload_archive")
+        .order_by("-source_record_date", "-run__completed_at", "-run_id")
+        .first()
+    )
+    if check is None:
+        return {}
+    published = {
+        stored_identity(row)
+        for row in CollectionObservation.objects.filter(
+            derived_inputs__observation=check,
+            derived_inputs__input_role="endpoint_revision_row",
+        ).only("source_identifier", "category_key", "config_key")
+    }
+    selected = selected_identity_rows(contract, "gdpx")
+    ids = [row.pk for key, row in selected.items() if key in published]
+
+    payload = read_document(check.run.payload_archive)
+    require(digest(payload) == check.run.payload_sha256, "GDPx selected payload changed")
+    specialists = {
+        model["id"] for model in payload["dataset"]["models"] if "specialist" in model
+    }
+    scores = (
+        MetricValue.objects.filter(
+            observation_id__in=ids, source_metric__metric_key="score"
+        )
+        .exclude(observation__category_key="overall")
+        .values_list(
+            "observation__source_identifier",
+            "observation__category_key",
+            "observation__coordinate_key",
+            "float_value",
+        )
+    )
+    domains, rows = {}, []
+    for model_id, partner_id, domain, score in scores:
+        require(
+            domains.setdefault(partner_id, domain) == domain, "GDPx partner domain conflict"
+        )
+        if model_id not in specialists:
+            rows.append((model_id, partner_id, score))
+    return headline_scores(rows, domains)
 
 
 def published_headlines(page):

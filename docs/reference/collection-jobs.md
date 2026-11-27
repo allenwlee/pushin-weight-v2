@@ -354,7 +354,7 @@ GitHub IDs, OpenRouter IDs/slugs and Arena names never overwrite Product's HF
 ## Product crosswalk matching
 
 `match_collection_products --brand <nickname>` reads existing HF products and
-stored GitHub, OpenRouter, Arena and OpenCode identities. Repeat `--brand` for
+stored GitHub, OpenRouter, Arena, OpenCode and GDPx identities. Repeat `--brand` for
 up to 21 tracked brands and `--source` to narrow the sources. The default is a
 read-only JSON preview; `--format markdown` presents the same fields as a review
 document. It makes no provider or model requests. Products sort by highest
@@ -378,6 +378,18 @@ python manage.py match_collection_products --brand deepseek --source arena \
 python manage.py match_collection_products --resume <job-uuid> --apply
 python manage.py collection_status --job <job-uuid>
 ```
+
+GDPx candidates come from stored per-partner and overall observations, not from
+endpoint checks or publication markers. Their identifier is the GDPx model id under
+the `model_id` namespace, but the label matched against products is the published
+display name (`models[].name`), with `lab` as the publisher hint: a slug such as
+`gpt-6-2-astra` never equals a name such as "GPT-6.2-Astra". Model labels are read
+from the selected publication payload archived with the observation's run.
+Specialist models and ids or names containing `abliterated` are always `unmatched`
+with reason `specialist_or_abliterated_variant`, so they never link to a base
+product. Two GDPx ids claiming one product are both `unmatched`
+(`competing_source_identity`). The candidate evidence URL is
+`https://gdpx.semianalysis.com/`.
 
 Apply freezes source-specific `match_crosswalk` instructions in `collection_jobs`.
 Existing runs and `product_match` scope records retain decisions and recovery
@@ -532,6 +544,22 @@ activate it or replace a different live owner. The existing hourly Render runner
 from `collection_role_dispatch_budget` (default 100/300/8 MiB). Source/environment
 activation is still required. Daily HF slots remain 10:00 UTC. Deep history uses
 separate jobs, so it cannot prevent a fresh inventory run.
+
+[GDPx](../external_vendors/semianalysis_gdpx/README.md) benchmark collection is
+scheduled through this job-owned path rather than the legacy
+`poll_seconds` check. Its contract has its own recurring `collect_metrics` job with
+a shared-driver `daily_utc` schedule, made the metric scheduling authority for the
+`gdpx` source and contract with `--take-metric-authority`. A daily slot opens at the
+job's UTC hour. A run that is not `success` sets `next_retry_at` fifteen minutes
+ahead, so a later hourly tick retries the same day; after a success the job waits
+for the next day's slot. `collect_benchmark_due` accepts `--contract` more than
+once, so the hourly benchmark cron can pass the existing contract and the GDPx
+contract in one invocation. Each contract runs in isolation: an error in one is
+reported after the others finish, and the command then exits nonzero.
+`dispatch_collection_roles` runs once per invocation, after the contracts. Adding
+the GDPx contract to the Render cron's start command is a separate release action.
+A GDPx run's success rule and typed failure codes are described in the
+[collector guide](../../scripts/benchmark_download_collector/README.md#gdpx-reader).
 
 `collection_status --job <uuid>` and `collection_status --cohort <sha256>` expose
 the same read-only services to humans and agents. Reports include separate attempt

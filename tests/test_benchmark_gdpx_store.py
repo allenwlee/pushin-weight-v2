@@ -509,3 +509,100 @@ def test_opencode_rows_still_require_their_reviewed_mapping():
     data["endpoint_checks"][0]["source_identifier"] = "other/model"
     with pytest.raises(ValueError, match="OpenCode endpoint differs from reviewed mapping"):
         prepare_revisions(target, prepared, data)
+
+
+# --- headline from stored rows (R15) ---------------------------------------------
+
+
+def computed_headlines(data):
+    """The U2 computation over a payload's non-specialist per-partner scores."""
+    from core.benchmark_gdpx import headline_scores
+
+    dataset = data["dataset"]
+    specialists = {m["id"] for m in dataset["models"] if "specialist" in m}
+    domains = {pid: entry["domain"] for pid, entry in data["partners"].items()}
+    return headline_scores(
+        (
+            (r["modelId"], r["partnerId"], r["score"])
+            for r in dataset["results"]
+            if r["modelId"] not in specialists
+        ),
+        domains,
+    )
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_stored_headline_equals_reader_computation_and_site_values():
+    from core.benchmark_gdpx import stored_headline_scores
+
+    data = payload()
+    run = persist(contract(), "1", data)
+    assert run.status == "success"
+    scores = stored_headline_scores(run.job.contract)
+    expected = computed_headlines(data)
+    assert len(expected) == OVERALL
+    assert scores == pytest.approx(expected, abs=1e-9)
+    shown = {row["model_id"]: row["published"] for row in data["headline_check"]}
+    assert {m: round(scores[m], 1) for m in shown} == shown
+    assert sorted(shown.values(), reverse=True)[:3] == [19.3, 16.4, 11.9]
+    assert round(scores["gpt-6-2-astra"], 4) == 19.2612
+    # Specialists are stored but, as on the site, carry no headline.
+    for specialist in ("hinoki-ho1", "kimi-k3-1-pro-abliterated"):
+        assert rows(run).filter(source_identifier=specialist).exists()
+        assert specialist not in scores
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_stored_headline_uses_only_the_latest_revision_after_supersession():
+    from core.benchmark_gdpx import stored_headline_scores
+
+    target = contract()
+    persist(target, "1", payload())
+    before = stored_headline_scores(target)
+
+    def lower(dataset):
+        result(dataset, "claude-haiku-5-5", "fleet")["score"] -= 1
+
+    newer = payload(lower, updated="2026-11-26")
+    persist(target, "2", newer)
+    after = stored_headline_scores(target)
+    assert after == pytest.approx(computed_headlines(newer), abs=1e-9)
+    assert after["claude-haiku-5-5"] < before["claude-haiku-5-5"]
+    assert {k: v for k, v in after.items() if k != "claude-haiku-5-5"} == (
+        pytest.approx({k: v for k, v in before.items() if k != "claude-haiku-5-5"})
+    )
+    # An older publication polled afterwards never replaces the selection.
+    persist(target, "3", payload())
+    assert stored_headline_scores(target) == pytest.approx(after, abs=1e-9)
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_model_without_stored_rows_has_no_headline_not_zero():
+    from core.benchmark_gdpx import stored_headline_scores
+    from core.benchmark_opencode import selected_identity_rows
+
+    target = contract()
+    assert stored_headline_scores(target) == {}
+    persist(target, "1", payload())
+    assert "no-such-model" not in stored_headline_scores(target)
+
+    def remove(dataset):
+        dataset["models"] = [m for m in dataset["models"] if m["id"] != "muse-wonder"]
+        dataset["results"] = [
+            r for r in dataset["results"] if r["modelId"] != "muse-wonder"
+        ]
+        del dataset["overall"]["muse-wonder"]
+
+    smaller = payload(remove, updated="2026-11-26")
+    persist(target, "2", smaller)
+    # Its older rows stay stored and selected, but the latest publication omits it.
+    assert any(
+        o.source_identifier == "muse-wonder"
+        for o in selected_identity_rows(target, "gdpx").values()
+    )
+    scores = stored_headline_scores(target)
+    assert "muse-wonder" not in scores
+    assert scores == pytest.approx(computed_headlines(smaller), abs=1e-9)
