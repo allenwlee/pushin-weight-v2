@@ -6503,6 +6503,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         globe.hover()
                         popover = page.locator('#pw-feed-inspection-popover')
                         self.assertEqual(popover.locator('.inspection-words').inner_text(), '言語・翻訳・解説待ち（目安1〜5分）')
+                        expect(popover.locator('.inspection-visual svg')).to_be_visible()
                         trigger_rect = globe.bounding_box()
                         popover_rect = popover.bounding_box()
                         self.assertIsNotNone(trigger_rect)
