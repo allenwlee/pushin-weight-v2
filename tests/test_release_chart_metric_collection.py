@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 
 import httpx
@@ -61,9 +62,9 @@ def test_scheduled_release_reuses_metric_job_and_recovers_without_fresh_posts(
         )
 
     take_metric_authority(job.pk)
-    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-        first = collect_due_release_metrics(client=client, cutoff=later)
-        second = collect_due_release_metrics(client=client, cutoff=later)
+    with httpx.Client(transport=httpx.MockTransport(respond)) as provider:
+        first = collect_due_release_metrics(client=provider, cutoff=later)
+        second = collect_due_release_metrics(client=provider, cutoff=later)
     assert first["applied"] == 1 and second["applied"] == 0
     assert len(seen) == 1 and "lab/Model" in seen[0]
     assert (
@@ -78,6 +79,32 @@ def test_scheduled_release_reuses_metric_job_and_recovers_without_fresh_posts(
     )
     assert value.observation.inputs.get().input_request.archive_id
     assert event.sources.filter(claims=evidence).exists()
+    # An official rolling snapshot already exists even while this UTC day is open.
+    monkeypatch.setattr(timezone, "now", lambda: later + timedelta(minutes=1))
+    from django.test import RequestFactory
+
+    from core.chart_engine import build_single_brand_chart
+    from monitor import single_brand_chart
+
+    # pytest already opened a transaction, so omit only the outer READ ONLY wrapper.
+    monkeypatch.setattr(
+        single_brand_chart, "_calculate_chart", build_single_brand_chart
+    )
+    monkeypatch.setattr(single_brand_chart, "_LAST_BUILD_FINISHED", float("-inf"))
+    response = single_brand_chart.chart(
+        RequestFactory().get("/general/chart/", {"release": str(event.pk)})
+    )
+    assert response.status_code == 200, response.content
+    line = next(
+        line
+        for line in json.loads(response.content)["lines"]
+        if line["key"] == "hf:downloads"
+    )
+    point = next(
+        point for point in line["points"] if point["date"] == later.date().isoformat()
+    )
+    assert point["raw"] == "0" and point["coverage"] == "observed"
+    assert point["evidence"]["observed_at"] == value.observation.observed_at.isoformat()
 
 
 def test_closed_chart_window_and_unresolved_date_make_no_requests(settings):

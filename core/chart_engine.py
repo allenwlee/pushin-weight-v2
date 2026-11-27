@@ -661,6 +661,11 @@ def metric_series(
                     "chart_metric_key": metric.selection.metric_key,
                     "chart_window_start": start,
                     "chart_window_end": min(end, request.cutoff),
+                    "direct_hf_snapshot": bool(
+                        getattr(getattr(request, "target", None), "dossier_id", None)
+                        and mapping.source_id == "hf"
+                        and metric.selection.metric_key == "downloads"
+                    ),
                 }
                 if single_template and start < min(end, request.cutoff)
                 else {}
@@ -784,6 +789,20 @@ def metric_series(
     )
 
 
+def _snapshot_observed_at(value, bucket, cutoff):
+    """Keep an actual observation only when its complete evidence was available."""
+    try:
+        observed = datetime.fromisoformat(value["first_local_observed_at"])
+        if not (bucket <= observed <= cutoff and observed < bucket + timedelta(days=1)):
+            return None
+        for name in ("import_completed_at", "provider_as_of", "as_of_at", "window_end_at"):
+            if value.get(name) and datetime.fromisoformat(value[name]) > cutoff:
+                return None
+    except (KeyError, TypeError, ValueError):
+        return None
+    return observed
+
+
 def _metric_points(
     metric, request, start, end, candidates, direct_runs, single_template
 ):
@@ -839,17 +858,35 @@ def _metric_points(
             }
             continue
         partial_source = value["source_metadata"].get("period_status") == "partial"
+        observed_at = None
+        if (
+            not complete
+            and single_template
+            and getattr(getattr(request, "target", None), "dossier_id", None)
+            and mapping.source_id == "hf"
+            and metric.selection.metric_key == "downloads"
+            and value["run_id"] in direct_runs
+            and value["window_mode"] == "rolling"
+            and not value.get("revision_conflict")
+            and not partial_source
+        ):
+            # This is the provider's rolling counter at retrieval, not a daily total.
+            observed = _snapshot_observed_at(value, bucket_start, min(end, request.cutoff))
+            if observed is not None:
+                observed_at = observed.isoformat()
+        available = complete or observed_at is not None
         selected[day] = {
             "date": day,
-            "value": value["value"] if complete and not partial_source else None,
+            "value": value["value"] if available and not partial_source else None,
             "coverage": "partial_source"
             if partial_source
             else "observed"
-            if complete
+            if available
             else "partial_window",
             "evidence": {
                 "value_id": value["value_id"],
                 "observation_id": value["observation_id"],
+                **({"observed_at": observed_at} if observed_at else {}),
             },
             "unit": value["unit"],
             "window_mode": value["window_mode"],
@@ -862,7 +899,10 @@ def _metric_points(
         point = dict(
             selected.get(day, {"date": day, "value": None, "coverage": "missing"})
         )
-        if bucket < start or bucket + timedelta(days=1) > min(end, request.cutoff):
+        if bucket < start or (
+            bucket + timedelta(days=1) > min(end, request.cutoff)
+            and not point.get("evidence", {}).get("observed_at")
+        ):
             point.update(value=None, coverage="partial_window")
         if mapping.source_id == "hf" and metric.selection.metric_key == "downloads":
             previous = selected.get((bucket.date() - timedelta(days=1)).isoformat(), {})

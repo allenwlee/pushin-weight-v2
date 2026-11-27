@@ -188,7 +188,7 @@ def chart(request):
         f"single-brand-comp:v2:{product_key}:{anchor.isoformat()}:{anchor_source}"
     )
     if qualified:
-        cache_key += f":{qualified.dossier_id}:{qualified.fingerprint}"
+        cache_key += f":snapshot-v1:{qualified.dossier_id}:{qualified.fingerprint}"
     refresh = request.GET.get("refresh") == "1"
     result = None if refresh else _cached_chart(cache_key)
     if result is None:
