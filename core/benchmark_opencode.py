@@ -16,13 +16,43 @@ from core.benchmark_serving import observation_read_fields
 from core.measurement_taxonomy import digest, require
 from core.models import CollectionObservation, CollectionObservationInput, CollectionRun
 
+REVISION_SOURCES = frozenset({"opencode", "gdpx"})
+GDPX_DATASET_IDENTIFIER = "gdpx:dataset"
+
+
+def revision_identity(source_identifier, category_key, config_key):
+    """Observation identity within a contract: model, category and configuration."""
+    return "|".join((source_identifier, category_key or "", config_key or ""))
+
+
+def prepared_identity(observation):
+    dimensions = observation["dimensions"]
+    return revision_identity(
+        observation["source_identifier"],
+        dimensions.get("category"),
+        dimensions.get("config"),
+    )
+
+
+def stored_identity(observation):
+    return revision_identity(
+        observation.source_identifier, observation.category_key, observation.config_key
+    )
+
 
 def record_endpoint_checks(run, checks, contract, *, verify_only=False):
-    """Keep successful endpoint revisions and cross-run row references typed."""
+    """Keep successful endpoint revisions and cross-run row references typed.
+
+    OpenCode checks belong to one reviewed mapping and reference rows by date.
+    GDPx checks cover the link-free dataset and reference rows by observation
+    identity (model, category, configuration); no mapping is expected.
+    """
     require(run.observed_at is not None, "endpoint observation time required")
+    source = run.job.source_id
+    require(source in REVISION_SOURCES, "unsupported revision source")
     mappings = {
         row.external_identifier: row
-        for row in contract.mappings.filter(purpose="metric", source_id="opencode")
+        for row in contract.mappings.filter(purpose="metric", source_id=source)
     }
     inserted = 0
     for check in checks:
@@ -30,20 +60,26 @@ def record_endpoint_checks(run, checks, contract, *, verify_only=False):
             continue
         identifier = check["source_identifier"]
         mapping = mappings.get(identifier)
-        require(mapping is not None, "endpoint mapping is missing")
-        updated_at = aware_instant(check["updated_at"])
+        if source == "opencode":
+            require(mapping is not None, "endpoint mapping is missing")
+        else:
+            require(identifier == GDPX_DATASET_IDENTIFIER, "GDPx check identity mismatch")
         body_hash = check["body_sha256"]
         require(
             isinstance(body_hash, str) and re.fullmatch(r"[0-9a-f]{64}", body_hash),
             "endpoint body hash is invalid",
         )
-        key = digest(["opencode-endpoint-check-v1", str(run.pk), identifier])
+        key = digest([source + "-endpoint-check-v1", str(run.pk), identifier])
         defaults = {
             "mapping": mapping,
             "source_identifier": identifier,
-            "source_subject_kind": "model",
+            "source_subject_kind": "model" if source == "opencode" else "aggregate",
             "observed_at": run.observed_at,
-            "source_record_at": updated_at,
+            **(
+                {"source_record_at": aware_instant(check["updated_at"])}
+                if source == "opencode"
+                else {"source_record_date": native_date(check["updated_at"])}
+            ),
             "payload_sha256": body_hash,
             "revision_conflict": (
                 check.get("revision_anomaly") == "same_update_different_body"
@@ -63,7 +99,7 @@ def record_endpoint_checks(run, checks, contract, *, verify_only=False):
             inserted += int(created)
         require(
             all(getattr(marker, field + "_id" if field == "mapping" else field)
-                == (value.pk if field == "mapping" else value)
+                == (getattr(value, "pk", None) if field == "mapping" else value)
                 for field, value in defaults.items()),
             "endpoint check marker conflicts with source evidence",
         )
@@ -71,14 +107,17 @@ def record_endpoint_checks(run, checks, contract, *, verify_only=False):
             referenced = CollectionObservation.objects.select_related(
                 "run__job"
             ).get(pk=observation_id)
-            day = native_date(label)
             require(
-                referenced.source_identifier == identifier
-                and referenced.run.job.contract_id == contract.pk
-                and referenced.run.job.source_id == "opencode"
+                referenced.run.job.contract_id == contract.pk
+                and referenced.run.job.source_id == source
                 and referenced.status == "ok"
-                and referenced.mapping_id == mapping.pk
-                and referenced.source_record_date == day,
+                and referenced.mapping_id == getattr(mapping, "pk", None)
+                and (
+                    referenced.source_identifier == identifier
+                    and referenced.source_record_date == native_date(label)
+                    if source == "opencode"
+                    else stored_identity(referenced) == label
+                ),
                 "endpoint row reference conflicts with source evidence",
             )
             if verify_only:
@@ -206,8 +245,114 @@ def publication_times(contract):
     return dict(rows)
 
 
-def prepare_revisions(contract, prepared, payload):
+def selected_identity_rows(contract, source):
+    """Latest checked observation per identity, found without any mapping.
+
+    A row's identity is (source, source_identifier, category_key, config_key)
+    within the contract. Each successful or partial check references the rows
+    current for its publication; the latest publication date, then the latest
+    run, decides. A stale check references nothing and so never selects.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """SELECT DISTINCT ON (o.source_identifier,o.category_key,o.config_key) o.id
+            FROM collection_jobs j
+            JOIN collection_runs r ON r.job_id=j.id
+            JOIN collection_observations marker ON marker.run_id=r.id
+            JOIN collection_observation_inputs i ON i.observation_id=marker.id
+                AND i.input_role='endpoint_revision_row'
+            JOIN collection_observations o ON o.id=i.input_observation_id
+            WHERE j.contract_id=%s AND j.source_id=%s AND j.purpose='metric'
+                AND r.status IN ('success','partial')
+                AND marker.observation_kind='endpoint_check' AND marker.status='ok'
+                AND o.status='ok'
+            ORDER BY o.source_identifier,o.category_key,o.config_key,
+                marker.source_record_date DESC,r.completed_at DESC,r.id DESC
+            LIMIT 100001""",
+            [contract.pk, source],
+        )
+        ids = [row[0] for row in cursor.fetchall()]
+    require(len(ids) <= 100000, "revision selection budget exceeded")
+    rows = CollectionObservation.objects.filter(pk__in=ids).only(
+        "id", "source_identifier", "category_key", "config_key", "mapping_id",
+        "row_semantic_digest",
+    )
+    return {stored_identity(row): row for row in rows}
+
+
+def reuse_unchanged(prepared, current, identity, *, supersede=False, conflict=False):
+    """Split rows into new evidence and references to equal prior observations."""
+    new, reused = [], []
+    for observation, values in prepared:
+        if observation["status"] != "ok":
+            new.append((observation, values))
+            continue
+        key = identity(observation)
+        prior = current.get(key)
+        if prior and bytes(prior.row_semantic_digest or b"") == bytes.fromhex(
+            observation["source_metadata"]["row_semantic_hash"]
+        ):
+            reused.append((key, prior, observation))
+            continue
+        if supersede and prior:
+            observation["supersedes_observation"] = prior
+        if conflict:
+            observation["revision_conflict"] = True
+        new.append((observation, values))
+    return new, reused
+
+
+def prepare_gdpx_revisions(contract, prepared, payload):
+    """Compare a validated GDPx dataset with the latest stored selection (KTD7)."""
+    dataset = payload["dataset"]
+    day = native_date(dataset["updatedAt"])
+    check = {
+        "source_identifier": GDPX_DATASET_IDENTIFIER,
+        "status": "ok",
+        "updated_at": day.isoformat(),
+        "body_sha256": payload["dataset_sha256"],
+        "row_references": {},
+    }
+    require(
+        re.fullmatch(r"[0-9a-f]{64}", check["body_sha256"]),
+        "GDPx dataset digest required",
+    )
+    identities = [prepared_identity(o) for o, _ in prepared]
+    require(len(identities) == len(set(identities)), "duplicate GDPx observation identity")
+    markers = CollectionObservation.objects.filter(
+        run__job__contract=contract,
+        run__job__source_id="gdpx",
+        run__job__purpose="metric",
+        run__status__in=["success", "partial"],
+        observation_kind="endpoint_check",
+        status="ok",
+    )
+    latest = max(markers.values_list("source_record_date", flat=True), default=None)
+    if latest is not None and day < latest:
+        check["revision_anomaly"] = "older_than_stored"
+        return [], [check], set()
+    if markers.filter(source_record_date=day).exclude(
+        payload_sha256=check["body_sha256"]
+    ).exists():
+        check["revision_anomaly"] = "same_update_different_body"
+    current = selected_identity_rows(contract, "gdpx")
+    new, reused = reuse_unchanged(
+        prepared, current, prepared_identity,
+        supersede=True, conflict="revision_anomaly" in check,
+    )
+    for key, prior, _ in reused:
+        check["row_references"][key] = prior.pk
+    # An identity missing from this publication is an absence fact, never a zero.
+    check["absent_rows"] = sorted(set(current) - set(identities))
+    check["new_publication"] = latest is None or day > latest
+    return new, [check], {key for key, _, _ in reused}
+
+
+def prepare_revisions(contract, prepared, payload, *, source="opencode"):
     """Compare the entire endpoint window; keep decreased historical corrections."""
+    if source == "gdpx":
+        return prepare_gdpx_revisions(contract, prepared, payload)
+    require(source == "opencode", "unsupported revision source")
     mappings = {
         m.external_identifier: m
         for m in contract.mappings.filter(purpose="metric", source_id="opencode")
@@ -285,21 +430,14 @@ def prepare_revisions(contract, prepared, payload):
         checks.append(check)
     by_identifier = {c["source_identifier"]: c for c in checks}
     require(len(by_identifier) == len(checks), "duplicate OpenCode endpoint check")
-    new, successful = [], set()
-    for observation, values in prepared:
-        if observation["status"] != "ok":
-            new.append((observation, values))
-            continue
-        key = observation["source_identifier"], observation["dimensions"]["date"]
-        prior = current.get(key)
-        if (
-            prior
-            and bytes(prior["observation"].row_semantic_digest or b"")
-            == bytes.fromhex(observation["source_metadata"]["row_semantic_hash"])
-        ):
-            by_identifier[key[0]]["row_references"][key[1]] = prior["observation"].pk
-            if observation["mapping"]:
-                successful.add(observation["mapping"].pk)
-        else:
-            new.append((observation, values))
+    new, reused = reuse_unchanged(
+        prepared,
+        {key: row["observation"] for key, row in current.items()},
+        lambda o: (o["source_identifier"], o["dimensions"]["date"]),
+    )
+    successful = set()
+    for key, prior, observation in reused:
+        by_identifier[key[0]]["row_references"][key[1]] = prior.pk
+        if observation["mapping"]:
+            successful.add(observation["mapping"].pk)
     return new, checks, successful

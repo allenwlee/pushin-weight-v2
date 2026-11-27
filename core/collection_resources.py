@@ -301,7 +301,7 @@ def _publication_fact_values(observation, values, metadata, dimensions):
     if "revision" in dimensions:
         merge("provider_revision", dimensions["revision"])
     source = observation.run.job.source_id
-    dated_source = source in {"arena", "openrouter", "opencode"}
+    dated_source = source in {"arena", "openrouter", "opencode", "gdpx"}
     if dated_source:
         for key in ("date", "period"):
             if key in dimensions and dimensions[key] is not None:
@@ -476,8 +476,24 @@ def attach_numeric_evidence(
         rejected = {r["metric"] for r in metadata.get("metric_rejections", [])}
         kind = data["source_subject_kind"]
         asset = data.get("dimensions", {}).get("asset_id") is not None
+        unavailable = set(metadata.get("unavailable_metrics", ()))
         for definition in definitions:
             if definition.pk in present:
+                continue
+            if run.job.source_id == "gdpx":
+                # Only a published null is a gap; other metrics do not apply
+                # to the row's grain (overall entries carry no score).
+                if definition.metric_key in unavailable:
+                    gaps.append(
+                        CollectionMetricGap(
+                            observation=observation,
+                            source_metric=definition,
+                            reason_code="source_value_unavailable",
+                            recoverable=False,
+                            first_confirmed_at=observation.observed_at,
+                            last_confirmed_at=observation.observed_at,
+                        )
+                    )
                 continue
             grain = definition.definition_metadata.get("resource_grain")
             if not grain and run.job.source_id == "hf":

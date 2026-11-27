@@ -146,14 +146,115 @@ def numeric_value(definition, value):
         type(value) in (int, float) and math.isfinite(value),
         "finite numeric score required",
     )
-    if definition.quantity_form in {"count", "rank", "variance", "ratio"}:
+    if definition.quantity_form in {"count", "rank", "variance", "ratio", "monetary"}:
         require(value >= 0, "negative quantity")
+    if definition.source_id == "gdpx" and definition.unit_reference_id == "percent":
+        require(0 <= value <= 100, "invalid GDPx percentage")
     return {"float_value": float(value)}
+
+
+GDPX_RESULT_FIELDS = (
+    ("score", "score"),
+    ("partialScore", "partial_score"),
+    ("tasks", "tasks"),
+    ("tasksScored", "tasks_scored"),
+    ("tasksWithPartial", "tasks_with_partial"),
+    ("costPerTask", "cost_per_task"),
+    ("tasksWithCost", "tasks_with_cost"),
+    ("tokensPerTask", "tokens_per_task"),
+    ("tasksWithTokens", "tasks_with_tokens"),
+)
+GDPX_OVERALL_FIELDS = (
+    ("costPerTask", "cost_per_task"),
+    ("tokensPerTask", "tokens_per_task"),
+)
+
+
+def gdpx_rows(payload):
+    """One row per published (model, partner) cell and per reported overall entry.
+
+    Coordinates follow KTD8: partner id as category, partner domain as
+    coordinate and ``harness|reasoning`` (reasoning casefolded) as config. A
+    published null is omitted and named unavailable, never stored as zero. The
+    verbatim model labels stay in the archived selected payload.
+    """
+    require(payload.get("coverage") == "full_published_dataset", "GDPx coverage mismatch")
+    dataset, partners = payload["dataset"], payload["partners"]
+    from core.benchmark_gdpx import canonical_digest, expected_observation_count
+
+    require(
+        payload.get("dataset_sha256") == canonical_digest(dataset)
+        and payload.get("expected_observation_count")
+        == expected_observation_count(dataset),
+        "GDPx dataset identity mismatch",
+    )
+    day = native_date(dataset["updatedAt"]).isoformat()
+    require(day == dataset["updatedAt"], "GDPx publication date must be a calendar day")
+    models = {model["id"]: model for model in dataset["models"]}
+
+    def config(model_id):
+        model = models[model_id]
+        key = model["harness"] + "|" + model["reasoning"].casefold()
+        require(len(key) <= 128, "GDPx configuration label too long")
+        return key
+
+    def row(model_id, category, coordinate, native, fields):
+        metrics, unavailable, semantic = {}, [], {}
+        for wire, key in fields:
+            value = native[wire]
+            if type(value) is float and value.is_integer():
+                value = int(value)
+            semantic[key] = value
+            if value is None:
+                unavailable.append(key)
+            else:
+                metrics[key] = {
+                    "value": value,
+                    "temporal_status": "date_only",
+                    "as_of_date": day,
+                }
+        dimensions = {"category": category, "config": config(model_id), "date": day}
+        if coordinate is not None:
+            dimensions["coordinate"] = coordinate
+        return {
+            "source_identifier": model_id,
+            "source_subject_kind": "model",
+            "identifier_scope": "model_id",
+            "dimensions": dimensions,
+            "published_date": day,
+            "publication_precision": "date",
+            "source_metadata": {
+                "unavailable_metrics": unavailable,
+                "row_semantic_hash": digest(
+                    {
+                        "model_id": model_id,
+                        "category": category,
+                        "coordinate": coordinate,
+                        "config": dimensions["config"],
+                        "values": semantic,
+                    }
+                ),
+            },
+            "metrics": metrics,
+        }
+
+    for native in dataset["results"]:
+        partner = native["partnerId"]
+        require(partner != "overall", "GDPx partner id collides with overall")
+        yield row(
+            native["modelId"], partner, partners[partner]["domain"], native,
+            GDPX_RESULT_FIELDS,
+        )
+    for model_id, native in dataset["overall"].items():
+        yield row(model_id, "overall", None, native, GDPX_OVERALL_FIELDS)
 
 
 def native_rows(source, payload):
     """Translate native fields; generic storage validates all definitions afterwards."""
     require(payload.get("status") in {"ok", "partial"}, "source retrieval failed")
+    if source == "gdpx":
+        yield from gdpx_rows(payload)
+        return
     rows = payload.get("rows")
     require(isinstance(rows, list) and len(rows) <= 100000, "invalid rows or row cap")
     if source == "openrouter":
@@ -567,6 +668,9 @@ def prepare_rows(contract, source, payload, *, adapter=None):
         try:
             if observation["status"] == "ok":
                 applicable_required = set() if statistics else required
+                if source == "gdpx" and dimensions.get("category") == "overall":
+                    # Overall entries report only cost and tokens, never a score.
+                    applicable_required = set()
                 if source == "hf" and (
                     kind == "account"
                     or metadata.get("history_basis")
@@ -892,6 +996,73 @@ def record_arena_publications(run, dates):
     return inserted
 
 
+def record_gdpx_publication(run, contract, published_day, probe):
+    """One publication marker per distinct GDPx ``updatedAt``, with the version probe."""
+    require(run.observed_at is not None, "publication observation time required")
+    require(isinstance(probe, dict), "GDPx version probe required")
+    defaults = {
+        "source_identifier": "gdpx:publication",
+        "source_subject_kind": "aggregate",
+        "observed_at": run.observed_at,
+        "published_date": published_day,
+        "publication_precision": "date",
+        "observation_kind": "publication_marker",
+        "source_dataset": run.source_dataset,
+        "publication_complete": True,
+        "provider_revision": probe.get("label"),
+        "payload_sha256": probe["task_totals_sha256"],
+    }
+    require(
+        isinstance(defaults["payload_sha256"], str)
+        and re.fullmatch(r"[0-9a-f]{64}", defaults["payload_sha256"]),
+        "GDPx task-total fingerprint required",
+    )
+    if CollectionObservation.objects.filter(
+        run__job__contract=contract,
+        run__job__source_id="gdpx",
+        run__job__purpose="metric",
+        run__status__in=["success", "partial"],
+        observation_kind="publication_marker",
+        published_date=published_day,
+    ).exists():
+        return 0
+    marker, created = CollectionObservation.objects.get_or_create(
+        run=run,
+        observation_key=digest(
+            ["gdpx-publication-v1", str(contract.pk), published_day.isoformat()]
+        ),
+        defaults=defaults,
+    )
+    require(
+        all(getattr(marker, field) == value for field, value in defaults.items()),
+        "conflicting publication marker",
+    )
+    return int(created)
+
+
+def record_gdpx_checks(run, contract, observations, source_details):
+    """Link the publication check to every stored or reused GDPx observation.
+
+    KTD9 counts these references, not mappings: the link-free contract has
+    none, so only the committed and reused observations show completeness.
+    """
+    from core.benchmark_opencode import record_endpoint_checks, stored_identity
+
+    (check,) = source_details["endpoint_checks"]
+    for observation in observations:
+        if observation.status == "ok":
+            key = stored_identity(observation)
+            require(key not in check["row_references"], "duplicate GDPx row reference")
+            check["row_references"][key] = observation.pk
+    record_endpoint_checks(run, [check], contract)
+    if check.get("new_publication"):
+        record_gdpx_publication(
+            run, contract, native_date(check["updated_at"]),
+            source_details["version_probe"],
+        )
+    return set(check["row_references"])
+
+
 def persist_source(
     contract,
     source,
@@ -1147,15 +1318,26 @@ def persist_source(
             )
             if payload.get("as_of") and source == "openrouter":
                 run.source_as_of = aware_instant(payload["as_of"])
+            if source == "gdpx":
+                # KTD9: a link-free contract has no mappings to count, so the
+                # validated publication defines what a complete run stores.
+                run.selected_count = payload["expected_observation_count"]
+                require(
+                    type(run.selected_count) is int and run.selected_count > 0,
+                    "invalid GDPx expected observation count",
+                )
+                source_details.setdefault("version_probe", payload.get("version_probe"))
+                source_details.setdefault("anomalies", payload.get("anomalies", []))
             prepared = prepare_rows(contract, source, payload, adapter=adapter)
             retained_successful = set()
-            if source == "opencode":
+            if source in {"opencode", "gdpx"}:
                 from core.benchmark_opencode import prepare_revisions
 
                 prepared, checks, retained_successful = prepare_revisions(
-                    contract, prepared, payload
+                    contract, prepared, payload, source=source
                 )
                 source_details["endpoint_checks"] = checks
+            if source == "opencode":
                 revisions = [
                     aware_instant(c["updated_at"])
                     for c in checks
@@ -1178,19 +1360,25 @@ def persist_source(
             observations, _ = commit_prepared_rows(run, prepared)
             if source == "arena" and source_details.get("publication_dates"):
                 record_arena_publications(run, dates)
-            for observation, (_, values) in zip(observations, prepared, strict=True):
-                errors |= observation.status == "error"
-                if observation.mapping_id and values:
-                    successful.add(observation.mapping_id)
-                if source == "opencode" and observation.status == "ok":
-                    check = next(
-                        c
-                        for c in source_details["endpoint_checks"]
-                        if c["source_identifier"] == observation.source_identifier
-                    )
-                    check["row_references"][observation.source_record_date.isoformat()] = (
-                        observation.pk
-                    )
+            if source == "gdpx":
+                errors = any(o.status == "error" for o in observations)
+                successful = record_gdpx_checks(
+                    run, contract, observations, source_details
+                )
+            else:
+                for observation, (_, values) in zip(observations, prepared, strict=True):
+                    errors |= observation.status == "error"
+                    if observation.mapping_id and values:
+                        successful.add(observation.mapping_id)
+                    if source == "opencode" and observation.status == "ok":
+                        check = next(
+                            c
+                            for c in source_details["endpoint_checks"]
+                            if c["source_identifier"] == observation.source_identifier
+                        )
+                        check["row_references"][
+                            observation.source_record_date.isoformat()
+                        ] = observation.pk
             if source == "opencode":
                 from core.benchmark_opencode import record_endpoint_checks
 
@@ -1208,6 +1396,11 @@ def persist_source(
                     source == "arena"
                     and source_details.get("publication_dates")
                     and not errors
+                )
+                or (
+                    source == "gdpx"
+                    and source_details["endpoint_checks"][0].get("revision_anomaly")
+                    == "older_than_stored"
                 )
                 else "failed"
             )
