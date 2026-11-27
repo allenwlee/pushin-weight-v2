@@ -2201,7 +2201,11 @@ def _prompts(role: str, post: Post, *, version: str | None = None,
             " Include a component separately only when the source introduces it."
             " For each record supply source_excerpt as an exact quote identifying"
             " the offering and release, publisher_relation as source_author,"
-            " attributed_party or null, and novelty as new_release, historical_release,"
+            " attributed_party or null. For each offering distinguish the posting account from the"
+            " publisher named in its own release clause. If a reporter says that another organization"
+            " released the model, use attributed_party, copy its name and cited handle. Use null when"
+            " publisher attribution is unclear. Never infer the issuer from an incidental mention."
+            " Supply novelty as new_release, historical_release,"
             " availability_update or unresolved. The categories array must contain exactly one primary category."
             " For source-supported access, return claim_kind as availability and access_channel as"
             " api, weights, hosted_app, software_download, source_code, data_download or physical_product;"
@@ -2225,7 +2229,7 @@ def _prompts(role: str, post: Post, *, version: str | None = None,
             "author_description": post.author_description,
             "profile_bio": post.author_profile_bio,
             "observed_at": post.fetched_at.isoformat() if post.fetched_at else None,
-        }])
+        }], include_release_display_name=True)
         evidence["sources"] = [
             {**{key: value for key, value in source.items() if key != "observed_at"}, "text": source["text"][:2048]}
             for source in evidence["sources"]

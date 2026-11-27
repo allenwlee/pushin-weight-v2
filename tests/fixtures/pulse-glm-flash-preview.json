@@ -1,0 +1,72 @@
+{
+  "posts": [
+    {
+      "tweet_id": "2088132965922476159",
+      "text": "Introducing GLM-5.3: Built to Code. Ready for Cyber Defense.\n\n- Top-tier coding and agentic capabilities, achieved through post-training on the 743B base model\n- A major leap in cybersecurity, setting a new standard among open models\n\nTech Blog: https://t.co/ekQkO83jCv https://t.co/y3Y2AB0wxr",
+      "author_handle": "Zai_org",
+      "created_at": "2026-08-14 05:17:49+00:00"
+    },
+    {
+      "tweet_id": "2092616204787626030",
+      "text": "Introducing GLM-5.3-Flash\n\n- Leading capabilities at a highly competitive price\n- Natively multimodal with a 1M-token context window\n- A 320B-A18B model released under the MIT License\n- Previously previewed as Ox Alpha, running entirely on Chinese AI chips\n\nBlog: https://t.co/tzOmB7gdZP\n\nAvailable now across all official platforms:\n\nWeights: https://t.co/9LRMahY9Wa\nAPI: https://t.co/VcaQnzYmS9\nCoding Plan: https://t.co/Nk8Y98HNhU\nZCode: https://t.co/Peepqv4XSx\nChat: https://t.co/WCqWT0qCQb\nAutoClaw: https://t.co/aGEG5HqTTb",
+      "author_handle": "Zai_org",
+      "created_at": "2026-08-26 14:12:36+00:00"
+    },
+    {
+      "tweet_id": "2123659545637785838",
+      "text": "@VeknQAQ Mình thấy ý kiến của fen cũng có lý, nhưng mà không rõ lắm về sự khác biệt giữa Gestalt và Ox Alpha. Mong chờ có thêm thông tin!",
+      "author_handle": "Nascan23",
+      "created_at": "2026-11-20 06:07:46+00:00"
+    },
+    {
+      "tweet_id": "2123696185680826434",
+      "text": "@VeknQAQ 那次Ox Alpha 也很奇怪 匿名的時候用起來蠻強的，被認領公開之後弱的一逼…根本不像同一個模型",
+      "author_handle": "Gale36435",
+      "created_at": "2026-11-20 08:33:21+00:00"
+    }
+  ],
+  "products": [
+    {
+      "id": 2255,
+      "display_name": "GLM-5.3-Flash",
+      "brand_id": "glm",
+      "repo_id": "zai-org/GLM-5.3-Flash",
+      "product_key": "cceb45fc-f883-4b25-8c9d-aeba27ca82d6",
+      "product_type": "llm-model"
+    },
+    {
+      "id": 2257,
+      "display_name": "GLM-5.3",
+      "brand_id": "glm",
+      "repo_id": "zai-org/GLM-5.3",
+      "product_key": "6504e32e-fa9f-4d48-a193-e41d238568fb",
+      "product_type": null
+    },
+    {
+      "id": 2973,
+      "display_name": "Ox Alpha",
+      "brand_id": "glm",
+      "repo_id": null,
+      "product_key": "3c35ec56-db57-400f-aa67-12f854d031e6",
+      "product_type": "model-llm"
+    }
+  ],
+  "openrouter": {
+    "date": "2026-08-26",
+    "model_permaslug": "z-ai/glm-5.3-flash-20260826",
+    "total_tokens": "360760043126"
+  },
+  "source": "Retained publisher announcements, discussion posts and OpenRouter daily ranking. The replay constructs the release finding locally.",
+  "preview_report": {
+    "tweet_id": "2090590214171296025",
+    "created_at": "2026-08-21 00:02:03+00:00",
+    "author_handle": "Claykdev",
+    "text": "Ox Alpha (a stealth model) just dropped on OpenCode, and it’s probably a GLM model, most likely an AIR variant.\n\nFree for the next week with 1M context, multimodal support, zero data retention and near-unlimited usage.\n\nI put it against DeepSeek V4 Flash and GLM 5.3 on the same Three.js prompt:\n\n“Create a stylized sakura tree in bloom with drifting petals and soft spring lighting.”\n\nI’ll post more side-by-side comparisons in the replies."
+  },
+  "openrouter_original": {
+    "date": "2026-08-26",
+    "model_permaslug": "z-ai/glm-5.3-20260816",
+    "total_tokens": "195375201868"
+  },
+  "openrouter_original_as_of": "2026-11-25T07:27:01.173Z"
+}

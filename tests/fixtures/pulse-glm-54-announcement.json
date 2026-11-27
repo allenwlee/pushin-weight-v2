@@ -1,0 +1,119 @@
+{
+  "post": {
+    "tweet_id": "2124805514722771349",
+    "text": "Introducing GLM-5.4: Generalized Coding with Our First Loop Transformer.\n\n- Loops existing layers in the GLM-5 base model for deeper reasoning\n- Pushes beyond traditional coding to video, games, 3D shaders, and CAD modeling\n- Adds vision capabilities for stronger visual coding\n\nGLM Coding Plan: https://t.co/Nk8Y98HNhU\nZCode: https://t.co/Peepqv4XSx\nhttps://t.co/DRCwFHQj1P Chat: https://t.co/WCqWT0qCQb\nTech Blog: https://t.co/dQrbKoamcN\n\nAPI access will open after safety evaluation. Model weights will be released responsibly.",
+    "created_at": "2026-11-23 10:01:26+00:00",
+    "lang": "en",
+    "lang_detected": null,
+    "author_handle": "Zai_org",
+    "is_retweet": null,
+    "in_reply_to_id": null,
+    "quoted_text": null,
+    "tweet_url": null,
+    "tweet_twitter_url": null
+  },
+  "brands": [
+    {
+      "nickname": "chatglm",
+      "display_name": "ChatGLM"
+    },
+    {
+      "nickname": "glm",
+      "display_name": "Zhipu GLM"
+    }
+  ],
+  "packet": {
+    "content_fingerprint": "98bc9e6b79cd0ff9920bc13dd59234dbc8a85b723922664cf1b50f976bde303e",
+    "extraction_version": "model-release-extraction-v2",
+    "finding": {
+      "assertions": [
+        {
+          "access_channel": null,
+          "assertion_text": "Introducing GLM-5.4: Generalized Coding with Our First Loop Transformer.",
+          "claim_kind": "release_report",
+          "effective_at": null,
+          "effective_date": null,
+          "effective_month": null,
+          "effective_precision": "unknown",
+          "effective_year": null,
+          "event_timezone": null,
+          "not_after": null,
+          "not_before": null,
+          "source_excerpt": "Introducing GLM-5.4: Generalized Coding with Our First Loop Transformer.",
+          "source_locator": null
+        }
+      ],
+      "brand_candidate_id": null,
+      "brand_id": "glm",
+      "candidate_repo_id": null,
+      "category": "model-llm",
+      "family_evidence": {
+        "name": "GLM",
+        "source_excerpt": "Introducing GLM-5.4: Generalized Coding with Our First Loop Transformer.",
+        "source_locator": null
+      },
+      "finding_key": "abe7592b656fb2523d526aa706a0ce0d2d3f8d6e0870e21fb9022a2842451ae8",
+      "issuer_evidence": {
+        "observed_name": null,
+        "relation": "source_author",
+        "source_excerpt": "Introducing GLM-5.4: Generalized Coding with Our First Loop Transformer.",
+        "source_locator": null
+      },
+      "novelty": "new_release",
+      "observed_name": "GLM-5.4",
+      "variant": null,
+      "version": "5.4"
+    },
+    "revision_id": "43bae9fef76f681bde66a123c2635b550497e4cdbcb1faf40ad1b8337de24878",
+    "schema": "pulse-release-intake-v1",
+    "source": {
+      "id": "2124805514722771349",
+      "kind": "post"
+    }
+  },
+  "marker": {
+    "post_id": "2124805514722771349",
+    "brand_id": "chatglm",
+    "revision_id": "43bae9fef76f681bde66a123c2635b550497e4cdbcb1faf40ad1b8337de24878",
+    "stage": "content",
+    "selector_version": "pulse-release-only-v1",
+    "validation_state": "release_only",
+    "prompt_version": "model-release-extraction-v2",
+    "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "provider_role": "targeted-release",
+    "contract_version": "pulse-release-only-v1",
+    "taxonomy_version": "pulse-release-only-v1",
+    "input_context_fingerprint": "98bc9e6b79cd0ff9920bc13dd59234dbc8a85b723922664cf1b50f976bde303e",
+    "canonical_judgment": {},
+    "changes_json": {
+      "brand_ids": [
+        "chatglm",
+        "glm"
+      ],
+      "selection": "enrichment-7c93d332c41c4099a7af1dd15aa7d5df",
+      "release_output": {
+        "schema": "pulse-classified-release-output-v1",
+        "sha256": "7aa11c51abdb03879ce6c11ff11a4fa987c0cf6508e9db8a4f909e95c53ac547",
+        "finding_keys": [
+          "abe7592b656fb2523d526aa706a0ce0d2d3f8d6e0870e21fb9022a2842451ae8"
+        ]
+      },
+      "source_evidence_hash": "0c04dfbbf1254cefdb17d1d2816a2bf79526cb4350b76591e43e53197a414368"
+    }
+  },
+  "author": {
+    "author_id": "1726486879456096256",
+    "handle": "Zai_org"
+  },
+  "links": [
+    {
+      "brand_id": "glm",
+      "role_id": "official"
+    },
+    {
+      "brand_id": "chatglm",
+      "role_id": "official"
+    }
+  ],
+  "parent": null
+}

@@ -1,0 +1,38 @@
+{
+  "content_fingerprint": "19421d293eb86f306837c7674c46a3fb6aea5ab7d079349f2a26084c6d64a940",
+  "extraction_version": "compressed8-pulse-content-v2",
+  "finding": {
+    "assertions": [
+      {
+        "access_channel": "api",
+        "assertion_text": "OpenRouter shows DeepSeek V4 Pro 0813 output up 114%: $4.44 to $9.50 per million tokens. Input doubled too, $0.111 to $0.22.",
+        "claim_kind": "availability",
+        "effective_at": null,
+        "effective_date": null,
+        "effective_month": null,
+        "effective_precision": "unknown",
+        "effective_year": null,
+        "event_timezone": null,
+        "not_after": null,
+        "not_before": null,
+        "source_excerpt": "OpenRouter shows DeepSeek V4 Pro 0813 output up 114%: $4.44 to $9.50 per million tokens. Input doubled too, $0.111 to $0.22.",
+        "source_locator": "https://x.com/kiteze2x/status/2123901505451577446"
+      }
+    ],
+    "brand_candidate_id": null,
+    "brand_id": null,
+    "candidate_repo_id": null,
+    "category": "model-llm",
+    "finding_key": "410289f0be3882e8f7a950cca4e90568923e9c558ffcfc78b53e08efd8630b4c",
+    "novelty": "availability_update",
+    "observed_name": "DeepSeek V4 Pro 0813",
+    "variant": null,
+    "version": "0813"
+  },
+  "revision_id": "9e4ebcd0f3f40541d05849f9a66dbc97e8e532aa90543d7d3ce9a199bd09e3a9",
+  "schema": "pulse-release-intake-v1",
+  "source": {
+    "id": "2123901505451577446",
+    "kind": "post"
+  }
+}

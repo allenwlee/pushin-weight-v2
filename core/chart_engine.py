@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
+from urllib.parse import quote
 from uuid import UUID
 
 from django.core.exceptions import ValidationError
@@ -16,6 +18,7 @@ from core.classification_contract import (
     SENTIMENT_KEYS,
     TAXONOMY_KEY_CROSSWALK,
 )
+from core.collection_identity import dedicated_product_mapping
 from core.models import (
     EventDossierClaim,
     Product,
@@ -31,6 +34,25 @@ class ReleaseAnchor:
     source: str
     review_id: UUID | None = None
     claim_id: UUID | None = None
+    dossier_id: UUID | None = None
+    fingerprint: str | None = None
+
+    @classmethod
+    def from_qualified(cls, release):
+        return cls(
+            product_key=release.product_key,
+            date=release.date,
+            source=release.source,
+            dossier_id=release.dossier_id,
+            claim_id=release.claim_id,
+            review_id=release.review_id,
+            fingerprint=release.fingerprint,
+        )
+
+
+def single_brand_dates(release_day):
+    """First and last UTC calendar days in the public release chart, inclusive."""
+    return release_day - timedelta(days=14), release_day + timedelta(days=28)
 
 
 @dataclass(frozen=True)
@@ -64,6 +86,9 @@ class ResolvedRelease:
     anchor_source: str
     reviewed: bool
     claim_id: UUID | None = None
+    dossier_id: UUID | None = None
+    fingerprint: str | None = None
+    milestone_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +97,8 @@ class ResolvedRequest:
     target: ResolvedRelease
     comparison: ResolvedRelease | None
     metrics: tuple["ResolvedMetric", ...]
+    limited_sources: tuple[str, ...] = ()
+    release_catalog_states: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -82,24 +109,32 @@ class ResolvedMetric:
 
 
 def _resolve_metric(
-    selection: MetricSelection, product_keys: set[UUID], *, source_use_override=False
+    selection: MetricSelection,
+    product_keys: set[UUID],
+    *,
+    source_use_override=False,
+    discovered=None,
+    catalog_states=None,
 ) -> ResolvedMetric:
     if not isinstance(selection, MetricSelection):
         raise TypeError("invalid metric selection")
     if selection.release not in {None, "target", "comparison"}:
         raise ValueError("unknown release selection")
-    try:
-        mapping = (
-            SourceSubjectMapping.objects.select_related("subject", "contract")
-            .filter(
-                pk=selection.mapping_id,
-                contract_id=selection.contract_id,
-                purpose="metric",
+    if discovered is not None:
+        mapping = discovered[selection.mapping_id]
+    else:
+        try:
+            mapping = (
+                SourceSubjectMapping.objects.select_related("subject", "contract")
+                .filter(
+                    pk=selection.mapping_id,
+                    contract_id=selection.contract_id,
+                    purpose="metric",
+                )
+                .first()
             )
-            .first()
-        )
-    except (ValidationError, ValueError):
-        mapping = None
+        except (ValidationError, ValueError):
+            mapping = None
     if mapping is None or mapping.contract is None:
         return ResolvedMetric(selection, None, "mapping_unavailable")
     if (
@@ -118,6 +153,14 @@ def _resolve_metric(
         or mapping.subject.product_id != requested_product
     ):
         return ResolvedMetric(selection, None, "mapping_product_mismatch")
+    from core.collection_identity import release_metric_catalog_state
+
+    if catalog_states is None:
+        catalog_states = {}
+    if mapping.pk not in catalog_states:
+        catalog_states[mapping.pk] = release_metric_catalog_state(mapping)
+    if catalog_states[mapping.pk] == "":
+        return ResolvedMetric(selection, None, "release_mapping_no_longer_qualified")
     configured = mapping.contract.source_configuration.get(mapping.source_id, {})
     if not any(
         row.get("metric_key") == selection.metric_key
@@ -136,8 +179,12 @@ def _resolve_metric(
     return ResolvedMetric(selection, mapping)
 
 
-def _discover_metrics(product_keys: set[UUID]) -> tuple[MetricSelection, ...]:
-    mappings = list(
+def _discover_metrics(
+    product_keys: set[UUID], *, single_template=False
+) -> tuple[
+    tuple[MetricSelection, ...], dict[UUID, SourceSubjectMapping], tuple[str, ...]
+]:
+    queryset = (
         SourceSubjectMapping.objects.filter(
             purpose="metric",
             contract__isnull=False,
@@ -145,14 +192,32 @@ def _discover_metrics(product_keys: set[UUID]) -> tuple[MetricSelection, ...]:
             subject__product_id__in=product_keys,
         )
         .select_related("subject", "contract")
-        .order_by("source_id", "pk")[:101]
+        .order_by("source_id", "pk")
     )
-    if len(mappings) > 100:
+    limited = []
+    supported = {(src, key) for src, key, _, _ in SINGLE_BRAND_METRICS}
+    if single_template:
+        mappings = []
+        for source in sorted({src for src, _ in supported}):
+            cohort = list(queryset.filter(source_id=source)[:101])
+            if len(cohort) > 100:
+                limited.append(source)
+                continue
+            mappings.extend(cohort)
+    else:
+        mappings = list(queryset[:101])
+    if not single_template and len(mappings) > 100:
         raise ValueError("too many reviewed source mappings; select metrics explicitly")
     selections = []
     for mapping in mappings:
         config = mapping.contract.source_configuration.get(mapping.source_id, {})
         for definition in config.get("definitions", []):
+            if (
+                single_template
+                and mapping.source_id != "arena"
+                and (mapping.source_id, definition.get("metric_key")) not in supported
+            ):
+                continue
             if definition.get("metric_key"):
                 selections.append(
                     MetricSelection(
@@ -162,9 +227,13 @@ def _discover_metrics(product_keys: set[UUID]) -> tuple[MetricSelection, ...]:
                         definition["metric_key"],
                     )
                 )
-    if len(selections) > 100:
+    if not single_template and len(selections) > 100:
         raise ValueError("too many metrics; select a smaller set")
-    return tuple(selections)
+    return (
+        tuple(selections),
+        {mapping.pk: mapping for mapping in mappings},
+        tuple(limited),
+    )
 
 
 def _resolve_anchor(
@@ -178,6 +247,31 @@ def _resolve_anchor(
         product = Product.objects.get(product_key=anchor.product_key)
     except (Product.DoesNotExist, ValidationError, ValueError) as exc:
         raise ValueError("unknown product") from exc
+    if anchor.dossier_id is not None:
+        from core.release_chart_handoff import resolve_release
+
+        qualified = resolve_release(anchor.dossier_id, cutoff=cutoff)
+        if (
+            qualified.product_key != product.product_key
+            or qualified.date != anchor.date
+            or qualified.source != anchor.source
+            or qualified.claim_id != anchor.claim_id
+            or qualified.review_id != anchor.review_id
+            or qualified.fingerprint != anchor.fingerprint
+        ):
+            raise ValueError("qualified release evidence changed")
+        return ResolvedRelease(
+            product,
+            anchor.date,
+            qualified.source,
+            qualified.review_id is not None,
+            qualified.claim_id,
+            qualified.dossier_id,
+            qualified.fingerprint,
+            qualified.milestone_kind,
+        )
+    if anchor.source in {"p2-qualified", "dossier-reviewed"} or anchor.fingerprint:
+        raise ValueError("qualified release requires dossier evidence")
     if (anchor.review_id is None) != (anchor.claim_id is None):
         raise ValueError("review and claim must be provided together")
     if anchor.review_id is None:
@@ -219,7 +313,7 @@ def _resolve_anchor(
 
 
 def validate_request(
-    request: ChartRequest, *, source_use_override=False
+    request: ChartRequest, *, source_use_override=False, single_template=False
 ) -> ResolvedRequest:
     """Validate exact half-open bounds and resolve named Products without writes."""
     if not isinstance(request.comparable_collection_accounting, bool):
@@ -284,7 +378,11 @@ def validate_request(
     product_keys = {target.product.product_key}
     if comparison:
         product_keys.add(comparison.product.product_key)
-    selections = request.metrics or _discover_metrics(product_keys)
+    selections, discovered, limited = request.metrics, None, ()
+    if not selections:
+        selections, discovered, limited = _discover_metrics(
+            product_keys, single_template=single_template
+        )
     if (
         not request.metrics
         and comparison
@@ -295,10 +393,17 @@ def validate_request(
             for selection in selections
             for role in ("target", "comparison")
         )
-    if len(selections) > 100:
+    if (request.metrics or not single_template) and len(selections) > 100:
         raise ValueError("too many metrics; select a smaller set")
+    catalog_states = {}
     metrics = tuple(
-        _resolve_metric(metric, product_keys, source_use_override=source_use_override)
+        _resolve_metric(
+            metric,
+            product_keys,
+            source_use_override=source_use_override,
+            discovered=discovered,
+            catalog_states=catalog_states,
+        )
         for metric in selections
     )
     for metric in metrics:
@@ -308,7 +413,18 @@ def validate_request(
             or str(metric.selection.product_key) != str(expected.product.product_key)
         ):
             raise ValueError("metric selection does not match its release")
-    return ResolvedRequest(request, target, comparison, metrics)
+    return ResolvedRequest(
+        request,
+        target,
+        comparison,
+        metrics,
+        limited,
+        tuple(
+            (str(pk), state)
+            for pk, state in catalog_states.items()
+            if state is not None
+        ),
+    )
 
 
 def brand_discussion(resolved: ResolvedRequest, *, comparison: bool = False) -> dict:
@@ -480,11 +596,10 @@ def metric_series(
     *,
     source_use_override=False,
     single_template=False,
+    split_arena=False,
 ) -> dict:
     """Read retained metric evidence with source rights and availability checks."""
-    import json
     from collections import defaultdict
-    from decimal import Decimal
 
     from core.benchmark_forecast_inputs import forecast_inputs
 
@@ -583,7 +698,10 @@ def metric_series(
                 direct_ingestion=True,
             ).values_list("pk", flat=True)
         }
-    candidates = defaultdict(list)
+    by_scope = defaultdict(lambda: defaultdict(list))
+    if split_arena:
+        native_board, native_category, _ = _arena_mapping_dimensions(mapping)
+
     for value in packet["values"]:
         if value["metric"] != metric.selection.metric_key:
             continue
@@ -591,33 +709,35 @@ def metric_series(
             definition["id"]
         ):
             continue
-        if (
-            single_template
-            and mapping.source_id == "arena"
-            and (
-                value.get("dimensions", {}).get("config") != "text"
-                or value.get("dimensions", {}).get("category") != "overall"
-            )
-        ):
-            continue
+        scope = None
+        if single_template and mapping.source_id == "arena":
+            dims = value.get("dimensions") or {}
+            scope = (dims.get("config"), dims.get("category"))
+            if split_arena and (
+                (native_board and scope[0] != native_board)
+                or (native_category and scope[1] != native_category)
+            ):
+                continue
+            if not all(scope) or (not split_arena and scope != ("text", "overall")):
+                continue
         metadata = value["source_metadata"]
-        day = (
-            (
-                value["period_label_date"]
-                if single_template and mapping.source_id in {"opencode", "openrouter"}
-                else None
+        if single_template and mapping.source_id == "arena":
+            day = metadata.get("publication_date") or value["as_of_date"]
+        elif single_template and mapping.source_id in {"opencode", "openrouter"}:
+            day = value["period_label_date"] or value["as_of_date"]
+        else:
+            day = (
+                metadata.get("archive_snapshot_date")
+                or metadata.get("reconstruction_date")
+                or value["period_label_date"]
+                or value["as_of_date"]
+                or (value["as_of_at"] or "")[:10]
+                or (
+                    (value["first_local_observed_at"] or "")[:10]
+                    if mapping.source_id == "hf"
+                    else None
+                )
             )
-            or metadata.get("archive_snapshot_date")
-            or metadata.get("reconstruction_date")
-            or value["period_label_date"]
-            or value["as_of_date"]
-            or (value["as_of_at"] or "")[:10]
-            or (
-                (value["first_local_observed_at"] or "")[:10]
-                if mapping.source_id == "hf"
-                else None
-            )
-        )
         if not day:
             continue
         if (
@@ -638,7 +758,39 @@ def metric_series(
             or bucket_start >= request.cutoff
         ):
             continue
-        candidates[day].append(value)
+        by_scope[scope][day].append(value)
+    if split_arena:
+        return {
+            "arena_scopes": {
+                scope: _metric_points(
+                    metric,
+                    request,
+                    start,
+                    end,
+                    candidates,
+                    direct_runs,
+                    single_template,
+                )
+                for scope, candidates in by_scope.items()
+            }
+        }
+    scope = (
+        ("text", "overall")
+        if single_template and mapping.source_id == "arena"
+        else None
+    )
+    return _metric_points(
+        metric, request, start, end, by_scope[scope], direct_runs, single_template
+    )
+
+
+def _metric_points(
+    metric, request, start, end, candidates, direct_runs, single_template
+):
+    import json
+    from decimal import Decimal
+
+    mapping = metric.mapping
     selected = {}
     for day, values in sorted(candidates.items()):
         bucket_start = datetime.fromisoformat(day).replace(tzinfo=UTC)
@@ -757,10 +909,27 @@ SINGLE_BRAND_METRICS = (
 )
 
 
-def _unmapped_exact_values(mapping, key, start, end):
+def _arena_source_fields(mapping):
+    return mapping.identifier_metadata.get("release_endpoint", {}).get(
+        "source_fields", {}
+    )
+
+
+def _arena_mapping_dimensions(mapping):
+    native = _arena_source_fields(mapping)
+    reasoning = native.get("reasoning")
+    if isinstance(reasoning, bool):
+        reasoning = "true" if reasoning else "false"
+    return (
+        native.get("config"),
+        native.get("category"),
+        str(reasoning) if reasoning is not None else "",
+    )
+
+
+def _unmapped_exact_values(mapping, key, start, end, *, split_arena=False):
     """Read pre-crosswalk evidence only through a reviewed, exact product mapping."""
     from collections import defaultdict
-    from decimal import Decimal
 
     from django.db.models import Q
 
@@ -804,6 +973,16 @@ def _unmapped_exact_values(mapping, key, start, end):
         | Q(as_of_date__gte=start.date(), as_of_date__lt=end.date())
         | Q(as_of_at__gte=start, as_of_at__lt=end)
         | Q(
+            observation__run__job__source_id="arena",
+            observation__published_date__gte=start.date(),
+            observation__published_date__lt=end.date(),
+        )
+        | Q(
+            observation__run__job__source_id="arena",
+            observation__source_record_date__gte=start.date(),
+            observation__source_record_date__lt=end.date(),
+        )
+        | Q(
             observation__archive_snapshot_date__gte=start.date(),
             observation__archive_snapshot_date__lt=end.date(),
         )
@@ -812,7 +991,58 @@ def _unmapped_exact_values(mapping, key, start, end):
             observation__reconstruction_date__lt=end.date(),
         )
     )
-    if source == "arena":
+    if split_arena:
+        native_board, native_category, reasoning = _arena_mapping_dimensions(mapping)
+        if native_board:
+            rows = rows.filter(observation__config_key=native_board)
+        if native_category:
+            rows = rows.filter(observation__category_key=native_category)
+        # A legacy row stores its model ID, board and category. There is no
+        # reasoning column. It cannot establish which same-ID setting applied.
+        other_variant_scopes = []
+        if not reasoning:
+            board_label = _arena_source_fields(mapping).get("board")
+            siblings = list(
+                SourceSubjectMapping.objects.filter(
+                    Q(
+                        identifier_metadata__release_endpoint__source_fields__has_key="reasoning"
+                    )
+                    | Q(
+                        identifier_metadata__release_endpoint__source_fields__has_key="board"
+                    ),
+                    purpose="metric",
+                    source_id=source,
+                    subject_id=mapping.subject_id,
+                    normalized_identifier=mapping.normalized_identifier,
+                )
+                .exclude(pk=mapping.pk)
+                .select_related("contract")[:101]
+            )
+            if len(siblings) > 100:
+                raise ValueError("too many Arena variants")
+            for sibling in siblings:
+                other_config, other_category, other_reasoning = (
+                    _arena_mapping_dimensions(sibling)
+                )
+                other_board = _arena_source_fields(sibling).get("board")
+                if other_reasoning or (other_board and other_board != board_label):
+                    other_variant_scopes.append(
+                        (
+                            other_config
+                            or sibling.contract.source_configuration[source].get(
+                                "config"
+                            ),
+                            other_category,
+                        )
+                    )
+        configured_board = mapping.contract.source_configuration[source].get("config")
+        if configured_board:
+            # A historical row on another board needs its own Product attribution.
+            rows = rows.filter(
+                Q(observation__config_key=configured_board)
+                | Q(observation__product__product_key=mapping.subject.product_id)
+            )
+    if source == "arena" and not split_arena:
         rows = rows.filter(
             observation__config_key="text", observation__category_key="overall"
         )
@@ -823,25 +1053,43 @@ def _unmapped_exact_values(mapping, key, start, end):
     )
     if len(rows) > 10000:
         raise ValueError("source evidence exceeds the bounded read")
-    grouped = defaultdict(list)
-    invalid_days = set()
+    groups = defaultdict(lambda: defaultdict(list))
+    conflicts = defaultdict(set)
+    ambiguous = defaultdict(set)
     for row in rows:
         obs = row.observation
-        day = (
-            row.period_label_date
-            or row.as_of_date
-            or obs.archive_snapshot_date
-            or obs.reconstruction_date
-            or (row.as_of_at.date() if row.as_of_at else None)
-        )
+        scope = (obs.config_key, obs.category_key) if split_arena else None
+        if split_arena and not all(scope):
+            continue
+        if source == "arena":
+            day = obs.published_date or obs.source_record_date or row.as_of_date
+        elif source in {"opencode", "openrouter"}:
+            day = row.period_label_date or row.as_of_date
+        else:
+            day = (
+                obs.archive_snapshot_date
+                or obs.reconstruction_date
+                or row.as_of_date
+                or (row.as_of_at.date() if row.as_of_at else None)
+            )
         if day is None or not start.date() <= day < end.date():
             continue
         bucket_start = datetime.combine(day, datetime.min.time(), tzinfo=UTC)
         if bucket_start < start or bucket_start + timedelta(days=1) > end:
             continue
+        if split_arena and (
+            reasoning
+            or any(
+                (not board or board == scope[0])
+                and (not category or category == scope[1])
+                for board, category in other_variant_scopes
+            )
+        ):
+            ambiguous[scope].add(day)
+            continue
         if obs.revision_conflict or obs.period_status == "partial":
             if source == "arena":
-                invalid_days.add(day)
+                conflicts[scope].add(day)
             continue
         if source in {"openrouter", "opencode"} and not _exact_utc_day(
             {
@@ -856,12 +1104,31 @@ def _unmapped_exact_values(mapping, key, start, end):
         definition = row.source_metric
         if definition_snapshot(definition) != frozen:
             if source == "arena":
-                invalid_days.add(day)
+                conflicts[scope].add(day)
             continue
-        grouped[day].append(row)
+        groups[scope][day].append(row)
+    if split_arena:
+        result = {}
+        for scope in groups.keys() | conflicts.keys() | ambiguous.keys():
+            days = _legacy_daily_values(
+                source, groups[scope], conflicts[scope], mapping
+            )
+            for day in ambiguous[scope]:
+                days.setdefault(
+                    day.isoformat(), {"value": None, "coverage": "ambiguous_variant"}
+                )
+            result[scope] = days
+        return result
+    return _legacy_daily_values(source, groups[None], conflicts[None], mapping)
+
+
+def _legacy_daily_values(source, grouped, invalid_days, mapping):
+    from decimal import Decimal
+
     result = {}
     epoch = datetime.min.replace(tzinfo=UTC)
     for day, candidates in grouped.items():
+
         def revision(row):
             run = row.observation.run
             return (
@@ -948,10 +1215,78 @@ def _single_brand_discussion(resolved):
         # A zero is observable only on a day with retained source posts.
         selected = filtered.get("daily", {})
         counts = {day: selected.get(day, 0) for day in counts}
-    return {"status": "stored_only", "daily": counts}
+    result = {"status": "stored_only", "daily": counts}
+    if resolved.target.dossier_id and not request.classifications:
+        from django.db.models import Q
+
+        from core.models import PostBrandProduct, PostSubjectAttribution
+        from core.product_preview_names import POLICY as preview_policy
+        from core.product_preview_names import chart_preview_names
+
+        # One post can have a verified catalog edge and several reviewed
+        # mentions. Count its ID once and only on days with observed evidence.
+        aliases = chart_preview_names(product, request.cutoff, strict=False)
+        eligible = Q(product=product)
+        for name in aliases:
+            eligible |= Q(
+                product__repo_id__isnull=True,
+                product__brand_id=product.brand_id,
+                product__display_name__iexact=name,
+                observed_name__iexact=name,
+            )
+        edges = (PostBrandProduct.objects.filter(eligible, brand_id=product.brand_id,
+                                                 created_at__lte=request.cutoff)
+                 .exclude(source_evidence={}).exclude(verification_policy_version="").values("post_id"))
+        mentions = PostSubjectAttribution.objects.filter(
+            subject__subject_kind="product", subject__product_id=product.product_key,
+            attribution_kind="direct_mention", created_at__lte=request.cutoff,
+        )
+        visible_mentions = ~Q(policy_version=preview_policy)
+        for name in aliases:
+            visible_mentions |= Q(observed_name__iexact=name)
+        mentions = mentions.filter(visible_mentions).values("post_id")
+        exact = (Post.objects.filter(pk__in=edges.union(mentions), created_at__gte=start, created_at__lt=end)
+                 .annotate(day=TruncDate("created_at", tzinfo=UTC)).values("day")
+                 .annotate(count=Count("pk")).order_by("day"))
+        result["product_daily"] = {row["day"]: row["count"] for row in exact}
+    return result
 
 
-def build_single_brand_chart(request: ChartRequest, *, start_day=-14, end_day=29):
+def _single_brand_values(mapped, retained, anchor):
+    values, evidence = {}, {}
+    for point in mapped.get("points", []):
+        day = (date.fromisoformat(point["date"]) - anchor).days
+        if point.get("value") is not None:
+            values[day] = point["value"]
+            evidence[day] = point.get("evidence")
+        elif point.get("coverage") not in {None, "missing"}:
+            evidence[day] = {"coverage": point["coverage"]}
+    for date_label, item in retained.items():
+        day = (date.fromisoformat(date_label) - anchor).days
+        if item.get("coverage") == "ambiguous_variant":
+            if day not in values:
+                evidence[day] = {"coverage": "ambiguous_variant"}
+            continue
+        if item.get("coverage") == "conflict":
+            values.pop(day, None)
+            evidence[day] = {"coverage": "conflict"}
+        elif (evidence.get(day) or {}).get("coverage") not in {None, "missing"}:
+            continue
+        elif day in values and Decimal(str(values[day])) != Decimal(str(item["value"])):
+            values.pop(day)
+            evidence[day] = {"coverage": "conflict"}
+        elif day not in values:
+            values[day] = item["value"]
+            evidence[day] = item["evidence"]
+    status = mapped.get("reason", mapped.get("status", "no_observations"))
+    if values:
+        status = "available"
+    elif status == "available":
+        status = "no_observations"
+    return values, evidence, status
+
+
+def build_single_brand_chart(request: ChartRequest, *, start_day=-14, end_day=29, cache_catalog_states=False):
     """Build the public, read-only single-brand-comp result from stored evidence.
 
     The owner's temporary source-use override is limited to this template. It
@@ -971,7 +1306,7 @@ def build_single_brand_chart(request: ChartRequest, *, start_day=-14, end_day=29
         or end_day - start_day > 366
     ):
         raise ValueError("invalid display range")
-    resolved = validate_request(request, source_use_override=True)
+    resolved = validate_request(request, source_use_override=True, single_template=True)
     anchor = resolved.target.date
     discussion = _single_brand_discussion(resolved)
     discussion_values = {
@@ -1008,22 +1343,35 @@ def build_single_brand_chart(request: ChartRequest, *, start_day=-14, end_day=29
             identifier=resolved.target.product.brand_id,
         )
     )
+    if discussion.get("product_daily"):
+        product_mentions = {(day - anchor).days: count for day, count in discussion["product_daily"].items()}
+        lines.append(line("discussion", "product_posts", "Verified product mentions", "posts", product_mentions, {},
+                          status="available", identifier=str(resolved.target.product.product_key)))
     candidates = defaultdict(list)
     for index, metric in enumerate(resolved.metrics):
         if metric.mapping is not None:
-            if metric.mapping.source_id == "github":
-                roles = {
-                    getattr(metric.mapping, "identity_snapshot", {}).get("role"),
-                    getattr(metric.mapping, "identifier_metadata", {}).get("role"),
-                } - {None, ""}
-                if not roles or not roles <= {"dedicated_model", "dedicated_product"}:
-                    continue
+            if metric.mapping.source_id == "github" and not dedicated_product_mapping(
+                metric.mapping
+            ):
+                continue
             candidates[(metric.mapping.source_id, metric.selection.metric_key)].append(
                 (index, metric)
             )
-    for source, key, label, unit in SINGLE_BRAND_METRICS:
+    metrics = list(SINGLE_BRAND_METRICS)
+    known = {(source, key) for source, key, _, _ in metrics}
+    for (source, key), options in sorted(candidates.items()):
+        if source == "arena" and (source, key) not in known:
+            # Additional registered components carry their frozen name and unit.
+            definition = _single_chart_definition(options[0][1].mapping, key)
+            if definition:
+                metrics.append((source, key, definition["name"], definition["unit"]))
+
+    for source, key, label, unit in metrics:
         choices = candidates[(source, key)]
-        if len(choices) != 1:
+        if not choices or (source != "arena" and len(choices) != 1):
+            reason = "mapping_ambiguous" if choices else "mapping_unavailable"
+            if source in getattr(resolved, "limited_sources", ()):
+                reason = "source_mapping_limit_exceeded"
             lines.append(
                 line(
                     source,
@@ -1032,69 +1380,126 @@ def build_single_brand_chart(request: ChartRequest, *, start_day=-14, end_day=29
                     unit,
                     {},
                     {},
-                    status="mapping_ambiguous" if choices else "mapping_unavailable",
+                    status=reason,
                 )
             )
             continue
-        index, metric = choices[0]
-        series = metric_series(
-            resolved, index, source_use_override=True, single_template=True
-        )
-        values = {}
-        evidence = {}
-        for point in series.get("points", []):
-            day = (date.fromisoformat(point["date"]) - anchor).days
-            if point.get("value") is not None:
-                values[day] = point["value"]
-                evidence[day] = point.get("evidence")
-            elif point.get("coverage") not in {None, "missing"}:
-                evidence[day] = {"coverage": point["coverage"]}
-        if (
-            request.history_mode == "hindsight"
-            and series.get("status") != "unavailable"
-        ):
-            try:
-                retained = _unmapped_exact_values(
-                    metric.mapping, key, request.start, min(request.end, request.cutoff)
+        scoped = defaultdict(list)
+        for index, metric in choices:
+            mapping = metric.mapping
+            is_arena = source == "arena"
+            mapped = metric_series(
+                resolved,
+                index,
+                source_use_override=True,
+                single_template=True,
+                split_arena=is_arena,
+            )
+            retained = {}
+            if (
+                request.history_mode == "hindsight"
+                and mapped.get("status") != "unavailable"
+            ):
+                try:
+                    retained = _unmapped_exact_values(
+                        mapping,
+                        key,
+                        request.start,
+                        min(request.end, request.cutoff),
+                        **({"split_arena": True} if is_arena else {}),
+                    )
+                except ValueError:
+                    mapped = {
+                        "status": "unavailable",
+                        "reason": "source_evidence_limit_exceeded",
+                    }
+            if not is_arena:
+                scoped[None].append((mapped, retained, mapping))
+                continue
+            observed = mapped.get("arena_scopes", {})
+            settings = mapping.contract.source_configuration["arena"]
+            native_board, native_category, reasoning = _arena_mapping_dimensions(
+                mapping
+            )
+            configured_board = native_board or settings.get("config")
+            for board, category in observed.keys() | retained.keys() or {
+                (configured_board or "text", native_category or "overall")
+            }:
+                coordinate = (
+                    board,
+                    category,
+                    mapping.external_identifier,
+                    reasoning,
+                    _arena_source_fields(mapping).get("board") or "",
                 )
-            except ValueError:
-                retained = {}
-                values = {}
-                evidence = {}
-                series["status"] = "unavailable"
-                series["reason"] = "source_evidence_limit_exceeded"
-            for day, item in retained.items():
-                offset = (date.fromisoformat(day) - anchor).days
-                # Conflicting independently sourced values are not silently pooled.
-                if item.get("coverage") == "conflict":
-                    values.pop(offset, None)
-                    evidence[offset] = {"coverage": "conflict"}
-                elif (evidence.get(offset) or {}).get("coverage") not in {
-                    None,
-                    "missing",
-                }:
-                    continue
-                elif offset in values and str(values[offset]) != str(item["value"]):
-                    values.pop(offset)
-                    evidence[offset] = {"coverage": "conflict"}
-                elif offset not in values:
-                    values[offset] = item["value"]
-                    evidence[offset] = item["evidence"]
-            if values:
-                series["status"] = "available"
-        lines.append(
-            line(
+                scoped[coordinate].append(
+                    (
+                        observed.get(
+                            (board, category), mapped if "status" in mapped else {}
+                        ),
+                        retained.get((board, category), {}),
+                        mapping,
+                    )
+                )
+
+        default_count = sum(
+            bool(scope and scope[:2] == ("text", "overall")) for scope in scoped
+        )
+        for scope, partitions in sorted(scoped.items()):
+            if scope and len(partitions) > 1:
+                native = [
+                    item
+                    for item in partitions
+                    if item[2].contract.source_configuration["arena"].get("config")
+                    == scope[0]
+                ]
+                partitions = native or partitions
+            identifier = partitions[0][2].external_identifier
+            if len(partitions) == 1:
+                mapped, retained, _ = partitions[0]
+                values, evidence, status = _single_brand_values(
+                    mapped, retained, anchor
+                )
+            else:
+                values, evidence, status = {}, {}, "mapping_ambiguous"
+            output = line(
                 source,
                 key,
                 label,
                 unit,
                 values,
                 evidence,
-                status=series.get("reason", series.get("status", "unavailable")),
-                identifier=metric.mapping.external_identifier,
+                status=status,
+                identifier=identifier,
             )
-        )
+            if scope:
+                board, category, variant, reasoning, board_label = scope
+                output["arena_scope"] = {
+                    "config": board,
+                    "category": category,
+                    "variant": variant,
+                    "reasoning": reasoning or None,
+                    "board": board_label or board,
+                }
+                output["default_visible"] = default_count == 1 and (
+                    board,
+                    category,
+                ) == ("text", "overall")
+                if (
+                    reasoning
+                    or (board_label and board_label != board)
+                    or not output["default_visible"]
+                ):
+                    output["key"] += ":" + ":".join(
+                        quote(part, safe="") for part in scope
+                    )
+            lines.append(output)
     return {
+        **(
+            {"_release_catalog_states": resolved.release_catalog_states}
+            if cache_catalog_states
+            else {}
+        ),
         "product": {
             "key": str(resolved.target.product.product_key),
             "label": resolved.target.product.display_name
@@ -1102,6 +1507,20 @@ def build_single_brand_chart(request: ChartRequest, *, start_day=-14, end_day=29
             "release_date": anchor.isoformat(),
             "anchor_source": resolved.target.anchor_source,
             "anchor_reviewed": resolved.target.reviewed,
+            **(
+                {
+                    "dossier_id": str(resolved.target.dossier_id),
+                    "brand_label": resolved.target.product.brand.display_name or resolved.target.product.brand_id,
+                    "milestone_kind": resolved.target.milestone_kind,
+                    "claim_id": str(resolved.target.claim_id),
+                    "review_id": str(request.target.review_id)
+                    if request.target.review_id
+                    else None,
+                    "fingerprint": resolved.target.fingerprint,
+                }
+                if getattr(resolved.target, "dossier_id", None)
+                else {}
+            ),
         },
         "as_of": request.cutoff.isoformat(),
         "start_date": (anchor + timedelta(days=start_day)).isoformat(),

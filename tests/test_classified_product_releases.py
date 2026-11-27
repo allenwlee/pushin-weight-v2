@@ -426,6 +426,93 @@ def test_detection_queue_prioritizes_completed_two_role_classification(monkeypat
     assert old_state.completed_at is None and old_state.retry_at is None
 
 
+@pytest.mark.parametrize("limit", [1, 2, 3])
+def test_saved_targeted_release_advances_among_older_two_role_finals(monkeypatch, tmp_path, settings, limit):
+    """GLM-5.4 had a separate release publication while older posts had only feed labels."""
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+    from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    old, runner, _ = setup_cycle(monkeypatch, official=True)
+    old.post.text = "I have been using Qwen."
+    old.post.save(update_fields=["text"])
+    runner.cfg.llm.classifier_pipeline = "two_role"
+    runner.cfg.targeted_extraction.enabled = False
+    runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
+    with monkeypatch.context() as setup:
+        setup.setattr("monitor.pulse_processing.process_saved_findings", dict)
+        setup.setattr("core.product_release_acquisition.dispatch_due_recovery", dict)
+        runner._run_post_fetch([], run_id="older-feed-only")
+        for post_id in ("saved-release", "second-release-report"):
+            release = models.Post.objects.create(
+                tweet_id=post_id, text="We released Qwen4 weights today.",
+                lang="en", lang_detected="en", author=old.post.author, author_handle=old.post.author_handle,
+            )
+            cycle._persist_attribution(release, ["qwen"], [])
+            models.PostBrand.objects.create(post=release, brand_id="qwen")
+            models.PostEnrichmentState.objects.create(post=release, translation_status="succeeded")
+        runner.cfg.targeted_extraction.enabled = True
+        runner._targeted_extraction_calls["model_release_extraction"] = lambda *_: {
+            "records": [{"model_name": "Qwen4", "brand_id": "qwen", "organization_name": "Qwen",
+                         "publisher_relation": "source_author", "novelty": "new_release",
+                         "source_excerpt": release.text, "categories": ["model-llm"]}]
+        }
+        runner._run_post_fetch([], run_id="ready-targeted-release")
+
+    # Put both published findings inside the queue, beyond the bounded scan
+    # of either end. Keep one older feed final eligible for ordinary recovery.
+    now = timezone.now()
+    edges = [models.Post(tweet_id=f"pending-{i}") for i in range(64)]
+    models.Post.objects.bulk_create(edges)
+    models.ProductReleaseDetectionState.objects.bulk_create([
+        models.ProductReleaseDetectionState(post=post, requested_at=now + timedelta(hours=-1 if i < 32 else 1))
+        for i, post in enumerate(edges)
+    ])
+    queue = models.ProductReleaseDetectionState.objects
+    queue.filter(post=old.post).update(requested_at=now - timedelta(hours=2), completed_at=None, retry_at=None)
+    queue.filter(post_id="saved-release").update(requested_at=now - timedelta(minutes=5))
+    queue.filter(post_id="second-release-report").update(requested_at=now)
+    assert models.PostBrandClassificationState.objects.filter(
+        post_id=old.pk, selected_final_judgment__isnull=False,
+    ).exists()
+    assert read_publication_findings(old.pk) is None
+    assert read_publication_findings("saved-release")[0]["finding"]["observed_name"] == "Qwen4"
+    result = process_saved_findings(limit=limit)
+    assert result["candidates"] == (2 if limit == 3 else 1)
+    assert result["provider_calls"] == result["failed"] == 0
+    assert (queue.get(post_id="saved-release").completed_at is not None) == (limit != 2)
+    assert (queue.get(post_id="second-release-report").completed_at is not None) == (limit > 1)
+    assert models.Product.objects.filter(display_name="Qwen4", brand_id="qwen").exists()
+    assert (queue.get(post=old.post).completed_at is not None) == (limit > 1)
+
+
+def test_queue_does_not_treat_one_brands_saved_manifest_as_a_complete_publication(monkeypatch, tmp_path, settings):
+    from monitor import pulse_control
+    from monitor.pulse_processing import process_saved_findings
+
+    settings.PULSE_CONTROL_DIRECTORY = str(tmp_path)
+    pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
+    old, runner, _ = setup_cycle(monkeypatch, official=True)
+    runner._run_post_fetch([], run_id="older-partial-after-brand-change")
+    new_brand = models.Brand.objects.create(nickname="another")
+    models.PostBrand.objects.create(post=old.post, brand=new_brand)
+    assert read_publication_findings(old.pk) is None
+
+    release = models.Post.objects.create(tweet_id="fully-published", text=old.post.text, lang="en",
+                                         lang_detected="en", author=old.post.author, author_handle=old.post.author_handle)
+    cycle._persist_attribution(release, ["qwen"], [])
+    models.PostBrand.objects.create(post=release, brand_id="qwen")
+    models.PostEnrichmentState.objects.create(post=release, translation_status="succeeded")
+    runner._run_post_fetch([], run_id="later-complete-release")
+    assert read_publication_findings(release.pk)
+    assert process_saved_findings(limit=1)["candidates"] == 1
+    assert models.ProductReleaseDetectionState.objects.get(post=old.post).completed_at is None
+    assert models.ProductReleaseDetectionState.objects.get(post=release).completed_at is not None
+
+
 def test_disabled_targeted_extraction_does_not_queue_release_work(monkeypatch, settings):
     from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
 
@@ -503,7 +590,8 @@ def test_two_role_nonrelease_does_not_stall_pulse_queue(monkeypatch, tmp_path, s
     assert read_publication_findings(state.post_id) == ()
 
 
-def test_saved_classification_schedules_missing_release_extraction(monkeypatch, tmp_path, settings):
+@pytest.mark.parametrize("enabled", [True, False])
+def test_saved_classification_schedules_missing_release_extraction(monkeypatch, tmp_path, settings, enabled):
     from core.product_release_detection_queue import enqueue_posts
     from monitor import pulse_control
     from monitor.pulse_processing import process_saved_findings
@@ -514,13 +602,17 @@ def test_saved_classification_schedules_missing_release_extraction(monkeypatch, 
     pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
     state, runner, _ = setup_cycle(monkeypatch, official=True)
     runner.cfg.llm.classifier_pipeline = "two_role"
+    # A separate worker reloads config.yaml. Give both normal entry points
+    # the same operator setting, including the supported disabled case.
+    runner.cfg.targeted_extraction.enabled = enabled
+    monkeypatch.setattr("x_monitor.config.load_config", lambda _: runner.cfg)
     runner._post_fetch_clients["classification"] = FixedSlotTwoRoleTransport()
     runner._run_post_fetch([], run_id="saved-classification-only")
     assert not models.TargetedExtractionState.objects.filter(post_id=state.pk).exists()
     settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
     enqueue_posts([state.pk])
     process_saved_findings()
-    assert models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction", status="pending").exists()
+    assert models.TargetedExtractionState.objects.filter(post_id=state.pk, role="model_release_extraction", status="pending").exists() is enabled
 
 
 def test_exhausted_release_retry_stops_polling_until_new_evidence(monkeypatch, tmp_path, settings):
@@ -767,7 +859,7 @@ def test_two_role_publishes_maya_hardware_mention_as_other_neutral(monkeypatch, 
     ).values_list("post_type_id", flat=True)) == ["other"]
 
 
-def test_two_role_third_party_can_create_unknown_publisher(monkeypatch, tmp_path, settings):
+def test_two_role_third_party_preserves_unknown_publisher_without_a_dedicated_account(monkeypatch, tmp_path, settings):
     from monitor import pulse_control
     from tests.test_u18_two_role_foundation import FixedSlotTwoRoleTransport
 
@@ -797,8 +889,11 @@ def test_two_role_third_party_can_create_unknown_publisher(monkeypatch, tmp_path
         }]
     }
     runner._run_post_fetch([], run_id="two-role-new-publisher")
-    assert models.Product.objects.filter(display_name="NewLab-Z", brand__display_name="NewLab").exists()
-    assert models.RareTypeCategoryAssignment.objects.filter(post_id=state.pk, brand__display_name="NewLab", category="model-llm").exists()
+    saved = read_publication_findings(state.pk)[0]["finding"]
+    assert (saved["observed_name"], saved["category"]) == ("NewLab-Z", "model-llm")
+    assert saved["issuer_evidence"]["observed_name"] == "NewLab"
+    assert not models.Brand.objects.filter(display_name="NewLab").exists()
+    assert not models.Product.objects.filter(display_name="NewLab-Z").exists()
 
 
 def test_two_role_uses_saved_profile_for_new_first_person_publisher(monkeypatch, tmp_path, settings):
@@ -818,7 +913,7 @@ def test_two_role_uses_saved_profile_for_new_first_person_publisher(monkeypatch,
     pulse_control.initialize(directory=tmp_path, state="running", actor="fixture", reason="test")
     state, runner, _ = setup_cycle(monkeypatch, sentinel=True)
     author = models.Account.objects.create(
-        author_id="new-lab-account", handle="newlab", display_name="NewLab",
+        author_id="88123499", handle="newlab", display_name="NewLab",
         bio="NewLab builds AI models.",
     )
     statement = "We released NewLab-Z today."
@@ -1816,7 +1911,7 @@ def test_classifier_supported_third_party_creates_product_without_official_autho
     assert not models.BrandAccount.objects.exists()
 
 
-def test_classifier_supported_third_party_creates_new_publisher_without_company(monkeypatch, tmp_path, settings):
+def test_classifier_supported_third_party_preserves_new_name_without_creating_brand(monkeypatch, tmp_path, settings):
     from monitor import pulse_control
     from monitor.pulse_processing import process_saved_findings
 
@@ -1836,9 +1931,9 @@ def test_classifier_supported_third_party_creates_new_publisher_without_company(
     assert state.classification_status == 'succeeded'
     assert read_publication_findings(state.pk)[0]['finding']['issuer_evidence']['observed_name'] == 'Acme Labs'
     outcome = process_saved_findings()
-    assert outcome['processed'] == 1 and outcome['unresolved'] == outcome['failed'] == 0
-    product = models.Product.objects.get()
-    assert product.brand.display_name == 'Acme Labs'
+    assert outcome['processed'] == outcome['unresolved'] == 1 and outcome['failed'] == 0
+    assert not models.Product.objects.exists()
+    assert not models.Brand.objects.filter(display_name='Acme Labs').exists()
     assert not models.Company.objects.exists()
     assert not models.BrandAccount.objects.exists()
     assert len(transport.calls) == 2
@@ -1882,7 +1977,7 @@ def test_source_author_profile_can_identify_new_publisher_without_worker(monkeyp
     assert outcome['processed'] == 1 and outcome['unresolved'] == outcome['failed'] == 0
     assert models.Product.objects.get().brand.display_name == 'Acme Labs'
     assert not models.Company.objects.exists()
-    assert not models.BrandAccount.objects.exists()
+    assert models.BrandAccount.objects.get(account=author, role_id='official').brand.display_name == 'Acme Labs'
     assert len(transport.calls) == 2
 
 

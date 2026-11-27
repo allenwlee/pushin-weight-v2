@@ -930,6 +930,10 @@ msgid "Brand posts"
 msgstr "品牌相关帖子"
 
 #: core/chart_engine.py
+msgid "Verified product mentions"
+msgstr "已确认提及该产品的帖子"
+
+#: core/chart_engine.py
 msgid "posts"
 msgstr "帖子"
 
@@ -1439,3 +1443,39 @@ msgstr "巨头"
 
 msgid "Chatter updates are delayed. The latest available story is shown."
 msgstr "Chatter 更新延迟，当前显示最近发布的报道。"
+
+msgid "Release chart"
+msgstr "发布图表"
+
+msgid "View chart"
+msgstr "查看图表"
+
+msgid "Release evidence"
+msgstr "发布依据"
+
+msgid "Chart is pending product identity and a usable release date."
+msgstr "图表正在等待产品身份和可用的发布日期。"
+
+msgid "New release"
+msgstr "新发布"
+
+msgid "Historical release"
+msgstr "历史发布"
+
+msgid "Availability update"
+msgstr "可用性更新"
+
+msgid "Release type pending"
+msgstr "发布类型待确认"
+
+msgid "Supported date"
+msgstr "有依据的日期"
+
+msgid "Reasoning setting"
+msgstr "推理设置"
+
+msgid "Confirmed in dossier review"
+msgstr "经档案审核确认"
+
+msgid "Chart values"
+msgstr "图表数值"

@@ -15,6 +15,7 @@ def product_identity():
     paths = [
         ROOT / "core/models.py",
         ROOT / "core/chart_engine.py",
+        ROOT / "core/release_chart_handoff.py",
         ROOT / "core/chart_engine_view.py",
         ROOT / "core/benchmark_forecast_inputs.py",
         ROOT / "core/classification_contract.py",
@@ -46,6 +47,7 @@ def product_identity():
         ROOT / "monitor/templates/monitor/chatter.html",
         *sorted((ROOT / "monitor/templates/monitor/general").glob("*.html")),
         *sorted((ROOT / "monitor/templates/monitor/content").glob("*.html")),
+        ROOT / "monitor/templates/monitor/_single_brand_chart.html",
         ROOT / "monitor/single_brand_chart.py",
         ROOT / "monitor/static/monitor/single-brand-chart.css",
         ROOT / "monitor/static/monitor/single-brand-chart.js",

@@ -8,11 +8,16 @@ this module.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from decimal import Decimal
+from threading import Lock
 from typing import Any
+from unittest.mock import patch
 
 from core.discovery import PAID_DISCOVERY_CALL_IDS, RARE_EXTRA_CALL_ID
 from monitor.post_enrichment import (
@@ -718,6 +723,7 @@ class BoundedXClient:
         self._delegate = delegate
         self._delegate.max_retries = 0
         self._search_requests = 0
+        self._request_lock = Lock()
 
     @property
     def timeout_s(self):
@@ -738,9 +744,10 @@ class BoundedXClient:
         return getattr(self._delegate, "_request_log", None)
 
     def _claim_search_request(self) -> None:
-        if self._search_requests >= 1:
-            raise StagingAcceptanceError("search_request_cap_exceeded")
-        self._search_requests += 1
+        with self._request_lock:
+            if self._search_requests >= 1:
+                raise StagingAcceptanceError("search_request_cap_exceeded")
+            self._search_requests += 1
 
     def run_search(self, query: str, **kwargs):
         self._claim_search_request()
@@ -791,14 +798,80 @@ def bounded_twitter_client_factory() -> Iterator[None]:
     original_descriptor = XClient.__dict__["from_env"]
     original_factory = XClient.from_env
 
+    pulse_run = bool(os.environ.get("PULSE_STAGING_BUDGET_WINDOW_ID"))
+    shared_client = None
+    factory_lock = Lock()
+
     def _from_env(_cls, purpose: TwitterApiCredentialPurpose):
-        return BoundedXClient(original_factory(purpose))
+        nonlocal shared_client
+        if not pulse_run:
+            return BoundedXClient(original_factory(purpose))
+        if purpose != TwitterApiCredentialPurpose.ON_DEMAND:
+            raise StagingAcceptanceError("pulse_staging_route_mismatch")
+        with factory_lock:
+            if shared_client is None:
+                shared_client = BoundedXClient(original_factory(purpose))
+            return shared_client
 
     XClient.from_env = classmethod(_from_env)
     try:
         yield
     finally:
         XClient.from_env = original_descriptor
+
+
+@contextmanager
+def bounded_pulse_staging_budget(window_id: str, cfg: Config) -> Iterator[None]:
+    """Charge guarded Pulse test traffic to one pilot window across invocations."""
+    from monitor.enrichment_budget import (
+        config_fingerprint,
+        request_cost_bound,
+        reserve_charge,
+    )
+    from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+
+    if (
+        os.environ.get(DEPLOYMENT_ENVIRONMENT) != EXPECTED_DEPLOYMENT_ENVIRONMENT
+        or os.environ.get("RENDER_SERVICE_NAME") != EXPECTED_SERVICE_NAME
+        or cfg.llm.classifier_pipeline != "two_role"
+        or cfg.llm.classifier_provider != "deepinfra"
+        or cfg.llm.translator_provider != "deepinfra"
+        or os.environ.get("X_DATA_PROVIDER_ORDER_ON_DEMAND") != "twitterapi:on_demand"
+        or os.environ.get("TWEXAPI_FORCE_SEARCH") == "1"
+        or os.environ.get("TWITTERAPI_SEARCH_MAX_RETRIES", "0") != "0"
+    ):
+        raise StagingAcceptanceError("pulse_staging_route_mismatch")
+
+    fingerprint = config_fingerprint(cfg)
+
+    def reserve(cost):
+        return reserve_charge(
+            window_id=window_id, fingerprint=fingerprint, cost=cost,
+            scope="pilot", window_ceiling=Decimal(20),
+        )
+
+    # One standard page at 300 credits, plus the existing Jev per-cycle hard
+    # limit. Leave both charged even when the response or its accounting is lost.
+    reserve(Decimal(MAX_RARE_TYPE_SEARCH_CREDITS) / 100_000 + cfg.discovery.rare_types.jev.cycle_budget_usd)
+    original_send = DeepInfraChatCompletionsClient._send_request
+
+    def send(client, request, *, timeout):
+        # The final provider payload may include a schema or other profile
+        # instructions. Include those bytes in the existing conservative bound.
+        profile_fields = {
+            key: value for key, value in request.items()
+            if key not in {"model", "messages", "max_tokens", "system"}
+        }
+        priced = request
+        if profile_fields:
+            priced = {**request, "system": request.get("system", "") + json.dumps(profile_fields)}
+        reserve(request_cost_bound(priced))
+        return original_send(client, request, timeout=timeout)
+
+    # Shared by inline classification, translation and targeted extraction.
+    # At the actual transport boundary every retry reserves separately.
+    with patch.object(DeepInfraChatCompletionsClient, "_send_request", send):
+        yield
 
 
 @contextmanager

@@ -20,6 +20,7 @@ from scripts.benchmark_download_collector.identity import days
 
 
 class Command(BaseCommand):
+    stealth_options = ("http_client",)
     help = "Collect a reviewed source into shared metric history; requires --apply."
 
     def add_arguments(self, parser):
@@ -125,18 +126,19 @@ class Command(BaseCommand):
                 from core.data_source_backfill_opencode import (
                     history_window,
                     is_opencode_history,
+                    is_release_publication_history,
                 )
-                if is_opencode_history(job):
+                if is_opencode_history(job) or is_release_publication_history(job):
                     first, last = history_window(job)
                     require((options['start_date'], options['end_date']) == (first, last),
-                            'requested dates differ from sealed OpenCode history bounds')
+                            'requested dates differ from sealed source history bounds')
                 for flag, name in (
                     ("max_requests", "requests"),
                     ("max_seconds", "seconds"),
                     ("max_bytes", "bytes"),
                 ):
                     options[flag] = min(options[flag], job.budgets[name])
-                claim = claim_job(job.pk, typed=True)
+                claim = claim_job(job.pk, typed=True, expected_slot=options["slot"])
                 with fenced_run(claim) as (_, active):
                     require(options["slot"] is None or active.scheduled_slot_at == aware_instant(options["slot"]),
                             "metric schedule slot differs from claimed slot")
@@ -151,7 +153,7 @@ class Command(BaseCommand):
             if claim is not None:
                 key = active.ingestion_key
             with (
-                httpx.Client() as client,
+                (nullcontext(options["http_client"]) if options.get("http_client") else httpx.Client()) as client,
                 (
                     collection_lock(contract, source)
                     if claim is not None
@@ -217,6 +219,11 @@ class Command(BaseCommand):
                                 )
                             ],
                         )
+                        if options["job"] and job.job_key.startswith(("release-metric:", "release-history:")):
+                            # capture_budget owns the full wire response. Keep
+                            # only its digest and selected rows in this payload.
+                            for check in result.get("endpoint_checks", []):
+                                check.pop("native_payload", None)
                         if options['job'] and is_opencode_history(job):
                             from core.data_source_backfill_opencode import (
                                 select_history_window,
@@ -227,10 +234,24 @@ class Command(BaseCommand):
                             budget,
                             params["start_date"],
                             params["end_date"],
+                            # A sealed missing-day window cannot use today's board
+                            # or bring unrelated carry-in publications into storage.
+                            **({"history": True, "carry_in_days": 0}
+                               if options["job"] and is_release_publication_history(job) else {}),
                             config=contract.source_configuration[source].get(
                                 "config", "text_style_control"
                             ),
                         )
+                    if (options["job"] and job.job_key.startswith(("release-metric:", "release-history:"))
+                            and source in {"openrouter", "arena"} and result.get("status") == "ok"):
+                        from core.model_history_publications import (
+                            select_publication_rows,
+                        )
+
+                        native_ids = set(contract.mappings.filter(source_id=source, purpose="metric")
+                                         .values_list("external_identifier", flat=True))
+                        require(len(native_ids) == 1, "release measurement must select one native product")
+                        result = select_publication_rows(result, source, native_ids)
                     result["request_count"] = options["max_requests"] - budget.remaining
                     return result
 

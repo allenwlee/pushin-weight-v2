@@ -155,6 +155,14 @@ def _prior_dossier_product(*, dossier_id, brand, observed_name, repo_id=None):
         if (name and (row["observed_name"] or "").strip().casefold() == name)
         or (repo and (row["candidate_repo_id"] or "").casefold() == repo)
     }
+    from core.release_chart_handoff import selected_p2_product
+
+    selected = selected_p2_product(dossier_id)
+    if selected and selected.brand_id == brand.pk and (
+        (name and (selected.display_name or "").strip().casefold() == name)
+        or (repo and (selected.repo_id or "").casefold() == repo)
+    ):
+        product_ids.add(selected.pk)
     if len(product_ids) > 1:
         raise ValueError("dossier_product_identity_conflict")
     return next(iter(product_ids), None)

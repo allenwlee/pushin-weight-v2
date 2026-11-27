@@ -616,6 +616,13 @@ def _publication_window(parent, budget, start, end, *, key, config):
     )
 
 
+def select_publication_rows(listing, source, identifiers):
+    """Select exact measured native identities from a validated full publication."""
+    field = "model_permaslug" if source == "openrouter" else "model_name"
+    return {**listing, "rows": [row for row in listing["rows"]
+                               if row[field] in identifiers and row[field] != "other"]}
+
+
 def _admit_publication(claim, job, publication, start, end):
     from core.collection_matching import admit_saved_publication_rows
 
@@ -636,11 +643,7 @@ def _admit_publication(claim, job, publication, start, end):
         ).values_list("external_identifier", flat=True)
     )
     listing, _, source_metadata = observation_object_documents(publication)
-    payload = copy.deepcopy(listing)
-    field = "model_permaslug" if job.source_id == "openrouter" else "model_name"
-    payload["rows"] = [
-        r for r in payload["rows"] if r[field] in identifiers and r[field] != "other"
-    ]
+    payload = select_publication_rows(listing, job.source_id, identifiers)
     if not payload["rows"]:
         return
     dataset = (

@@ -20,7 +20,12 @@ from django.utils import timezone, translation
 from django.utils.translation import gettext
 from django.views.decorators.http import require_GET
 
-from core.chart_engine import ChartRequest, ReleaseAnchor, build_single_brand_chart
+from core.chart_engine import (
+    ChartRequest,
+    ReleaseAnchor,
+    build_single_brand_chart,
+    single_brand_dates,
+)
 from core.models import Product
 from monitor.content_views import content_locale, private_response
 
@@ -42,9 +47,22 @@ def _public_products():
 
 def _cached_chart(key):
     try:
-        return cache.get(key)
-    except OSError:
-        logger.warning("Chart cache read failed", exc_info=True)
+        cached = cache.get(key)
+        states = cached.get("_release_catalog_states", ()) if cached is not None else ()
+        if states:
+            from core.collection_identity import release_metric_catalog_state
+            from core.models import SourceSubjectMapping
+
+            mappings = SourceSubjectMapping.objects.filter(
+                purpose="metric",
+                pk__in=[pk for pk, _ in states],
+            ).select_related("subject__product", "contract")
+            current = {str(m.pk): release_metric_catalog_state(m) for m in mappings}
+            if current != dict(states):
+                return None
+        return cached
+    except (OSError, DatabaseError):
+        logger.warning("Chart cache or ownership check unavailable", exc_info=True)
         return None
 
 
@@ -70,7 +88,7 @@ def _calculate_chart(request_data):
                     "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
                 )
                 cursor.execute("SET LOCAL statement_timeout = '15000ms'")
-        return build_single_brand_chart(request_data)
+        return build_single_brand_chart(request_data, cache_catalog_states=True)
 
 
 @require_GET
@@ -105,7 +123,28 @@ def chart(request):
     global _LAST_BUILD_FINISHED
     product_id = request.GET.get("product")
     release = request.GET.get("release_date")
-    if not product_id and not release:
+    now = timezone.now().astimezone(UTC)
+    qualified = None
+    if "release" in request.GET:
+        if "product" in request.GET or "release_date" in request.GET:
+            return HttpResponseBadRequest(
+                "Choose one release or enter a product and date."
+            )
+        from core.release_chart_handoff import resolve_release
+
+        try:
+            dossier_id = UUID(request.GET["release"])
+            qualified = resolve_release(dossier_id, cutoff=now)
+        except ValueError:
+            return JsonResponse({"code": "release_pending", "error": "Release evidence is incomplete."}, status=400)
+        except DatabaseError:
+            return JsonResponse(
+                {"error": "Chart data is temporarily unavailable."}, status=503
+            )
+        product_key = qualified.product_key
+        anchor = qualified.date
+        anchor_source = qualified.source
+    elif not product_id and not release:
         # Owner-confirmed release is a starting example, not a limitation of
         # the engine or the endpoint. The date is an explicitly supplied anchor.
         product = (
@@ -127,21 +166,29 @@ def chart(request):
             return HttpResponseBadRequest("A product and release date are required.")
         product = _public_products().filter(product_key=product_key).first()
         anchor_source = "caller-supplied"
-    if product is None:
-        raise Http404("Product is unavailable.")
-    now = timezone.now().astimezone(UTC)
+    if qualified is None:
+        if product is None:
+            raise Http404("Product is unavailable.")
+        product_key = product.product_key
     if anchor.year < 1970 or anchor > now.date():
         return HttpResponseBadRequest("Invalid release date.")
+    first, last = single_brand_dates(anchor)
     request_data = ChartRequest(
-        target=ReleaseAnchor(
-            product_key=product.product_key, date=anchor, source=anchor_source
+        target=(
+            ReleaseAnchor.from_qualified(qualified)
+            if qualified
+            else ReleaseAnchor(product_key, anchor, anchor_source)
         ),
-        start=datetime.combine(anchor - timedelta(days=14), time.min, tzinfo=UTC),
-        end=datetime.combine(anchor + timedelta(days=29), time.min, tzinfo=UTC),
+        start=datetime.combine(first, time.min, tzinfo=UTC),
+        end=datetime.combine(last + timedelta(days=1), time.min, tzinfo=UTC),
         cutoff=now,
         history_mode="hindsight",
     )
-    cache_key = f"single-brand-comp:v1:{product.product_key}:{anchor.isoformat()}:{anchor_source}"
+    cache_key = (
+        f"single-brand-comp:v2:{product_key}:{anchor.isoformat()}:{anchor_source}"
+    )
+    if qualified:
+        cache_key += f":{qualified.dossier_id}:{qualified.fingerprint}"
     refresh = request.GET.get("refresh") == "1"
     result = None if refresh else _cached_chart(cache_key)
     if result is None:
@@ -156,7 +203,7 @@ def chart(request):
                 try:
                     Path(cache_dir).mkdir(mode=0o700, parents=True, exist_ok=True)
                     fd = os.open(
-                        str(Path(cache_dir) / _build_lock_name(product.product_key, anchor)),
+                        str(Path(cache_dir) / _build_lock_name(product_key, anchor)),
                         os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0),
                         0o600,
                     )
@@ -166,7 +213,9 @@ def chart(request):
                     return _busy()
                 except OSError:
                     logger.exception("Chart build lock unavailable")
-                    return JsonResponse({"error": "Chart data is temporarily unavailable."}, status=503)
+                    return JsonResponse(
+                        {"error": "Chart data is temporarily unavailable."}, status=503
+                    )
             # Recheck after acquiring the shared admission lock.
             result = None if refresh else _cached_chart(cache_key)
             if result is None:
@@ -186,13 +235,14 @@ def chart(request):
                 finally:
                     _LAST_BUILD_FINISHED = clock.monotonic()
                 try:
-                    if refresh:
+                    if refresh and not qualified:
                         other_source = (
-                            "owner-confirmed" if anchor_source == "caller-supplied"
+                            "owner-confirmed"
+                            if anchor_source == "caller-supplied"
                             else "caller-supplied"
                         )
                         other_key = (
-                            f"single-brand-comp:v1:{product.product_key}:"
+                            f"single-brand-comp:v2:{product_key}:"
                             f"{anchor.isoformat()}:{other_source}"
                         )
                         cache.delete(other_key)
@@ -205,9 +255,24 @@ def chart(request):
             _CHART_BUILD_LOCK.release()
     locale = content_locale(request)
     result = {**result, "lines": [dict(line) for line in result["lines"]]}
+    result.pop("_release_catalog_states", None)
     with translation.override("zh-hans" if locale == "zh-cn" else locale):
         for line in result["lines"]:
             line["label"] = gettext(line["label"])
             line["unit"] = gettext(line["unit"])
+            if line.get("key") == "discussion:posts" and result["product"].get("brand_label"):
+                line["label"] += f" ({result['product']['brand_label']})"
+            scope = line.get("arena_scope")
+            if scope:
+                board = scope["config"]
+                if scope.get("board") and scope["board"] != board:
+                    board = f"{scope['board']} / {board}"
+                line["label"] += (
+                    f" · {board} / {scope['category']} · {scope['variant']}"
+                )
+                if scope.get("reasoning"):
+                    line["label"] += (
+                        f" · {gettext('Reasoning setting')}: {scope['reasoning']}"
+                    )
         result["notes"] = [gettext(note) for note in result["notes"]]
     return private_response(JsonResponse(result))

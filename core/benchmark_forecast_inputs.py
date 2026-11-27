@@ -132,6 +132,16 @@ def forecast_inputs(
             | Q(as_of_date__gte=start.date(), as_of_date__lt=end.date())
             | Q(as_of_at__gte=start, as_of_at__lt=end)
             | Q(
+                observation__run__job__source_id="arena",
+                observation__published_date__gte=start.date(),
+                observation__published_date__lt=end.date(),
+            )
+            | Q(
+                observation__run__job__source_id="arena",
+                observation__source_record_date__gte=start.date(),
+                observation__source_record_date__lt=end.date(),
+            )
+            | Q(
                 observation__archive_snapshot_date__gte=start.date(),
                 observation__archive_snapshot_date__lt=end.date(),
             )
@@ -190,6 +200,7 @@ def forecast_inputs(
             "observation__mapping__reviewed_at",
             "observation__source_dataset__code",
             "observation__revision_conflict",
+            "observation__published_date",
         )
         .order_by("id")[: limit + 1]
     )
@@ -220,6 +231,10 @@ def forecast_inputs(
         # Every supported measurement source keeps its forecast coordinates
         # and provenance outside the retired observation documents.
         metadata = observation_provenance_metadata(observation)
+        if run.job.source_id == "arena":
+            publication = observation.published_date or observation.source_record_date
+            if publication:
+                metadata["publication_date"] = publication.isoformat()
         dimensions = observation_dimensions(observation)
         if run.job.source_id == "github" and github_asset_metric(definition):
             require(

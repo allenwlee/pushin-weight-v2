@@ -406,3 +406,114 @@ def test_chart_build_lock_blocks_other_worker(monkeypatch, tmp_path):
         process.stdout.close()
     assert single_brand_chart.chart(request).status_code == 200
     assert build.call_count == 1
+
+
+def test_release_cache_distinguishes_evidence_and_refreshes_empty_result(monkeypatch):
+    import json
+    from uuid import uuid4
+
+    from core import release_chart_handoff
+
+    dossier_id, product_key, claim_id = uuid4(), uuid4(), uuid4()
+    evidence = SimpleNamespace(
+        dossier_id=dossier_id,
+        product_key=product_key,
+        date=date(2026, 8, 13),
+        source="p2-qualified",
+        review_id=None,
+        claim_id=claim_id,
+        fingerprint="a" * 64,
+    )
+    resolve = Mock(return_value=evidence)
+    monkeypatch.setattr(release_chart_handoff, "resolve_release", resolve)
+    values = []
+
+    def calculate(request):
+        assert request.target.dossier_id == dossier_id
+        return {
+            "product": {},
+            "notes": [],
+            "lines": [
+                {"label": "Brand posts", "unit": "posts", "values": list(values)}
+            ],
+        }
+
+    build = Mock(side_effect=calculate)
+    monkeypatch.setattr(single_brand_chart, "_calculate_chart", build)
+    factory = RequestFactory()
+
+    def read(**params):
+        response = single_brand_chart.chart(
+            factory.get("/general/chart/", {"release": str(dossier_id), **params})
+        )
+        assert response.status_code == 200
+        return json.loads(response.content)["lines"][0]["values"]
+
+    assert read() == []
+    values.append(0)
+    assert read() == []
+    assert read(refresh="1") == [0]
+    assert read() == [0]
+    evidence.fingerprint = "b" * 64
+    values.append(18)
+    assert read() == [0, 18]
+    assert build.call_count == 3
+    resolve.side_effect = ValueError("superseded release")
+    assert (
+        single_brand_chart.chart(
+            factory.get("/general/chart/", {"release": str(dossier_id)})
+        ).status_code
+        == 400
+    )
+    assert build.call_count == 3
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"release": "invalid"},
+        {"release": ""},
+        {
+            "release": "e9a554f5-d5d7-4303-a92d-be8fcc80830b",
+            "release_date": "2026-10-01",
+        },
+        {"release": "e9a554f5-d5d7-4303-a92d-be8fcc80830b", "product": ""},
+    ],
+)
+def test_invalid_release_link_does_not_fall_back_to_manual(params):
+    response = single_brand_chart.chart(RequestFactory().get("/general/chart/", params))
+    assert response.status_code == 400
+
+def test_template_discovery_bounds_each_source_without_dropping_other_sources(monkeypatch):
+    from uuid import uuid4
+
+    from core import chart_engine
+
+    product = uuid4()
+    config = {
+        "arena": {"definitions": [{"metric_key": key} for key in ("rating", "rank")]}
+    }
+    mappings = [
+        SimpleNamespace(
+            pk=uuid4(),
+            contract_id=uuid4(),
+            source_id="arena",
+            subject=SimpleNamespace(product_id=product),
+            contract=SimpleNamespace(source_configuration=config),
+        )
+        for _ in range(51)
+    ]
+    query = Mock()
+    query.select_related.return_value.order_by.return_value = query
+    query.filter.side_effect = lambda source_id: {
+        "arena": mappings,
+        "github": list(range(101)),
+    }.get(source_id, [])
+    monkeypatch.setattr(
+        chart_engine.SourceSubjectMapping.objects, "filter", lambda **_: query
+    )
+    selections, lookup, limited = chart_engine._discover_metrics(
+        {product}, single_template=True
+    )
+    assert len(selections) == 102 and len(lookup) == 51
+    assert limited == ("github",)

@@ -4544,7 +4544,7 @@ class CycleRunner:
                         "author_description": post.author_description,
                         "profile_bio": post.author_profile_bio,
                         "observed_at": post.fetched_at.isoformat() if post.fetched_at else None,
-                    }])
+                    }], include_release_display_name=True)
                     sources = [
                         {**source, "text": source["text"][:2048]}
                         for source in evidence["sources"]

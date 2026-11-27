@@ -261,6 +261,11 @@ def due_job(job, *, now=None):
             ).exists()
         ):
             reason = "legacy_slot_succeeded"
+    if job.job_key.startswith("release-metric:") and reason in {"due", "before_slot", "slot_succeeded", "legacy_slot_succeeded"}:
+        from core.release_chart_collection import release_metric_job_is_current
+
+        if not release_metric_job_is_current(job, now):
+            reason = "release_scope_unavailable"
     return {
         "job_id": str(job.pk),
         "source": job.source_id,
@@ -286,6 +291,7 @@ def execute_due_job(job, decision, budget):
         from core.data_source_backfill_opencode import (
             history_window,
             is_opencode_history,
+            is_release_publication_history,
         )
         now = timezone.now().astimezone(UTC)
         config = job.contract.source_configuration[job.source_id]
@@ -299,7 +305,7 @@ def execute_due_job(job, decision, budget):
             if job.source_id == "openrouter"
             else end
         )
-        if is_opencode_history(job):
+        if is_opencode_history(job) or is_release_publication_history(job):
             from datetime import date
             first, last = history_window(job)
             start, end = date.fromisoformat(first), date.fromisoformat(last)
@@ -313,6 +319,7 @@ def execute_due_job(job, decision, budget):
         try:
             call_command(
                 "collect_benchmark_metrics",
+                http_client=budget.client,
                 contract=str(job.contract_id),
                 source=job.source_id,
                 start_date=start.isoformat(),

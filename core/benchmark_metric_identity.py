@@ -460,6 +460,40 @@ def validate_evidence_url(value):
     return value
 
 
+def _release_hf_receipt(subject, row):
+    """Allow a catalog-attested Product publisher without manufacturing a Company."""
+    from core.data_source_backfill_hf import catalog_repo_creation
+
+    marker = row.get("identifier_metadata", {}).get("release_catalog")
+    if not isinstance(marker, dict) or not marker.get("hf_receipt"):
+        return False
+    publisher = row.get("publisher_account_key")
+    if not publisher or str(publisher) != marker.get("publisher_account_key"):
+        return False
+    mapping = SourceSubjectMapping.objects.filter(
+        source_id="hf",
+        purpose="catalog",
+        subject=subject,
+        source_subject_kind="repository",
+        identifier_scope__code="model",
+        normalized_identifier=row["external_identifier"].casefold(),
+        mapping_hash=marker.get("mapping_hash"),
+        publisher_account_id=publisher,
+    ).first()
+    if not mapping:
+        return False
+    receipt = mapping.identifier_metadata.get("release_endpoint") or {}
+    require(
+        marker["hf_receipt"] == digest([
+            receipt.get("archive_sha256"), receipt.get("selector"), receipt.get("url"),
+        ]),
+        "HF catalog receipt differs from the reviewed source",
+    )
+    # This revalidates dedicated repository, publisher ownership and archived bytes.
+    catalog_repo_creation(subject, row["external_identifier"], publisher)
+    return True
+
+
 def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
     from core.benchmark_metric_store import safe_payload
 
@@ -623,6 +657,7 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
             validate_statistics_mapping(subject, row, source, taxonomy)
         if subject.subject_kind == "product":
             product = subject.product
+            release_hf = source == "hf" and _release_hf_receipt(subject, row)
             require(
                 (
                     product.product_type_code in {"llm-model", "other-ai-model", "agent-harness", "model-llm", "model-other", "agent", "harness"}
@@ -631,7 +666,8 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
                     )
                 )
                 if statistics
-                else product.product_type_code in {"llm-model", "model-llm"},
+                else product.product_type_code in {"llm-model", "model-llm"}
+                or (release_hf and product.product_type_code == "model-other"),
                 "product type is not reviewed as llm-model",
             )
             require(
@@ -656,21 +692,22 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
                     product.repo_id and normalized == product.repo_id.casefold(),
                     "HF repository identity mismatch",
                 )
-                require(
-                    product.hf_namespace
-                    and product.publisher_ownership
-                    and product.publisher_ownership.ownership_confirmed,
-                    "HF publisher ownership unconfirmed",
-                )
-                from core.models import BrandCompany
+                if not release_hf:
+                    require(
+                        product.hf_namespace
+                        and product.publisher_ownership
+                        and product.publisher_ownership.ownership_confirmed,
+                        "HF publisher ownership unconfirmed",
+                    )
+                    from core.models import BrandCompany
 
-                require(
-                    BrandCompany.objects.filter(
-                        brand_id=product.brand_id,
-                        company_id=product.publisher_ownership.company_id,
-                    ).exists(),
-                    "HF company does not own selected brand",
-                )
+                    require(
+                        BrandCompany.objects.filter(
+                            brand_id=product.brand_id,
+                            company_id=product.publisher_ownership.company_id,
+                        ).exists(),
+                        "HF company does not own selected brand",
+                    )
                 if publisher:
                     require(
                         str(product.publisher_account_id) == str(publisher),
