@@ -28,6 +28,7 @@ def profile(author):
 
 
 def test_supported_first_party_registers_one_official_brand():
+    existing_companies = set(models.Company.objects.values_list('pk', flat=True))
     author = account('9990001', 'ace_robotics', 'ACE ROBOTICS')
     post, finding = release(author, 'Introducing ACE-ViDiHand2', 'ACE ROBOTICS', 'source_author')
     finding['publisher_profile'] = profile(author)
@@ -35,7 +36,7 @@ def test_supported_first_party_registers_one_official_brand():
     brand_id = resolve(post=post, finding=finding)
     assert resolve(post=post, finding=finding) == brand_id
     assert models.BrandAccount.objects.get(account=author, role_id='official').brand_id == brand_id
-    assert not models.Company.objects.exists()
+    assert set(models.Company.objects.values_list("pk", flat=True)) == existing_companies
 
 
 def test_extracting_a_handle_does_not_register_reporter_or_unverified_publisher():
@@ -120,3 +121,25 @@ def test_namesake_profile_does_not_qualify_a_new_brand():
     assert publisher_accounts.resolve_release_publisher(post=post, finding=finding) is None
     assert not models.Brand.objects.exists()
     assert not models.BrandAccount.objects.exists()
+
+
+def test_reporter_mention_cannot_credit_a_reassigned_handle_and_uses_exact_indexes():
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+    from core.release_publisher_recovery import _saved_originals
+
+    reporter = account("1868991360755539968", "SouthBrief", "SouthBrief")
+    current = account("111122223333", "AminiTech", "Different account")
+    post, finding = release(reporter, "Amini (@AminiTech) released Soma-1X Lite this week.",
+                            "Amini", "attributed_party", "aminitech")
+    post.entities = {"user_mentions":[{"name":"Amini","id_str":"1615357145842581505",
+                                     "indices":[7,17],"screen_name":"AminiTech"}]}
+    from django.utils import timezone
+    post.created_at = timezone.now()
+    with CaptureQueriesContext(connection) as captured:
+        assert publisher_accounts.resolve_release_publisher(post=post, finding=finding, verified_account=current) is None
+        assert list(_saved_originals("aminitech", "Soma-1X Lite", post)) == []
+    assert not models.BrandAccount.objects.exists()
+    queries = [r["sql"] for r in captured.captured_queries]
+    assert any('"normalized_handle"' in q and 'WHERE' in q for q in queries)
+    assert not any('UPPER("accounts"."handle"' in q or 'UPPER("posts"."author_handle"' in q for q in queries)

@@ -121,6 +121,29 @@ def _release_brand_candidates(name):
     return Brand.objects.filter(is_sentinel=False).filter(labels | Q(pk__in=reviewed))
 
 
+def cited_x_account(post, handle, *, lock=False):
+    """Resolve an exact indexed X handle; a saved native mention ID must agree."""
+    handle = handle.lstrip("@").casefold()
+    if not handle:
+        return None
+    accounts = Account.objects.filter(data_source_id="x", normalized_handle=handle)
+    if lock:
+        accounts = accounts.select_for_update()
+    entities = post.entities if isinstance(post.entities, dict) else {}
+    native_ids = {
+        str(entity.get("id_str") or entity.get("id"))
+        for entity in entities.get("user_mentions") or []
+        if isinstance(entity, dict) and str(entity.get("screen_name", "")).casefold() == handle
+        and str(entity.get("id_str") or entity.get("id") or "").isascii()
+        and str(entity.get("id_str") or entity.get("id") or "").isdecimal()
+    }
+    if len(native_ids) > 1:
+        return None
+    if native_ids:
+        accounts = accounts.filter(normalized_identifier=native_ids.pop())
+    return accounts.first()
+
+
 @transaction.atomic
 def resolve_release_publisher(*, post, finding, verified_account=None):
     """Resolve the selected P1 issuer. A verified account must come from publisher-owned evidence."""
@@ -167,11 +190,7 @@ def resolve_release_publisher(*, post, finding, verified_account=None):
                 organization == identifier(account.handle or "") or organization in domain_labels
             ))
     elif relation == "attributed_party" and issuer.get("observed_handle"):
-        handle = issuer["observed_handle"].lstrip("@")
-        hits = list(accounts.filter(handle__iexact=handle)[:2])
-        if len(hits) > 1:
-            return None
-        account = hits[0] if hits else None
+        account = cited_x_account(post, issuer["observed_handle"], lock=True)
 
     if verified_account is not None and (not account or account.pk != verified_account.pk):
         return None

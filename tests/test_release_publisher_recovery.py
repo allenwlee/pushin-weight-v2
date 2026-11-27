@@ -204,6 +204,24 @@ def test_guarded_search_outage_charges_once_across_retries(monkeypatch):
     )
     assert len(charges) == 1
     assert budget.remaining == 3
+    monkeypatch.setenv("PULSE_STAGING_PUBLISHER_RETRY_POST_ID", "2125967917942452381")
+    assert (
+        _search_publisher("AminiTech", "Soma-1X Lite", budget, "different-report") == []
+    )
+    for _ in range(2):
+        assert (
+            _search_publisher(
+                "AminiTech", "Soma-1X Lite", budget, "2125967917942452381"
+            )
+            == []
+        )
+    assert len(charges) == 2 and budget.remaining == 2
+    assert (
+        SearchQuery.objects.filter(
+            query_id__endswith=":article-v2", plan_calls_run_id="window"
+        ).count()
+        == 1
+    )
 
 
 def test_retrospective_keeps_model_link_and_does_not_invent_a_launch_day():
@@ -289,3 +307,78 @@ def test_first_party_older_text_only_original_cannot_hide_later_repository(
         extraction_version="pulse-historical-announcement-v1",
     ).exists()
     assert not recover_release_publisher(dossier, client=None, now=now, budget=budget)
+
+
+@pytest.mark.parametrize(
+    "case,expected",
+    [
+        ("original", True),
+        ("http_profile", True),
+        ("profile_conflict", False),
+        ("spoof", False),
+        ("nested", False),
+        ("unrelated", False),
+    ],
+)
+def test_original_post_and_publisher_page_reciprocally_confirm_exact_model(
+    monkeypatch, case, expected
+):
+    from types import SimpleNamespace
+
+    from core.release_publisher_recovery import _publisher_page
+    from core.staff_assets import public_fetch
+
+    article = "https://www.amini.ai/blog-post/introducing-soma-1x-lite-a-2b-model-for-document-intelligence"
+    if case == "spoof":
+        article = article.replace("amini.ai", "amini.ai.example.com")
+    if case == "unrelated":
+        article = article.replace(
+            article.partition("/blog-post")[2], "/unrelated-product"
+        )
+    rows = [
+        {
+            "url": "https://t.co/TX0lw7Ufsd",
+            "expanded_url": "https://huggingface.co/AminiTech/Soma-1X-lite-1120-preview",
+        },
+        {"url": "https://t.co/0BaALfqBmD", "expanded_url": article},
+    ]
+    raw = {
+        "author_handle": "AminiTech",
+        "author_id": "1615357145842581505",
+        "author_url": "https://x.com/AminiTech",
+        "text": "Introducing Soma-1X Lite, our open-weight 2B model for document intelligence.\n\nModel: https://t.co/TX0lw7Ufsd\n\nRead more about Soma 1X Lite: https://t.co/0BaALfqBmD",
+        "entities": {"urls": rows},
+    }
+    if case == "nested":
+        raw["entities"] = {"quoted_tweet": {"urls": rows}}
+    if case in {"profile_conflict", "http_profile"}:
+        domain = "different.example" if case == "profile_conflict" else "www.amini.ai"
+        raw["author_entities"] = {
+            "url": {
+                "urls": [
+                    {"url": "https://t.co/profile", "expanded_url": "http://" + domain}
+                ]
+            }
+        }
+    budget = SimpleNamespace(
+        check=lambda: None,
+        remaining=1,
+        deadline=999,
+        max_bytes=1024 * 1024,
+        total_bytes_read=0,
+    )
+    calls = []
+
+    def fetch(url, **kwargs):
+        calls.append(url)
+        assert kwargs["max_requests"] == 1
+        return ARTICLE.encode(), url, "text/html"
+
+    monkeypatch.setattr(public_fetch, "fetch_before_deadline", fetch)
+    page = _publisher_page(
+        raw, "Soma-1X Lite", "AminiTech", budget, publisher_name="Amini"
+    )
+    assert bool(page) is expected
+    assert calls == ([article] if expected else [])
+    if page:
+        assert page[1].repo == "AminiTech/Soma-1X-lite"

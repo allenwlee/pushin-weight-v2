@@ -59,7 +59,7 @@ def discover_verified_hf_model(release, *, budget):
                 account__normalized_identifier=namespace.casefold(),
             ).exists()
             or accounts.filter(
-                account__data_source_id="x", account__handle__iexact=namespace
+                account__data_source_id="x", account__normalized_handle=namespace.casefold()
             ).exists()
         )
 

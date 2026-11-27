@@ -163,26 +163,28 @@ def _original_post(raw, handle, product):
 
 
 def _urls(raw):
-    from core.product_verification import _walk_strings
+    text = raw.get("text") or ""
+    urls = re.findall(r"https://[^\s<>\"']+", text)
+    text_urls = set(urls)
+    entities = raw.get("entities") or {}
+    for obj in entities.get("urls", ()) if isinstance(entities, dict) else ():
+        if (
+            isinstance(obj, dict)
+            and obj.get("url") in text_urls
+            and isinstance(obj.get("expanded_url"), str)
+        ):
+            urls.append(obj["expanded_url"])
+    return list(dict.fromkeys(u.rstrip(".,;!?)]}") for u in urls))
 
-    return list(
-        dict.fromkeys(
-            url.rstrip(".,;!?)]}")
-            for field in (raw.get("entities"), raw.get("text"))
-            for value in _walk_strings(field)
-            for url in re.findall(r"https://[^\s<>\"']+", value)
-        )
-    )
 
-
-def _host(url):
+def _host(url, *, profile=False):
     try:
         parsed = urlsplit(url or "")
         if (
-            parsed.scheme == "https"
+            (parsed.scheme == "https" or profile and parsed.scheme == "http")
             and not parsed.username
             and not parsed.password
-            and parsed.port in (443, None)
+            and parsed.port in (None, 443 if parsed.scheme == "https" else 80)
         ):
             return (parsed.hostname or "").casefold().removeprefix("www.")
     except ValueError:
@@ -190,7 +192,7 @@ def _host(url):
     return ""
 
 
-def _publisher_page(raw, product, handle, budget):
+def _publisher_page(raw, product, handle, budget, *, publisher_name=None):
     from urllib3.exceptions import HTTPError
 
     from core.product_verification import _walk_strings
@@ -198,38 +200,78 @@ def _publisher_page(raw, product, handle, budget):
 
     profile = raw.get("author_profile_bio") or {}
     profile_entities = profile.get("entities") if isinstance(profile, dict) else None
-    websites = (
-        (profile_entities or {}).get("url")
-        if isinstance(profile_entities, dict)
-        else None
-    )
-    hosts = {_host(url) for url in [raw.get("author_url"), *_walk_strings(websites)]}
-    hosts -= {"", "t.co", "twitter.com", "x.com", "huggingface.co", "github.com"}
+    hosts = {_host(raw.get("author_url"), profile=True)}
+    for entities in (profile_entities, raw.get("author_entities")):
+        if isinstance(entities, dict):
+            hosts.update(
+                _host(url, profile=True) for url in _walk_strings(entities.get("url"))
+            )
+    platforms = {
+        "",
+        "t.co",
+        "bit.ly",
+        "tinyurl.com",
+        "ow.ly",
+        "lnkd.in",
+        "twitter.com",
+        "x.com",
+        "huggingface.co",
+        "hf.co",
+        "github.com",
+        "linkedin.com",
+    }
+    hosts -= platforms
+    publisher_label = re.sub(r"[^a-z0-9]", "", (publisher_name or "").casefold())
+    articles = []
     for url in _urls(raw):
         host = _host(url)
-        if host not in hosts:
+        if host in platforms:
             continue
-        budget.check()
-        budget.remaining -= 1
-        cap = min(1024 * 1024, budget.max_bytes - budget.total_bytes_read)
-        if cap <= 0:
-            return None
-        try:
-            body, final, mime = fetch_before_deadline(
-                url, max_bytes=cap, deadline=budget.deadline, max_requests=1
-            )
-        except (ValueError, OSError, HTTPError):
-            return None
-        budget.total_bytes_read += len(body)
-        if _host(final) == host and "html" in mime:
-            page = publisher_article(body, product, handle)
-            if page:
-                return final, page
-        break
+        if hosts:
+            if host not in hosts:
+                continue
+        else:
+            # Without a profile website, require a link from the genuine issuer
+            # naming this product on a domain bearing the independently cited
+            # publisher name. Only the target's own title, date, social backlink
+            # and exact model link can complete the proof.
+            if not (
+                _original_post(raw, handle, product)
+                and publisher_label
+                and re.fullmatch(re.escape(publisher_label) + r"\.[a-z]{2,63}", host)
+                and re.search(
+                    r"(?<![a-z0-9])"
+                    + re.escape(_offering_key(product))
+                    + r"(?![a-z0-9])",
+                    _offering_key(urlsplit(url).path),
+                )
+            ):
+                continue
+        articles.append(url)
+    if len(articles) != 1:
+        return None
+    url = articles[0]
+    host = _host(url)
+    budget.check()
+    budget.remaining -= 1
+    cap = min(1024 * 1024, budget.max_bytes - budget.total_bytes_read)
+    if cap <= 0:
+        return None
+    try:
+        body, final, mime = fetch_before_deadline(
+            url, max_bytes=cap, deadline=budget.deadline, max_requests=1
+        )
+    except (ValueError, OSError, HTTPError):
+        return None
+    budget.total_bytes_read += len(body)
+    if _host(final) == host and "html" in mime:
+        page = publisher_article(body, product, handle)
+        if page:
+            return final, page
     return None
 
 
-def _search_publisher(handle, product, budget):
+def _search_publisher(handle, product, budget, report_id=None):
     """A single separately reserved X lookup in the explicitly guarded pilot window."""
     import hashlib
     import os
@@ -273,6 +315,14 @@ def _search_publisher(handle, product, budget):
     query = f'from:{handle} "{product}"'
     digest = hashlib.sha256(query.casefold().encode()).hexdigest()
     query_id = f"pulse-publisher-search-v1:{window}:{digest}"
+    # One deliberately selected source can retry the changed article parser
+    # within this same pilot budget. The retry has its own single-use slot.
+    if (
+        report_id
+        and os.environ.get("PULSE_STAGING_PUBLISHER_RETRY_POST_ID") == str(report_id)
+        and SearchQuery.objects.filter(query_id=query_id).exists()
+    ):
+        query_id += ":article-v2"
     if SearchQuery.objects.filter(query_id=query_id).exists():
         return []
 
@@ -328,10 +378,21 @@ def _search_publisher(handle, product, budget):
 
 def _saved_originals(handle, product, report):
     from core.models import Post
+    from core.publisher_accounts import cited_x_account
 
+    if (
+        report.author_id
+        and (report.author_handle or "").casefold() == handle.casefold()
+    ):
+        account_id = report.author_id
+    else:
+        account = cited_x_account(report, handle)
+        if account is None:
+            return
+        account_id = account.pk
     rows = (
         Post.objects.filter(
-            author_handle__iexact=handle,
+            author_id=account_id,
             text__icontains=product,
             created_at__lte=report.created_at,
         )
@@ -351,6 +412,7 @@ def _saved_originals(handle, product, report):
                             "entities",
                             "author_url",
                             "author_profile_bio",
+                            "author_entities",
                             "is_quote",
                             "is_retweet",
                             "quoted_status_id",
@@ -364,7 +426,9 @@ def _saved_originals(handle, product, report):
 def _originals(handle, product, report, issuer, budget):
     yield from _saved_originals(handle, product, report)
     if issuer.get("relation") == "attributed_party":
-        yield from ((None, row) for row in _search_publisher(handle, product, budget))
+        yield from (
+            (None, row) for row in _search_publisher(handle, product, budget, report.pk)
+        )
 
 
 def _announcement_effective(text, published_at):
@@ -409,7 +473,8 @@ def _record_source(anchor, finding, source_post, raw, article, repo, now):
             dossier.merged_into_id
             or dossier.current_review_id
             or not any(
-                row["anchor_claim_id"] == str(anchor.pk) and replay_saved_publisher(row["finding"], report) == finding
+                row["anchor_claim_id"] == str(anchor.pk)
+                and replay_saved_publisher(row["finding"], report) == finding
                 for row in read_publication_findings(report.pk) or ()
             )
         ):
@@ -559,7 +624,9 @@ def recover_release_publisher(dossier, *, client, now, budget):
             if not _publisher_post(raw, handle):
                 continue
             original = _original_post(raw, handle, product)
-            article = _publisher_page(raw, product, handle, budget)
+            article = _publisher_page(
+                raw, product, handle, budget, publisher_name=issuer.get("observed_name")
+            )
             if not (original or article):
                 continue
             repo = _model_repo(_urls(raw), product, handle) if original else None
