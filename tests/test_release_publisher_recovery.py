@@ -284,4 +284,8 @@ def test_first_party_older_text_only_original_cannot_hide_later_repository(
         event_dossier_source__post=newer,
         scope_key="official-hf-model:QwenOfficial/Qwen4",
     ).exists()
+    assert not models.EventDossierClaim.objects.filter(
+        event_dossier_source__post=newer,
+        extraction_version="pulse-historical-announcement-v1",
+    ).exists()
     assert not recover_release_publisher(dossier, client=None, now=now, budget=budget)

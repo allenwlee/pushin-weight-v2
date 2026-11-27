@@ -392,7 +392,7 @@ def _record_source(anchor, finding, source_post, raw, article, repo, now):
 
     from core.classified_product_releases import read_publication_findings
     from core.event_dossiers import add_claim, attach_source
-    from core.models import EventDossier, Product
+    from core.models import EventDossier, EventDossierClaim, Product
     from core.product_identity import resolve_saved_release_finding
     from core.publisher_accounts import resolve_release_publisher
     from monitor.cycle import persist_x_post
@@ -457,7 +457,17 @@ def _record_source(anchor, finding, source_post, raw, article, repo, now):
             if article
             else _announcement_effective(title, source_post.created_at)
         )
-        if effective:
+        existing_date = EventDossierClaim.objects.filter(
+            event_dossier_source__event_dossier_id=result["dossier_id"],
+            scope_key=f"pulse-history-v1:{product.product_key}",
+            reported_product=product,
+            extraction_version="pulse-historical-announcement-v1",
+        )
+        # A later X announcement can add a repository without establishing
+        # another launch timestamp. Explicit publisher-stated days retain provenance.
+        if effective and (
+            article or effective.get("effective_date") or not existing_date.exists()
+        ):
             add_claim(
                 linked.pk,
                 claim_kind="announcement",
