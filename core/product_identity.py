@@ -286,13 +286,6 @@ def resolve_saved_release_finding(*, claim_id):
     # judgment. Archived older packets keep their original qualification path.
     trusted_finding = False
     trusted_publisher = False
-    attributed_name = (issuer.get("observed_name") if isinstance(issuer, dict) and (
-        issuer.get("relation") == "attributed_party"
-        or (issuer.get("relation") == "source_author" and (
-            finding.get("publisher_profile")
-            or (issuer.get("observed_name") and issuer["observed_name"] in issuer.get("source_excerpt", ""))
-        ))
-    ) else None)
     from core.classified_product_releases import TARGETED_RELEASE_REVISION
 
     if post and name and packet["extraction_version"] in {
@@ -309,6 +302,18 @@ def resolve_saved_release_finding(*, claim_id):
             trusted_finding = bool(published and any(
                 row["anchor_claim_id"] == str(claim.pk) for row in published
             ))
+    if trusted_finding and packet["extraction_version"] == TARGETED_RELEASE_REVISION:
+        from core.classified_product_releases import replay_saved_publisher
+
+        finding = replay_saved_publisher(finding, post)
+        issuer = finding.get("issuer_evidence")
+    attributed_name = (issuer.get("observed_name") if isinstance(issuer, dict) and (
+        issuer.get("relation") == "attributed_party"
+        or (issuer.get("relation") == "source_author" and (
+            finding.get("publisher_profile")
+            or (issuer.get("observed_name") and issuer["observed_name"] in issuer.get("source_excerpt", ""))
+        ))
+    ) else None)
     upload_source = None
     if product is None and trusted_finding and identity_is_specific and not identity_conflict and dossier.current_review_id is None:
         from core.product_availability_identity import saved_upload_source

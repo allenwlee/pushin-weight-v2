@@ -390,7 +390,10 @@ def _announcement_effective(text, published_at):
 def _record_source(anchor, finding, source_post, raw, article, repo, now):
     from django.db import transaction
 
-    from core.classified_product_releases import read_publication_findings
+    from core.classified_product_releases import (
+        read_publication_findings,
+        replay_saved_publisher,
+    )
     from core.event_dossiers import add_claim, attach_source
     from core.models import EventDossier, EventDossierClaim, Product
     from core.product_identity import resolve_saved_release_finding
@@ -406,7 +409,7 @@ def _record_source(anchor, finding, source_post, raw, article, repo, now):
             dossier.merged_into_id
             or dossier.current_review_id
             or not any(
-                row["anchor_claim_id"] == str(anchor.pk) and row["finding"] == finding
+                row["anchor_claim_id"] == str(anchor.pk) and replay_saved_publisher(row["finding"], report) == finding
                 for row in read_publication_findings(report.pk) or ()
             )
         ):
@@ -493,7 +496,10 @@ def _record_source(anchor, finding, source_post, raw, article, repo, now):
 
 
 def recover_release_publisher(dossier, *, client, now, budget):
-    from core.classified_product_releases import read_publication_findings
+    from core.classified_product_releases import (
+        read_publication_findings,
+        replay_saved_publisher,
+    )
     from core.models import EventDossierClaim
     from core.product_release_findings import discussion_only_reason
 
@@ -529,6 +535,7 @@ def recover_release_publisher(dossier, *, client, now, budget):
             or not report.created_at
         ):
             continue
+        finding = replay_saved_publisher(finding, report)
         issuer = finding.get("issuer_evidence") or {}
         handle = (
             report.author_handle
