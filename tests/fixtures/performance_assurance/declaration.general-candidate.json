@@ -247,64 +247,72 @@
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-refresh=\"calendar\"]"
+          "kind": "press",
+          "target": "[data-refresh=\"calendar\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-refresh=\"free\"]"
+          "kind": "press",
+          "target": "[data-refresh=\"free\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-refresh=\"jobs\"]"
+          "kind": "press",
+          "target": "[data-refresh=\"jobs\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-refresh=\"moving\"]"
+          "kind": "press",
+          "target": "[data-refresh=\"moving\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-more=\"calendar\"]"
+          "kind": "press",
+          "target": "[data-more=\"calendar\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-more=\"free\"]"
+          "kind": "press",
+          "target": "[data-more=\"free\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-more=\"jobs\"]"
+          "kind": "press",
+          "target": "[data-more=\"jobs\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-more=\"moving\"]"
+          "kind": "press",
+          "target": "[data-more=\"moving\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
@@ -386,64 +394,72 @@
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-refresh=\"calendar\"]"
+          "kind": "press",
+          "target": "[data-refresh=\"calendar\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-refresh=\"free\"]"
+          "kind": "press",
+          "target": "[data-refresh=\"free\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-refresh=\"jobs\"]"
+          "kind": "press",
+          "target": "[data-refresh=\"jobs\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-refresh=\"moving\"]"
+          "kind": "press",
+          "target": "[data-refresh=\"moving\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-more=\"calendar\"]"
+          "kind": "press",
+          "target": "[data-more=\"calendar\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-more=\"free\"]"
+          "kind": "press",
+          "target": "[data-more=\"free\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-more=\"jobs\"]"
+          "kind": "press",
+          "target": "[data-more=\"jobs\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
           "value": 1200
         },
         {
-          "kind": "click",
-          "target": "[data-more=\"moving\"]"
+          "kind": "press",
+          "target": "[data-more=\"moving\"]",
+          "value": "Enter"
         },
         {
           "kind": "wait",
