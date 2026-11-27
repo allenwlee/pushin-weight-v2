@@ -3140,6 +3140,8 @@ def test_p2_rechecks_publisher_after_matching_ingestion_finishes(
         directory=tmp_path, state="running", actor="fixture", reason="test"
     )
     state, runner, transport = setup_cycle(monkeypatch, sentinel=True)
+    existing_companies = set(models.Company.objects.values_list("pk", flat=True))
+    existing_edges = set(models.BrandAccount.objects.values_list("pk", flat=True))
     statement = "Acme Labs released Qwen4 weights today, says reporter."
     state.post.text = statement
     state.post.save(update_fields=["text"])
@@ -3211,8 +3213,8 @@ def test_p2_rechecks_publisher_after_matching_ingestion_finishes(
         ).count()
         == 1
     )
-    assert not models.Company.objects.exists()
-    assert not models.BrandAccount.objects.exists()
+    assert set(models.Company.objects.values_list("pk", flat=True)) == existing_companies
+    assert set(models.BrandAccount.objects.values_list("pk", flat=True)) == existing_edges
 
 def test_worker_keeps_and_records_conflicting_identity_votes(monkeypatch):
     state, runner, transport = setup_cycle(monkeypatch)
