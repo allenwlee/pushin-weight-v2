@@ -19,6 +19,8 @@ class PublisherArticle:
     day: date
     repo: str | None
     profile: str | None = None
+    github_profile: str | None = None
+    github_repo: str | None = None
 
 
 class _ArticlePage(HTMLParser):
@@ -26,6 +28,7 @@ class _ArticlePage(HTMLParser):
         super().__init__()
         self.links = []
         self.hf_profiles = set()
+        self.github_socials = set()
         self.documents = []
         self._script = None
         self.headings = []
@@ -41,6 +44,11 @@ class _ArticlePage(HTMLParser):
             self._capture = (tag, self.byline_dates, [])
         if tag == "a" and attrs.get("href"):
             self.links.append(attrs["href"])
+            if "me" in attrs.get("rel", "").casefold().split() or (
+                "social-link" in classes
+                and "github" in attrs.get("aria-label", "").casefold()
+            ):
+                self.github_socials.add(attrs["href"])
             if "me" in attrs.get("rel", "").casefold().split() or (
                 "social-link" in classes
                 and "hugging face" in attrs.get("aria-label", "").casefold()
@@ -159,8 +167,13 @@ def publisher_article(body, product, handle):
     if not any(url.rstrip("/").casefold() in socials for url in page.links):
         return None
     profile = next(iter(page.hf_profiles)) if len(page.hf_profiles) == 1 else None
+    from core.release_github_identity import publisher_github_links
+
     repo = _model_repo(page.links, product, profile or handle)
-    if not repo:
+    github_profile, github_repo = publisher_github_links(
+        page.github_socials, page.links, product
+    )
+    if not (repo or github_profile):
         return None
     matches = set()
     for doc in page.documents:
@@ -177,7 +190,9 @@ def publisher_article(body, product, handle):
             day = datetime.fromisoformat(doc["datePublished"]).date()
         except (ValueError, TypeError, KeyError):
             continue
-        matches.add(PublisherArticle(title, day, repo, profile))
+        matches.add(
+            PublisherArticle(title, day, repo, profile, github_profile, github_repo)
+        )
     # CMS pages may put dates in the visible article byline instead of JSON-LD.
     if len(page.headings) == 1 and _announcement_title(page.headings[0], product):
         for byline in page.byline_dates:
@@ -185,7 +200,11 @@ def publisher_article(body, product, handle):
                 day = datetime.strptime(byline, "%B %d, %Y").date()  # noqa: DTZ007 - civil byline date
             except ValueError:
                 continue
-            matches.add(PublisherArticle(page.headings[0], day, repo))
+            matches.add(
+                PublisherArticle(
+                    page.headings[0], day, repo, profile, github_profile, github_repo
+                )
+            )
     return matches.pop() if len(matches) == 1 else None
 
 
@@ -312,9 +331,16 @@ def _issuer_article(page, product, handle, publisher, url):
         except (TypeError, ValueError, KeyError):
             continue
         profile = next(iter(page.hf_profiles)) if len(page.hf_profiles) == 1 else None
+        from core.release_github_identity import publisher_github_links
+
+        github_links = publisher_github_links(page.github_socials, page.links, product)
         matches.add(
             PublisherArticle(
-                title, day, _model_repo(page.links, product, profile or handle), profile
+                title,
+                day,
+                _model_repo(page.links, product, profile or handle),
+                profile,
+                *github_links,
             )
         )
     return matches.pop() if len(matches) == 1 else None
@@ -538,7 +564,7 @@ def _search_publisher(handle, product, budget, report_id=None):
     return rows
 
 
-def _saved_originals(handle, product, report):
+def _saved_originals(handle, product, report, *, github_only=False):
     from core.models import Post
     from core.publisher_accounts import cited_x_account
 
@@ -552,15 +578,20 @@ def _saved_originals(handle, product, report):
         if account is None:
             return
         account_id = account.pk
-    rows = (
-        Post.objects.filter(
-            author_id=account_id,
-            text__icontains=product,
-            created_at__lte=report.created_at,
-        )
-        .select_related("author")
-        .order_by("created_at", "pk")[:24]
+    rows = Post.objects.filter(
+        author_id=account_id, text__icontains=product, created_at__lte=report.created_at
     )
+    if github_only:
+        from django.db.models import Q
+
+        rows = rows.filter(
+            Q(text__icontains="github.com/")
+            | Q(entities__icontains="github.com/")
+            | Q(author_url__icontains="github.com/")
+            | Q(author_entities__icontains="github.com/")
+            | Q(author_profile_bio__icontains="github.com/")
+        )
+    rows = rows.select_related("author").order_by("created_at", "pk")[:24]
     for row in rows:
         if row.author_id:
             yield (
@@ -613,6 +644,127 @@ def _announcement_effective(text, published_at):
     return {"effective_precision": "datetime", "effective_at": published_at}
 
 
+def _profile_urls(raw):
+    from core.product_verification import _walk_strings
+
+    urls = [raw.get("author_url") or ""]
+    profile_bio = raw.get("author_profile_bio")
+    for fields in (
+        raw.get("author_entities"),
+        profile_bio.get("entities") if isinstance(profile_bio, dict) else None,
+    ):
+        if isinstance(fields, dict):
+            urls.extend(_walk_strings(fields.get("url")))
+    return urls
+
+
+def _record_github_claim(linked, kind, path, common):
+    from core.event_dossiers import add_claim
+    from core.release_github_identity import GITHUB_SOURCE_VERSION
+
+    url = "https://github.com/" + path
+    add_claim(
+        linked.pk,
+        claim_kind="release_context",
+        scope_key=f"github-{kind}:{path.casefold()}",
+        assertion_text=url,
+        source_excerpt=url,
+        extraction_version=GITHUB_SOURCE_VERSION,
+        **common,
+    )
+
+
+def _retain_official_github_post(
+    anchor, dossier, finding, handle, now, existing_scopes
+):
+    """Read saved originals for this confirmed Product, independently of its HF proof or date."""
+    from django.db import transaction
+
+    from core.event_dossiers import attach_source
+    from core.models import BrandAccount, EventDossier, Product
+    from core.product_identity import _resolved_anchor_product
+    from core.release_github_identity import publisher_github_links
+
+    product_id = _resolved_anchor_product(anchor, dossier)
+    if not product_id:
+        return False
+    product = Product.objects.get(pk=product_id)
+    name = finding["observed_name"]
+    if not product.brand_id or _offering_key(
+        product.display_name or ""
+    ) != _offering_key(name):
+        return False
+    report = anchor.event_dossier_source.post
+    for saved, raw in _saved_originals(handle, name, report, github_only=True):
+        if not (
+            _publisher_post(raw, handle)
+            and saved.created_at <= now
+            and (
+                _original_post(raw, handle, name)
+                or (
+                    saved.pk == report.pk
+                    and finding["issuer_evidence"]["relation"] == "source_author"
+                )
+            )
+        ):
+            continue
+        official = BrandAccount.objects.filter(
+            brand_id=product.brand_id, account_id=saved.author_id, role_id="official"
+        )
+        if not official.exists():
+            continue
+        profile, repo = publisher_github_links(_profile_urls(raw), _urls(raw), name)
+        candidates = [
+            (kind, path)
+            for kind, path in (("publisher", profile), ("repository", repo))
+            if path and f"github-{kind}:{path.casefold()}" not in existing_scopes
+        ]
+        if not candidates:
+            continue
+        # A known owner for this login must be consistent with the announcing Brand.
+        github_owners = BrandAccount.objects.filter(
+            role_id="official",
+            account__data_source_id="github",
+            account__normalized_handle=(profile or repo.split("/")[0]).casefold(),
+        )
+        if (
+            github_owners.exists()
+            and not github_owners.filter(brand_id=product.brand_id).exists()
+        ):
+            continue
+        with transaction.atomic():
+            current = EventDossier.objects.select_for_update().get(pk=dossier.pk)
+            if (
+                current.merged_into_id
+                or _resolved_anchor_product(anchor, current) != product.pk
+                or not official.exists()
+            ):
+                return False
+            if current.current_review_id:
+                from core.release_chart_handoff import resolve_catalog_release
+
+                try:
+                    selected = resolve_catalog_release(current.pk, cutoff=now)
+                except ValueError:
+                    return False
+                if (selected.product_key, selected.brand_id) != (
+                    product.product_key,
+                    product.brand_id,
+                ):
+                    return False
+            linked = attach_source(dossier.pk, post_id=saved.pk)
+            common = {
+                "source_locator": saved.tweet_url
+                or f"https://x.com/{handle}/status/{saved.pk}",
+                "reported_product_id": product.pk,
+                "reported_brand_id": product.brand_id,
+            }
+            for kind, path in candidates:
+                _record_github_claim(linked, kind, path, common)
+            return True
+    return False
+
+
 def _record_source(
     anchor, finding, source_post, raw, article, repo, now, *, budget=None
 ):
@@ -634,17 +786,7 @@ def _record_source(
     from monitor.cycle import persist_x_post
 
     report = anchor.event_dossier_source.post
-    # A verified announcing account's website field is also first-party evidence.
-    from core.product_verification import _walk_strings
-
-    profile_urls = [raw.get("author_url") or ""]
-    profile_bio = raw.get("author_profile_bio")
-    for fields in (
-        raw.get("author_entities"),
-        profile_bio.get("entities") if isinstance(profile_bio, dict) else None,
-    ):
-        if isinstance(fields, dict):
-            profile_urls.extend(_walk_strings(fields.get("url")))
+    profile_urls = _profile_urls(raw)
     profiles = {name for url in profile_urls if (name := _hf_profile(url))}
     if article and article[1].profile:
         profiles.add(article[1].profile)
@@ -744,6 +886,35 @@ def _record_source(
                 **effective,
                 **common,
             )
+        from core.release_github_identity import publisher_github_links
+
+        # Preserve what the authenticated publisher actually linked, even when
+        # the shared HTTP budget will verify the GitHub native IDs on a later wake.
+        github_profiles = list(profile_urls)
+        github_repos = _urls(raw)
+        if article:
+            if page.github_profile:
+                github_profiles.append("https://github.com/" + page.github_profile)
+            if page.github_repo:
+                github_repos.append("https://github.com/" + page.github_repo)
+        github_profile, github_repo = publisher_github_links(
+            github_profiles, github_repos, finding["observed_name"]
+        )
+        for kind, path in (("publisher", github_profile), ("repository", github_repo)):
+            if path:
+                from_article = article and path in (
+                    page.github_profile,
+                    page.github_repo,
+                )
+                source_locator = (
+                    url
+                    if from_article
+                    else source_post.tweet_url
+                    or f"https://x.com/{source_post.author_handle}/status/{source_post.pk}"
+                )
+                _record_github_claim(
+                    linked, kind, path, {**common, "source_locator": source_locator}
+                )
         profile_account = bind_hf_publisher(owner, profile, url) if profile else None
         bound = False
         if payload and (not profile or profile_account is not None):
@@ -785,13 +956,12 @@ def recover_release_publisher(
     from core.models import EventDossierClaim
     from core.product_release_findings import discussion_only_reason
 
-    if dossier.current_review_id or dossier.merged_into_id:
+    if dossier.merged_into_id or (dossier.current_review_id and revisit_saved_articles):
         return False
     claims = EventDossierClaim.objects.filter(
         event_dossier_source__event_dossier=dossier
     )
-    if claims.filter(extraction_version="pulse-publisher-source-v1").exists():
-        return False
+    proven_hf = claims.filter(extraction_version="pulse-publisher-source-v1").exists()
     anchors = claims.filter(
         scope_key__startswith="pulse-finding-v1:",
         event_dossier_source__post__isnull=False,
@@ -838,13 +1008,40 @@ def recover_release_publisher(
             histories.values_list("event_dossier_source__post_id", "source_locator")
         )
         existing_dates = {post_id for post_id, _ in dated_sources}
+        github_scopes = set()
+        if not revisit_saved_articles:
+            # When another source already confirmed the Product the original may
+            # still supply a later GitHub link. This path never searches X or changes dates.
+            from core.release_github_identity import GITHUB_SOURCE_VERSION
+
+            github_scopes = set(
+                claims.filter(
+                    extraction_version=GITHUB_SOURCE_VERSION,
+                    reported_product__display_name__iexact=product,
+                ).values_list("scope_key", flat=True)
+            )
+            if not any(
+                key.startswith("github-repository:") for key in github_scopes
+            ) and (
+                _retain_official_github_post(
+                    anchor, dossier, finding, handle, now, github_scopes
+                )
+            ):
+                return True
+            if proven_hf or dossier.current_review_id:
+                continue
         verified_articles = {
             post_id
             for post_id, url in dated_sources
             if _host(url) not in ("", "x.com", "twitter.com")
         }
         fallback = None
-        for saved, raw in _originals(handle, product, report, issuer, budget):
+        originals = (
+            _saved_originals(handle, product, report)
+            if (existing_dates or github_scopes) and not revisit_saved_articles
+            else _originals(handle, product, report, issuer, budget)
+        )
+        for saved, raw in originals:
             if not _publisher_post(raw, handle):
                 continue
             original = _original_post(raw, handle, product)

@@ -2,7 +2,7 @@
 
 import logging
 from datetime import UTC, datetime, time, timedelta
-from itertools import groupby
+from itertools import groupby, zip_longest
 
 import httpx
 from django.conf import settings
@@ -19,6 +19,7 @@ from core.collection_budgets import (
     invocation_budget,
 )
 from core.collection_identity import (
+    RELEASE_IDENTIFIER_SCOPES,
     dedicated_product_mapping,
     release_metric_mapping_is_current,
 )
@@ -44,6 +45,7 @@ from core.release_chart_handoff import lock_qualified_release, resolve_release
 DIRECT_SOURCES = ("hf", "openrouter", "opencode", "arena")
 # One cold release can need X, the publisher article, model identity and a measurement.
 RELEASE_REQUEST_LIMIT = 4
+CATALOG_REQUEST_LIMIT = 8
 
 
 def _contract_from_recipe(recipe, product, reviewed_by):
@@ -81,7 +83,6 @@ def _catalog_recipe(mapping, *, coordinate=None):
 
     from core.chart_engine import SINGLE_BRAND_METRICS
     from core.collection_identity import (
-        RELEASE_IDENTIFIER_SCOPES,
         qualified_catalog_ownership,
     )
 
@@ -295,6 +296,7 @@ def _metric_mappings(release):
             continue
         metric.extend(group.get("metric", []))
         catalog.extend(group.get("catalog", []))
+    catalog = [m for m in catalog if m.identifier_scope_code == RELEASE_IDENTIFIER_SCOPES.get(m.source_id)]
     existing_sources = {m.source_id for m in metric}
     for m in catalog:
         if m.source_id in existing_sources:
@@ -445,15 +447,34 @@ def collect_due_release_metrics(
         client, requests=RELEASE_REQUEST_LIMIT, seconds=max_seconds, max_bytes=4 * 1024**2
     )
     now = (cutoff or timezone.now()).astimezone(UTC)
+    # Public identity reads have a separate physical quota so cold catalogs cannot
+    # consume the requests reserved for publisher recovery and chart measurements.
+    catalog_budget = None
+    if confirm_identities and cutoff is None and discover_saved_endpoints is None:
+        catalog_budget = invocation_budget(client, requests=CATALOG_REQUEST_LIMIT, seconds=max_seconds, max_bytes=4 * 1024**2)
+        # Leave part of the worker deadline to the existing metric writer.
+        reserve = min(3, max_seconds / 2) if measure else 0
+        catalog_budget.deadline = budget.deadline - reserve
     try:
-        _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints, live=cutoff is None, measure=measure)
+        _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints, live=cutoff is None, measure=measure, catalog_budget=catalog_budget)
     except PlanningDeadline:
         result["status"] = "deferred"
     result["requests"] = RELEASE_REQUEST_LIMIT - budget.remaining
+    if catalog_budget is not None:
+        result["catalog_requests"] = CATALOG_REQUEST_LIMIT - catalog_budget.remaining
+        result["requests"] += result["catalog_requests"]
     return result
 
 
-def _recent_publisher_findings(now):
+def _rotating_dossier_page(ids, slot, size=4):
+    count = ids.count()
+    if not count:
+        return []
+    offset = (slot % ((count + size - 1) // size)) * size
+    return list(ids[offset:offset + size])
+
+
+def _recent_publisher_findings(now, *, include_confirmed=False):
     """Admit a just-harvested launch even while its Product or date is pending."""
     dossier_key = "event_dossier_source__event_dossier_id"
     proof = EventDossierClaim.objects.filter(
@@ -466,25 +487,64 @@ def _recent_publisher_findings(now):
         assertion_text__in=("new_release", "historical_release", "availability_update"),
         event_dossier_source__event_dossier__merged_into__isnull=True,
         event_dossier_source__event_dossier__current_review__isnull=True,
-    ).filter(~Exists(proof)).order_by().values(dossier_key).annotate(latest=Max("recorded_at"))
+    )
+    if not include_confirmed:
+        pending = pending.filter(~Exists(proof))
+    pending = pending.order_by().values(dossier_key).annotate(latest=Max("recorded_at"))
     # Reserve space for new launches and rotate through overflow from prior cycles.
     fresh = list(pending.filter(latest__gte=now - timedelta(minutes=30))
                  .order_by("-latest", dossier_key).values_list(dossier_key, flat=True)[:8])
     overflow = pending.exclude(**{dossier_key + "__in": fresh}).order_by(dossier_key)
-    count = overflow.count()
-    if count:
-        offset = (int(now.timestamp()) // 900 % ((count + 3) // 4)) * 4
-        fresh.extend(overflow.values_list(dossier_key, flat=True)[offset:offset + 4])
-    return fresh
+    slot = int(now.timestamp()) // 900
+    fresh.extend(_rotating_dossier_page(overflow.values_list(dossier_key, flat=True), slot))
+    if not include_confirmed:
+        return fresh
+
+    # Start from the decision time: an old post can receive its first confirmed
+    # model today, even before anyone can establish the launch date.
+    reviewed = (
+        EventDossier.objects.filter(
+            merged_into__isnull=True,
+            event_kind_reference__code="product_release",
+            current_review__review_state="confirmed",
+            current_review__recorded_at__range=(now - timedelta(days=1), now),
+            current_review__product_release__product__brand__is_sentinel=False,
+            current_review__product_release__product__product_type__code__in=("model-llm", "model-other"),
+        )
+        .exclude(current_review__product_release__disclosure_state="unannounced")
+        .exclude(current_review__product_release__product__private=True)
+        .exclude(current_review__product_release__product__disabled=True)
+        .order_by("-current_review__recorded_at", "pk")
+        .values_list("pk", flat=True)
+    )
+    reviewed_page = _rotating_dossier_page(reviewed, slot)
+    # Alternate first place for tight deadlines and retain each lane's own slots.
+    lanes = (reviewed_page, fresh) if slot % 2 else (fresh, reviewed_page)
+    return [key for pair in zip_longest(*lanes) for key in pair if key is not None]
 
 
-def _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints, *, live, measure=True):
+def _discover_public_catalogs(release, budget, result, now):
+    from core.release_catalog_discovery import discover_release_catalogs
+    from core.release_github_identity import discover_github_release
+
+    try:
+        if discover_github_release(release, budget=budget):
+            result["github_identities_saved"] = result.get("github_identities_saved", 0) + 1
+    except (ValueError, TimeoutError, httpx.HTTPError) as exc:
+        logging.getLogger(__name__).info("GitHub identity pending for %s: %s", release.dossier_id, type(exc).__name__)
+    outcomes = discover_release_catalogs(release, budget, now=now)
+    for source, state in outcomes.items():
+        counts = result.setdefault("catalog_checks", {}).setdefault(source, {})
+        counts[state] = counts.get(state, 0) + 1
+
+
+def _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints, *, live, measure=True, catalog_budget=None):
     from core.benchmark_attribution import UseNotPermitted, enforce_source_collection
     from core.chart_engine import single_brand_dates
 
     if dossier_ids is None:
         with bounded_planning(budget):
-            dossier_ids = _recent_publisher_findings(now)
+            dossier_ids = _recent_publisher_findings(now, include_confirmed=catalog_budget is not None)
             if measure:
                 dossier_ids += _release_page(now, discovery_enabled=True)
     else:
@@ -518,6 +578,16 @@ def _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints,
             with bounded_planning(budget):
                 release = resolve_release(identifier, cutoff=evidence_cutoff)
         except ValueError:
+            # Catalog identity can be confirmed before its launch date is known.
+            if catalog_budget is not None:
+                from core.release_chart_handoff import resolve_catalog_release
+
+                try:
+                    with bounded_planning(budget):
+                        identity = resolve_catalog_release(identifier, cutoff=evidence_cutoff)
+                except ValueError:
+                    continue
+                _discover_public_catalogs(identity, catalog_budget, result, now)
             continue
         if not Product.objects.filter(product_key=release.product_key,
                                       product_type__code__in=("model-llm", "model-other")).exists():
@@ -537,6 +607,8 @@ def _advance_metrics(dossier_ids, now, budget, result, discover_saved_endpoints,
                 discover_verified_hf_model(release, budget=budget)
             except (ValueError, httpx.HTTPError) as exc:
                 logging.getLogger(__name__).warning("HF mapping pending for %s: %s", identifier, type(exc).__name__)
+        if catalog_budget is not None:
+            _discover_public_catalogs(release, catalog_budget, result, now)
         if not measure:
             continue
         with bounded_planning(budget):

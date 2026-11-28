@@ -13,31 +13,58 @@ from core import models
 from core.account_identity import upsert_account
 from core.collection_capture import archive_document
 from core.collection_identity import dedicated_product_mapping, review_catalog_mapping
-from core.measurement_taxonomy import resolve_subject_id
+from core.measurement_taxonomy import product_measurement_subject
 from core.product_verification import _repo_from_hf_url
 from core.publisher_accounts import register_publisher
 from core.release_chart_handoff import lock_qualified_release
 
 
-@transaction.atomic
+def release_product_query():
+    """Avoid loading full HF cards, configuration and file lists for identity checks."""
+    return models.Product.objects.select_related("brand", "product_type").only(
+        "product_key", "display_name", "repo_id", "publisher_account_id",
+        "brand__display_name", "brand__display_name_en", "brand__display_name_zh_cn",
+        "product_type__code",
+    )
+
+
 def bind_hf_publisher(brand_id, namespace, evidence_url):
-    """One HF account can supply both the brand and its established company URL."""
+    return bind_release_publisher(brand_id, "hf", namespace, namespace, evidence_url)
+
+
+@transaction.atomic
+def bind_release_publisher(brand_id, source, identifier, handle, evidence_url):
+    """Share one native publisher account between its brand and established company."""
     brand = models.Brand.objects.select_for_update().get(pk=brand_id)
     account_q = models.Account.objects.select_for_update().filter(
-        data_source_id="hf", normalized_identifier=namespace.casefold()
+        data_source_id=source, normalized_identifier=identifier.casefold()
     )
     account = account_q.first()
     if account is None:
         try:
             with transaction.atomic():
                 account = upsert_account(
-                    source="hf",
-                    external_identifier=namespace,
-                    handle=namespace,
+                    source=source,
+                    external_identifier=identifier,
+                    handle=handle,
+                    account_kind="organization" if source == "github" else "unknown",
                     provider_metadata={"discovered_via": evidence_url},
                 )
         except IntegrityError:
-            account = account_q.get()
+            account = account_q.first()
+            if account is None:
+                # The verified login already belongs to another stored native ID.
+                return None
+    if source == "github" and (
+        account.handle != handle or account.account_kind != "organization"
+    ):
+        try:
+            with transaction.atomic():
+                account.handle = handle
+                account.account_kind = "organization"
+                account.save(update_fields=["handle", "account_kind"])
+        except IntegrityError:
+            return None
     companies = list(
         models.BrandCompany.objects.filter(brand=brand).values_list(
             "company_id", flat=True
@@ -48,7 +75,7 @@ def bind_hf_publisher(brand_id, namespace, evidence_url):
         return None
     siblings = owners.exclude(brand=brand)
     if siblings.exists():
-        # A company may publish several verified brand lines under one HF account.
+        # A company may publish several verified brand lines under one publisher account.
         if len(companies) != 1:
             return None
         related = models.BrandCompany.objects.filter(
@@ -73,7 +100,10 @@ def bind_hf_publisher(brand_id, namespace, evidence_url):
         ):
             return None
         register_publisher(
-            source="hf", identifier=namespace, company_id=companies[0], confirmed=True
+            source=source,
+            identifier=identifier,
+            company_id=companies[0],
+            confirmed=True,
         )
     role, _ = models.Role.objects.get_or_create(pk="official")
     models.BrandAccount.objects.get_or_create(
@@ -296,10 +326,7 @@ def bind_hf_model(product, payload, evidence_url):
     product.save(update_fields=["repo_id", "publisher_account", "created_at"])
     if existing:
         return True
-    subject, _ = models.MeasurementSubject.objects.get_or_create(
-        pk=resolve_subject_id("product", str(product.product_key)),
-        defaults={"subject_kind": "product", "product": product},
-    )
+    subject = product_measurement_subject(product)
     archive = archive_document(raw, encoding="decoded-body-v1")
     review_catalog_mapping(
         source=models.DataSource.objects.get(pk="hf"),
