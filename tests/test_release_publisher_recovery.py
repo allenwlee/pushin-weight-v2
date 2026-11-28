@@ -142,6 +142,8 @@ def test_cold_reporter_uses_publisher_post_and_article_then_replays_without_io(
         monkeypatch.setattr(
             release_provider_identity, "review_catalog_mapping", reject_mapping
         )
+    # This fixture serves the HF API only; the other catalogs have dedicated worker tests.
+    monkeypatch.setattr("core.release_catalog_discovery.CATALOGS", {})
     settings.BENCHMARK_COLLECTION_ENABLED = False
     with httpx.Client(transport=httpx.MockTransport(metadata)) as client:
         summary = collect_due_release_metrics(

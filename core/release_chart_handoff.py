@@ -27,6 +27,14 @@ from core.product_release_pipeline import canonical_dossier
 
 
 @dataclass(frozen=True)
+class CatalogRelease:
+    dossier_id: UUID
+    product_key: UUID
+    brand_id: str
+    fingerprint: str
+
+
+@dataclass(frozen=True)
 class QualifiedRelease:
     dossier_id: UUID
     product_key: UUID
@@ -243,6 +251,15 @@ def selected_p2_product(event_id):
 
 def resolve_release(dossier_id, *, cutoff=None):
     """Resolve current public release evidence as of an aware cutoff, without writes or network."""
+    return _resolve(dossier_id, cutoff=cutoff, catalog_only=False)
+
+
+def resolve_catalog_release(dossier_id, *, cutoff=None):
+    """Use the confirmed Product and publisher even when the launch date is unknown."""
+    return _resolve(dossier_id, cutoff=cutoff, catalog_only=True)
+
+
+def _resolve(dossier_id, *, cutoff, catalog_only):
     cutoff = timezone.now() if cutoff is None else cutoff
     if not isinstance(cutoff, datetime) or timezone.is_naive(cutoff):
         raise ValueError("Release cutoff must include a timezone")
@@ -296,6 +313,19 @@ def resolve_release(dossier_id, *, cutoff=None):
                         if anchor.pk in approved_anchors]
         else:
             evidence = []
+        if catalog_only and approved_anchors:
+            eligible = [
+                anchor for anchor, subtype in evidence
+                if subtype in {"new_release", "historical_release", "availability_update"}
+            ]
+            if not eligible or any(
+                row.reported_brand_id not in (None, product.brand_id)
+                or row.reported_product_id not in (None, product.pk) for row in eligible
+            ):
+                raise ValueError("Reviewed release lacks an active eligible finding for the Product")
+            identity_hashes = sorted(row.claim_hash for row in eligible)
+        elif catalog_only and not dates:
+            raise ValueError("Reviewed Product lacks accepted release evidence")
         update_sources, other_sources, update_packets = set(), set(), set()
         for anchor, subtype in evidence:
             source_id = anchor.event_dossier_source_id
@@ -323,7 +353,7 @@ def resolve_release(dossier_id, *, cutoff=None):
         source = "dossier-reviewed"
     else:
         product, dates, identity_hashes = _p2_evidence(_bounded(claims), cutoff)
-        if product is None or not dates:
+        if product is None or (not dates and not catalog_only):
             raise ValueError("Release has no unique qualified P2 product and milestone")
         source = "p2-qualified"
     if product.brand_id and product.display_name and not product.repo_id:
@@ -341,6 +371,12 @@ def resolve_release(dossier_id, *, cutoff=None):
         or product.disabled
     ):
         raise ValueError("Release lacks a public tracked Product")
+    if catalog_only:
+        identity = digest([
+            "release-catalog-v1", str(event.pk), str(product.product_key), product.brand_id,
+            str(event.current_review_id or ""), source, identity_hashes,
+        ])
+        return CatalogRelease(event.pk, product.product_key, product.brand_id, identity)
     claim = _dated_claim(dates, cutoff)
     day = _day(claim)
     fingerprint = digest(
@@ -373,6 +409,19 @@ def resolve_release(dossier_id, *, cutoff=None):
 
 def lock_qualified_release(dossier_id, *, fingerprint):
     """Hold the lock used by dossier merges, reviews and claim writers through this write."""
+    return _lock_release(dossier_id, fingerprint, resolve_release)
+
+
+def lock_catalog_release(release):
+    """Keep the exact authorization used for discovery valid through the catalog write."""
+    if isinstance(release, QualifiedRelease):
+        return lock_qualified_release(release.dossier_id, fingerprint=release.fingerprint)
+    if not isinstance(release, CatalogRelease):
+        raise TypeError("Expected a qualified release or catalog identity")
+    return _lock_release(release.dossier_id, release.fingerprint, resolve_catalog_release)
+
+
+def _lock_release(dossier_id, fingerprint, resolve):
     if not connection.in_atomic_block:
         raise ValueError("Release revalidation requires an active transaction")
     try:
@@ -381,7 +430,7 @@ def lock_qualified_release(dossier_id, *, fingerprint):
         raise ValueError("Unknown release") from exc
     if event.merged_into_id:
         raise ValueError("Release was merged after preparation")
-    current = resolve_release(event.pk)
+    current = resolve(event.pk)
     if current.fingerprint != fingerprint:
         raise ValueError("Release evidence changed after preparation")
     return current

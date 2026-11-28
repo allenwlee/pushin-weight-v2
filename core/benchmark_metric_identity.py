@@ -331,22 +331,27 @@ def definition_rows():
 
 
 @transaction.atomic
+def register_source(key):
+    name, kind, url, adapter, normalizer = SOURCES[key]
+    return DataSource.objects.get_or_create(
+        pk=key,
+        defaults={
+            "name": name,
+            "source_type": kind,
+            "website_url": url,
+            "adapter_key": adapter,
+            "identifier_normalizer": normalizer,
+        },
+    )
+
+
 def register_definitions(*, sources=None):
     selected_sources = set(SOURCES) if sources is None else set(sources)
     require(bool(selected_sources) and selected_sources <= SOURCES.keys(), 'unknown metric registry source')
     for key, (name, kind, url, adapter, normalizer) in SOURCES.items():
         if key not in selected_sources:
             continue
-        source, created = DataSource.objects.get_or_create(
-            pk=key,
-            defaults={
-                "name": name,
-                "source_type": kind,
-                "website_url": url,
-                "adapter_key": adapter,
-                "identifier_normalizer": normalizer,
-            },
-        )
+        source, created = register_source(key)
         if created or (not source.metadata and key != "github"):
             from core.benchmark_attribution import DEFAULTS
 

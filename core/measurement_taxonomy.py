@@ -66,6 +66,14 @@ def resolve_subject_id(kind, key):
     return sid
 
 
+def product_measurement_subject(product):
+    subject, _ = MeasurementSubject.objects.get_or_create(
+        pk=resolve_subject_id("product", product.product_key),
+        defaults={"subject_kind": "product", "product": product},
+    )
+    return subject
+
+
 def prepare_taxonomy(spec):
     require(bool(spec.get("reviewed_by")), "reviewed_by is required")
     require(len(spec.get("subjects", [])) <= 10000, "subject budget exceeded")

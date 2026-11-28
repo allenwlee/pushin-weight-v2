@@ -2745,6 +2745,7 @@ dependencies = [
     { name = "pillow" },
     { name = "posthog" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "pyarrow" },
     { name = "pydantic" },
     { name = "python-dateutil" },
     { name = "pyyaml" },
@@ -2756,9 +2757,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-benchmark = [
-    { name = "pyarrow" },
-]
 dev = [
     { name = "jsonschema" },
     { name = "pytest" },
@@ -2795,7 +2793,7 @@ requires-dist = [
     { name = "pillow", specifier = ">=12.1,<13" },
     { name = "posthog", specifier = "==7.64.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
-    { name = "pyarrow", marker = "extra == 'benchmark'", specifier = ">=25,<26" },
+    { name = "pyarrow", specifier = ">=25,<26" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },

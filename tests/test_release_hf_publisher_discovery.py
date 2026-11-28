@@ -269,7 +269,7 @@ def test_identity_confirmation_remains_enabled_without_chart_measurements(
     settings.BENCHMARK_COLLECTION_ENABLED = False
     # No eligible dossier or budget means no network demand or scheduler write.
     monkeypatch.setattr(
-        collection, "_recent_publisher_findings", lambda now: [uuid.uuid4()]
+        collection, "_recent_publisher_findings", lambda now, **kwargs: [uuid.uuid4()]
     )
     monkeypatch.setattr(
         collection,

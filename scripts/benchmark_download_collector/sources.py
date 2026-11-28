@@ -47,6 +47,10 @@ class SourceError(ValueError):
     """Only fixed, non-secret error codes cross the collection boundary."""
 
 
+class AmbiguousCatalogMatch(SourceError):
+    """More than one native identity satisfies the publisher and model evidence."""
+
+
 class Budget:
     def __init__(
         self,
@@ -379,12 +383,17 @@ def validate_arena_row(row, start_date, end_date, *, config="text"):
 
 def arena_latest(budget, *, config=ARENA_CONFIG):
     """The official latest artifact avoids the Dataset Viewer's cold search index."""
+    return read_arena_latest(lambda: budget.arena_asset(config=config), config=config)
+
+
+def read_arena_latest(load_content, *, config=ARENA_CONFIG):
+    """Validate a current publication, including when its bytes are shared by release lookups."""
     try:
         import pyarrow as pa
         import pyarrow.parquet as pq
     except ImportError as exc:
         raise SourceError("install_benchmark_extra_for_arena") from exc
-    content = budget.arena_asset(config=config)
+    content = load_content()
     try:
         parquet = pq.ParquetFile(
             pa.BufferReader(content),

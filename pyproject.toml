@@ -35,10 +35,11 @@ dependencies = [
     "imageio-ffmpeg>=0.6,<1",
     "django-storages[s3]>=1.14.6,<2",
     "tiktoken>=0.12,<1",
+    "pyarrow>=25,<26",
 ]
 
 [project.optional-dependencies]
-benchmark = ["pyarrow>=25,<26"]
+benchmark = []  # Kept for callers installing the existing extra.
 dev = [
     "pytest>=8",
     "jsonschema>=4",
